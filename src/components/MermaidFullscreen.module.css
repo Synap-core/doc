@@ -1,0 +1,267 @@
+.inlineContainer {
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.diagramWrapper {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--ifm-global-radius);
+  padding: 1rem;
+  background: var(--ifm-background-color);
+  overflow: auto;
+}
+
+.fullscreenButton {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--ifm-color-primary);
+  color: var(--ifm-color-primary-contrast-foreground);
+  border: none;
+  border-radius: var(--ifm-global-radius);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.fullscreenButton:hover {
+  background: var(--ifm-color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.fullscreenButton:active {
+  transform: translateY(0);
+}
+
+.fullscreenButton svg {
+  flex-shrink: 0;
+}
+
+/* Modal Styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 2rem;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modalContent {
+  width: 95vw;
+  height: 95vh;
+  max-width: 100%;
+  max-height: 100%;
+  background: var(--ifm-background-color);
+  border-radius: var(--ifm-global-radius);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  flex-shrink: 0;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.zoomControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--ifm-color-emphasis-100);
+  border-radius: var(--ifm-global-radius);
+}
+
+.zoomButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--ifm-global-radius);
+  cursor: pointer;
+  color: var(--ifm-font-color-base);
+  transition: all 0.2s ease;
+}
+
+.zoomButton:hover {
+  background: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-400);
+}
+
+.zoomButton:active {
+  transform: scale(0.95);
+}
+
+.zoomLevel {
+  min-width: 3rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ifm-font-color-base);
+}
+
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: var(--ifm-color-emphasis-100);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--ifm-global-radius);
+  cursor: pointer;
+  color: var(--ifm-font-color-base);
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: var(--ifm-color-danger);
+  border-color: var(--ifm-color-danger);
+  color: white;
+}
+
+.modalBody {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ifm-background-color);
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.zoomableContainer {
+  transition: transform 0.1s ease-out;
+  max-width: none;
+  max-height: none;
+  will-change: transform;
+}
+
+.zoomableContainer > div {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modalFooter {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  flex-shrink: 0;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.helpText {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ifm-color-emphasis-700);
+  text-align: center;
+}
+
+.helpText kbd {
+  display: inline-block;
+  padding: 0.2rem 0.4rem;
+  background: var(--ifm-color-emphasis-200);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modalContent {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .modalHeader {
+    padding: 1rem;
+  }
+
+  .modalTitle {
+    font-size: 1.25rem;
+  }
+
+  .modalBody {
+    padding: 1rem;
+  }
+
+  .zoomControls {
+    gap: 0.25rem;
+  }
+
+  .zoomButton {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .zoomLevel {
+    min-width: 2.5rem;
+    font-size: 0.75rem;
+  }
+}
+

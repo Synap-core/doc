@@ -22,8 +22,8 @@ sidebar_position: 1
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/synap/synap-backend.git
-cd synap-backend
+git clone https://github.com/Synap-core/backend.git
+cd backend
 ```
 
 ### 2. Install Dependencies
@@ -108,7 +108,7 @@ pnpm --filter @synap/api build
 ## Project Structure
 
 ```
-synap-backend/
+backend/
 ├── apps/
 │   ├── api/              # Data Pod API server
 │   └── docs/             # Documentation site

@@ -13,8 +13,8 @@ const config: Config = {
   baseUrl: '/',
 
   // GitHub pages deployment config
-  organizationName: 'synap',
-  projectName: 'synap-backend',
+  organizationName: 'Synap-core',
+  projectName: 'backend',
 
   onBrokenLinks: 'warn',
   markdown: {
@@ -36,7 +36,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/synap/synap-backend/tree/main/docs/',
+          editUrl: 'https://github.com/Synap-core/backend/tree/main/apps/docs/',
           routeBasePath: '/',
         },
         blog: false, // Disable blog for now
@@ -74,7 +74,7 @@ const config: Config = {
           position: 'right',
         },
         {
-          href: 'https://github.com/synap/synap-backend',
+          href: 'https://github.com/Synap-core/backend',
           label: 'GitHub',
           position: 'right',
         },
@@ -105,15 +105,15 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/synap/synap-backend',
+              href: 'https://github.com/Synap-core/backend',
             },
             {
               label: 'Discussions',
-              href: 'https://github.com/synap/synap-backend/discussions',
+              href: 'https://github.com/Synap-core/backend/discussions',
             },
             {
               label: 'Issues',
-              href: 'https://github.com/synap/synap-backend/issues',
+              href: 'https://github.com/Synap-core/backend/issues',
             },
           ],
         },

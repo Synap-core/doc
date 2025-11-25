@@ -30,9 +30,9 @@ Congratulations! You've set up Synap. Here's what to explore next.
 
 ## Join the Community
 
-- [GitHub](https://github.com/synap/synap-backend)
-- [Discussions](https://github.com/synap/synap-backend/discussions)
-- [Issues](https://github.com/synap/synap-backend/issues)
+- [GitHub](https://github.com/Synap-core/backend)
+- [Discussions](https://github.com/Synap-core/backend/discussions)
+- [Issues](https://github.com/Synap-core/backend/issues)
 
 ---
 

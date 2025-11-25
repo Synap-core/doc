@@ -78,8 +78,8 @@ npm install -g pnpm
 
 ```bash
 # Clone repository
-git clone https://github.com/synap/synap-backend.git
-cd synap-backend
+git clone https://github.com/Synap-core/backend.git
+cd backend
 
 # Install dependencies
 pnpm install

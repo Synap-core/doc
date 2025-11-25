@@ -12,8 +12,8 @@ sidebar_position: 2
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/synap/synap-backend.git
-cd synap-backend
+git clone https://github.com/Synap-core/backend.git
+cd backend
 
 # 2. Configure environment
 cp env.local.example .env

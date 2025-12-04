@@ -51,7 +51,7 @@ pnpm install
    pnpm install
    ```
 
-The repository includes a `docker-compose.yml` file that sets up all required infrastructure services.
+The repository includes a `docker compose.yml` file that sets up all required infrastructure services.
 
 
 ---
@@ -105,7 +105,7 @@ PORT=3000
 
 ### 2. Start Local Services with Docker Compose
 
-The repository includes a `docker-compose.yml` file that sets up all required services:
+The repository includes a `docker compose.yml` file that sets up all required services:
 
 ```bash
 # Start PostgreSQL, MinIO, Redis, and Ory
@@ -168,7 +168,7 @@ curl http://localhost:3000/health
 See the [Production Deployment](../deployment/data-pod/production.md) guide for detailed production setup instructions.
 
 For production, you'll typically:
-- Use managed PostgreSQL (Neon, Supabase, Railway)
+- Use **PostgreSQL 14+** (any provider: Supabase, Railway, AWS RDS, self-hosted)
 - Use Cloudflare R2 instead of MinIO
 - Deploy to a platform like Vercel, Railway, or Fly.io
 - Set up proper environment variables
@@ -230,6 +230,6 @@ PORT=3001
 ## Resources
 
 - **GitHub Repository**: [https://github.com/Synap-core/backend](https://github.com/Synap-core/backend)
-- **Docker Compose File**: `docker-compose.yml` (in repository root)
+- **Docker Compose File**: `docker compose.yml` (in repository root)
 - **Issues**: [GitHub Issues](https://github.com/Synap-core/backend/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Synap-core/backend/discussions)

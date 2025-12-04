@@ -20,9 +20,10 @@ sidebar_position: 1
 
 ### Managed Services (Recommended)
 
-- **Neon**: Serverless PostgreSQL with TimescaleDB
 - **Supabase**: Managed PostgreSQL with extensions
-- **AWS RDS**: Managed PostgreSQL (manual extension setup)
+- **Railway**: Easy deployment with PostgreSQL
+- **AWS RDS**: Enterprise-grade managed PostgreSQL
+- **Any PostgreSQL 14+**: Cloud, managed, or self-hosted
 
 ### Self-Hosted
 
@@ -36,6 +37,36 @@ sudo apt install postgresql-16-pgvector
 sudo timescaledb-tune
 sudo systemctl restart postgresql
 ```
+
+---
+
+## Current Architecture
+
+Synap uses a **pure PostgreSQL 14+** approach with two complementary database clients:
+
+### Database Clients
+
+#### postgres.js
+- **Purpose**: Connection management and raw SQL queries
+- **Use For**: Complex queries, PostgreSQL-specific features, performance-critical operations
+
+#### Drizzle ORM
+- **Purpose**: Type-safe query building and schema management
+- **Use For**: CRUD operations, schema definitions, type-safe queries
+
+**Why Both?**
+- **Flexibility**: Raw SQL for complex queries, ORM for simple operations
+- **Performance**: postgres.js is one of the fastest PostgreSQL clients
+- **Type Safety**: Drizzle provides full TypeScript support
+- **Cost Control**: Works with any PostgreSQL 14+ provider
+
+**Compatible With:**
+- Supabase
+- Railway
+- AWS RDS
+- Google Cloud SQL
+- Self-hosted PostgreSQL
+- Any PostgreSQL 14+ provider
 
 ---
 
@@ -71,8 +102,19 @@ SELECT create_hypertable('events_v2', 'created_at');
 ### Connection Pooling
 
 ```env
-# Use connection pooler (PgBouncer or Neon's pooler)
+# Use connection pooler (PgBouncer)
 DATABASE_URL=postgresql://user:pass@host:5432/synap?pgbouncer=true
+```
+
+### Query Optimization
+
+```sql
+-- Set work_mem for heavy queries
+SET work_mem = '256MB';
+
+-- Analyze tables regularly
+ANALYZE events_v2;
+ANALYZE entities;
 ```
 
 ### Indexes

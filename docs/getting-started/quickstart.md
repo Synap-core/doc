@@ -186,5 +186,5 @@ PORT=3001
 ## Resources
 
 - **GitHub**: [https://github.com/Synap-core/backend](https://github.com/Synap-core/backend)
-- **Docker Compose**: `docker-compose.yml` in repository root
+- **Docker Compose**: `docker compose.yml` in repository root
 - **Documentation**: Full docs in `apps/docs/`

@@ -81,7 +81,7 @@ docker compose exec postgres psql -U postgres -d synap -c "SELECT COUNT(*) FROM 
 ## Production Considerations
 
 For production, consider:
-- Using managed PostgreSQL (e.g., Neon, Supabase)
+- Using **managed PostgreSQL 14+** (Supabase, Railway, AWS RDS, etc.)
 - Using Cloudflare R2 instead of MinIO
 - Setting up proper backups
 - Configuring monitoring

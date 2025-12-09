@@ -24,6 +24,7 @@ const sidebars: SidebarsConfig = {
         'architecture/event-driven',
         'architecture/event-metadata',  // NEW: Metadata extensibility
         'architecture/ai-architecture',
+        'architecture/sdk-strategy',    // NEW: SDK Unification Strategy
         'architecture/hub-protocol-flow',
         {
           type: 'category',
@@ -93,6 +94,14 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'API Reference',
       items: [
+        {
+          type: 'category',
+          label: 'SDK',
+          items: [
+            'api/client-sdk',
+            'api/unified-sdk',
+          ],
+        },
         {
           type: 'category',
           label: 'Data Pod',

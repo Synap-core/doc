@@ -2,16 +2,19 @@
 sidebar_position: 1
 ---
 
-# SDK Reference
+# SDK Quick Reference
 
-**Complete API reference for `@synap/client`**
+**Quick reference for `@synap/client` API methods**
+
+> [!TIP]
+> This is a quick reference guide. For comprehensive documentation, see the [Data Pod SDK](/docs/api/client-sdk) documentation.
 
 ---
 
 ## Installation
 
 ```bash
-npm install @synap/client
+pnpm add @synap/client
 ```
 
 ---
@@ -19,100 +22,143 @@ npm install @synap/client
 ## Client Initialization
 
 ```typescript
-import SynapClient from '@synap/client';
+import { SynapClient } from '@synap/client';
 
-const synap = new SynapClient({
+const client = new SynapClient({
   url: 'http://localhost:3000',
-  token: 'your-token', // Optional if using session cookies
+  getToken: async () => getSessionToken() // or return null for cookie auth
 });
 ```
 
 ---
 
-## API Methods
+## API Facades (Recommended)
+
+The SDK provides high-level facade methods for common operations.
 
 ### Notes
 
 ```typescript
 // Create note
-await synap.notes.create.mutate({
-  content: '# My Note\n\nContent',
+const result = await client.notes.create({
+  content: '# My Note\n\nContent here',
   title: 'My Note',
+  tags: ['work', 'ideas']
 });
 
 // List notes
-const notes = await synap.notes.list.query({
+const notes = await client.notes.list({
   limit: 20,
   offset: 0,
+  type: 'note' // or 'task' or 'all'
 });
 
 // Get note
-const note = await synap.notes.get.query({
-  id: 'note-id',
-});
-
-// Update note
-await synap.notes.update.mutate({
-  id: 'note-id',
-  content: '# Updated Note',
-});
-
-// Delete note
-await synap.notes.delete.mutate({
-  id: 'note-id',
-});
+const note = await client.notes.get('note-id');
 ```
+
+---
 
 ### Chat
 
 ```typescript
 // Send message
-const response = await synap.chat.sendMessage.mutate({
+const result = await client.chat.sendMessage({
   content: 'Create a task to call John',
-  threadId: 'thread-id', // Optional
+  threadId: 'thread-id' // optional
 });
 
 // Get thread
-const thread = await synap.chat.getThread.query({
-  threadId: 'thread-id',
-});
+const thread = await client.chat.getThread('thread-id');
 
 // List threads
-const threads = await synap.chat.listThreads.query({
-  limit: 20,
-});
+const threads = await client.chat.listThreads();
 ```
 
-### Events
+---
+
+### Tasks
 
 ```typescript
-// Log event
-await synap.events.log.mutate({
-  type: 'custom.event',
-  data: { key: 'value' },
-});
+// Complete a task
+await client.tasks.complete('task-id');
+```
 
-// List events
-const events = await synap.events.list.query({
-  limit: 100,
-  type: 'custom.event', // Optional filter
+---
+
+### Capture
+
+```typescript
+// Capture a quick thought
+await client.capture.thought('Remember to buy milk');
+
+// With context
+await client.capture.thought('Call John about project', {
+  priority: 'high',
+  category: 'work'
 });
 ```
+
+---
 
 ### System
 
 ```typescript
 // Health check
-const health = await synap.system.health.query();
+const health = await client.system.health();
+console.log(health.status, health.timestamp);
 
 // System info
-const info = await synap.system.info.query();
+const info = await client.system.info();
+console.log(info.version, info.database, info.storage);
+```
 
-// List handlers
-const handlers = await synap.system.handlers.query();
+---
 
-// List tools
-const tools = await synap.system.tools.query();
+## Direct tRPC Access (Advanced)
+
+For advanced use cases, access the tRPC router directly:
+
+```typescript
+// Direct tRPC calls
+await client.rpc.notes.create.mutate({
+  content: '# Note',
+  title: 'Note'
+});
+
+const notes = await client.rpc.notes.list.query({
+  limit: 20,
+  offset: 0
+});
+
+// Events
+await client.rpc.events.log.mutate({
+  eventType: 'custom.event',
+  data: { key: 'value' }
+});
+```
+
+> [!NOTE]
+> **Facades vs Direct tRPC**
+> 
+> Use facades for simplicity and semantic clarity. Use direct tRPC access when you need full control or access to procedures not exposed via facades.
+
+---
+
+## WebSocket Streaming
+
+Subscribe to real-time updates:
+
+```typescript
+const userId = 'user-123';
+const wsUrl = client.getRealtimeUrl(userId);
+
+const ws = new WebSocket(wsUrl);
+
+ws.onmessage = (event) => {
+  const update = JSON.parse(event.data);
+  console.log('Real-time update:', update);
+};
 ```
 
 ---
@@ -121,11 +167,12 @@ const tools = await synap.system.tools.query();
 
 ```typescript
 try {
-  await synap.notes.create.mutate({ content: '...' });
+  await client.notes.create({ 
+    content: '# Note',
+    title: 'Note'
+  });
 } catch (error) {
-  if (error instanceof SynapError) {
-    console.error(error.message, error.statusCode);
-  }
+  console.error('Failed to create note:', error);
 }
 ```
 
@@ -136,13 +183,18 @@ try {
 All types are auto-generated from the tRPC router:
 
 ```typescript
-import type { AppRouter } from '@synap/api';
+import type { AppRouter } from '@synap/client';
 
 // Types are inferred automatically
-const note = await synap.notes.get.query({ id: '...' });
-// note is typed as Note | null
+const note = await client.notes.get('note-id');
+// note: { id: string; title: string | null; ... }
 ```
 
 ---
 
-**Next**: See [React Integration](./react-integration.md) for React hooks.
+## Related Documentation
+
+- [Data Pod SDK](/docs/api/client-sdk) - Comprehensive SDK documentation
+- [React Integration](./react-integration) - React hooks and components
+- [Unified SDK](/docs/api/unified-sdk) - Proprietary intelligence layer
+

@@ -100,26 +100,50 @@ Agent (LangGraph) → Tool Execution → tRPC API
 
 **Location**: `packages/api/src/routers/`
 
-All mutations create events:
+All mutations create events with optional **metadata** for context:
 
 ```typescript
-// Example: Creating a note
+// Example: Creating a note (user action)
 const event = createSynapEvent({
   type: EventTypes.NOTE_CREATION_REQUESTED,
   userId,
   aggregateId: entityId,
   data: { content, title },
-  source: 'api', // or 'agent' if from automation
+  source: 'api',
+  // metadata is optional - used for AI, import, sync context
 });
 
-// Append to Event Store (TimescaleDB)
+// Example: Creating an entity (AI extraction)
+const event = createSynapEvent({
+  type: EventTypes.ENTITY_CREATED,
+  userId,
+  aggregateId: entityId,
+  data: { type: 'task', title: 'Call John' },
+  source: 'intelligence',
+  metadata: {
+    ai: {
+      agent: 'orchestrator',
+      confidence: { score: 0.92 },
+      extraction: {
+        extractedFrom: { messageId: 'msg_123', threadId: 'thread_456' },
+        method: 'explicit',
+      },
+    },
+  },
+});
+
+// Append to Event Store (PostgreSQL/TimescaleDB)
 await eventRepo.append(event);
 
 // Publish to Inngest for async processing
 await publishEvent('api/event.logged', eventData);
 ```
 
-**Event Store**: TimescaleDB hypertable for immutable event history.
+**Event Store**: PostgreSQL with optional TimescaleDB hypertable for immutable event history.
+
+:::tip Metadata Extensibility
+The `metadata` field is the key extensibility point. See [Event Metadata](./event-metadata.md) for details on AI, import, sync, and custom metadata.
+:::
 
 ---
 

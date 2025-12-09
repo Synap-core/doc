@@ -22,6 +22,7 @@ const sidebars: SidebarsConfig = {
         'architecture/overview',
         'architecture/ecosystem-analysis',
         'architecture/event-driven',
+        'architecture/event-metadata',  // NEW: Metadata extensibility
         'architecture/ai-architecture',
         'architecture/hub-protocol-flow',
         {

@@ -199,7 +199,10 @@ Authorization: Bearer synap_user_...
 {
   "name": "n8n Task Notifications",
   "url": "https://n8n.acme.com/webhook/synap-events",
-  "eventTypes": ["task.completed", "note.created"],
+  "eventTypes": [
+    "entities.update.validated",
+    "entities.create.validated"
+  ],
   "secret": "your-webhook-secret"  // For HMAC validation
 }
 ```
@@ -246,11 +249,12 @@ return $input.all();
 ```
 
 **Available Events**:
-- `note.created` - New note created
-- `note.updated` - Note modified
-- `task.created` - New task created
-- `task.completed` - Task marked complete
-- `project.created` - New project created
+- `entities.create.validated` - New entity created
+- `entities.update.validated` - Entity modified
+- `documents.create.validated` - New document created
+- `conversationMessages.create.validated` - New message
+
+**Note**: Filter by entity `type` in your webhook handler to get task/note specific events.
 
 ---
 

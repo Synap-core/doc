@@ -10,6 +10,7 @@ const sidebars: SidebarsConfig = {
         'getting-started/introduction',
         'getting-started/installation',
         'getting-started/quickstart',
+        'getting-started/why-events',       // Business value
         'getting-started/next-steps',
       ],
     },
@@ -21,10 +22,17 @@ const sidebars: SidebarsConfig = {
       items: [
         'architecture/overview',
         'architecture/ecosystem-analysis',
-        'architecture/event-driven',
-        'architecture/event-metadata',  // NEW: Metadata extensibility
+        {
+          type: 'category',
+          label: 'Events & Automation',      
+          items: [
+            'architecture/events/event-architecture',
+            'architecture/events/automation-system',
+            'architecture/events/event-metadata',  // Moved here
+          ],
+        },
         'architecture/ai-architecture',
-        'architecture/sdk-strategy',    // NEW: SDK Unification Strategy
+        'architecture/sdk-strategy',
         'architecture/hub-protocol-flow',
         {
           type: 'category',
@@ -94,6 +102,8 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'API Reference',
       items: [
+        'api/event-types-catalog',          // Event catalog
+        'api/event-schema',                 
         {
           type: 'category',
           label: 'SDK',
@@ -125,6 +135,16 @@ const sidebars: SidebarsConfig = {
             'api/hub-protocol/insight-submission',
           ],
         },
+      ],
+    },
+    
+    // Integrations
+    {
+      type: 'category',
+      label: 'Integrations',                
+      items: [
+        'integrations/webhooks-guide',       
+        'integrations/n8n',                  
       ],
     },
     

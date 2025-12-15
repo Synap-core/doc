@@ -56,27 +56,27 @@ The `source` field **must** be one of these values:
 
 ---
 
-## Common Event Types
+## Generated Event Pattern
 
-### Entity Events
+All table events follow the `{table}.{action}.{modifier}` pattern:
+
 ```typescript
-'entity.created'    // New entity created
-'entity.updated'    // Entity modified
-'entity.deleted'    // Entity soft-deleted
+// Pattern: table.action.modifier
+GeneratedEventTypes.entities['create.requested']
+GeneratedEventTypes.entities['create.validated']
+GeneratedEventTypes.entities['update.requested']
+GeneratedEventTypes.entities['update.validated']
+GeneratedEventTypes.entities['delete.requested']
+GeneratedEventTypes.entities['delete.validated']
+
+// Same pattern for all tables:
+GeneratedEventTypes.documents['create.requested']
+GeneratedEventTypes.chatThreads['create.requested']
+GeneratedEventTypes.conversationMessages['create.requested']
+// ... and so on for all 9 core tables
 ```
 
-### Note Events
-```typescript
-'note.created'      // New note created
-'note.updated'      // Note content changed
-'note.archived'     // Note archived
-```
-
-### Knowledge Events
-```typescript
-'knowledge.extracted'    // Facts extracted from content
-'knowledge.linked'       // Entities linked together
-```
+**See**: [Event Types Catalog](./event-types-catalog.md) for all 55 event types
 
 ---
 
@@ -86,17 +86,19 @@ The `source` field **must** be one of these values:
 
 ```typescript
 import type { SynapEvent } from '@synap/types';
+import { GeneratedEventTypes } from '@synap/types';
 
 const event: SynapEvent = {
   id: crypto.randomUUID(),
-  version: 'v1',           // ⚠️ Must be literal 'v1'
-  type: 'note.created',
+  version: 'v1',
+  type: GeneratedEventTypes.entities['create.requested'],
   userId: 'user-123',
   data: { 
-    content: 'My note',
-    title: 'Meeting Notes' 
+    type: 'note',
+    title: 'Meeting Notes',
+    content: 'Q1 roadmap discussion...',
   },
-  source: 'api',           // ⚠️ Must be valid enum value
+  source: 'api',
   timestamp: new Date(),
 };
 ```

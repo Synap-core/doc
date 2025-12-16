@@ -18,7 +18,7 @@ sidebar_position: 1
 
 ## Installation
 
-### Managed Services (Recommended)
+### Managed Services
 
 - **Supabase**: Managed PostgreSQL with extensions
 - **Railway**: Easy deployment with PostgreSQL

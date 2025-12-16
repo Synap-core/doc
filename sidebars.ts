@@ -10,7 +10,7 @@ const sidebars: SidebarsConfig = {
         'getting-started/introduction',
         'getting-started/installation',
         'getting-started/quickstart',
-        'getting-started/why-events',       // Business value
+        'getting-started/why-events',
         'getting-started/next-steps',
       ],
     },
@@ -28,7 +28,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'architecture/events/event-architecture',
             'architecture/events/automation-system',
-            'architecture/events/event-metadata',  // Moved here
+            'architecture/events/event-metadata',
           ],
         },
         'architecture/ai-architecture',
@@ -71,11 +71,22 @@ const sidebars: SidebarsConfig = {
         'development/setup',
         {
           type: 'category',
-          label: 'Extensibility',
+          label: 'Core Contribution',
           items: [
-            'development/extensibility/extensibility-guide',
-            'development/extensibility/internal-plugins',
-            'development/extensibility/external-services',
+            'development/core-contribution/overview',
+            'development/core-contribution/monorepo-structure',
+            'development/core-contribution/router-development',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Plugin Development',
+          items: [
+            'development/plugin-development/overview',
+            'development/plugin-development/direct-plugins',
+            'development/plugin-development/remote-plugins',
+            'development/plugin-development/hybrid-plugins',
+            'development/plugin-development/intelligence-registry',
           ],
         },
         {
@@ -102,7 +113,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'API Reference',
       items: [
-        'api/event-types-catalog',          // Event catalog
+        'api/event-types-catalog',
         'api/event-schema',                 
         {
           type: 'category',

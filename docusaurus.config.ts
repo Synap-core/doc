@@ -60,7 +60,7 @@ const config: Config = {
       title: 'Synap',
       logo: {
         alt: 'Synap Logo',
-        src: 'img/logo.svg',
+        src: 'img/logo.png',
       },
       items: [
         {

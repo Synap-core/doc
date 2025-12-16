@@ -32,7 +32,6 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'architecture/ai-architecture',
-        'architecture/sdk-strategy',
         'architecture/hub-protocol-flow',
         {
           type: 'category',
@@ -91,10 +90,12 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'SDK',
+          label: 'Data Pod SDK',
           items: [
-            'development/sdk/sdk-reference',
+            'development/sdk/overview',
+            'development/sdk/basic-usage',
             'development/sdk/react-integration',
+            'development/sdk/sdk-reference',
           ],
         },
         {
@@ -103,47 +104,6 @@ const sidebars: SidebarsConfig = {
           items: [
             'development/contributing/code-style',
             'development/contributing/testing',
-          ],
-        },
-      ],
-    },
-    
-    // API Reference
-    {
-      type: 'category',
-      label: 'API Reference',
-      items: [
-        'api/event-types-catalog',
-        'api/event-schema',                 
-        {
-          type: 'category',
-          label: 'SDK',
-          items: [
-            'api/client-sdk',
-            'api/unified-sdk',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Data Pod',
-          items: [
-            'api/data-pod/overview',
-            'api/data-pod/authentication',
-            'api/data-pod/notes',
-            'api/data-pod/chat',
-            'api/data-pod/events',
-            'api/data-pod/hub',
-            'api/data-pod/api-keys',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Hub Protocol',
-          items: [
-            'api/hub-protocol/overview',
-            'api/hub-protocol/authentication',
-            'api/hub-protocol/data-request',
-            'api/hub-protocol/insight-submission',
           ],
         },
       ],
@@ -182,6 +142,16 @@ const sidebars: SidebarsConfig = {
             'deployment/infrastructure/storage',
           ],
         },
+      ],
+    },
+    
+    // Reference (Quick lookup)
+    {
+      type: 'category',
+      label: 'Reference',
+      items: [
+        'reference/event-catalog',
+        'reference/events-api',
       ],
     },
     

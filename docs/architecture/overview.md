@@ -12,7 +12,10 @@ sidebar_position: 1
 
 Synap follows a **pure event-driven architecture** where all state changes flow through events:
 
-**UI or Automation (Agents) → Events → Workers → Data Layer (Database & File Storage)**
+**UI or Automation (Agents) →Events → Workers → Data Layer (Database & File Storage)**
+
+> [!NOTE]
+> **External Services** in the diagram represent remote plugins that authenticate with the Data Pod via the Hub Protocol. These are plugins hosted externally that extend Data Pod functionality.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -252,7 +255,7 @@ sequenceDiagram
 
 ## Key Concepts
 
-- **[Event-Driven Architecture](./event-driven.md)** - Events as source of truth
+- **[Event Sourcing & CQRS](./core-patterns.md)** - Events as source of truth
 - **[Hub & Spoke Model](./core-concepts/hub-spoke.md)** - Data Pod ↔ External Services
 - **[Data Sovereignty](./core-concepts/data-sovereignty.md)** - Your data, your control
 - **[Plugin System](./core-concepts/plugin-system.md)** - Extensibility
@@ -275,5 +278,5 @@ sequenceDiagram
 ## Next Steps
 
 - **[Ecosystem Analysis](./ecosystem-analysis.md)** - Deep dive into all packages
-- **[Event-Driven Architecture](./event-driven.md)** - Understand the complete flow
+- **[Core Patterns](./core-patterns.md)** - Event Sourcing, CQRS patterns
 - **[Components](./components/data-pod.md)** - Learn about each component

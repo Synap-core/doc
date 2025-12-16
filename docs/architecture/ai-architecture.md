@@ -24,7 +24,7 @@ This architecture provides:
 :::info AI as First-Class Citizen
 When AI creates or enriches entities, it uses the **same event types** as user actions (e.g., `entity.created`). AI context is stored in the event's `metadata.ai` field, including confidence scores, extraction sources, and reasoning traces.
 
-See [Event Metadata](./event-metadata.md) for details on AI metadata structure.
+See [Event Metadata](./events/event-metadata.md) for details on AI metadata structure.
 :::
 
 ---

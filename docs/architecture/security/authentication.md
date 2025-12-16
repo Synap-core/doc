@@ -372,4 +372,4 @@ curl http://localhost:4433/health/ready
 
 **Next**: 
 - [Data Confidentiality](./data-confidentiality.md) - Privacy details
-- [Hub Protocol Authentication](../../api/hub-protocol/authentication.md) - Hub-specific auth
+- [Hub Protocol Flow](../hub-protocol-flow.md) - Plugin authentication flow

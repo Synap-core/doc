@@ -390,4 +390,4 @@ The metadata system provides:
 
 ---
 
-**Next**: See [Extensibility Guide](../development/extensibility/extensibility-guide.md) to build your own metadata-aware plugins.
+**Next**: See [Plugin Development Guide](../development/plugin-development/overview.md) to build your own metadata-aware plugins.

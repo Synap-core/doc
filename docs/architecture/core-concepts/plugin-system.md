@@ -250,4 +250,4 @@ POST /api/marketplace/register
 
 ---
 
-**Next**: See [Extensibility Guide](../../development/extensibility/extensibility-guide.md) for implementation details.
+**Next**: See [Plugin Development Guide](../../development/plugin-development/overview.md) for implementation details.

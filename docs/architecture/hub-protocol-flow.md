@@ -218,5 +218,5 @@ import MermaidFullscreen from '@site/src/components/MermaidFullscreen';
 
 ---
 
-**Next**: See [Hub Protocol API Reference](../api/hub-protocol/overview.md) for complete API documentation.
+**Next**: See [Plugin Development Guide](../development/plugin-development/overview.md) for implementation details.
 

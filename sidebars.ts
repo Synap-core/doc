@@ -15,6 +15,20 @@ const sidebars: SidebarsConfig = {
       ],
     },
     
+    // Concepts (NEW!)
+    {
+      type: 'category',
+      label: 'Concepts',
+      items: [
+        'concepts/what-is-synap',
+        'concepts/event-sourcing-explained',
+        'concepts/knowledge-graph',
+        'concepts/branching-conversations',
+        'concepts/multi-agent-system',
+        'concepts/data-sovereignty',
+      ],
+    },
+    
     // Architecture
     {
       type: 'category',
@@ -22,6 +36,9 @@ const sidebars: SidebarsConfig = {
       items: [
         'architecture/overview',
         'architecture/ecosystem-analysis',
+        'architecture/core-patterns',
+        'architecture/permission-model',
+        'architecture/event-flow',
         {
           type: 'category',
           label: 'Events & Automation',      
@@ -37,7 +54,6 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Core Concepts',
           items: [
-            'architecture/core-concepts/data-sovereignty',
             'architecture/core-concepts/hub-spoke',
             'architecture/core-concepts/plugin-system',
           ],
@@ -59,6 +75,32 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'architecture/storage',
+      ],
+    },
+    
+    // Tutorials (NEW!)
+    {
+      type: 'category',
+      label: 'Tutorials',
+      items: [
+        'tutorials/minute-demo',
+        'tutorials/build-knowledge-graph-view',
+      ],
+    },
+    
+    // Guides (reorganized)
+    {
+      type: 'category',
+      label: 'Guides',
+      items: [
+        {
+          type: 'category',
+          label: 'By Use Case',
+          items: [
+            'guides/by-use-case/second-brain',
+            'guides/by-use-case/team-collaboration',
+          ],
+        },
       ],
     },
     
@@ -152,6 +194,22 @@ const sidebars: SidebarsConfig = {
       items: [
         'reference/event-catalog',
         'reference/events-api',
+      ],
+    },
+    
+    // Resources (NEW!)
+    {
+      type: 'category',
+      label: 'Resources',
+      items: [
+        {
+          type: 'category',
+          label: 'Comparisons',
+          items: [
+            'resources/comparisons/vs-notion',
+            'resources/comparisons/vs-obsidian',
+          ],
+        },
       ],
     },
     

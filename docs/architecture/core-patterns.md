@@ -372,6 +372,205 @@ for (const event of events) {
 
 ---
 
+## Production Event Pattern: 3-Phase Flow
+
+**Synap's production event system uses a 3-phase pattern for security and auditability.**
+
+### The Pattern
+
+```
+User Action
+    ↓
+events.{action}.requested  (Intent submitted)
+    ↓
+Permission Validator Worker
+    ├─ Check ownership
+    ├─ Check workspace roles
+    └─ Check AI approval
+    ↓
+events.{action}.approved  (Permission granted)
+    ↓
+CRUD Worker
+    ├─ DB operation
+    └─ Emit completion
+    ↓
+events.{action}.validated  (Operation complete)
+    ↓
+Real-time update to frontend
+```
+
+### Why 3 Phases?
+
+**1. Security by Design**
+- All permissions checked in one place (`permissionValidator` worker)
+- Centralized logic, easy to audit
+- Can't bypass permissions
+
+**2. AI Approval Workflow**
+- AI proposals emit `.requested` events
+- User must explicitly approve
+- Full transparency in event log
+
+**3. Complete Audit Trail**
+- Who requested (user or AI)
+- Was it approved (and why)
+- When was it validated (completed)
+
+### Example Flow
+
+```typescript
+// User creates entity
+await client.entities.create({
+  type: 'note',
+  title: 'Meeting Notes'
+});
+
+// Phase 1: Intent
+await publishEvent({
+  type: 'entities.create.requested',
+  data: { type: 'note', title: 'Meeting Notes' },
+  userId: 'alice'
+});
+
+// Phase 2: Permission Check (automatic)
+// permissionValidator worker:
+if (user === owner && action === 'create') {
+  await publishEvent({
+    type: 'entities.create.approved',
+    data: {...},
+    userId: 'alice'
+  });
+}
+
+// Phase 3: Execution (automatic)
+// entitiesWorker on .approved:
+await db.insert(entities).values({...});
+await publishEvent({
+  type: 'entities.create.validated',
+  data: { entityId: '...' }
+});
+```
+
+---
+
+## Dual-Write Pattern
+
+**Every event is written to BOTH TimescaleDB and Inngest simultaneously.**
+
+### The Pattern
+
+```typescript
+async function publishEvent(event, options) {
+  // STEP 1: Write to TimescaleDB (audit trail)
+  const [result] = await db.insert(events).values({
+    type: event.type,
+    data: event.data,
+    userId: options.userId,
+    timestamp: new Date()
+  });
+  
+  // STEP 2: Send to Inngest (trigger workers)
+  await inngest.send({
+    name: event.type,
+    data: { eventId: result.id, ...event.data },
+    user: { id: options.userId }
+  });
+  
+  return { eventId: result.id };
+}
+```
+
+### Why Dual-Write?
+
+**1. TimescaleDB (Persistent Audit Trail)**
+- ✅ Immutable event log
+- ✅ Time-series optimized
+- ✅ Can query historical events
+- ✅ Compressed automatically (~90% savings)
+
+**2. Inngest (Instant Processing)**
+- ✅ Triggers workers immediately
+- ✅ Automatic retries
+- ✅ Distributed execution
+- ✅ Built-in observability
+
+**3. Fault Tolerance**
+- If Inngest fails: Event still in DB, retry later
+- If DB fails: Operation fails safely (no partial state)
+- Event log is always complete
+
+---
+
+## Worker-Based Permissions
+
+**Permissions are checked in workers, not at API layer.**
+
+### Why Workers?
+
+**Traditional Approach Problems:**
+```typescript
+// ❌ API layer permission checks
+router.delete.mutation(async ({ input, ctx }) => {
+  // Check if user owns entity
+  const entity = await db.query.entities.findFirst({
+    where: eq(entities.id, input.id)
+  });
+  
+  if (entity.userId !== ctx.userId) {
+    throw new Error('Unauthorized');
+  }
+  
+  await db.delete(entities).where(eq(entities.id, input.id));
+});
+
+// Problems:
+// - Permission logic scattered across routers
+// - No audit trail of permission decisions
+// - Hard to add complex rules (roles, AI approval)
+// - Can't replay decisions from events
+```
+
+**Worker Approach Benefits:**
+```typescript
+// ✅ Worker-based permissions
+export const permissionValidator = inngest.createFunction(
+  { id: 'permission-validator' },
+  [{ event: 'entities.delete.requested' }],
+  async ({ event, step }) => {
+    const hasPermission = await step.run('check-permission', async () => {
+      // Centralized permission logic
+      const entity = await db.query.entities.findFirst({
+        where: eq(entities.id, event.data.entityId)
+      });
+      
+      return entity.userId === event.user.id;
+    });
+    
+    if (hasPermission) {
+      // Permission granted - emit approved event
+      await publishEvent({
+        type: 'entities.delete.approved',
+        data: event.data,
+        userId: event.user.id
+      });
+      
+      return { approved: true, reason: 'Owner' };
+    }
+    
+    return { approved: false, reason: 'Not owner' };
+  }
+);
+
+// Benefits:
+// ✅ All permission logic in one place
+// ✅ Every decision is an event (audit trail)
+// ✅ Easy to add roles, AI approval, etc.
+// ✅ Testable independently
+// ✅ Can replay permission decisions
+```
+
+---
+
 ## Advanced Patterns
 
 ### Snapshots

@@ -11,10 +11,18 @@ sidebar_position: 2
 ## Overview
 
 This catalog documents:
-- **54 Generated Events** (from 9 database tables)
+- **81 Generated Events** (from 9 database tables × 9 event types each)
+  - 27 `.requested` events (user/AI intent)
+  - 27 `.approved` events (permission validated)
+  - 27 `.validated` events (operation complete)
 - **1 System Event** (webhooks)
 - Default worker/automation for each event
 - Data schemas and payloads
+
+**Note**: Synap uses a **3-phase event pattern** for security:
+1. `.requested` - User or AI expresses intent
+2. `.approved` - Permission validator authorizes 
+3. `.validated` - Operation completed successfully
 
 ---
 
@@ -43,9 +51,9 @@ event_type
 #### entities.create.requested
 
 - **Trigger**: User or AI creates an entity
-- **Automation**: Entities Worker
-- **Automation**: Validate → upload content to storage → create DB record
-- **Output**: `entities.create.validated` + entity in DB + content file
+- **Automation**: Permission Validator Worker  
+- **Action**: Check ownership and permissions
+- **Output**: `entities.create.approved` (if authorized) or rejected
 - **Schema**:
 ```typescript
 {
@@ -57,19 +65,27 @@ event_type
 }
 ```
 
+#### entities.create.approved
+
+- **Trigger**: After permission validation passes
+- **Automation**: Entities Worker
+- **Action**: Validate → upload content to storage → create DB record
+- **Output**: `entities.create.validated` + entity in DB + content file
+- **Note**: **3-phase pattern** - Permission check happens BEFORE DB operation
+
 #### entities.create.validated
 
 - **Trigger**: After entity created successfully
 - **Automation**: AI Analyzer + Embedding Worker
-- **Automation**: Generate embeddings + extract metadata + detect insights
+- **Action**: Generate embeddings + extract metadata + detect insights
 - **Output**: Vector in `entity_vectors` + AI suggestions
   
 #### entities.update.requested
 
 - **Trigger**: User or AI updates entity
-- **Automation**: Entities Worker
-- **Automation**: Validate → update DB → upload new content (if changed)
-- **Output**: `entities.update.validated`
+- **Automation**: Permission Validator Worker
+- **Action**: Check if user owns entity or has workspace permission
+- **Output**: `entities.update.approved` or rejected
 - **Schema**:
 ```typescript
 {
@@ -80,25 +96,38 @@ event_type
 }
 ```
 
+#### entities.update.approved
+
+- **Trigger**: After permission validation passes
+- **Automation**: Entities Worker
+- **Action**: Validate → update DB → upload new content (if changed)
+- **Output**: `entities.update.validated`
+
 #### entities.update.validated
 
 - **Trigger**: After entity updated
 - **Automation**: AI Analyzer (if content changed)
-- **Automation**: Regenerate embeddings
+- **Action**: Regenerate embeddings
 - **Output**: Updated vectors
 
 #### entities.delete.requested
 
 - **Trigger**: User deletes entity
+- **Automation**: Permission Validator Worker
+- **Action**: Check if user owns entity
+- **Output**: `entities.delete.approved` or rejected
+
+#### entities.delete.approved
+
+- **Trigger**: After permission validation passes
 - **Automation**: Entities Worker
-- **Automation**: Soft delete (set `deleted_at`)
+- **Action**: Soft delete (set `deleted_at`)
 - **Output**: `entities.delete.validated`
 
 #### entities.delete.validated
 
 - **Trigger**: After entity deleted
 - **Automation**: None (no post-processing)
-- **Automation**: N/A
 
 ---
 
@@ -458,11 +487,16 @@ event_type
 
 ## Event Catalog Summary
 
-| Category | Events | Tables |
-|----------|--------|--------|
-| **Generated** | 54 | 9 |
-| **System** | 1 | - |
-| **Total** | **55** | **9** |
+| Category | Events | Tables | Notes |
+|----------|--------|--------|-------|
+| **3-Phase Events** | 81 | 9 | requested + approved + validated |
+| **System** | 1 | - | webhook delivery |
+| **Total** | **82** | **9** | Production event system |
+
+**3-Phase Pattern Breakdown:**
+- `.requested` events: 27 (user/AI intent)
+- `.approved` events: 27 (permission validated)
+- `.validated` events: 27 (operation complete)
 
 ---
 

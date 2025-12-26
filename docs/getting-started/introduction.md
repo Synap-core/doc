@@ -4,27 +4,33 @@ sidebar_position: 1
 
 # Introduction
 
-Welcome to **Synap** - an event-sourced knowledge backend with AI capabilities.
+Welcome to **Synap** - a Personal Data Operating System with revolutionary capabilities.
 
 ## What is Synap?
 
-Synap is a modern, event-driven backend system designed to help you build intelligent knowledge management applications. It combines:
+**Synap is not just a note-taking app.** It's a complete platform for building intelligent applications with superpowers:
 
-- **Event Sourcing** - Immutable event log for complete auditability
-- **AI Integration** - LangGraph-powered agents for intelligent interactions
-- **Data Sovereignty** - Your data stays in your Data Pod
-- **Hub & Spoke Architecture** - Connect to external intelligence services via marketplace
-- **Extensibility** - Plugin system for custom capabilities
+- 🕐 **Time-Travel** - Never lose data, undo anything, see your workspace from any point in time
+- 🌳 **Branching** - Git-like conversations, parallel AI exploration, context switching
+- 🧠 **Knowledge Graph** - Automatic connections, bi-directional links, relationship discovery
+- 🤖 **Multi-Agent AI** - Specialized AI team working in parallel, not just one assistant
+- 🔒 **Data Sovereignty** - You own it, you host it, you control it
 
-## Key Features
+## Why These Matter
 
-- ✅ **Event-Driven Architecture** - Built on Inngest event bus
-- ✅ **PostgreSQL with TimescaleDB** - Time-series data and vector search
-- ✅ **Multi-User Support** - Row-Level Security (RLS) for data isolation
-- ✅ **Ory Authentication** - Enterprise-grade identity management
-- ✅ **tRPC APIs** - Type-safe, end-to-end APIs
-- ✅ **Vector Search** - pgvector for semantic search
-- ✅ **Storage Abstraction** - R2 (production) or MinIO (dev)
+### Unlike Traditional Apps:
+
+| Traditional Apps | Synap |
+|------------------|-------|
+| Update data → lose history | Record events → remember everything |
+| One AI assistant | AI team with specialists |
+| Manual organization | Automatic knowledge graph |
+| Linear conversations | Git-like branching |
+| They own your data | You own your data |
+
+**Learn more**: [What is Synap?](../concepts/what-is-synap) - Deep dive into capabilities
+
+---
 
 ## Architecture Overview
 
@@ -61,13 +67,32 @@ Synap follows an **event-driven architecture** where all state changes flow thro
 
 For a complete architecture overview, see [Architecture Overview](../architecture/overview.md).
 
-## Next Steps
-
-1. **[Installation](./installation)** - Set up your development environment
-2. **[Quickstart](./quickstart)** - Get your first note and chat working
-3. **[Architecture Overview](../architecture/overview)** - Understand the system design
+**How It Works**:
+- **[Event Sourcing](../concepts/event-sourcing-explained)** - Never lose data, infinite undo
+- **[Knowledge Graph](../concepts/knowledge-graph)** - Automatic connections
+- **[Branching](../concepts/branching-conversations)** - Parallel AI work
+- **[Multi-Agent System](../concepts/multi-agent-system)** - Specialized AI team
 
 ---
 
-**Ready to get started?** Let's begin with [Installation](./installation)!
+## Key Features
 
+- ✅ **Event-Driven Architecture** - Built on Inngest event bus
+- ✅ **PostgreSQL with TimescaleDB** - Time-series data and vector search
+- ✅ **Multi-User Support** - Row-Level Security (RLS) for data isolation
+- ✅ **Ory Authentication** - Enterprise-grade identity management
+- ✅ **tRPC APIs** - Type-safe, end-to-end APIs
+- ✅ **Vector Search** - pgvector for semantic search
+- ✅ **Storage Abstraction** - R2 (production) or MinIO (dev)
+
+---
+
+## Next Steps
+
+1. **[Quickstart](./quickstart)** - Get your first note and chat working in 5 minutes
+2. **[Core Concepts](../concepts/what-is-synap)** - Understand what makes Synap different
+3. **[Architecture Overview](../architecture/overview)** - Technical deep dive
+
+---
+
+**Ready to get started?** Let's begin with [Quickstart](./quickstart)!

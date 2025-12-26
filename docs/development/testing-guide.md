@@ -256,6 +256,267 @@ describe('VectorService', () => {
 
 ---
 
+## Testing Inngest Workers
+
+### Overview
+
+Synap uses Inngest workers for **3-phase event processing**. Testing workers requires:
+1. Mocking Inngest events
+2. Testing permission validation logic
+3. Verifying DB operations
+4. Testing event emissions
+
+### Example: Permission Validator Worker
+
+**Worker code:**
+```typescript
+// packages/jobs/src/functions/permission-validator.ts
+export const permissionValidator = inngest.createFunction(
+  { id: 'permission-validator' },
+  [{ event: 'entities.create.requested' }],
+  async ({ event }) => {
+    const hasPermission = event.user.id === event.data.userId;
+    
+    if (hasPermission) {
+      await publishEvent({
+        type: 'entities.create.approved',
+        data: event.data,
+        userId: event.user.id
+      });
+    }
+    
+    return { approved: hasPermission };
+  }
+);
+```
+
+**Test:**
+```typescript
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { permissionValidator } from '../permission-validator.js';
+
+// Mock publishEvent
+vi.mock('@synap/events', () => ({
+  publishEvent: vi.fn()
+}));
+
+describe('Permission Validator Worker', () => {
+  it('should approve when user owns resource', async () => {
+    const userId = generateTestUserId();
+    
+    // Mock Inngest event
+    const mockEvent = {
+      event: {
+        name: 'entities.create.requested',
+        data: { userId, type: 'note', title: 'Test' },
+        user: { id: userId }
+      },
+      step: {
+        run: vi.fn((name, fn) => fn())  // Execute steps immediately
+      }
+    };
+    
+    const result = await permissionValidator.handler(mockEvent);
+    
+    expect(result.approved).toBe(true);
+    expect(publishEvent).toHaveBeenCalledWith({
+      type: 'entities.create.approved',
+      data: expect.objectContaining({ userId }),
+      userId
+    });
+  });
+  
+  it('should reject when user does not own resource', async () => {
+    const ownerId = generateTestUserId();
+    const requesterId = generateTestUserId();
+    
+    const mockEvent = {
+      event: {
+        name: 'entities.create.requested',
+        data: { userId: ownerId, type: 'note' },
+        user: { id: requesterId }  // Different user
+      },
+      step: {
+        run: vi.fn((name, fn) => fn())
+      }
+    };
+    
+    const result = await permissionValidator.handler(mockEvent);
+    
+    expect(result.approved).toBe(false);
+    expect(publishEvent).not.toHaveBeenCalled();
+  });
+});
+```
+
+### Testing CRUD Workers
+
+**Worker code:**
+```typescript
+// packages/jobs/src/functions/entities.ts
+export const entitiesWorker = inngest.createFunction(
+  { id: 'entities-worker' },
+  [{ event: 'entities.create.approved' }],
+  async ({ event, step }) => {
+    await step.run('create-entity', async () => {
+      await db.insert(entities).values({
+        id: event.data.entityId,
+        userId: event.user.id,
+        type: event.data.type,
+        title: event.data.title
+      });
+    });
+    
+    await step.run('emit-validated', async () => {
+      await publishEvent({
+        type: 'entities.create.validated',
+        data: { entityId: event.data.entityId },
+        userId: event.user.id
+      });
+    });
+  }
+);
+```
+
+**Test:**
+```typescript
+describe('Entities Worker', () => {
+  beforeAll(async () => {
+    await cleanTestData();
+  });
+  
+  afterAll(async () => {
+    await cleanTestData();
+    await sql.end();
+  });
+  
+  it('should create entity on approved event', async () => {
+    const userId = generateTestUserId();
+    const entityId = crypto.randomUUID();
+    
+    const mockEvent = {
+      event: {
+        name: 'entities.create.approved',
+        data: {
+          entityId,
+          type: 'note',
+          title: 'Test Note'
+        },
+        user: { id: userId }
+      },
+      step: {
+        run: vi.fn((name, fn) => fn())
+      }
+    };
+    
+    await entitiesWorker.handler(mockEvent);
+    
+    // Verify DB operation
+    const [created] = await sql`
+      SELECT * FROM entities WHERE id = ${entityId}
+    `;
+    
+    expect(created).toBeDefined();
+    expect(created.user_id).toBe(userId);
+    expect(created.type).toBe('note');
+    expect(created.title).toBe('Test Note');
+    
+    // Verify validated event emission
+    expect(publishEvent).toHaveBeenCalledWith({
+      type: 'entities.create.validated',
+      data: { entityId },
+      userId
+    });
+  });
+});
+```
+
+### Testing 3-Phase Flow
+
+**Integration test:**
+```typescript
+describe('3-Phase Event Flow', () => {
+  it('should complete full flow: requested → approved → validated', async () => {
+    const userId = generateTestUserId();
+    const entityId = crypto.randomUUID();
+    
+    // Phase 1: Publish .requested event
+    await publishEvent({
+      type: 'entities.create.requested',
+      data: { entityId, type: 'note', title: 'Test' },
+      userId
+    });
+    
+    // Verify event in TimescaleDB
+    const [requestedEvent] = await sql`
+      SELECT * FROM events_timescale
+      WHERE type = 'entities.create.requested'
+      AND subject_id = ${entityId}
+    `;
+    expect(requestedEvent).toBeDefined();
+    
+    // Phase 2: Simulate permission validator
+    const permResult = await permissionValidator.handler({
+      event: {
+        name: 'entities.create.requested',
+        data: { entityId, userId, type: 'note' },
+        user: { id: userId }
+      },
+      step: { run: (_, fn) => fn() }
+    });
+    
+    expect(permResult.approved).toBe(true);
+    
+    // Verify .approved event
+    const [approvedEvent] = await sql`
+      SELECT * FROM events_timescale
+      WHERE type = 'entities.create.approved'
+      AND subject_id = ${entityId}
+    `;
+    expect(approvedEvent).toBeDefined();
+    
+    // Phase 3: Simulate entities worker
+    await entitiesWorker.handler({
+      event: {
+        name: 'entities.create.approved',
+        data: { entityId, type: 'note', title: 'Test' },
+        user: { id: userId }
+      },
+      step: { run: (_, fn) => fn() }
+    });
+    
+    // Verify entity created
+    const [entity] = await sql`
+      SELECT * FROM entities WHERE id = ${entityId}
+    `;
+    expect(entity).toBeDefined();
+    
+    // Verify .validated event
+    const [validatedEvent] = await sql`
+      SELECT * FROM events_timescale
+      WHERE type = 'entities.create.validated'
+      AND subject_id = ${entityId}
+    `;
+    expect(validatedEvent).toBeDefined();
+    
+    // Complete audit trail
+    const allEvents = await sql`
+      SELECT type FROM events_timescale
+      WHERE subject_id = ${entityId}
+      ORDER BY timestamp
+    `;
+    
+    expect(allEvents.map(e => e.type)).toEqual([
+      'entities.create.requested',
+      'entities.create.approved',
+      'entities.create.validated'
+    ]);
+  });
+});
+```
+
+---
+
 ## Testing Patterns
 
 ### 1. User Isolation

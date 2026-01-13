@@ -2,7 +2,7 @@
 sidebar_position: 6
 ---
 
-# AI Integration Guide
+# Building AI Agents
 
 **Complete guide to adding AI intelligence to Data Pod**
 
@@ -380,7 +380,7 @@ await registerWithDataPod({
 });
 ```
 
-**See**: [Intelligence Registry Guide](./intelligence-registry)
+**See**: [Intelligence Registry Guide](../plugin-development/intelligence-registry.md)
 
 ---
 
@@ -557,7 +557,7 @@ await client.ai.myAgent.run({ ... });
 
 ### 3. External Service
 
-See: [Remote Plugins Guide](./remote-plugins)
+See: [Remote Plugins Guide](../plugin-development/remote-plugins.md)
 
 ---
 
@@ -590,7 +590,7 @@ Track LLM API usage, set budgets.
 - **Try LangFlow** → Build your first agent
 - **Explore LangGraph** → [LangGraph Docs](https://langchain-ai.github.io/langgraph/)
 - **Use Vercel AI SDK** → [Vercel AI SDK](https://sdk.vercel.ai/)
-- **Deploy External** → [Intelligence Registry](./intelligence-registry)
+- **Deploy External** → [Intelligence Registry](../plugin-development/intelligence-registry.md)
 
 ---
 
@@ -599,4 +599,4 @@ Track LLM API usage, set budgets.
 - [LangFlow](https://langflow.org) - Visual AI agent builder
 - [LangGraph](https://langchain-ai.github.io/langgraph/) - Agent framework
 - [Vercel AI SDK](https://sdk.vercel.ai/) - Multi-model toolkit
-- [Intelligence Registry](./intelligence-registry) - External services
+- [Intelligence Registry](../plugin-development/intelligence-registry.md) - External services

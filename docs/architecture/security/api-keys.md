@@ -54,5 +54,5 @@ Authorization: Bearer synap_xxx...
 
 ---
 
-**Next**: See [Hub Protocol API](../hub-protocol/overview.md) for Hub endpoints.
+**Next**: See [Hub Protocol Flow](../hub-protocol-flow.md) for Hub endpoints.
 

@@ -76,7 +76,7 @@ GeneratedEventTypes.conversationMessages['create.requested']
 // ... and so on for all 9 core tables
 ```
 
-**See**: [Event Types Catalog](./event-types-catalog.md) for all 55 event types
+**See**: [Event Types Catalog](../../reference/event-catalog.md) for all 55 event types
 
 ---
 

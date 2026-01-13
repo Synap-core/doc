@@ -256,9 +256,9 @@ sequenceDiagram
 ## Key Concepts
 
 - **[Event Sourcing & CQRS](./core-patterns.md)** - Events as source of truth
-- **[Hub & Spoke Model](./core-concepts/hub-spoke.md)** - Data Pod ↔ External Services
-- **[Data Sovereignty](./core-concepts/data-sovereignty.md)** - Your data, your control
-- **[Plugin System](./core-concepts/plugin-system.md)** - Extensibility
+- **[Hub & Spoke Model](../concepts/hub-and-spoke.md)** - Data Pod ↔ External Services
+- **[Data Sovereignty](../concepts/data-sovereignty.md)** - Your data, your control
+- **[Extensibility](../development/extending/overview.md)** - Plugin System & Extensions
 
 ---
 

@@ -110,4 +110,4 @@ External services only request data that is strictly necessary for the requested
 
 ---
 
-**Next**: See [Data Sovereignty](../core-concepts/data-sovereignty.md) for more details.
+**Next**: See [Data Sovereignty](../../concepts/data-sovereignty.md) for more details.

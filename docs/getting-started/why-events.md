@@ -392,6 +392,6 @@ if (event.source === 'ai-agent') {
 ## Next Steps
 
 - [Event Architecture](../architecture/events/event-architecture.md) - Technical foundation
-- [Event Types Catalog](../api/event-types-catalog.md) - All events reference
+- [Event Types Catalog](../reference/event-catalog.md) - All events reference
 - [Webhooks Guide](../integrations/webhooks-guide.md) - External integrations
-- [API Reference](../api/data-pod/overview.md) - Build integrations
+- [Development Guide](../development/setup.md) - Build integrations

@@ -27,7 +27,7 @@ Extend Data Pod with new features:
 - AI integrations
 - Custom workflows
 
-**Guide**: [Plugin Development →](../plugin-development/overview)
+**Guide**: [Extending Synap →](../extending/overview)
 
 ---
 

@@ -21,6 +21,9 @@ const sidebars: SidebarsConfig = {
       label: 'Concepts',
       items: [
         'concepts/what-is-synap',
+        'concepts/workspace-as-a-service',
+        'concepts/contagious-layers',
+        'concepts/hub-and-spoke',
         'concepts/event-sourcing-explained',
         'concepts/knowledge-graph',
         'concepts/branching-conversations',
@@ -50,14 +53,7 @@ const sidebars: SidebarsConfig = {
         },
         'architecture/ai-architecture',
         'architecture/hub-protocol-flow',
-        {
-          type: 'category',
-          label: 'Core Concepts',
-          items: [
-            'architecture/core-concepts/hub-spoke',
-            'architecture/core-concepts/plugin-system',
-          ],
-        },
+
         {
           type: 'category',
           label: 'Components',
@@ -112,22 +108,25 @@ const sidebars: SidebarsConfig = {
         'development/setup',
         {
           type: 'category',
-          label: 'Core Contribution',
+          label: 'Contributing Guide',
           items: [
-            'development/core-contribution/overview',
-            'development/core-contribution/monorepo-structure',
-            'development/core-contribution/router-development',
+            'development/contributing/overview',
+            'development/contributing/monorepo-structure',
+            'development/contributing/code-style',
+            'development/contributing/router-development',
+            'development/contributing/event-system',
+            'development/contributing/testing',
           ],
         },
         {
           type: 'category',
-          label: 'Plugin Development',
+          label: 'Extending Synap',
           items: [
-            'development/plugin-development/overview',
-            'development/plugin-development/direct-plugins',
-            'development/plugin-development/remote-plugins',
-            'development/plugin-development/hybrid-plugins',
-            'development/plugin-development/intelligence-registry',
+            'development/extending/overview',
+            'development/extending/direct-plugins',
+            'development/extending/remote-plugins',
+            'development/extending/hybrid-plugins',
+            'development/extending/intelligence-registry',
           ],
         },
         {
@@ -142,10 +141,9 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Contributing',
+          label: 'AI & Agents',
           items: [
-            'development/contributing/code-style',
-            'development/contributing/testing',
+            'development/ai/building-agents',
           ],
         },
       ],
@@ -208,6 +206,8 @@ const sidebars: SidebarsConfig = {
           items: [
             'resources/comparisons/vs-notion',
             'resources/comparisons/vs-obsidian',
+            'resources/comparisons/vs-saas',
+            'resources/comparisons/vs-opensource',
           ],
         },
       ],

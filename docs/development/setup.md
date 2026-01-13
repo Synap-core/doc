@@ -227,4 +227,4 @@ PORT=3001
 
 ---
 
-**Next**: See [Extensibility Guide](./extensibility/extensibility-guide.md) to learn how to extend the system.
+**Next**: See [Extending Synap](./extending/overview.md) to learn how to extend the system.

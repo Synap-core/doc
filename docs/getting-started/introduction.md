@@ -7,28 +7,28 @@ sidebar_position: 1
 Welcome to **Synap** - a Personal Data Operating System with revolutionary capabilities.
 
 ## What is Synap?
+**Synap is a Personal Data Operating System.**
 
-**Synap is not just a note-taking app.** It's a complete platform for building intelligent applications with superpowers:
+It creates a **private, intelligent kernel** for your digital life where you are the root user. Instead of scattering your life across dozens of SaaS silos, Synap brings your data into a single, sovereign "Data Pod" that you own, control, and can extend indefinitely.
 
-- 🕐 **Time-Travel** - Never lose data, undo anything, see your workspace from any point in time
-- 🌳 **Branching** - Git-like conversations, parallel AI exploration, context switching
-- 🧠 **Knowledge Graph** - Automatic connections, bi-directional links, relationship discovery
-- 🤖 **Multi-Agent AI** - Specialized AI team working in parallel, not just one assistant
-- 🔒 **Data Sovereignty** - You own it, you host it, you control it
+### The "Workspace as a Service" Paradigm
+Synap treats your workspace not as a static file folder, but as a live service:
 
-## Why These Matter
+- 🕐 **Time-Travel**: Every keystroke is an event. Replay history, fork conversations, and audit everything.
+- 🧠 **Contagious Intelligence**: AI isn't a bolt-on; it's a layer. Add an AI capability once, and it propagates to every note, task, and file instantly.
+- 🌳 **Branching Workflows**: Just like code, your thoughts can branch. Explore different ideas in parallel without messing up your main thread.
+- 🔒 **Sovereign by Design**: You don't "log in" to Synap; you *host* it (or we host a private instance for you). Your data never leaves your pod unless you explicitly authorize it via the Hub Protocol.
 
-### Unlike Traditional Apps:
+### Why It Matters
 
-| Traditional Apps | Synap |
-|------------------|-------|
-| Update data → lose history | Record events → remember everything |
-| One AI assistant | AI team with specialists |
-| Manual organization | Automatic knowledge graph |
-| Linear conversations | Git-like branching |
-| They own your data | You own your data |
+| The SaaS Model (Old) | The Synap Model (Personal OS) |
+|----------------------|-------------------------------|
+| App owns the data | **You own the data** |
+| Intelligence is trapped in the app | **Intelligence works across your whole life** |
+| "Features" are gatekept by pricing | **Features are just plugins you install** |
+| Linear history (Ctrl+Z) | **Event Sourcing (Infinite Time Travel)** |
 
-**Learn more**: [What is Synap?](../concepts/what-is-synap) - Deep dive into capabilities
+**Learn more**: [Workspace as a Service](../concepts/workspace-as-a-service.md) - Deep dive into the philosophy
 
 ---
 

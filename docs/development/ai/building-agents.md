@@ -4,599 +4,495 @@ sidebar_position: 6
 
 # Building AI Agents
 
-**Complete guide to adding AI intelligence to Data Pod**
+**How to Add Intelligence to Synap**
 
 ---
 
-## Overview
+## The Intelligence Services Model
 
-Data Pod supports multiple ways to add AI capabilities:
+Synap's AI architecture is different: **AI runs as external services**, not embedded code.
 
-### 1. Visual Tools (No Code)
-- **LangFlow** - Visual AI agent builder
-- **N8N** - Automation workflows
+### Why External?
 
-### 2. Code-Based (Direct Integration)
-- **LangGraph** - Agent orchestration framework
-- **Vercel AI SDK** - Multi-model AI toolkit
-- **Custom Code** - Full control
+| Traditional (Built-in) | Synap (External Services) |
+|------------------------|---------------------------|
+| One AI model | **Your choice of model** |
+| Vendor lock-in | **Swap anytime** |
+| Can't use proprietary models | **Keep your IP** |
+| Scales with app | **Scale independently** |
 
-### 3. External Services
-- **Intelligence Registry** - Remote AI services
-- **HTTP Webhooks** - Any external AI
+### The Flow
+
+```
+User → Data Pod → Hub Protocol → Your Intelligence Service
+                                        ↓
+                                  ANY AI Model
+                                  (GPT-4, Claude, Llama, Custom)
+                                        ↓
+                                  Entities/Proposals
+                                        ↓
+                        ← Hub Protocol ← Data Pod
+```
 
 ---
 
 ## Quick Decision Tree
 
 ```
-Want to build AI without code?
-├─ Yes → Use LangFlow (visual agent builder)
-│
-└─ No → Need code control?
-    ├─ Simple AI calls → Vercel AI SDK
-    ├─ Complex agents → LangGraph
-    └─ External service → Intelligence Registry
+Building AI for Synap?
+├─ Need proprietary AI? → Intelligence Service (recommended)
+├─ Need GPU infrastructure? → Intelligence Service
+├─ Want to use local models? → Intelligence Service
+├─ Simple utility? → Internal Agent (LangGraph)
+└─ Just testing? → tRPC mutation with AI SDK
 ```
 
 ---
 
-## Option 1: LangFlow (Visual AI Builder)
+## Option 1: Intelligence Service (Recommended)
 
-### What is LangFlow?
+**Best for**: Production AI, proprietary models, independent scaling
 
-**Visual interface** for building LangGraph agents without code.
+### 1. Create Your Service
 
-**Perfect for**:
-- Knowledge workers customizing AI
-- Rapid prototyping
-- Non-developers
-- Visual learners
-
-### How It Works
-
-```
-LangFlow UI (visual editor)
-  ↓
-Exports LangGraph agent code
-  ↓
-Deploy to Data Pod
-  ↓
-Available via tRPC API
-```
-
-### Example: Personal Research Assistant
-
-**In LangFlow**:
-```
-1. Drag nodes:
-   - Input: User query
-   - RAG: Search notes
-   - LLM: Generate summary
-   - Output: Formatted response
-
-2. Connect nodes visually
-
-3. Test in LangFlow
-
-4. Export agent
-```
-
-**Deploy to Data Pod**:
 ```bash
-# Export from LangFlow
-langflow export --agent research-assistant --output ./agent.py
-
-# Convert to TypeScript (or use Python runtime)
-# Place in packages/ai/src/agents/research-assistant.ts
-
-# Register with Data Pod
-# Automatically available via API
+mkdir my-intelligence-service
+cd my-intelligence-service
+npm init -y
+npm install @synap/hub-protocol hono
 ```
 
-**Use from Frontend**:
+### 2. Implement the Service
+
 ```typescript
-const response = await client.ai.research.query({
-  question: "Summarize my Lisbon trip notes"
+// src/index.ts
+import { Hono } from 'hono';
+import { HubProtocolClient } from '@synap/hub-protocol';
+import OpenAI from 'openai'; // or any AI library
+
+const app = new Hono();
+
+app.post('/analyze', async (c) => {
+  const { threadId, dataPodUrl, apiKey } = await c.req.json();
+  
+  // 1. Connect to user's Data Pod
+  const hub = new HubProtocolClient(dataPodUrl, apiKey);
+  
+  // 2. Read context
+  const thread = await hub.getThreadContext({ threadId });
+  const userNotes = await hub.queryEntities({ 
+    type: "note",
+    filters: { tags: ["project-x"] }
+  });
+  
+  // 3. Process with YOUR AI
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4",
+    messages: [
+      { role: "system", content: "You are a project analyzer." },
+      { role: "user", content: `Analyze: ${JSON.stringify(userNotes)}` }
+    ]
+  });
+  
+  const analysis = completion.choices[0].message.content;
+  
+  // 4. Submit insights as proposals
+  await hub.createEntity({
+    type: "note",
+    title: "Project Analysis",
+    content: analysis,
+    metadata: {
+      aiGenerated: true,
+      model: "gpt-4",
+      confidence: 0.9,
+      reasoning: "Analyzed project notes for insights"
+    }
+  });
+  
+  return c.json({ success: true });
+});
+
+export default app;
+```
+
+### 3. Deploy Anywhere
+
+- **Cloudflare Workers**: Serverless, global edge
+- **AWS Lambda**: Serverless, AWS ecosystem
+- **Railway**: One-click deploy
+- **Your VPS**: Full control
+- **Local (ngrok)**: Development
+
+### 4. Register with Data Pod
+
+```typescript
+// Service startup
+await fetch(`${dataPodUrl}/trpc/intelligenceRegistry.register`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    serviceId: 'my-analyzer',
+    name: 'Project Analyzer',
+    capabilities: ['entity_creation', 'semantic_analysis'],
+    webhookUrl: 'https://my-service.com/analyze'
+  })
 });
 ```
 
-### LangFlow Features
+### 5. Frontend Integration
 
-✅ **Visual graph editor**  
-✅ **Pre-built components** (RAG, chains, tools)  
-✅ **Test directly** in UI  
-✅ **Export to code**  
-✅ **Version control** friendly (JSON exports)
+Users can invoke your service:
 
-### Integration with Data Pod
-
-LangFlow agents can access Data Pod directly:
-
-```python
-# LangFlow agent has Data Pod tools
-from datapod_tools import search_notes, create_entity
-
-def research_agent(query):
-    # Search user's notes
-    notes = search_notes(query)
-    
-    # Generate summary with LLM
-    summary = llm.generate(notes)
-    
-    # Save as entity
-    create_entity(type="summary", content=summary)
-    
-    return summary
+```typescript
+// Frontend
+const response = await client.intelligenceServices.invoke({
+  serviceId: 'my-analyzer',
+  threadId: currentThread.id
+});
 ```
-
-**Learn more**: [LangFlow Documentation](https://langflow.org)
 
 ---
 
-## Option 2: LangGraph (Code-Based Agents)
+## Option 2: Internal Agent (LangGraph)
 
-### What is LangGraph?
+**Best for**: Simple utilities, tight integration, open-source contributions
 
-**Agent orchestration framework** for complex AI workflows.
+### When to Use Internal
 
-**Perfect for**:
-- Multi-step reasoning
-- Agent collaboration
-- Conditional logic
-- State management
+- No proprietary logic
+- Simple AI calls
+- Contributing to core
+- Low latency critical
 
-### Example: Meeting Notes Processor
+### Example: Note Summarizer
 
 ```typescript
-// packages/ai/src/agents/meeting-processor.ts
-import { StateGraph } from '@langchain/langgraph';
-import { db, notes, entities } from '@synap/database';
+// packages/ai/src/agents/summarizer.ts
+import { StateGraph, Annotation } from '@langchain/langgraph';
+import { generateObject } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
 
-interface MeetingState {
-  noteId: string;
-  content: string;
-  topics: string[];
-  tasks: Array<{ title: string; assignee?: string }>;
-  summary: string;
-}
+const SummarizerState = Annotation.Root({
+  noteId: Annotation<string>(),
+  content: Annotation<string>(),
+  summary: Annotation<string>()
+});
 
-export function createMeetingAgent() {
-  const graph = new StateGraph<MeetingState>();
+export function createSummarizer() {
+  const graph = new StateGraph(SummarizerState);
   
-  // Step 1: Extract topics
-  graph.addNode('extract_topics', async (state) => {
-    const topics = await llm.extract({
-      prompt: `Extract main topics from: ${state.content}`,
-      schema: z.array(z.string())
+  graph.addNode('fetch', async (state) => {
+    // Fetch note from DB
+    const note = await db.query.entities.findFirst({
+      where: eq(entities.id, state.noteId)
     });
-    return { ...state, topics };
+    return { ...state, content: note.content };
   });
   
-  // Step 2: Find action items
-  graph.addNode('extract_tasks', async (state) => {
-    const tasks = await llm.extract({
-      prompt: `Extract tasks from: ${state.content}`,
-      schema: TaskSchema
-    });
-    return { ...state, tasks };
-  });
-  
-  // Step 3: Generate summary
   graph.addNode('summarize', async (state) => {
-    const summary = await llm.generate({
-      prompt: `Summarize meeting covering: ${state.topics.join(', ')}`
+    const result = await generateObject({
+      model: anthropic('claude-3-haiku-20240307'),
+      schema: z.object({
+        summary: z.string(),
+        keyPoints: z.array(z.string())
+      }),
+      prompt: `Summarize: ${state.content}`
     });
-    return { ...state, summary };
+    
+    return { ...state, summary: result.object.summary };
   });
   
-  // Step 4: Save to Data Pod
   graph.addNode('save', async (state) => {
-    // Create topic entities
-    for (const topic of state.topics) {
-      await db.insert(entities).values({
-        type: 'topic',
-        title: topic,
-        sourceNoteId: state.noteId
-      });
-    }
-    
-    // Create task entities
-    for (const task of state.tasks) {
-      await db.insert(entities).values({
-        type: 'task',
-        title: task.title,
-        assignee: task.assignee
-      });
-    }
+    // Emit event to create summary entity
+    await eventBus.emit('entity.creation.requested', {
+      type: 'note',
+      title: `Summary: ${state.noteId}`,
+      content: state.summary,
+      metadata: { aiGenerated: true }
+    });
     
     return state;
   });
   
-  // Define flow
-  graph.setEntryPoint('extract_topics');
-  graph.addEdge('extract_topics', 'extract_tasks');
-  graph.addEdge('extract_tasks', 'summarize');
+  graph.setEntryPoint('fetch');
+  graph.addEdge('fetch', 'summarize');
   graph.addEdge('summarize', 'save');
   
   return graph.compile();
 }
 ```
 
-### Using with Vercel AI SDK
+### Register in Router
 
 ```typescript
-import { generateText } from 'ai';
-import { openai } from '@ai-sdk/openai';
+// packages/api/src/routers/notes.ts
+import { createSummarizer } from '@synap/ai';
 
-// Vercel AI SDK for LLM calls
-const llm = {
-  async generate(options) {
-    const { text } = await generateText({
-      model: openai('gpt-4'),
-      prompt: options.prompt
-    });
-    return text;
-  },
-  
-  async extract(options) {
-    const { object } = await generateObject({
-      model: openai('gpt-4'),
-      schema: options.schema,
-      prompt: options.prompt
-    });
-    return object;
-  }
-};
-```
-
-### Register Agent
-
-```typescript
-// packages/api/src/routers/ai.ts
-import { createMeetingAgent } from '@synap/ai';
-
-export const aiRouter = router({
-  processMeeting: protectedProcedure
-    .input(z.object({ noteId: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const agent = createMeetingAgent();
-      
-      // Get note
-      const note = await db.query.notes.findFirst({
-        where: eq(notes.id, input.noteId)
-      });
-      
-      // Run agent
-      const result = await agent.invoke({
-        noteId: input.noteId,
-        content: note.content,
-        topics: [],
-        tasks: [],
-        summary: ''
-      });
-      
-      return { summary: result.summary, tasks: result.tasks };
-    })
-});
-```
-
----
-
-## Option 3: Vercel AI SDK (Simple AI Calls)
-
-### What is Vercel AI SDK?
-
-**Multi-model AI toolkit** for simple AI operations.
-
-**Perfect for**:
-- Text generation
-- Structured extraction
-- Streaming responses
-- Multi-model support (OpenAI, Anthropic, Google, etc.)
-
-### Example: Note Summarizer
-
-```typescript
-// packages/api/src/routers/ai-helpers.ts
-import { generateText, streamText } from 'ai';
-import { openai } from '@ai-sdk/openai';
-
-export const aiHelpersRouter = router({
+export const notesRouter = router({
   summarize: protectedProcedure
-    .input(z.object({ text: z.string() }))
+    .input(z.object({ noteId: z.string() }))
     .mutation(async ({ input }) => {
-      const { text } = await generateText({
-        model: openai('gpt-4'),
-        prompt: `Summarize this concisely:\n\n${input.text}`
-      });
+      const agent = createSummarizer();
+      await agent.invoke({ noteId: input.noteId });
       
-      return { summary: text };
-    }),
-  
-  // Streaming response
-  chat: protectedProcedure
-    .input(z.object({ messages: z.array(MessageSchema) }))
-    .mutation(async function* ({ input }) {
-      const stream = await streamText({
-        model: openai('gpt-4'),
-        messages: input.messages
-      });
-      
-      for await (const chunk of stream.textStream) {
-        yield { chunk };
-      }
+      return { success: true };
     })
 });
 ```
 
 ---
 
-## Option 4: Intelligence Registry (External Services)
+## Option 3: Simple AI Call (Vercel AI SDK)
 
-### When to Use
+**Best for**: One-off AI features, prototyping
 
-- Heavy ML workloads (GPU needed)
-- Proprietary AI models
-- Third-party AI services
-- Independent scaling
+### Example: Smart Tags
 
-### Example: Life Feed Intelligence
-
-**External Service**:
 ```typescript
-// synap-intelligence-service/
-import { Hono } from 'hono';
+// packages/api/src/routers/entities.ts
+import { generateObject } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
 
-const app = new Hono();
-
-app.post('/analyze', async (c) => {
-  const { itemId, content, callbackUrl } = await c.req.json();
-  
-  // AI analysis (use any model)
-  const analysis = await aiModel.analyze(content);
-  
-  // Call back to Data Pod
-  await fetch(callbackUrl, {
-    method: 'POST',
-    body: JSON.stringify({
-      itemId,
-      analysis: {
-        priority: analysis.priority,
-        tags: analysis.tags,
-        summary: analysis.summary
+export const entitiesRouter = router({
+  generateTags: protectedProcedure
+    .input(z.object({ content: z.string() }))
+    .mutation(async ({ input }) => {
+      const result = await generateObject({
+        model: anthropic('claude-3-haiku-20240307'),
+        schema: z.object({
+          tags: z.array(z.string()),
+          confidence: z.number()
+        }),
+        prompt: `Suggest tags for: ${input.content}`
+      });
+      
+      // Emit event for each tag
+      for (const tag of result.object.tags) {
+        await ctx.events.emit('tag.creation.requested', {
+          name: tag,
+          metadata: { aiGenerated: true }
+        });
       }
+      
+      return result.object;
     })
-  });
-  
-  return c.json({ success: true });
-});
-
-// Register on startup
-await registerWithDataPod({
-  serviceId: 'lifefeed-ai',
-  webhookUrl: process.env.SERVICE_URL + '/analyze',
-  capabilities: ['lifefeed-analysis']
 });
 ```
 
-**See**: [Intelligence Registry Guide](../plugin-development/intelligence-registry.md)
-
 ---
 
-## Comparison
+## Proposals: Human-in-the-Loop
 
-| Approach | Code Required | Flexibility | Visual | Best For |
-|----------|--------------|-------------|--------|----------|
-| **LangFlow** | None | Medium | ✅ Yes | Knowledge workers, rapid prototyping |
-| **LangGraph** | Advanced | High | ❌ No | Complex agents, multi-step workflows |
-| **Vercel AI SDK** | Simple | Medium | ❌ No | Quick AI features, streaming |
-| **Intelligence Registry** | External | High | ❌ No | Heavy ML, independent services |
+All AI-created entities start as **proposals** awaiting user approval.
 
----
+### The Flow
 
-## Complete Example: Research Assistant
-
-### LangFlow Version (Visual)
-
-1. **Create in LangFlow**:
-   - Input node: User query
-   - RAG node: Search user's notes
-   - LLM node: GPT-4 summarization
-   - Output node: Formatted response
-
-2. **Export & Deploy**:
-```bash
-langflow export --output research-assistant.json
-# Deploy to Data Pod
+```
+1. Intelligence Service → hubProtocol.createEntity()
+2. Backend → Creates Proposal (status: pending)
+3. User → Reviews in UI
+4. User → Approves → Real entity created
+5. User → Rejects → Stays for audit
 ```
 
-3. **Use**:
+### Why Proposals?
+
+- **Review before commit**: See what AI wants to create
+- **Confidence scores**: AI explains its reasoning
+- **Audit trail**: Track all AI suggestions
+- **Undo capability**: Reject bad suggestions
+
+### Proposal API
+
 ```typescript
-await client.ai.research.ask({ question: "..." });
+// Intelligence Service creates proposal
+await hubProtocol.createEntity({
+  type: "task",
+  title: "Follow up with client",
+  metadata: {
+    aiGenerated: true,
+    confidence: 0.75,
+    reasoning: "Detected action item in meeting notes",
+    source: "meeting-note-123"
+  }
+});
+
+// User sees in proposal inbox
+{
+  id: "prop-456",
+  status: "pending",
+  targetType: "entity",
+  request: { /* entity data */ },
+  createdAt: "2024-01-15T10:00:00Z"
+}
+
+// User approves
+await client.proposals.approve({ proposalId: "prop-456" });
+
+// Now it's a real entity
 ```
 
 ---
 
-### LangGraph Version (Code)
+## AI Metadata Standard
+
+Always include AI context in metadata:
 
 ```typescript
-// Full control, custom logic
-export function createResearchAgent() {
-  const graph = new StateGraph<ResearchState>();
-  
-  graph.addNode('search', async (state) => {
-    // Search notes with vector similarity
-    const results = await vectorSearch(state.query);
-    return { ...state, context: results };
-  });
-  
-  graph.addNode('analyze', async (state) => {
-    // Custom analysis logic
-    const insights = await analyzeContext(state.context);
-    return { ...state, insights };
-  });
-  
-  graph.addNode('generate', async (state) => {
-    // Generate response
-    const response = await llm.generate({
-      context: state.context,
-      insights: state.insights,
-      query: state.query
-    });
-    return { ...state, response };
-  });
-  
-  // Define flow
-  graph.setEntryPoint('search');
-  graph.addEdge('search', 'analyze');
-  graph.addEdge('analyze', 'generate');
-  
-  return graph.compile();
+metadata: {
+  aiGenerated: true,              // Required: marks as AI-created
+  model: "gpt-4",                  // Which model
+  confidence: 0.85,                // 0-1 confidence score
+  reasoning: "Found in notes...",  // Explain why created
+  source: "entity-123",            // What triggered it
+  timestamp: "2024-01-15T10:00:00Z"
 }
 ```
 
----
-
-## Why Visual Tools Matter
-
-### LangFlow Benefits
-
-✅ **Accessibility**: Non-developers can build agents  
-✅ **Visualization**: See agent flow clearly  
-✅ **Iteration**: Test and modify quickly  
-✅ **Exports code**: Can version control  
-✅ **Personalization**: Users customize their AI
-
-### N8N for Automation
-
-**Similar concept** but for workflows, not AI agents:
-
-```
-N8N: Visual automation
-- Trigger: New email
-- Action: Extract tasks
-- Action: Create entities
-- Action: Notify user
-
-LangFlow: Visual AI agents
-- Input: User query
-- RAG: Search knowledge
-- LLM: Generate response
-- Output: Formatted answer
-```
-
-**Both empower users** without requiring code
+This enables:
+- UI badges ("AI-suggested")
+- Filtering (show only high-confidence)
+- Debugging (trace AI reasoning)
+- Analytics (which AI performs best)
 
 ---
 
-## Integration Architecture
+## Real Examples
 
-```
-┌─────────────────────────────────────┐
-│ Visual Tools (No Code)              │
-│ ┌──────────┐      ┌──────────┐    │
-│ │ LangFlow │      │   N8N    │    │
-│ │ (AI)     │      │ (Workflow)│    │
-│ └────┬─────┘      └────┬─────┘    │
-│      │Export           │Export      │
-│      ▼                 ▼            │
-└──────┼─────────────────┼────────────┘
-       │                 │
-       ▼                 ▼
-┌─────────────────────────────────────┐
-│ Data Pod                            │
-│ ┌──────────────┐  ┌──────────────┐│
-│ │  LangGraph   │  │  Workflows   ││
-│ │   Agents     │  │  (Inngest)   ││
-│ └──────────────┘  └──────────────┘│
-│                                     │
-│ Accessible via tRPC API             │
-└─────────────────────────────────────┘
-       ▲
-       │ Use AI
-       │
-┌──────┴───────┐
-│  Frontend    │
-└──────────────┘
-```
+### 1. Meeting Notes Analyzer
+
+**Intelligence Service** that:
+1. Reads meeting notes
+2. Extracts action items → Tasks
+3. Identifies attendees → Person entities
+4. Creates relations (Task → Person)
+
+All as **proposals** for user review.
+
+### 2. Knowledge Graph Builder
+
+**Intelligence Service** that:
+1. Reads all user notes
+2. Finds semantic connections
+3. Proposes relations between notes
+4. Generates summary notes
+
+User reviews and approves connections.
+
+### 3. Smart Inbox
+
+**Internal Agent** that:
+1. Monitors inbox items
+2. Classifies by type
+3. Suggests tags
+4. Routes to projects
+
+Runs on every inbox item creation.
 
 ---
 
-## Getting Started
+## Deployment Patterns
 
-### 1. Visual Approach (LangFlow)
+### Development
 
 ```bash
-# Install LangFlow
-pip install langflow
+# Run service locally
+npm run dev
 
-# Start LangFlow UI
-langflow run
+# Expose via ngrok
+ngrok http 3000
 
-# Open http://localhost:7860
-# Build your agent visually
-# Export to Data Pod
+# Register with Data Pod
+curl -X POST http://localhost:3001/trpc/intelligenceRegistry.register \
+  -d '{"webhookUrl": "https://xyz.ngrok.io/analyze"}'
 ```
 
-### 2. Code Approach (LangGraph)
+### Production
+
+#### Cloudflare Workers
 
 ```bash
-# Install dependencies
-pnpm add @langchain/langgraph @langchain/openai
-
-# Create agent
-# packages/ai/src/agents/my-agent.ts
-
-# Register in router
-# packages/api/src/routers/ai.ts
-
-# Use from frontend
-await client.ai.myAgent.run({ ... });
+npm install wrangler -g
+wrangler init
+wrangler publish
 ```
 
-### 3. External Service
+#### Docker
 
-See: [Remote Plugins Guide](../plugin-development/remote-plugins.md)
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+CMD ["npm", "start"]
+```
+
+```bash
+docker build -t my-intelligence-service .
+docker run -p 3000:3000 my-intelligence-service
+```
+
+---
+
+## Testing
+
+### Test Intelligence Service Locally
+
+```typescript
+// test/analyze.test.ts
+import { HubProtocolClient } from '@synap/hub-protocol';
+
+describe('Analyzer Service', () => {
+  it('creates proposals', async () => {
+    const hub = new HubProtocolClient(
+      'http://localhost:3001',
+      'test-api-key'
+    );
+    
+    const response = await fetch('http://localhost:3000/analyze', {
+      method: 'POST',
+      body: JSON.stringify({
+        threadId: 'test-thread',
+        dataPodUrl: 'http://localhost:3001',
+        apiKey: 'test-api-key'
+      })
+    });
+    
+    expect(response.status).toBe(200);
+    
+    // Check proposals were created
+    const proposals = await hub.getProposals();
+    expect(proposals.length).toBeGreaterThan(0);
+  });
+});
+```
 
 ---
 
 ## Best Practices
 
-### 1. Start Simple
-
-Begin with Vercel AI SDK for simple tasks, upgrade to LangGraph when needed.
-
-### 2. Use Visual Tools for Users
-
-Let knowledge workers build their own agents with LangFlow.
-
-### 3. Version Control Everything
-
-Export LangFlow agents to JSON, commit to git.
-
-### 4. Test Thoroughly
-
-AI is non-deterministic - test extensively.
-
-### 5. Monitor Costs
-
-Track LLM API usage, set budgets.
+1. **Use Intelligence Services for production** - Better separation, scaling
+2. **Use Internal Agents sparingly** - Only for simple utilities
+3. **Always create proposals** - Never write directly
+4. **Include metadata** - Confidence, reasoning, model
+5. **Test with real Data Pods** - Use Hub Protocol SDK
+6. **Version your APIs** - Service endpoints can change
+7. **Monitor confidence scores** - Track AI performance
 
 ---
 
 ## Next Steps
 
-- **Try LangFlow** → Build your first agent
-- **Explore LangGraph** → [LangGraph Docs](https://langchain-ai.github.io/langgraph/)
-- **Use Vercel AI SDK** → [Vercel AI SDK](https://sdk.vercel.ai/)
-- **Deploy External** → [Intelligence Registry](../plugin-development/intelligence-registry.md)
+1. **Choose your approach** (Intelligence Service recommended)
+2. **Read Hub Protocol docs** → [Hub Protocol Flow](../../architecture/hub-protocol-flow.md)
+3. **See composability** → [Composable Architecture](../../concepts/composable-architecture.md)
+4. **Build and deploy**
 
 ---
 
-## Resources
-
-- [LangFlow](https://langflow.org) - Visual AI agent builder
-- [LangGraph](https://langchain-ai.github.io/langgraph/) - Agent framework
-- [Vercel AI SDK](https://sdk.vercel.ai/) - Multi-model toolkit
-- [Intelligence Registry](../plugin-development/intelligence-registry.md) - External services
+**Resources**:
+- [Hub Protocol SDK](https://github.com/synap-core/hub-protocol-sdk)
+- [Intelligence Services Examples](https://github.com/synap-core/intelligence-services)
+- [Event Architecture](../../architecture/events/event-architecture.md)

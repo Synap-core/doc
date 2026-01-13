@@ -23,6 +23,7 @@ const sidebars: SidebarsConfig = {
         'concepts/what-is-synap',
         'concepts/workspace-as-a-service',
         'concepts/contagious-layers',
+        'concepts/composable-architecture',
         'concepts/hub-and-spoke',
         'concepts/event-sourcing-explained',
         'concepts/knowledge-graph',

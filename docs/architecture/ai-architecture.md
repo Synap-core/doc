@@ -4,231 +4,361 @@ sidebar_position: 4
 
 # AI Architecture
 
-**LangGraph + Vercel AI SDK integration**
+**Intelligence Services & Composable AI**
 
 ---
 
 ## Overview
 
-Synap uses a **hybrid approach** combining the best of both worlds:
-- **LangGraph**: State machine orchestration for multi-step reasoning workflows
-- **Vercel AI SDK**: Simple, type-safe LLM calls with built-in schema validation
+Synap's AI architecture is built on three key principles:
 
-This architecture provides:
-- ✅ Complex multi-step reasoning (LangGraph)
-- ✅ Simple, maintainable LLM calls (Vercel AI SDK)
-- ✅ Type-safe outputs (Zod schemas)
-- ✅ Provider-agnostic design
-- ✅ Better developer experience
-
-:::info AI as First-Class Citizen
-When AI creates or enriches entities, it uses the **same event types** as user actions (e.g., `entity.created`). AI context is stored in the event's `metadata.ai` field, including confidence scores, extraction sources, and reasoning traces.
-
-See [Event Metadata](./events/event-metadata.md) for details on AI metadata structure.
-:::
+1. **External Intelligence Services**: AI runs as separate services, not embedded agents
+2. **Composable Entities**: AI assembles Lego-like building blocks (entities/documents)
+3. **Human-in-the-Loop**: AI proposals require human validation (via proposals system)
 
 ---
 
-## Architecture
+## Intelligence Services Model
 
-### Current Implementation
+### The Architecture
 
-import MermaidFullscreen from '@site/src/components/MermaidFullscreen';
+Unlike traditional apps with built-in AI, Synap provides a **platform** for connecting external AI services:
 
-<MermaidFullscreen 
-  title="AI Architecture: LangGraph State Machine"
-  value={`graph TD
-    A[User Message] --> B[LangGraph State Machine]
-    B --> C[parse_intent]
-    C --> D[gather_context]
-    D --> E[plan_actions]
-    E --> F[execute_actions]
-    F --> G[generate_final_response]
-    G --> H[Response to User]
-    
-    C --> I[Vercel AI SDK]
-    E --> I
-    G --> I
-    I --> J[Anthropic Claude]`} 
-/>
+```
+User → Data Pod (Your Data) → Hub Protocol → Intelligence Service (Your AI)
+                                                    ↓
+                                             ANY AI Model
+                                      (GPT-4, Claude, Llama, Custom)
+                                                    ↓
+                                            Insights/Entities
+                                                    ↓
+                                    ← Hub Protocol ← Data Pod
+```
 
-### State Machine Workflow
+### Why External Services?
 
-1. **parse_intent** - Classifies user intent (capture/command/query/unknown)
-   - Uses: `generateObject()` with Zod schema
-   - Model: Claude 3 Haiku (via Vercel AI SDK)
+| Traditional (Built-in AI) | Synap (External Services) |
+|---------------------------|---------------------------|
+| One AI model for everyone | **Your choice of AI** |
+| Vendor lock-in | **Swap anytime** |
+| Can't use proprietary models | **Keep your IP private** |
+| Scales with app | **Scales independently** |
+| Generic intelligence | **Specialized agents** |
 
-2. **gather_context** - Collects semantic search results and memory facts
-   - Uses: Semantic search tool + Knowledge service
-   - No LLM call needed
+### How It Works
 
-3. **plan_actions** - Plans tool execution sequence
-   - Uses: `generateObject()` with Zod schema
-   - Model: Claude 3 Haiku (via Vercel AI SDK)
+1. **Developer builds a service** (Node.js, Python, anything)
+2. **Service implements Hub Protocol client**
+3. **Service requests Data Pod access** (per-user, per-request)
+4. **Service processes with ANY AI**
+5. **Service submits insights** → Proposals (human review)
 
-4. **execute_actions** - Executes planned tools
-   - Tools: `createEntity`, `semanticSearch`, `saveFact`
-   - No LLM call needed
-
-5. **generate_final_response** - Generates natural language response
-   - Uses: `generateObject()` with Zod schema
-   - Model: Claude 3 Haiku (via Vercel AI SDK)
+**Reference Implementation**: `services/intelligence/` in backend repo
 
 ---
 
-## Code Examples
+## AI as Lego Assembler
 
-### Intent Classification
+Intelligence Services don't write to a database - they **assemble Lego bricks**:
+
+### The Bricks
+
+- **Entities**: Tasks, notes, files, people (metadata)
+- **Documents**: Content (markdown, code, PDFs)
+- **Relations**: Links between entities
+- **Views**: Different perspectives on entities
+
+### How AI Assembles
 
 ```typescript
-// packages/ai/src/agent/intent-classifier.ts
-import { generateObject } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { getAnthropicModel } from './config-helper.js';
-
-const classificationSchema = z.object({
-  intent: z.enum(['capture', 'command', 'query', 'unknown']),
-  confidence: z.number().min(0).max(1),
-  reasoning: z.string().min(1),
-  needsFollowUp: z.boolean(),
+// Intelligence Service reads entities
+const userNotes = await hubProtocol.queryEntities({
+  type: "note",
+  filters: { updatedAfter: "2024-01-01" }
 });
 
-export const classifyIntent = async (message: string): Promise<IntentAnalysis> => {
-  const modelName = getAnthropicModel('intent');
-  
-  const result = await generateObject({
-    model: anthropic(modelName),
-    schema: classificationSchema,
-    prompt: `${systemPrompt}\n\n${userPrompt(message)}`,
-    temperature: 0,
-    maxTokens: 256,
-  });
+// AI processes
+const analysis = await yourAI.analyze(userNotes);
 
-  return toIntentAnalysis(result.object);
-};
+// AI proposes new entities
+await hubProtocol.createEntity({
+  type: "task",
+  title: "Review Q1 notes",
+  metadata: {
+    aiGenerated: true,
+    confidence: 0.85,
+    reasoning: "Found pattern in recent notes"
+  }
+});
+
+// AI proposes relations
+await hubProtocol.createRelation({
+  from: "note-123",
+  to: "task-456",
+  type: "derived_from"
+});
 ```
 
-### Action Planning
-
-```typescript
-// packages/ai/src/agent/planner.ts
-export const planActions = async (input: PlannerInput): Promise<PlannerOutput> => {
-  const modelName = getAnthropicModel('planner');
-  
-  const result = await generateObject({
-    model: anthropic(modelName),
-    schema: planSchema,
-    prompt: `${plannerSystemPrompt}\n\n${buildPlannerInput(input)}`,
-    temperature: 0.3,
-    maxTokens: 512,
-  });
-
-  return {
-    reasoning: result.object.reasoning,
-    actions: result.object.actions.map(toPlannedAction),
-  };
-};
-```
+**Result**: New entities appear in user's workspace as **proposals** awaiting approval.
 
 ---
 
-## Configuration
+## Human-in-the-Loop (Proposals)
 
-### Model Selection
+The unique advantage of Synap's event-sourced architecture is **native human-in-the-loop**:
 
-Models are configured via environment variables with purpose-specific overrides:
+### Traditional AI Systems
 
-```bash
-# Base model
-ANTHROPIC_MODEL=claude-3-haiku-20240307
-
-# Purpose-specific overrides (optional)
-ANTHROPIC_INTENT_MODEL=claude-3-haiku-20240307
-ANTHROPIC_PLANNER_MODEL=claude-3-haiku-20240307
-ANTHROPIC_RESPONDER_MODEL=claude-3-haiku-20240307
+```
+AI creates data → Directly writes to DB
 ```
 
-### Lazy Configuration Loading
+Problem: User can't review before it's "real".
 
-Configuration is loaded lazily to avoid circular dependencies:
+### Synap's Proposal System
+
+```
+1. AI → hubProtocol.createEntity() → event: entity.creation.requested
+2. Worker → Creates Proposal (status: pending)
+3. User → Reviews in UI (sees AI reasoning, confidence)
+4. User → Approves → Worker converts to real entity
+5. User → Rejects → Stays in proposals table for audit
+```
+
+### Proposal Lifecycle
 
 ```typescript
-// packages/ai/src/agent/config-helper.ts
-export function getAnthropicModel(purpose: 'intent' | 'planner' | 'responder' | 'chat'): string {
-  const config = getConfig(); // Lazy load from globalThis
-  const ai = config.ai;
-  
-  // Check for purpose-specific override
-  const purposeModel = ai.anthropic.models[purpose];
-  if (purposeModel) {
-    return purposeModel;
-  }
-  
-  // Fall back to default model
-  return ai.anthropic.model;
+// Proposal object
+{
+  id: "prop-123",
+  workspaceId: "user-workspace",
+  targetType: "entity",
+  status: "pending", // or "validated", "rejected"
+  request: {
+    type: "task",
+    title: "AI-suggested task",
+    metadata: {
+      aiGenerated: true,
+      confidence: 0.85,
+      reasoning: "User mentioned in chat"
+    }
+  },
+  createdAt: "2024-01-15T10:00:00Z"
 }
 ```
 
----
+### Why This Works
 
-## Dependencies
+Only possible because of **event sourcing**:
 
-### Core Dependencies
+- Events have lifecycle states (`requested` → `validated`)
+- Proposals are a separate table
+- State transitions are events themselves
+- Complete audit trail
 
-- **`@langchain/langgraph@^1.0.1`** - State machine orchestration
-- **`ai@^4.0.0`** - Vercel AI SDK (LLM calls)
-- **`@ai-sdk/anthropic@^1.0.0`** - Anthropic provider for Vercel AI SDK
-- **`zod@^3.25.76`** - Schema validation
-
-### Removed Dependencies
-
-- ❌ `@langchain/anthropic` - Replaced by `@ai-sdk/anthropic`
-- ❌ `@langchain/core` (for messages) - No longer needed
-- ❌ Custom `createChatModel` wrapper - Replaced by Vercel AI SDK
-
-### Retained Dependencies
-
-- ✅ `@langchain/langgraph` - Still needed for state machine
-- ✅ `@langchain/core` (for embeddings) - Used by embeddings provider
-- ✅ `@langchain/openai` - Used for embeddings
+No other system can do this cleanly because they use **direct database writes**.
 
 ---
 
-## Benefits
+## Building an Intelligence Service
 
-### Why LangGraph?
+### 1. Setup
 
-- ✅ **Perfect for multi-step workflows** - State machine handles complex reasoning
-- ✅ **Conditional logic** - Easy to add branching based on state
-- ✅ **Tool orchestration** - Built-in support for tool calling
-- ✅ **Memory/context** - State persists between steps
+```bash
+# Your service (Node.js example)
+mkdir my-ai-service
+cd my-ai-service
+npm init -y
+npm install @synap/hub-protocol hono
+```
 
-### Why Vercel AI SDK?
+### 2. Implement Hub Protocol Client
 
-- ✅ **Simpler API** - Less boilerplate than LangChain
-- ✅ **Better TypeScript** - First-class type support
-- ✅ **Built-in validation** - Zod schemas ensure type-safe outputs
-- ✅ **Provider-agnostic** - Easy to switch providers
-- ✅ **No manual parsing** - Structured outputs handled automatically
+```typescript
+// src/index.ts
+import { Hono } from 'hono';
+import { HubProtocolClient } from '@synap/hub-protocol';
 
-### Combined Benefits
+const app = new Hono();
 
-- ✅ **50% less code** - No manual JSON parsing needed
-- ✅ **Type-safe** - Zod schemas ensure correct outputs
-- ✅ **Better error handling** - Clear error messages
-- ✅ **Maintainable** - Simpler codebase
+app.post('/analyze', async (c) => {
+  const { threadId, dataPodUrl, apiKey } = await c.req.json();
+  
+  // 1. Connect to user's Data Pod
+  const hub = new HubProtocolClient(dataPodUrl, apiKey);
+  
+  // 2. Read user data
+  const context = await hub.getThreadContext({ threadId });
+  const userNotes = await hub.queryEntities({ type: "note" });
+  
+  // 3. Process with YOUR AI (any model)
+  const analysis = await myCustomAI.analyze({
+    conversation: context,
+    notes: userNotes
+  });
+  
+  // 4. Submit insights as proposals
+  for (const suggestion of analysis.suggestions) {
+    await hub.createEntity({
+      type: suggestion.type,
+      title: suggestion.title,
+      metadata: {
+        aiGenerated: true,
+        confidence: suggestion.confidence,
+        reasoning: suggestion.reasoning
+      }
+    });
+  }
+  
+  return c.json({ success: true, suggestionsCount: analysis.suggestions.length });
+});
+
+export default app;
+```
+
+### 3. Register with Data Pod
+
+```typescript
+// Register your service
+await fetch(`${dataPodUrl}/trpc/intelligenceRegistry.register`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: "My AI Analyzer",
+    endpoint: "https://my-ai-service.com/analyze",
+    capabilities: ["entity_creation", "semantic_analysis"]
+  })
+});
+```
+
+### 4. Deploy Anywhere
+
+- **Cloud Functions**: AWS Lambda, Cloudflare Workers
+- **Containers**: Docker, Kubernetes
+- **VPS**: Your own server
+- **Local**: ngrok for development
+
+---
+
+## Internal Agents (Optional)
+
+For tight integrations, you can use **LangGraph** inside the Data Pod:
+
+### LangGraph State Machine
+
+```typescript
+// packages/ai/src/agents/my-agent.ts
+import { StateGraph, Annotation } from '@langchain/langgraph';
+
+const AgentState = Annotation.Root({
+  messages: Annotation<string[]>(),
+  context: Annotation<any>()
+});
+
+export function createMyAgent() {
+  const graph = new StateGraph(AgentState);
+  
+  graph.addNode('analyze', async (state) => {
+    // Your logic
+    return { ...state, result: "..." };
+  });
+  
+  graph.addNode('act', async (state) => {
+    // Create entities via events
+    return state;
+  });
+  
+  graph.setEntryPoint('analyze');
+  graph.addEdge('analyze', 'act');
+  
+  return graph.compile();
+}
+```
+
+### Integration
+
+```typescript
+// packages/api/src/routers/my-router.ts
+import { createMyAgent } from '@synap/ai';
+
+export const myRouter = router({
+  runAgent: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const agent = createMyAgent();
+      const result = await agent.invoke({ messages: [] });
+      
+      // Agent emits events internally
+      return result;
+    })
+});
+```
+
+**Use internal agents when**:
+- Tight coupling needed
+- Low latency critical
+- Simple logic
+
+**Use external services when**:
+- Need proprietary models
+- Require GPU infrastructure
+- Want independent scaling
+- Building multi-tenant AI
+
+---
+
+## Current Implementation
+
+### Vercel AI SDK + LangGraph
+
+The backend uses:
+
+- **LangGraph**: State machine orchestration
+- **Vercel AI SDK**: Type-safe LLM calls
+- **Zod schemas**: Structured outputs
+
+```typescript
+import { generateObject } from 'ai';
+import { anthropic } from '@ai-sdk/anthropic';
+
+const result = await generateObject({
+  model: anthropic('claude-3-haiku-20240307'),
+  schema: z.object({
+    intent: z.enum(['capture', 'command', 'query']),
+    confidence: z.number()
+  }),
+  prompt: userMessage
+});
+```
+
+**See**: [Event Metadata](./events/event-metadata.md) for AI metadata structure
+
+---
+
+## Comparison
+
+| Feature | Internal (LangGraph) | External (Intelligence Service) |
+|---------|---------------------|--------------------------------|
+| **Deployment** | Inside Data Pod | Separate infrastructure |
+| **AI Models** | Anthropic/OpenAI via API | **ANY** (GPT, Claude, Llama, custom) |
+| **Latency** | Lower | Higher (network hop) |
+| **Scalability** | Limited | Independent |
+| **Cost** | API calls | **Your infrastructure** |
+| **Proprietary IP** | Shared codebase | **Private** |
+| **Multi-tenancy** | Hard | **Built-in** (per-user credentials) |
 
 ---
 
 ## Best Practices
 
-1. **Use LangGraph for orchestration** - Complex workflows, state management
-2. **Use Vercel AI SDK for LLM calls** - Simple, type-safe API
-3. **Always use Zod schemas** - Ensures type-safe outputs
-4. **Lazy load configuration** - Avoids circular dependencies
-5. **Provider-agnostic design** - Easy to switch AI providers
+1. **Use External Services for production AI** - Better isolation, scaling
+2. **Use Internal Agents for simple utilities** - Lower latency
+3. **Always use Proposals for AI actions** - Human verification
+4. **Store AI metadata** - `aiGenerated`, `confidence`, `reasoning`
+5. **Design for multi-tenant** - Each user has unique Data Pod credentials
 
 ---
 
-**Next**: See [Plugin System](./core-concepts/plugin-system.md) to learn how to add intelligence via plugins.
-
+**Next**:
+- [Hub Protocol Flow](./hub-protocol-flow.md) - Technical implementation
+- [Composable Architecture](../concepts/composable-architecture.md) - Lego philosophy
+- [Building AI Agents](../development/ai/building-agents.md) - Development guide

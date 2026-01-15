@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
         'architecture/ecosystem-analysis',
         'architecture/core-patterns',
         'architecture/permission-model',
+        'architecture/validation-policy',
         'architecture/event-flow',
         {
           type: 'category',

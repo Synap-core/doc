@@ -186,6 +186,66 @@ io.of('/presence')
 
 ---
 
+## Fast-Path Optimization
+
+Not all operations require the full 3-phase validation flow. Synap uses **ValidationPolicy** to route events intelligently:
+
+### When to Use Fast-Path
+
+Operations that are:
+- **High-frequency**: Chat messages, view tracking
+- **User-owned**: Starring/pinning entities  
+- **Low-risk**: Thread metadata updates
+- **Reversible**: Actions that can be easily undone
+
+**Fast-path events skip GlobalValidator** and go straight to execution:
+
+```
+User Action → API → .validated Event → Executor → .completed Event
+```
+
+**Total time**: ~50-100ms (4x faster!)
+
+### When to Require Validation
+
+Operations that are:
+- **Data creation**: New entities, documents
+- **Deletions**: Prevent accidental loss
+- **AI operations**: Agent creation, enrichments
+- **Sensitive changes**: Permission updates, workspace settings
+
+**Standard flow includes permission check**:
+
+```
+User Action → API → .requested Event → GlobalValidator → .validated Event → Executor → .completed Event
+```
+
+**Total time**: ~200-500ms
+
+### Configuration
+
+Workspace owners can customize which operations use fast-path:
+
+```typescript
+// Example: Require approval for all chat messages
+await client.workspaces.updateSettings({
+  workspaceId: "ws-123",
+  settings: {
+    validationRules: {
+      conversation_message: {
+        create: true,  // Override default (was fast-path)
+        update: true,
+        delete: true
+      }
+    }
+  }
+});
+```
+
+See [Validation Policy](./validation-policy.md) for complete details on configuration and decision logic.
+
+---
+
 ## Event Audit Trail
 
 After this flow completes, TimescaleDB contains:

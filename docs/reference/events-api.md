@@ -17,7 +17,7 @@ interface SynapEvent {
   id: string;                // UUID
   version: 'v1';             // Schema version
   type: string;              // Event type (e.g., 'entity.created')
-  aggregateId?: string;      // Entity ID (optional)
+  subjectId?: string;      // Entity ID (optional)
   data: Record<string, unknown>;  // Event payload
   metadata?: Record<string, unknown>;  // Context (AI, import, sync)
   userId: string;            // Owner
@@ -51,7 +51,7 @@ POST /trpc/events.log
 POST /trpc/events.log
 {
   "type": "entity.created",
-  "aggregateId": "entity-456",
+  "subjectId": "entity-456",
   "source": "intelligence",
   "data": {
     "type": "task",

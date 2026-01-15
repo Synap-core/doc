@@ -583,7 +583,7 @@ export const permissionValidator = inngest.createFunction(
 // Every 1000 events, save snapshot
 if (eventCount % 1000 === 0) {
   await saveSnapshot({
-    aggregateId: 'user-123',
+    subjectId: 'user-123',
     state: currentState,
     version: eventCount
   });

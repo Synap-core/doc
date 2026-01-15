@@ -35,7 +35,7 @@ All events in the Synap system must conform to the `SynapEvent` schema. This sch
 
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
-| `aggregateId` | `string` (UUID) | Related aggregate ID | `"entity-456"` |
+| `subjectId` | `string` (UUID) | Related aggregate ID | `"entity-456"` |
 | `correlationId` | `string` (UUID) | Request correlation | `"req-789"` |
 | `causationId` | `string` (UUID) | Causing event ID | `"event-012"` |
 | `requestId` | `string` (UUID) | HTTP request ID | `"req-345"` |
@@ -115,7 +115,7 @@ const event: SynapEvent = {
   source: 'api',
   timestamp: new Date(),
   // Optional fields
-  aggregateId: 'entity-456',
+  subjectId: 'entity-456',
   correlationId: 'req-789',
   requestId: 'req-345',
 };
@@ -287,7 +287,7 @@ export const SynapEventSchema = z.object({
   userId: z.string(),
   source: z.enum(['api', 'automation', 'sync', 'migration', 'system']),
   timestamp: z.date(),
-  aggregateId: z.string().uuid().optional(),
+  subjectId: z.string().uuid().optional(),
   correlationId: z.string().uuid().optional(),
   causationId: z.string().uuid().optional(),
   requestId: z.string().uuid().optional(),

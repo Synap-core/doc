@@ -90,7 +90,7 @@ interface SynapEvent {
   
   // Classification
   type: string;         // e.g., 'entity.created'
-  aggregateId?: string; // Entity ID this event relates to
+  subjectId?: string; // Entity ID this event relates to
   
   // WHAT happened (core payload)
   data: Record<string, unknown>;
@@ -265,7 +265,7 @@ import { createSynapEvent, EventTypes, createAIExtractionMetadata } from '@synap
 const event = createSynapEvent({
   type: EventTypes.ENTITY_CREATED,
   userId: 'user_123',
-  aggregateId: 'entity_456',
+  subjectId: 'entity_456',
   source: 'intelligence',
   data: {
     id: 'entity_456',

@@ -103,6 +103,62 @@ if (metadata.source === 'ai-proposal') {
 
 ---
 
+## ValidationPolicy Integration
+
+The `permissionValidator` uses **ValidationPolicy** to determine which operations require validation:
+
+### Fast-Path Operations
+
+Some operations skip the validator entirely for speed:
+
+```typescript
+// Chat messages use fast-path by default
+await client.messages.create({ content: "Hello!" });
+
+// Events emitted:
+// 1. conversation_message.create.validated ⚡ (no .requested)
+// 2. conversation_message.create.completed ✅
+```
+
+**Why?** Chat is high-frequency and low-risk. Users expect instant responses.
+
+### Standard Validation
+
+Most operations go through the full validation flow:
+
+```typescript
+// Entity creation requires validation
+await client.entities.create({ type: "note", title: "My Note" });
+
+// Events emitted:
+// 1. entity.create.requested 📝
+// 2. entity.create.validated ✅ (after permission check)
+// 3. entity.create.completed ✅
+```
+
+**Why?** Creating entities is a core operation that benefits from permission checks and audit trail.
+
+### Workspace Configuration
+
+Workspace owners can override defaults:
+
+```typescript
+// Require approval for chat messages in enterprise workspace
+{
+  validationRules: {
+    conversation_message: {
+      create: true,  // Override: require validation
+      update: true,
+      delete: true
+    }
+  }
+}
+```
+
+See [Validation Policy](./validation-policy.md) for complete configuration options.
+
+---
+
 ## Workspace Roles
 
 ### Owner

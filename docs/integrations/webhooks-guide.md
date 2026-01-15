@@ -177,7 +177,7 @@ eventTypes: ['*']
   },
   
   // Optional fields
-  "aggregateId": "entity-456",
+  "subjectId": "entity-456",
   "correlationId": "req-789",
   
   // Webhook metadata

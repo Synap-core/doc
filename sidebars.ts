@@ -39,7 +39,6 @@ const sidebars: SidebarsConfig = {
       label: 'Architecture',
       items: [
         'architecture/overview',
-        'architecture/ecosystem-analysis',
         'architecture/core-patterns',
         'architecture/permission-model',
         'architecture/validation-policy',
@@ -129,16 +128,6 @@ const sidebars: SidebarsConfig = {
             'development/extending/remote-plugins',
             'development/extending/hybrid-plugins',
             'development/extending/intelligence-registry',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Data Pod SDK',
-          items: [
-            'development/sdk/overview',
-            'development/sdk/basic-usage',
-            'development/sdk/react-integration',
-            'development/sdk/sdk-reference',
           ],
         },
         {

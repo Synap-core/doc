@@ -2,15 +2,19 @@
 sidebar_position: 1
 ---
 
-# Data Pod (Core OS)
+# Data Pod (The Brain)
 
-**The open-source backend that serves as the guardian of user data**
+**The central intelligence that powers your entire Synap ecosystem.**
 
 ---
 
 ## Overview
 
-The **Data Pod** (also called **Synap Core OS**) is the open-source backend that manages all user data. It is the central hub of the Synap ecosystem.
+The **Data Pod** (or Synap Core OS) is the self-hosted backend that serves as the "Digital Brain" of your system. 
+
+It is **headless**, meaning it has no UI of its own. It runs silently in the background, storing your memories (Events), processing your thoughts (AI), and serving your applications (Web, Mobile, CLI).
+
+> "The Body (App) may change, but the Brain (Data Pod) remembers forever."
 
 ---
 

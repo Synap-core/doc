@@ -27,20 +27,43 @@ import MermaidFullscreen from '@site/src/components/MermaidFullscreen';
 <MermaidFullscreen 
   title="High-Level Architecture"
   value={`graph TD
-    A[UI/Client App] -->|User Action| B[tRPC API]
-    C[Automation/Agent] -->|Agent Action| B
-    B -->|Publishes Event| D[Event Store<br/>TimescaleDB]
-    D -->|Triggers| E[Inngest Event Bus]
-    E -->|Dispatches| F[Workers<br/>synap/jobs]
-    F -->|Updates| G[Database<br/>PostgreSQL]
-    F -->|Stores Content| H[File Storage<br/>R2/MinIO]
-    F -->|Can Trigger| C
-    G -->|Reads| B
-    H -->|Reads| B
-    
-    I[External Service] -.->|Hub Protocol| B
-    B -.->|Request Expertise| I
-    I -.->|Submit Insight| B`} 
+    subgraph Client ["Client Layer (Faces)"]
+      Web[Web App]
+      Mobile[Mobile App]
+      CLI[CLI Tool]
+    end
+
+    subgraph Core ["Data Pod (The Brain)"]
+      API[tRPC API]
+      Store[Event Store]
+      Bus[Event Bus]
+      Worker[Workers]
+      DB[(PostgreSQL)]
+      File[(File Storage)]
+    end
+
+    subgraph Intelligence ["Intelligence Layer (Skills)"]
+      Agent[Local Agents]
+      External[External AI Services]
+    end
+
+    %% Client Interactions
+    Web -->|User Action| API
+    Mobile -->|User Action| API
+    CLI -->|Command| API
+
+    %% Core Flow
+    API -->|Publishes| Store
+    Store -->|Triggers| Bus
+    Bus -->|Dispatches| Worker
+    Worker -->|Updates| DB
+    Worker -->|Stores| File
+
+    %% Intelligence Interactions
+    Worker -->|Delegates| Agent
+    Worker -->|Requests| External
+    Agent -->|Returns Insight| API
+    External -->|Returns Insight| API`} 
 />
 
 </TabItem>
@@ -49,20 +72,43 @@ import MermaidFullscreen from '@site/src/components/MermaidFullscreen';
 ````markdown
 ```mermaid
 graph TD
-    A[UI/Client App] -->|User Action| B[tRPC API]
-    C[Automation/Agent] -->|Agent Action| B
-    B -->|Publishes Event| D[Event Store<br/>TimescaleDB]
-    D -->|Triggers| E[Inngest Event Bus]
-    E -->|Dispatches| F[Workers<br/>synap/jobs]
-    F -->|Updates| G[Database<br/>PostgreSQL]
-    F -->|Stores Content| H[File Storage<br/>R2/MinIO]
-    F -->|Can Trigger| C
-    G -->|Reads| B
-    H -->|Reads| B
-    
-    I[External Service] -.->|Hub Protocol| B
-    B -.->|Request Expertise| I
-    I -.->|Submit Insight| B
+    subgraph Client ["Client Layer (Faces)"]
+      Web[Web App]
+      Mobile[Mobile App]
+      CLI[CLI Tool]
+    end
+
+    subgraph Core ["Data Pod (The Brain)"]
+      API[tRPC API]
+      Store[Event Store]
+      Bus[Event Bus]
+      Worker[Workers]
+      DB[(PostgreSQL)]
+      File[(File Storage)]
+    end
+
+    subgraph Intelligence ["Intelligence Layer (Skills)"]
+      Agent[Local Agents]
+      External[External AI Services]
+    end
+
+    %% Client Interactions
+    Web -->|User Action| API
+    Mobile -->|User Action| API
+    CLI -->|Command| API
+
+    %% Core Flow
+    API -->|Publishes| Store
+    Store -->|Triggers| Bus
+    Bus -->|Dispatches| Worker
+    Worker -->|Updates| DB
+    Worker -->|Stores| File
+
+    %% Intelligence Interactions
+    Worker -->|Delegates| Agent
+    Worker -->|Requests| External
+    Agent -->|Returns Insight| API
+    External -->|Returns Insight| API
 ```
 ````
 

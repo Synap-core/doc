@@ -1,24 +1,38 @@
----
-sidebar_position: 1
----
-
 # What is Synap?
 
-**Synap is a Personal Data Operating System that gives you superpowers**
+**Synap is a Personal Data Operating System. Think of it as your own "Digital Brain."**
 
-Unlike traditional apps that update your data and forget the past, Synap is built on a fundamentally different architecture that enables capabilities impossible in conventional systems.
+Unlike traditional apps that are silos (Notion for notes, Asana for tasks), Synap is built on a fundamentally different architecture: **One Data Pod, Many Apps**.
 
 ---
 
 ## 🎯 At a Glance
 
-Synap is **not just a note-taking app**. It's a complete platform for building intelligent, data-sovereign applications with:
+Synap is designed around two core philosophies:
 
-- 🕐 **Time-Travel** - Never lose data, undo anything, see your workspace from any point in time
-- 🌳 **Branching** - Git-like conversations, parallel AI exploration, context switching
-- 🧠 **Knowledge Graph** - Automatic connections, bi-directional links, relationship discovery
-- 🤖 **Multi-Agent AI** - Specialized AI team, not just one assistant
-- 🔒 **Data Sovereignty** - You own it, you host it, you control it
+1.  **The Brain (Data Pod)**: A central, self-hosted backend that stores *all* your data (notes, tasks, contacts, files) in one place. It runs independently of any app, syncing devices, processing AI tasks, and handling automation.
+2.  **The Lego Bricks (Building Blocks)**: Instead of rigid "apps", Synap gives you **Entities** (Notes, Tasks) and **Views** (Tables, Boards) that you can compose into your own custom **Workspaces**.
+
+### Key Capabilities:
+
+- 🧱 **[Building Blocks](./building-blocks)** - Build your own custom tools without code
+- 🕐 **[Time-Travel](./event-sourcing-explained)** - Never lose data, undo anything, see your workspace from any point in time
+- 🌳 **[Branching](./branching-conversations)** - Git-like conversations, parallel AI exploration, context switching
+- 🧠 **[Knowledge Graph](./knowledge-graph)** - Automatic connections, bi-directional links, relationship discovery
+- 🤖 **[Multi-Agent AI](./multi-agent-system)** - Specialized AI team, not just one assistant
+- 🔒 **[Data Sovereignty](./data-sovereignty)** - You own it, you host it, you control it
+
+---
+
+## 🧱 The Lego Brick Philosophy
+
+**The Problem**: In traditional apps, you are limited by what the developers built. If you need a field for "Client Priority" in your notes app, you can't add it.
+
+**Synap's Solution**: We give you the fundamental building blocks—**Entities** (data) and **Views** (displays)—and let you snap them together.
+
+> "Synap provides the bricks. You build the castle."
+
+[Read more about Building Blocks →](./building-blocks)
 
 ---
 

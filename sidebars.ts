@@ -21,6 +21,7 @@ const sidebars: SidebarsConfig = {
       label: 'Concepts',
       items: [
         'concepts/what-is-synap',
+        'concepts/building-blocks',
         'concepts/workspace-as-a-service',
         'concepts/contagious-layers',
         'concepts/composable-architecture',

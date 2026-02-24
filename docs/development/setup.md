@@ -1,230 +1,63 @@
 ---
 sidebar_position: 1
+title: Development Setup
 ---
 
 # Development Setup
 
-**Complete guide to setting up your development environment**
-
----
+Synap uses a hybrid development environment:
+1.  **Infrastructure** runs in Docker (Database, Cache, Search).
+2.  **Application Code** runs natively in Node.js (API, Frontend, Workers).
 
 ## Prerequisites
+*   Node.js 20+
+*   pnpm
+*   Docker Desktop
 
-- **Node.js**: 20+ (LTS recommended)
-- **pnpm**: 8.15+ (package manager)
-- **Docker Desktop**: For local services (PostgreSQL, MinIO)
-- **Git**: For version control
-
----
-
-## Initial Setup
-
-### 1. Clone Repository
+## Quick Start
 
 ```bash
-git clone https://github.com/Synap-core/backend.git
-cd backend
-```
-
-### 2. Install Dependencies
-
-```bash
+# 1. Install dependencies
 pnpm install
-```
 
-### 3. Environment Configuration
+# 2. Start Infrastructure (Postgres, Redis, MinIO, Typesense)
+./scripts/dev-local.sh
 
-```bash
-# Copy example environment file
-cp env.local.example .env
+# 3. Initialize Database
+pnpm db:migrate
 
-# Edit .env and add your API keys
-# - ANTHROPIC_API_KEY
-# - OPENAI_API_KEY
-# - DATABASE_URL (PostgreSQL)
-# - Ory configuration
-```
-
-### 4. Start Local Services
-
-```bash
-# Start PostgreSQL and MinIO
-docker compose up -d postgres minio
-
-# Wait for services to be ready
-docker compose ps
-```
-
-### 5. Initialize Database
-
-```bash
-# Run migrations
-pnpm --filter database db:init
-
-# Verify database
-pnpm --filter database db:status
-```
-
----
-
-## Development Workflow
-
-### Start Development Server
-
-```bash
-# Start all services in watch mode
+# 4. Start Development Servers
 pnpm dev
-
-# Or start specific services
-pnpm --filter api dev
-pnpm --filter jobs dev
 ```
 
-### Run Tests
+## Services Overview
 
-```bash
-# Run all tests
-pnpm test
+| Service | Port | Description |
+| :--- | :--- | :--- |
+| **PostgreSQL** | 5432 | Main data and event store |
+| **Redis** | 6379 | Caching and Rate Limiting |
+| **Typesense** | 8108 | Search Engine (Typos, Facets) |
+| **MinIO** | 9000 | S3-compatible Object Storage |
+| **API Server** | 4000 | tRPC Backend |
+| **Web App** | 3000 | Next.js Frontend |
+| **Inngest** | 8288 | Background Job Dev Server |
 
-# Run specific package tests
-pnpm --filter @synap/api test
+## Package Structure
 
-# Watch mode
-pnpm test:watch
-```
+*   `apps/`
+    *   `web`: The main Next.js frontend.
+    *   `api`: The Express/Hono backend server.
+*   `packages/`
+    *   `core`: Shared business logic and utilities.
+    *   `database`: Drizzle schemas and migrations.
+    *   `api`: tRPC routers (the implementation).
+    *   `events`: Event definitions and schemas.
+    *   `jobs`: Inngest worker definitions.
+    *   `types`: Shared TypeScript definitions.
 
-### Build
+## Common Commands
 
-```bash
-# Build all packages
-pnpm build
-
-# Build specific package
-pnpm --filter @synap/api build
-```
-
----
-
-## Project Structure
-
-```
-backend/
-├── apps/
-│   ├── api/              # Data Pod API server
-│   └── docs/             # Documentation site
-├── packages/
-│   ├── api/              # tRPC routers
-│   ├── database/         # Database schemas & migrations
-│   ├── domain/           # Business logic
-│   ├── ai/               # AI agents
-│   ├── jobs/             # Inngest workers
-│   ├── auth/             # Authentication
-│   └── client/           # Client SDK
-└── docs/                 # Documentation
-```
-
----
-
-## Common Tasks
-
-### Add a New Router
-
-```typescript
-// packages/api/src/routers/my-router.ts
-import { router, protectedProcedure } from '../trpc.js';
-import { z } from 'zod';
-
-export const myRouter = router({
-  create: protectedProcedure
-    .input(z.object({ name: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      // Your logic here
-    }),
-});
-
-// Register in app router
-// packages/api/src/router.ts
-import { myRouter } from './routers/my-router.js';
-export const appRouter = router({
-  // ... existing routers
-  my: myRouter,
-});
-```
-
-### Add a New Event Handler
-
-```typescript
-// packages/jobs/src/handlers/my-handler.ts
-import { IEventHandler } from './interface.js';
-
-export class MyHandler implements IEventHandler {
-  eventType = 'my.event.type';
-  
-  async handle(event: SynapEvent): Promise<void> {
-    // Handle event
-  }
-}
-
-// Register in dispatcher
-// packages/jobs/src/functions/event-dispatcher.ts
-import { MyHandler } from '../handlers/my-handler.js';
-registerHandler(new MyHandler());
-```
-
----
-
-## Debugging
-
-### View Logs
-
-```bash
-# API logs
-pnpm --filter api dev | grep "api"
-
-# Worker logs
-pnpm --filter jobs dev | grep "worker"
-```
-
-### Database Queries
-
-```bash
-# Connect to PostgreSQL
-docker compose exec postgres psql -U postgres -d synap
-
-# View events
-SELECT * FROM events_v2 ORDER BY created_at DESC LIMIT 10;
-
-# View entities
-SELECT * FROM entities LIMIT 10;
-```
-
----
-
-## Troubleshooting
-
-### Database Connection Issues
-
-```bash
-# Check PostgreSQL is running
-docker compose ps postgres
-
-# Check connection string
-echo $DATABASE_URL
-
-# Test connection
-pnpm --filter database db:status
-```
-
-### Port Conflicts
-
-```bash
-# Check what's using port 3000
-lsof -i :3000
-
-# Change port in .env
-PORT=3001
-```
-
----
-
-**Next**: See [Extending Synap](./extending/overview.md) to learn how to extend the system.
+*   `pnpm db:generate`: Generate SQL from Drizzle schema.
+*   `pnpm db:migrate`: Apply SQL migrations.
+*   `pnpm db:studio`: Open Drizzle Studio UI.
+*   `pnpm dev:all`: Start API, Web, and Realtime servers together.

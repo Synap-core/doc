@@ -1,103 +1,54 @@
 ---
-sidebar_position: 2
+sidebar_position: 1
+title: Roadmap & MVP Scope
 ---
 
-# Roadmap
+# Roadmap & MVP Scope
 
-**Development roadmap for Synap Backend**
 
----
+## MVP Goal
+**"Reactive Excellence"**
+The MVP focuses on a high-quality, reactive AI experience where the user is in control. Proactive features (autonomous background agents) are deferred to ensure the core interaction loop is perfect.
 
-## Current Status (v1.0)
+### Critical Capabilities (MVP)
+- ✅ **Infinite Chat**: Continuous conversation history without loss of context.
+- ✅ **Thread Continuity**: Semantic understanding of long-term project threads.
+- 🚧 **Proposal System**: AI suggests changes (to code, docs, or entities) -> User reviews diff -> User approves/rejects.
+- 🚧 **Branch Management**: "Git for thoughts". Create alternative paths for a project without losing the main thread.
+- 🚧 **Real-time Streaming**: Instant feedback on AI thought processes and tool execution.
 
-### ✅ Completed
+## Roadmap Phases
 
-- Event-driven architecture foundation
-- Hub Protocol V1.0
-- Ory authentication migration
-- PostgreSQL-only architecture
-- Type-safe SDK
-- Real-time updates
-- Knowledge graph integration
+### Phase 1: Foundation (Completed ✅)
+- **Event Sourcing**: Backend architecture fully implemented (TimescaleDB).
+- **Hub Protocol**: Standardized communication between Data Pod and Intelligence Services.
+- **Skill System**: AI can create and execute dynamic skills.
+- **Multi-Agent Core**: Orchestrator capability established.
 
----
+### Phase 2: Frontend Integration (Current Focus 🚧)
+- **Objective**: Make the powerful backend visible and usable.
+- **Key Tasks**:
+    1.  **Streaming UI**: Visualize the "thinking" process of the AI.
+    2.  **Proposal UI**: A clean interface for reviewing and accepting AI actions.
+    3.  **Branching UI**: Visual tree navigation for conversation branches.
+    4.  **Real-time Sync**: Full Socket.IO integration for instant updates.
 
-## Phase 1: The Architech (Almost Finished)
+### Phase 3: Intelligence Enhancement (Next)
+- **Auto-Linking**: AI automatically detects and links relevant entities to the current thread.
+- **Context Compression**: Algorithms to reduce token usage by 80% while preserving semantic meaning.
+- **Hub Protocol Alignment**: Finalizing the contract between Hub and Spoke services.
 
-### Goal
-Release The Architech CLI for plugin management and extensibility.
+### Phase 4: Proactive Agents (Future)
+- **Background Tasks**: Agents that work while you sleep (e.g., "Research this topic and have a report ready by morning").
+- **Conflict Detection**: Managing data conflicts when multiple agents (or users) edit the same entity.
+- **Marketplace**: Opening the platform to third-party skills and agents.
 
-### Status
-🚧 **In Progress** - Most core functionality complete
+## Strategic Decisions
 
-### Tasks
-- [x] Plugin manifest system
-- [x] Dynamic router registry
-- [x] Tool registry system
-- [ ] CLI development
-- [ ] Code generation templates
-- [ ] Marketplace integration
-- [ ] Complete documentation
+### Deferring Background Tasks
+We have decided to **defer background tasks** for the MVP.
+- **Why?** They add significant complexity (scheduling, error handling, resource management) and the core value of "Reactive AI" is not yet fully realized in the UI.
+- **Risk**: Over-engineering before validating the core chat loop.
 
-**Next Steps**: Finalize CLI tooling and code generation capabilities.
-
----
-
-## Phase 2: Dual-Access Foundation
-
-### Goal
-Enable users to access both local and company/community content simultaneously.
-
-### Tasks
-- [ ] Schema updates for context
-- [ ] Context management service
-- [ ] Storage path updates
-- [ ] API updates for context
-- [ ] Testing
-
-**Estimated**: 2-3 weeks
-
----
-
-## Phase 3: Marketplace
-
-### Goal
-Launch the external services marketplace.
-
-### Tasks
-- [ ] Marketplace API
-- [ ] Service registration
-- [ ] Discovery and search
-- [ ] Payment integration
-- [ ] Documentation
-
-**Estimated**: 4-6 weeks
-
----
-
-## Phase 4: Advanced AI
-
-### Goal
-Enhance AI capabilities with proactive features.
-
-### Tasks
-- [ ] Proactive AI agents
-- [ ] Advanced reasoning
-- [ ] Multi-agent orchestration
-- [ ] Performance optimization
-
-**Estimated**: 8-10 weeks
-
----
-
-## Future Considerations
-
-- Multi-user Data Pod support
-- Mobile SDK
-- GraphQL API
-- Webhook system
-- Advanced analytics
-
----
-
-**Note**: Roadmap is subject to change based on user feedback and priorities.
+### Focus on Frontend Data Flow
+The current bottleneck is the **Frontend -> Backend** connection. The backend has advanced capabilities (branching, time-travel) that are not yet exposed in the UI. Phase 2 is entirely dedicated to closing this gap.

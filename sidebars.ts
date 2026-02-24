@@ -54,6 +54,7 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'architecture/ai-architecture',
+        'architecture/backend-intelligence-separation',
         'architecture/hub-protocol-flow',
 
         {

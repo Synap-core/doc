@@ -28,6 +28,7 @@ const sidebars: SidebarsConfig = {
         'concepts/hub-and-spoke',
         'concepts/event-sourcing-explained',
         'concepts/knowledge-graph',
+        'concepts/entity-connections',
         'concepts/branching-conversations',
         'concepts/multi-agent-system',
         'concepts/data-sovereignty',

@@ -50,7 +50,7 @@ A View is simply a **Query** + **Layout**.
 - **📄 List**: Good for simple itemization (Shopping list)
 - **🕸️ Graph**: Good for exploring connections (Relationship mapping)
 - **📅 Calendar**: Good for time-based data (Schedule)
-- **📝 Document**: Good for long-form writing (Wiki, Journal)
+- **🏗️ Bento**: Composable dashboard grid — embed multiple views in one surface
 
 ### The Power of Decoupling
 Because Views are separate from Entities, you can view the **same data** in **multiple ways** simultaneously:

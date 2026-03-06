@@ -1,391 +1,72 @@
 # What is Synap?
 
-**Synap is a Personal Data Operating System. Think of it as your own "Digital Brain."**
+**Synap is an AI operating system for knowledge work.**
 
-Unlike traditional apps that are silos (Notion for notes, Asana for tasks), Synap is built on a fundamentally different architecture: **One Data Pod, Many Apps**.
-
----
-
-## 🎯 At a Glance
-
-Synap is designed around two core philosophies:
-
-1.  **The Brain (Data Pod)**: A central, self-hosted backend that stores *all* your data (notes, tasks, contacts, files) in one place. It runs independently of any app, syncing devices, processing AI tasks, and handling automation.
-2.  **The Lego Bricks (Building Blocks)**: Instead of rigid "apps", Synap gives you **Entities** (Notes, Tasks) and **Views** (Tables, Boards) that you can compose into your own custom **Workspaces**.
-
-### Key Capabilities:
-
-- 🧱 **[Building Blocks](./building-blocks)** - Build your own custom tools without code
-- 🕐 **[Time-Travel](./event-sourcing-explained)** - Never lose data, undo anything, see your workspace from any point in time
-- 🌳 **[Branching](./branching-conversations)** - Git-like conversations, parallel AI exploration, context switching
-- 🧠 **[Knowledge Graph](./knowledge-graph)** - Automatic connections, bi-directional links, relationship discovery
-- 🤖 **[Multi-Agent AI](./multi-agent-system)** - Specialized AI team, not just one assistant
-- 🔒 **[Data Sovereignty](./data-sovereignty)** - You own it, you host it, you control it
+Unlike traditional apps that each own a slice of your data (Notion for notes, Asana for tasks, Salesforce for CRM), Synap is built on a single open model that unifies all of it — and lets any AI work with it under your governance rules.
 
 ---
 
-## 🧱 The Lego Brick Philosophy
+## The Triptych
 
-**The Problem**: In traditional apps, you are limited by what the developers built. If you need a field for "Client Priority" in your notes app, you can't add it.
+Everything in Synap reduces to three composable concepts:
 
-**Synap's Solution**: We give you the fundamental building blocks—**Entities** (data) and **Views** (displays)—and let you snap them together.
+**Entities** — the data layer. Every piece of information is an entity in the same graph. Typed by profiles, related by edges, governed by permissions. One model for tasks, contacts, events, ideas, documents, and anything custom.
 
-> "Synap provides the bricks. You build the castle."
+**Views** — the visualization layer. A view is a lens on the entity graph — never a copy. Switch between Table, Kanban, Calendar, Timeline, Graph, Whiteboard, and Bento dashboard with one click. The data never moves.
 
-[Read more about Building Blocks →](./building-blocks)
+**Channels** — the interaction layer. Where you and AI talk about, with, and through your entities. An `ai_thread` is a conversation. A `branch` is a fork. `entity_comments` are inline notes. An `external_import` relays messages from Telegram or Slack.
 
----
-
-## 🕐 Time-Travel Your Data
-
-**The Problem**: In traditional apps, when you edit something, the old version is gone forever.
-
-**Synap's Solution**: Every single change is recorded as an immutable event. Nothing is ever truly deleted.
-
-### What This Enables:
-
-```typescript
-// Show me my workspace from last Tuesday
-const workspace = await synap.timeline.getState('2024-12-17');
-
-// Why did the AI suggest this?
-const reasoning = await synap.events.getAIReasoning('suggestion_123');
-
-// Undo my last 3 changes
-await synap.history.undo({ count: 3 });
-```
-
-**UI You Can Build**:
-- Activity timeline view
-- Infinite undo/redo
-- "Show workspace from [date]" feature
-- AI reasoning explanations
-- Audit trails for compliance
-
-**vs Traditional Apps**:
-| Feature | Notion/Obsidian | Synap |
-|---------|-----------------|-------|
-| Undo | Limited history | Infinite |
-| View past state | ❌ Not possible | ✅ Any point in time |
-| AI transparency | Hidden | Full reasoning trace |
-| Audit trail | Manual logs | Automatic |
-
-[Learn more about Event Sourcing →](./event-sourcing-explained)
+These three compose freely:
+- A channel can be anchored to a view
+- A view can be embedded in a bento block
+- An entity can become a dashboard (bento mode)
 
 ---
 
-## 🌳 Branching Conversations
+## Key Capabilities
 
-**The Problem**: When you're in a conversation and want to explore a tangent, you either:
-- Lose the main thread context
-- Pollute the main conversation
-- Open a new chat and lose continuity
+### 🧱 [Building Blocks](./building-blocks) — your data, your schema
+Profiles define entity types. PropertyDefs give each type typed, constrained fields. The field system renders properties consistently across every view. Build a CRM, a second brain, a content pipeline — from configuration, not code.
 
-**Synap's Solution**: Branch conversations like Git branches.
+### 🌳 [Branching Conversations](./branching-conversations) — Git for thought
+Fork a conversation at any point. Explore alternatives in parallel without polluting the main thread. Branch history is full and replayable.
 
-### How It Works:
+### 🧠 [Knowledge Graph](./knowledge-graph) — typed, bidirectional edges
+Entities link with typed relationships (`assigned_to`, `mentions`, `depends_on`, `parent_of`). AI can suggest connections. Query across domains: "all tasks assigned to contacts I met this quarter."
 
-```typescript
-// Mid-conversation, branch off to research
-const researchBranch = await synap.threads.createBranch({
-  parentThreadId: 'main_thread',
-  fromMessageId: 'msg_789',
-  purpose: 'Research competitors in detail',
-  agentId: 'research_specialist'  // Assign specialist AI
-});
+### 🤖 [Multi-Agent System](./multi-agent-system) — peer network, not hierarchy
+A network of specialized agents (Researcher, Code Agent, Writing Agent, Action Agent) that route to each other based on intent. Any agent can invoke any other. No central orchestrator.
 
-// Work happens in parallel
-// Main thread continues
-// Research branch deep-dives
+### 🔒 [Data Sovereignty](./data-sovereignty) — you own the kernel
+A pod is a real PostgreSQL backend running on your infrastructure. Open source. Self-hostable. Exportable at any time.
 
-// Merge insights back
-await synap.threads.merge(researchBranch.id, 'main_thread');
-```
-
-**UI You Can Build**:
-- Git-style branch visualization
-- Parallel AI exploration
-- Branch history explorer
-- Merge conflict resolution UI
-
-**Real Example**:
-```
-Main Conversation:
-├─ User: "Plan marketing for new feature"
-├─ Agent: "Let me research competitors"
-│   └─ [BRANCH: Research] ← Research Agent works here
-│       ├─ Analyzed Notion's pricing
-│       ├─ Reviewed Obsidian's community
-│       └─ [MERGED: 5 insights]
-├─ Agent: "Based on research, here's a plan..."
-└─ User: "Great! Create project"
-    └─ [BRANCH: Setup] ← Action Agent works here
-```
-
-**vs Traditional Chat**:
-| Feature | ChatGPT/Claude | Synap |
-|---------|----------------|-------|
-| Branching | ❌ No | ✅ Full Git-like |
-| Parallel exploration | ❌ No | ✅ Multiple agents |
-| Merge context | ❌ Manual copy-paste | ✅ Automatic |
-| Branch history | ❌ Lost | ✅ Full tree |
-
-[Learn more about Branching →](./branching-conversations)
+### 📡 [Hub & Spoke](./hub-and-spoke) — pluggable intelligence
+Swap AI services per workspace. Connect external agents via Hub Protocol. MCP client unlocks 10,000+ community tools.
 
 ---
 
-## 🧠 Knowledge Graph
+## What You Can Build
 
-**The Problem**: In traditional apps, you manually create links between notes. It's tedious and incomplete.
+Because Synap is a platform with an open entity graph, the same infrastructure powers radically different use cases:
 
-**Synap's Solution**: Everything is automatically connected through a knowledge graph.
+**Personal**: second brain, daily journal with AI insights, personal CRM, research assistant, habit tracker
 
-### How It Works:
+**Team**: collaborative workspace, project management, knowledge base, meeting notes with summaries, team wiki
 
-Every piece of content becomes an **entity** (note, task, person, project, event), and relationships are automatically discovered by AI or explicitly created.
-
-```typescript
-// Find all notes mentioning "Marie" and "Project X"
-const connected = await synap.graph.findRelated({
-  entity: 'contact_marie',
-  relationTypes: ['mentions', 'assigned_to'],
-  filters: { projectId: 'project_x' }
-});
-
-// Discover hidden connections
-const suggestions = await synap.graph.suggestConnections();
-// "These 3 notes should be a project"
-```
-
-**UI You Can Build**:
-- Interactive network graph (like Obsidian)
-- Entity pages ("Show all mentions of Marie")
-- Smart relationship suggestions
-- Topic clusters
-- Cross-project analytics
-
-**Graph Structure**:
-```
-[Note: "Call Marie"] ──mentions──> [Contact: Marie]
-         │                              │
-    belongs_to                     assigned_to
-         │                              │
-         v                              v
-[Project: App Redesign] <────related_to───┘
-```
-
-**vs Obsidian/Roam**:
-| Feature | Obsidian | Synap |
-|---------|----------|-------|
-| Links | Manual `[[]]` | Automatic + Manual |
-| Graph view | ✅ Yes | ✅ Yes + AI insights |
-| AI suggestions | ❌ No | ✅ "Connect these notes" |
-| Typed relations | ❌ Generic links | ✅ mentions, assigned_to, etc. |
-
-[Learn more about Knowledge Graph →](./knowledge-graph)
+**Specialized**: CRM pipeline, legal case management, academic paper organizer, investment analysis, sales pipeline with AI
 
 ---
 
-## 🤖 Multi-Agent AI
+## How It Differs
 
-**The Problem**: One AI assistant tries to do everything (planning, research, coding, writing). Jack of all trades, master of none.
-
-**Synap's Solution**: Multiple specialized agents, coordinated by an orchestrator.
-
-### The Team:
-
-```
-┌─────────────────┐
-│  Orchestrator   │ ← Coordinates everything
-└─────────────────┘
-         │
-    ┌────┴────┬────────────┬─────────────┐
-    │         │            │             │
-    v         v            v             v
-[Research] [Technical] [Creative] [Your Custom Agent]
-```
-
-**How It Works**:
-
-```typescript
-// Orchestrator analyzes your request
-await synap.chat.send("Plan a marketing campaign");
-
-// Orchestrator delegates:
-// 1. Research Agent → Analyze competitors
-// 2. Creative Agent → Generate campaign ideas
-// 3. Technical Agent → Suggest implementation
-// All work in parallel branches
-
-// Results merge back to you with insights from each specialist
-```
-
-**Real Flow**:
-```
-You: "Plan marketing for new feature"
-
-Orchestrator: "I'll coordinate research and creative"
-  ├─ [Delegates to Research Agent]
-  │   → Finds 5 competitor strategies
-  ├─ [Delegates to Creative Agent]
-  │   → Generates 10 campaign concepts
-  └─ [Synthesizes results]
-      → "Here's a plan combining insights from both"
-```
-
-**vs Single AI**:
-| Feature | ChatGPT/Claude | Synap |
-|---------|----------------|-------|
-| Specialization | ❌ One model | ✅ Multiple specialists |
-| Parallel work | ❌ Sequential | ✅ Concurrent |
-| Agent switching | ❌ Manual | ✅ Automatic delegation |
-| Custom agents | ❌ Limited | ✅ Build your own |
-
-[Learn more about Multi-Agent System →](./multi-agent-system)
+| | Traditional SaaS | Synap |
+|--|-----------------|-------|
+| Data ownership | Vendor-owned | Your PostgreSQL |
+| AI | Bolt-on, single model | Pluggable, governed |
+| View types | Fixed per app | 10+ on same data |
+| History | Limited undo | Full event log |
+| Entity model | Siloed per app | Unified graph |
 
 ---
 
-## 🔒 Data Sovereignty
-
-**The Problem**: Your data lives on someone else's servers (Notion, Google, Apple). They can:
-- Change pricing anytime
-- Change features
-- Shut down
-- Mine your data
-- Lock you in
-
-**Synap's Solution**: You own the infrastructure.
-
-### What This Means:
-
-✅ **Self-Hosted**: Run on your server, your laptop, or your Raspberry Pi  
-✅ **Open Source**: Core OS is MIT licensed, inspect every line  
-✅ **Portable**: Export everything, migrate anytime  
-✅ **Private**: Your data never leaves your control  
-✅ **Extensible**: Build plugins without asking permission  
-
-```bash
-# Your data, your rules
-docker compose up -d  # That's it, you're running Synap
-```
-
-**Deployment Options**:
-- 🏠 **Self-hosted**: Docker Compose on your server
-- ☁️ **Cloud**: Deploy to AWS/GCP/Azure (you control it)
-- 🔒 **Air-gapped**: Works completely offline
-- 🌐 **Managed** (future): We host, you still own the data
-
-[Learn more about Data Sovereignty →](./data-sovereignty)
-
----
-
-## 🎨 What Can You Build?
-
-Because Synap is a **platform**, not just an app, you can build:
-
-### **Personal Apps**:
-- Second Brain (like Obsidian)
-- Daily journal with AI insights
-- Personal CRM
-- Research assistant
-- Habit tracker with analytics
-
-### **Team Apps**:
-- Collaborative workspace (like Notion)
-- Project management
-- Knowledge base
-- Meeting notes + AI summaries
-- Team wiki with graph view
-
-### **Specialized Apps**:
-- Legal case management
-- Medical research database
-- Investment analysis tool
-- Academic paper organizer
-- Sales pipeline + AI insights
-
-**All with**:
-- ✅ Full event history
-- ✅ Knowledge graph connections
-- ✅ Branching conversations
-- ✅ Multi-agent AI
-- ✅ Your ownership
-
----
-
-## 🆚 How Synap Compares
-
-### vs Notion
-```
-✅ Synap Advantages:
-- You own the infrastructure
-- Infinite undo (event sourcing)
-- Branching conversations
-- Multi-agent AI
-- Full API access
-
-⚠️ Notion Better For:
-- Simpler onboarding
-- No hosting needed
-- Team already on Notion
-```
-
-### vs Obsidian
-```
-✅ Synap Advantages:
-- Automatic connections (AI-powered)
-- Real-time collaboration
-- Multi-agent AI
-- Event history
-- Branching conversations
-
-⚠️ Obsidian Better For:
-- Offline-first simplicity
-- No server needed
-- Markdown purists
-```
-
-### vs Standard Notes
-```
-✅ Synap Advantages:
-- Knowledge graph
-- AI capabilities
-- Branching
-- Extensibility
-- Event sourcing
-
-⚠️ Standard Notes Better For:
-- Ultra-simple encryption
-- Mobile-first
-```
-
-[See full comparisons →](../resources/comparisons/overview)
-
----
-
-## 🚀 Getting Started
-
-Ready to experience the difference?
-
-1. **[5-Minute Demo](../quick-start/demo)** - Deploy a working app
-2. **[Core Concepts](./event-sourcing-explained)** - Understand the architecture
-3. **[Build Tutorial](../tutorials/build-first-app)** - Create your first app
-4. **[Migrate](../resources/migration/from-notion)** - Bring your data
-
----
-
-## 💡 Key Takeaway
-
-**Synap isn't "another note app."**
-
-It's a **Personal Data Operating System** that fundamentally changes what's possible:
-
-| Traditional Apps | Synap |
-|------------------|-------|
-| Update → forget | Record → remember |
-| Single AI | AI team |
-| Flat notes | Knowledge graph |
-| Linear chat | Branching exploration |
-| They own it | You own it |
-
-**Next**: Learn about the [Event Sourcing](./event-sourcing-explained) that powers time-travel →
+**Start here**: [Quickstart](../getting-started/quickstart) — running in 10 minutes

@@ -4,72 +4,9 @@ sidebar_position: 4
 
 # Composable Architecture
 
-**Synap as Lego Bricks for your Digital Life**
+**How Entities, Views, and AI assemble into anything**
 
----
-
-## The Philosophy
-
-Traditional apps give you a pre-built house. **Synap gives you Lego bricks.**
-
-Every piece of your digital life - notes, tasks, files, conversations - becomes a **composable primitive** that you can assemble in infinite ways.
-
----
-
-## The Building Blocks
-
-### 1. Entities (The Bricks)
-
-**Entities** are the atomic units of your knowledge graph:
-
-- **Notes**: Ideas, thoughts, meeting minutes
-- **Tasks**: Action items with status
-- **Projects**: Containers for organization
-- **Files**: PDFs, images, audio, video
-- **People**: Contacts and relationships
-- **Events**: Calendar items
-
-Each entity has:
-- Metadata (title, type, timestamps)
-- Relations (links to other entities)
-- Content (via document reference)
-
-```typescript
-// An entity is just metadata
-{
-  id: "uuid",
-  type: "task",
-  title: "Build Lego castle",
-  metadata: { status: "in-progress", priority: "high" },
-  documentId: "uuid" // Points to actual content
-}
-```
-
-### 2. Documents (The Content)
-
-**Documents** store the actual content:
-
-- Markdown text
-- Rich text (via Yjs)
-- Code files
-- Binary files
-
-Documents support:
-- **Versioning**: Every change is a snapshot
-- **Collaboration**: Real-time multi-cursor editing
-- **AI Co-editing**: Agents can propose changes
-
-```typescript
-// A document stores content
-{
-  id: "uuid",
-  title: "Architecture Notes",
-  type: "markdown",
-  storageUrl: "r2://...",
-  workingState: "<yjs-binary>", // Live editing state
-  versions: [ /* history */ ]
-}
-```
+> This doc covers the *assembly mechanics*. For what the building blocks are, see [Building Blocks](./building-blocks).
 
 ---
 
@@ -83,233 +20,126 @@ Documents support:
 |-----------|---------|---------|
 | **Table** | Spreadsheet-like | All tasks with filters |
 | **Kanban** | Board columns | Tasks by status |
-| **Timeline** | Chronological | Events over time |
+| **Calendar** | Time-based | Events over time |
+| **Timeline** | Date ranges | Project milestones |
 | **Whiteboard** | Freeform canvas | Visual brainstorming |
 | **Mindmap** | Hierarchical tree | Nested ideas |
 | **Graph** | Network visualization | Knowledge connections |
+| **Bento** | Composable dashboard | Multiple views in one |
 
-**The Key**: Same entities, different perspectives.
+**The key insight**: Same entities, different perspectives. A task in the Kanban is the same row as that task in the Calendar. Update it in either — it updates everywhere.
 
-```typescript
-// A view is a lens on your entities
-{
-  id: "uuid",
-  type: "kanban",
-  category: "structured", // or "canvas"
-  name: "Sprint Board",
-  metadata: {
-    columns: ["todo", "in-progress", "done"],
-    filters: { type: "task", project: "X" }
-  }
-}
-```
+#### Canvas vs Structured views
 
-#### Canvas Views vs Structured Views
-
-- **Canvas** (`whiteboard`, `mindmap`): Freeform positioning, visual relationships
-- **Structured** (`table`, `kanban`, `timeline`): Query-based, computed from entity properties
+- **Canvas** (`whiteboard`, `mindmap`): Freeform positioning, visual relationships — backed by a Yjs document
+- **Structured** (`table`, `kanban`, `calendar`, `list`, `timeline`): Query-based, computed from entity properties — no document overhead
 
 ### 2. AI (How AI Assembles Bricks)
 
-**AI is another assembler** - it reads entities and proposes new combinations:
+**AI is another assembler** — it reads entities and proposes new combinations:
 
 ```
-User: "Create a project plan for the Lego castle"
+User: "Create a project plan for the launch"
 
-AI:
-1. Reads existing entities (notes, tasks, files)
-2. Proposes new entities:
-   - Project: "Lego Castle"
-   - Task: "Buy bricks"
-   - Task: "Design blueprint"
-   - Task: "Assemble base"
+Action Agent:
+1. Reads existing entities (notes, contacts, tasks)
+2. Proposes new entities via Hub Protocol:
+   - Project: "Launch"
+   - Task: "Write landing page copy"
+   - Task: "Set up analytics"
 3. Proposes relations:
    - Tasks → belong to Project
    - Notes → linked to relevant tasks
+4. All proposals wait for human approval
 ```
 
-**Unlike humans using views**, AI uses the **Hub Protocol** to:
-- Read entity graph
-- Create proposals (pending entities)
-- Wait for human validation
+Unlike humans using views, AI uses the **Hub Protocol** — it never writes directly. It proposes. The Data Pod decides whether to execute.
 
 ---
 
 ## Human-in-the-Loop (The Unique Advantage)
 
 Most AI systems either:
-- **Full automation** (AI does it, you can't stop it)
-- **Full manual** (AI suggests, you copy-paste)
+- **Full automation**: AI does it, you can't stop it
+- **Full manual**: AI suggests, you copy-paste
 
-**Synap uses Proposals** - AI creates "draft entities" that pause in a validation queue:
+Synap uses **Proposals** — AI creates draft changes that pause in a validation queue:
 
 ```
-Event Flow:
-1. AI → submitInsight() → entity.creation.requested
-2. Worker → Creates PROPOSAL (status: pending)
-3. User → Reviews in UI
-4. User → Approves/Rejects
-5. If approved → Worker converts to real entity
+1. AI → hubProtocol.createEntity()
+2. Data Pod → checkPermissionOrPropose()
+       → if auto-approve whitelist: execute immediately
+       → else: write proposal row, return { status: "proposed" }
+3. User → Reviews in inbox
+4. User → Approves → entity created
+   User → Rejects → proposal closed, reason logged
 ```
-
-**Proposal States**:
-- `pending` - Waiting for human review
-- `validated` - Approved, entity created
-- `rejected` - Dismissed with reason
 
 This is **only possible** because of event sourcing:
-- Events have states (`requested` → `validated`)
-- Proposals are a separate table
-- State transitions are events themselves
+- Every action is an event with a lifecycle state
+- Proposals are a separate table — no "draft" entities polluting the graph
+- The audit trail is immutable — every approval decision is logged
 
 ---
 
-## The Lego Philosophy in Practice
+## Composition Examples
 
-### Example 1: Building a Second Brain
+### Example: Second Brain
 
-**Bricks**:
-- 500 note entities
-- 50 person entities
-- 1000 relation entities (links)
+**Bricks**: 500 note entities, 50 person entities, 1000 relation edges
 
-**Assemblies**:
-- **Table view**: All notes, sortable by date
-- **Graph view**: Visual network of connected ideas
-- **Timeline view**: Notes chronologically
-- **Whiteboard view**: Sticky notes on a canvas
+**Human assemblies**:
+- Table view: all notes, sorted by date
+- Graph view: visual network of connected ideas
+- Timeline view: notes chronologically
+- Bento dashboard: stats + recent notes + quick capture
 
-**AI Assembly**:
-- Agent reads all notes
-- Proposes new "summary" notes
-- Proposes relations between similar topics
+**AI assemblies** (proposals):
+- Suggests "summary" note entities from related clusters
+- Proposes connections between notes mentioning the same topic
 
-### Example 2: AI-Assisted Writing
+### Example: AI-Assisted Writing
 
-**Bricks**:
-- Document entity (your article)
-- Task entities (outline items)
-- Note entities (research)
+**Bricks**: document entity (article), task entities (outline items), note entities (research)
 
-**Human Assembly**:
-- **Whiteboard view**: Outline as cards
-- **Document view**: Real-time editor
+**Human assembly**: Whiteboard view for outline, Document view for editing
 
-**AI Assembly**:
-- Agent reads document
-- Proposes edits (via document versions)
-- Proposes task entities ("Add conclusion section")
-- User reviews proposals in sidebar
+**AI assembly**: Agent reads document, proposes edit tasks, links research notes — user approves each
 
 ---
 
-## Why This Matters
-
-### Traditional Apps
-
-```
-Notion: Notes locked to pages
-Trello: Cards locked to boards
-Obsidian: Files locked to folders
-```
-
-You build one castle, you're stuck with it.
-
-### Synap (Lego Architecture)
-
-```
-Entities: Universal bricks
-Views: Different castles from same bricks
-AI: Automated builder
-Proposals: Review blueprints before building
-```
-
-You can rebuild anytime, with zero data loss (event sourcing).
-
----
-
-## Technical Implementation
-
-### Entities ↔ Documents
+## Technical: How the Layers Connect
 
 ```typescript
-// Entity references document
+// Entity references a document (canvas/rich-text only)
 const entity = {
   id: "task-1",
   type: "task",
   title: "Write documentation",
-  documentId: "doc-1" // Full task description
+  documentId: "doc-1"  // null for most entities
 };
 
-// Document stores content
-const document = {
-  id: "doc-1",
-  type: "markdown",
-  content: "## Task Details\n\nWrite composability docs..."
-};
-```
-
-### Views ↔ Entities
-
-```typescript
-// Structured view (query-based)
+// Structured view — query-based, no document
 const kanbanView = {
   type: "kanban",
-  metadata: {
-    source: {
-      entityType: "task",
-      filters: { project: "synap" }
-    },
-    columns: [
-      { id: "todo", filter: { status: "todo" } },
-      { id: "done", filter: { status: "done" } }
-    ]
+  config: {
+    profileSlug: "task",
+    filters: { project: "synap" },
+    groupBy: "status"
   }
 };
 
-// Canvas view (position-based)
+// Canvas view — backed by Yjs document
 const whiteboardView = {
   type: "whiteboard",
-  yjsRoomId: "whiteboard-123", // Real-time collab
-  metadata: {
-    entities: [
-      { entityId: "task-1", position: { x: 100, y: 200 } },
-      { entityId: "note-5", position: { x: 300, y: 400 } }
-    ]
-  }
+  documentId: "whiteboard-doc-123"  // Yjs real-time collab
 };
-```
-
-### AI ↔ Proposals
-
-```typescript
-// Intelligence Service creates proposal
-await hubProtocol.createEntity({
-  type: "task",
-  title: "AI-suggested task",
-  metadata: {
-    aiGenerated: true,
-    confidence: 0.85,
-    reasoning: "User mentioned this in chat"
-  }
-});
-
-// Backend creates proposal (not entity)
-const proposal = await db.insert(proposals).values({
-  targetType: "entity",
-  status: "pending",
-  request: { /* entity data */ }
-});
-
-// User approves → Worker converts to entity
-// User rejects → Proposal stays for audit
 ```
 
 ---
 
 ## Next Steps
 
-- [Event Architecture](../architecture/events/event-architecture.md) - How events enable composability
-- [Views System](../development/extending/views.md) - Building custom views
-- [Hub Protocol](../architecture/hub-protocol-flow.md) - How AI assembles bricks
-- [Proposals](../architecture/core-patterns.md#proposals) - Human-in-the-loop pattern
+- [Event Architecture](../architecture/events/event-architecture.md) — How events enable composability
+- [Hub Protocol](../architecture/hub-protocol-flow.md) — How AI assembles bricks
+- [Building Blocks](./building-blocks) — The entity and view primitives

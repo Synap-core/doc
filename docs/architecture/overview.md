@@ -285,11 +285,11 @@ sequenceDiagram
 - **tRPC APIs**: Type-safe APIs
 - **Authentication**: Ory Kratos + Hydra
 - **Storage**: R2/MinIO for file storage
-- **Local Agents**: LangGraph workflows for basic tasks
+- **Intelligence Hub**: Separate service — peer-agent network (see [Multi-Agent System](/concepts/multi-agent-system))
 
-### Intelligence (Plugins & Services)
-- **Agent Plugins**: LangGraph-powered agents (single or multi-agent graphs)
-- **External Services**: Specialized AI services via Hub Protocol (marketplace)
+### Intelligence (Services & Protocol)
+- **Intelligence Hub**: Peer-agent network, connects via Hub Protocol
+- **External Services**: Any Hub Protocol-compatible AI service
 - **Tool Registry**: Dynamic tool registration for extensibility
 
 ### Client SDK
@@ -315,7 +315,7 @@ sequenceDiagram
 - **Event Bus**: Inngest
 - **ORM**: Drizzle ORM
 - **API**: tRPC + Hono
-- **AI**: LangGraph + Vercel AI SDK
+- **AI**: Vercel AI SDK + Claude (Intelligence Hub service)
 - **Auth**: Ory Stack (Kratos + Hydra)
 - **Storage**: Cloudflare R2 / MinIO
 

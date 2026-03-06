@@ -33,9 +33,9 @@ It is **headless**, meaning it has no UI of its own. It runs silently in the bac
 - **Real-time**: WebSocket support
 
 ### Intelligence
-- **Local Agents**: LangGraph workflows for basic tasks
-- **Plugin System**: Extensible via The Architech
+- **Intelligence Hub**: Separate service — peer-agent network, Hub Protocol client
 - **Tool Registry**: Dynamic tool registration
+- **MCP Client**: Connects to external MCP servers (planned)
 
 ---
 
@@ -73,22 +73,22 @@ All state changes flow through events, ensuring:
 - Complete control
 
 ### Extensibility
-- Internal plugins (The Architech)
-- External services (Marketplace)
-- Agent plugins (LangGraph)
+- External Intelligence Services via Hub Protocol
+- MCP client for community tools (planned)
+- Marketplace widgets for bento dashboards (planned)
 
 ---
 
 ## Technology Stack
 
 - **Runtime**: Node.js 20+
-- **Database**: PostgreSQL (TimescaleDB + pgvector)
-- **Event Bus**: Inngest
+- **Database**: PostgreSQL 15+ with pgvector
+- **Jobs**: pg-boss (PostgreSQL-backed queue)
 - **ORM**: Drizzle ORM
-- **API**: tRPC + Hono
-- **AI**: LangGraph + Vercel AI SDK
-- **Auth**: Ory Stack
-- **Storage**: R2/MinIO
+- **API**: tRPC 11 + Hono
+- **AI**: Vercel AI SDK + Claude (Intelligence Hub is a separate service)
+- **Auth**: Ory Kratos
+- **Storage**: MinIO / Cloudflare R2
 
 ---
 

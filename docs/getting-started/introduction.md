@@ -4,95 +4,34 @@ sidebar_position: 1
 
 # Introduction
 
-Welcome to **Synap** - a Personal Data Operating System with revolutionary capabilities.
+Welcome to Synap — an **AI operating system for knowledge work**.
 
-## What is Synap?
-**Synap is a Personal Data Operating System.**
-
-It creates a **private, intelligent kernel** for your digital life where you are the root user. Instead of scattering your life across dozens of SaaS silos, Synap brings your data into a single, sovereign "Data Pod" that you own, control, and can extend indefinitely.
-
-### The "Workspace as a Service" Paradigm
-Synap treats your workspace not as a static file folder, but as a live service:
-
-- 🕐 **Time-Travel**: Every keystroke is an event. Replay history, fork conversations, and audit everything.
-- 🧠 **Contagious Intelligence**: AI isn't a bolt-on; it's a layer. Add an AI capability once, and it propagates to every note, task, and file instantly.
-- 🌳 **Branching Workflows**: Just like code, your thoughts can branch. Explore different ideas in parallel without messing up your main thread.
-- 🔒 **Sovereign by Design**: You don't "log in" to Synap; you *host* it (or we host a private instance for you). Your data never leaves your pod unless you explicitly authorize it via the Hub Protocol.
-
-### Why It Matters
-
-| The SaaS Model (Old) | The Synap Model (Personal OS) |
-|----------------------|-------------------------------|
-| App owns the data | **You own the data** |
-| Intelligence is trapped in the app | **Intelligence works across your whole life** |
-| "Features" are gatekept by pricing | **Features are just plugins you install** |
-| Linear history (Ctrl+Z) | **Event Sourcing (Infinite Time Travel)** |
-
-**Learn more**: [Workspace as a Service](../concepts/workspace-as-a-service.md) - Deep dive into the philosophy
+Synap gives you a single open data layer for everything you know: tasks, contacts, notes, events, documents, ideas. Visualize it any way you need. Let AI work with it under your governance rules. Own the infrastructure.
 
 ---
 
-## Architecture Overview
+## The three concepts that make it work
 
-Synap follows an **event-driven architecture** where all state changes flow through events:
+| Concept | What it is |
+|---------|-----------|
+| **Entities** | Your data — typed, related, governed. Tasks, contacts, events: one model, one graph. |
+| **Views** | Any lens on that data. Table, Kanban, Calendar, Graph, Bento dashboard — never a copy. |
+| **Channels** | Where you and AI interact with and through entities. Conversations, branches, comments, external relays. |
 
-**UI or Automation (Agents) → Events → Workers → Data Layer**
-
-```
-┌─────────────┐         ┌──────────────┐
-│   Client    │────────▶│   Data Pod   │
-│  (Frontend) │         │  (Core OS)   │
-└─────────────┘         └──────────────┘
-                              │
-                              │ Events
-                              ▼
-                         ┌──────────────┐
-                         │   Inngest    │
-                         │  Event Bus   │
-                         └──────────────┘
-                              │
-                              │ Dispatches
-                              ▼
-                         ┌──────────────┐
-                         │   Workers    │
-                         └──────────────┘
-                              │
-                    ┌─────────┴─────────┐
-                    ▼                   ▼
-            ┌──────────────┐    ┌──────────────┐
-            │  PostgreSQL  │    │  R2/MinIO    │
-            │  + pgvector  │    │   Storage    │
-            └──────────────┘    └──────────────┘
-```
-
-For a complete architecture overview, see [Architecture Overview](../architecture/overview.md).
-
-**How It Works**:
-- **[Event Sourcing](../concepts/event-sourcing-explained)** - Never lose data, infinite undo
-- **[Knowledge Graph](../concepts/knowledge-graph)** - Automatic connections
-- **[Branching](../concepts/branching-conversations)** - Parallel AI work
-- **[Multi-Agent System](../concepts/multi-agent-system)** - Specialized AI team
+Everything else — documents, templates, the intelligence service, the browser app — enables or extends these three.
 
 ---
 
-## Key Features
+## Three things that make it unusual
 
-- ✅ **Event-Driven Architecture** - Built on Inngest event bus
-- ✅ **PostgreSQL with TimescaleDB** - Time-series data and vector search
-- ✅ **Multi-User Support** - Row-Level Security (RLS) for data isolation
-- ✅ **Ory Authentication** - Enterprise-grade identity management
-- ✅ **tRPC APIs** - Type-safe, end-to-end APIs
-- ✅ **Vector Search** - pgvector for semantic search
-- ✅ **Storage Abstraction** - R2 (production) or MinIO (dev)
+1. **You own the data.** A pod is a real backend on your infrastructure (or Synap's). Standard PostgreSQL. Exportable. No lock-in.
+2. **AI proposes, humans approve.** No agent writes to your data without going through a proposal queue. Every decision is logged.
+3. **The intelligence is pluggable.** Swap AI services per workspace. Connect external agents via Hub Protocol. One wire adds 10,000+ MCP tools.
 
 ---
 
-## Next Steps
+## Next steps
 
-1. **[Quickstart](./quickstart)** - Get your first note and chat working in 5 minutes
-2. **[Core Concepts](../concepts/what-is-synap)** - Understand what makes Synap different
-3. **[Architecture Overview](../architecture/overview)** - Technical deep dive
-
----
-
-**Ready to get started?** Let's begin with [Quickstart](./quickstart)!
+1. **[Quickstart](./quickstart)** — Running instance in under 10 minutes
+2. **[What is Synap](../concepts/what-is-synap)** — The triptych in depth
+3. **[Architecture Overview](../architecture/overview)** — Technical deep dive

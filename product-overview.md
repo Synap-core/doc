@@ -1,46 +1,92 @@
-# Synap — Product Overview
+# Synap — Product Overview & Vision 2026
 
-> For new team members and anyone writing copy for the landing page.
-> Last updated: February 2026
+> Canonical reference for product direction, marketing copy, and team alignment.
+> Last updated: March 2026
 
 ---
 
 ## What is Synap?
 
-Synap is a **self-hostable data intelligence workspace** — an OS-like environment where users capture, organize, and understand all their information, with AI that proposes rather than executes.
+Synap is an **AI operating system for knowledge work** — a self-hostable workspace where every piece of information you produce (tasks, notes, contacts, documents, ideas, data) lives in one open model, is visualized any way you need, and is understood by AI that proposes before it acts.
 
-The core bet: people and organizations produce enormous amounts of structured and unstructured data — tasks, notes, emails, documents, decisions, relationships — scattered across dozens of tools with no common brain. Synap is that brain. It stores everything in a single open data model (PostgreSQL, fully self-hostable), makes it navigable through a dozen view types, and lets AI help without taking control away from the user.
+The core premise: the tools people use every day (task managers, note apps, CRM, spreadsheets, project trackers) each manage a slice of the same underlying graph of human work. They don't share. They don't relate. And their AI features are bolt-ons with no shared understanding of your data.
+
+Synap is the single data layer underneath all of it. Not another SaaS app — an **OS** for your data.
 
 **Three things that make it unusual:**
 
-1. **You own the data.** A "pod" is a real backend instance running on your infrastructure (or Synap's). There is no SaaS database you can never export from.
-2. **AI proposes, humans approve.** No AI agent ever directly writes to your data without a proposal that goes through an approval queue.
-3. **Everything is an entity.** Tasks, documents, contacts, events, ideas, code snippets — they all share the same data model and can relate to each other, which means you can build cross-domain views the original tools never imagined.
+1. **You own the data.** A "pod" is a real backend running on your infrastructure (or Synap's). Standard PostgreSQL. Exportable at any time. No SaaS lock-in.
+2. **AI proposes, humans approve.** No AI agent writes to your data without a proposal in an approval queue. Every decision is logged.
+3. **Everything is an entity.** Tasks, contacts, events, ideas, code snippets — one model with typed relationships. Build views the original tools couldn't imagine.
+
+---
+
+## The Product Triptych
+
+Every surface in Synap reduces to three composable concepts:
+
+```
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│   Entities  │   │    Views    │   │  Channels   │
+│             │   │             │   │             │
+│  Your data  │◄──│  Any lens   │◄──│ Interaction │
+│  One model  │   │  on data    │   │  & AI       │
+└─────────────┘   └─────────────┘   └─────────────┘
+```
+
+**Entities** are the data layer. A task, a contact, a meeting note, a CRM deal — they are all entities in the same graph. Typed by profiles, related by edges, stored in PostgreSQL. The entity graph is the source of truth for everything.
+
+**Views** are the visualization layer. A view is a lens on the entity graph — never a copy. Table, Kanban, Calendar, Bento, Graph — all query the same data. Switch views without moving anything. Embed views inside other views. Every workspace and every entity can have its own view configuration.
+
+**Channels** are the interaction layer. A channel is where you and your AI talk about, with, and through your entities. An `ai_thread` is a conversation. A `branch` is a fork. `entity_comments` are inline notes. An `external_import` relays messages from Telegram or Slack. The channel always knows what entities it's about.
+
+These three are independent but composable:
+- A channel can be anchored to a view (discuss what you're looking at)
+- A view can embed a channel (show the conversation alongside the data)
+- An entity can have a bento view (the entity *becomes* a dashboard)
+- A channel can reference entities as context items (AI knows what you're working on)
+
+Everything else in Synap — documents, templates, the intelligence service, the browser — is infrastructure that enables or extends these three.
+
+---
+
+## The "OS" Metaphor Explained
+
+We call it an OS because it behaves like one:
+
+- **Kernel**: the Data Pod — storage, permissions, event log, job system
+- **Desktop**: the web app and Electron browser — views, navigation, interaction
+- **Apps**: Channels (AI conversations), Views (data visualization), Documents (rich text/canvas), Marketplace (plugins, planned)
+- **Processes**: AI agents running in the Intelligence Hub, background workers in pg-boss
+- **Package manager**: the Template Engine — install a CRM, a second brain, a content pipeline with one click
+- **File system**: the Entity graph — every "file" is an entity, every "folder" is a view, every "shortcut" is a relationship
+
+The analogy isn't cosmetic. It guides decisions: apps don't own data (they query entities), views are lenses not copies, and AI is a privileged process that still needs user authorization.
 
 ---
 
 ## The Pod Architecture
 
-The foundational concept is the **data pod**: a fully self-contained backend instance.
+Every deployment of Synap is a **data pod** — a fully self-contained backend instance.
 
 ```
-┌────────────────────────────────────────────┐
-│                  Data Pod                  │
-│  ┌──────────┐  ┌──────────┐  ┌─────────┐  │
-│  │ tRPC API │  │ Realtime │  │  Jobs   │  │
-│  │ (port    │  │ (Socket  │  │ (pg-    │  │
-│  │  4000)   │  │  .IO /   │  │  boss)  │  │
-│  └────┬─────┘  │  Yjs)    │  └────┬────┘  │
-│       │        └────┬─────┘       │        │
-│  ┌────▼─────────────▼─────────────▼──────┐ │
-│  │            PostgreSQL                 │ │
-│  │   entities · events · workspaces      │ │
-│  │   documents · views · invites · ...   │ │
-│  └────────────────────────────────────────┘ │
-└────────────────────────────────────────────┘
+┌────────────────────────────────────────────────┐
+│                   Data Pod                      │
+│  ┌──────────┐  ┌──────────┐  ┌────────────┐    │
+│  │ tRPC API │  │ Realtime │  │  Jobs      │    │
+│  │ (tRPC11) │  │ Socket.IO│  │ (pg-boss)  │    │
+│  │          │  │ + Yjs    │  │            │    │
+│  └────┬─────┘  └────┬─────┘  └─────┬──────┘    │
+│       │              │              │            │
+│  ┌────▼──────────────▼──────────────▼─────────┐ │
+│  │                 PostgreSQL                  │ │
+│  │  entities · channels · views · workspaces  │ │
+│  │  documents · profiles · proposals · events │ │
+│  └────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────┘
 ```
 
-Every pod is identical code (open source). Synap cloud simply provisions and operates the pod for you. Self-hosted pods use the same Docker images and behave identically.
+Every pod runs identical open-source code. Synap Cloud provisions and operates the pod; self-hosted pods use the same Docker images.
 
 ### Cloud vs. Self-hosted
 
@@ -56,294 +102,440 @@ Every pod is identical code (open source). Synap cloud simply provisions and ope
 
 ### Control Plane
 
-The **control plane** (`synap-control-plane-api`) is a thin coordination layer that:
-- Provisions and manages cloud pods (DNS via Cloudflare, SSL via Let's Encrypt)
-- Tracks subscriptions (Stripe)
-- Sends transactional emails (Resend)
+A thin coordination layer (`synap-control-plane-api`) handles cloud operations only:
+- Provisions pods (DNS via Cloudflare, SSL via Let's Encrypt)
+- Manages subscriptions (Stripe) and transactional emails (Resend)
 - Monitors pod health
 
-Pods work independently even if the control plane is down. It is not a single point of failure.
+Pods function fully independently if the control plane is down. It is not in the hot path.
 
 ---
 
-## Entity System
+## Data Model
 
-Everything in Synap is an **Entity** — a universal data model that unifies tasks, notes, documents, contacts, events, ideas, and anything custom.
+### Entity — the universal unit
+
+Everything in Synap is an **Entity**.
 
 ```typescript
 Entity {
-  id: UUID
-  type: string            // determined by profile (task, note, project, ...)
-  title: string
-  preview: string
-  properties: JSONB       // flexible metadata, schema-validated
-  documentId: UUID        // rich-text or canvas content
-  relationships: Relation[]
-  version: number         // optimistic locking
+  id:            UUID
+  type:          string           // determined by profile
+  title:         string
+  preview:       string
+  properties:    JSONB            // typed, schema-validated, index-friendly
+  documentId:    UUID | null      // rich-text or canvas content (optional)
+  relationships: Relation[]       // typed, bidirectional edges
+  workspaceId:   UUID
+  version:       number           // optimistic locking
 }
 ```
 
-### Entity Types (Profiles)
+A task and a contact and an event are all entities. They share the same query interface, the same relationship model, and the same view system. There is no special-casing.
 
-Profiles define what an entity is and what properties it has:
+### Profiles — entity types as configuration
 
-- **System profiles** (built-in): `task`, `note`, `project`, `contact`, `event`, `idea`, `meeting`
-- **Workspace profiles**: custom types created by admins per workspace
+A Profile defines an entity type:
+
+```typescript
+Profile {
+  slug:          string           // "task", "contact", "project"
+  displayName:   string
+  scope:         "system" | "workspace" | "shared" | "user"
+  defaultValues: JSONB            // property defaults at creation time
+  parentProfileId: UUID | null    // inheritance
+  uiHints:       JSONB            // icon, color, layout hints
+}
+```
+
+- **System profiles**: `task`, `note`, `project`, `contact`, `event`, `idea`, `meeting` — built-in, available everywhere
+- **Workspace profiles**: custom types created by workspace admins
+- **Shared profiles**: explicitly granted to multiple workspaces (e.g., a CRM profile shared across team + personal)
 - **User profiles**: personal entity types
-- Profiles support **inheritance** — e.g., `webinar` extends `event`
+
+`defaultValues` is resolved at entity creation time — the profile's defaults are merged with the caller's input, so new entities always have valid initial state.
 
 ### Property System
 
-Properties are typed, constrained, and schema-validated:
-- Types: `string`, `number`, `date`, `entity_id`, `array`, `object`
-- Constraints: min/max, enum values, regex, format
-- UI hints: label, icon, input type, placeholder
-- Properties auto-detected from existing entities (no schema required to start)
+Properties flow through a four-step chain from definition to display:
 
-### Knowledge Graph (Relationships)
+```
+Profile
+  └── PropertyDef links (profile_properties)
+        └── entity.properties JSONB  ← stored here at runtime
+              └── Field System renders  ← @synap/entity-card
+```
 
-Entities link to each other with typed, bidirectional edges:
+**PropertyDef** defines a field — its slug, value type, constraints, and UI hints. Slugs are profile-scoped, so `status` means something specific to a `task` profile and something different on a `contact` profile.
+
+**profile_properties** links a PropertyDef to a Profile with display configuration: required, defaultValue, displayOrder.
+
+**entity.properties** is a JSONB object on every entity row. Values are written here at runtime, validated against the linked PropertyDefs.
+
+**Field System** (`@synap/entity-card`, `@synap/property-renderer`) is the single rendering source of truth. Every view type — table column, kanban card, bento widget, entity form — renders property values through the same field components. Auto-detection scores field importance (frequency, value density, type) so views can pick smart defaults without manual configuration.
+
+Value types: `string`, `number`, `boolean`, `date`, `entity_id`, `array`, `object`, `secret`
+Constraints: min/max, enum values, regex, format
+UI hints: label, icon, input type, placeholder, display width
+
+### Relationships (Knowledge Graph)
+
+Entities link with typed, bidirectional edges:
 
 ```
 Task "Close Q1" --[depends_on]--> Task "Board sign-off"
-Document "Spec" --[mentions]--> Contact "Sarah"
-Task "Write tests" --[belongs_to_project]--> Project "Backend refactor"
+Contact "Sarah" --[assigned_to]--> Project "Rebrand"
+Document "Spec" --[mentions]--> Task "Write tests"
 ```
 
-Built-in relation types: `assigned_to`, `mentions`, `links_to`, `parent_of`, `relates_to`, `depends_on`, `blocks`, `created_by`. Custom relation types are supported.
+Built-in types: `assigned_to`, `mentions`, `links_to`, `parent_of`, `relates_to`, `depends_on`, `blocks`, `created_by`. Custom types are supported.
+
+### Documents (infrastructure layer)
+
+Documents are **backing stores for content, not a user-facing concept**. Users don't "create documents" in Synap — they create entities (which may have a rich-text body) or open a whiteboard (which uses a canvas document). The document is the implementation detail underneath.
+
+Two content modes:
+- **Rich text** (TipTap 3 / ProseMirror): entity body, document-type entities, comments
+- **Canvas** (Tldraw 2.0): whiteboard and mindmap views
+
+Both use **Yjs CRDTs** for real-time multi-user editing with no merge conflicts. Updates stream via Socket.IO and persist to MinIO/R2, with a PostgreSQL row for metadata and versioning.
+
+**Design constraint**: only `canvas` view types (whiteboard, mindmap) create a document backing store. Structured views (kanban, table, list), bento dashboards, and most entities have `documentId: null` — zero document overhead. The CRDT + MinIO infrastructure is only instantiated when the content actually needs it.
 
 ---
 
-## Features
+## Views — any lens on the same data
 
-### Views — multiple ways to see the same data
-
-All views query the same entities. Switching views never moves your data.
+Every view type queries the same entity graph. Switching views never moves data.
 
 | View | Best for |
 |------|----------|
-| **Table** | Spreadsheet-style, sortable columns, inline edit |
-| **Kanban** | Status-based boards with drag-and-drop |
-| **List** | Simple linear list, fast scanning |
+| **Table** | Spreadsheet-style, sortable, inline edit |
+| **Kanban** | Status-based drag-and-drop boards |
+| **List** | Fast linear scanning |
 | **Grid** | Card grid, image-friendly |
-| **Timeline** | Date-based chronological view |
-| **Graph** | Node-link knowledge graph, explore relationships |
-| **Whiteboard** | Freeform canvas (Tldraw), sticky notes, shapes |
+| **Calendar** | Date-based scheduling |
+| **Timeline** | Date-range based planning |
+| **Graph** | Node-link relationship explorer |
+| **Whiteboard** | Freeform canvas (Tldraw) |
 | **Mindmap** | Hierarchical branching |
+| **Bento** | Composable dashboard grid |
 
-Views are configurable: custom filters, sorts, grouping, visible columns, column widths. Views can be **embedded inside other views** (e.g., a Kanban inside a document).
+### Bento Dashboards
 
-The **Field System** (`@synap/entity-card`) is the single source of truth for how any property renders across every view. Auto-detection scores field importance so views can pick smart defaults without configuration.
+The bento grid is the flagship composition surface. Any workspace (or entity) can have a bento view as its primary display. A bento layout is a JSONB config of **blocks** arranged on a responsive grid (react-grid-layout):
 
-### Documents & Whiteboards
+```typescript
+BentoViewConfig {
+  blocks: BentoBlock[]
+}
 
-- **Rich text documents**: TipTap 3 (ProseMirror-based) — heading styles, tables, embeds, code blocks, mentions, comments
-- **Whiteboards**: Tldraw 2.0 — freeform canvas, shapes, connectors, sticky notes, images
-- Both support **real-time multi-user editing** (Yjs CRDTs, no merge conflicts)
-- Every workspace gets a default whiteboard, auto-provisioned on first access
-
-### Real-Time Collaboration
-
-```
-Frontend
-  ├── Presence socket   (who's online, cursor positions, typing)
-  └── Yjs socket        (document/whiteboard content, conflict-free)
-          ↓
-  Realtime Service (port 4001)
-          ↓
-  PostgreSQL + MinIO (persistence)
+BentoBlock {
+  id:         string
+  widgetType: string          // registered widget key
+  pos:        { x, y, w, h } // grid position
+  config:     JSONB           // widget-specific config
+}
 ```
 
-- **Yjs CRDTs**: structural conflict resolution — two users editing simultaneously always produces a valid merge
-- **Presence**: live cursors, typing indicators, user avatars
-- **Auto-save**: every 10 seconds during active editing; snapshot on last user disconnect
-- **Offline support**: changes queue locally and sync on reconnect
+**Widget registry** (`@synap/views-bento`): 14+ built-in widgets + runtime-registered widgets from feature packages:
 
-### AI — Intelligence Hub
+| Widget | Description |
+|--------|-------------|
+| `welcome-header` | Workspace welcome, clock, quick actions |
+| `entity-list` | Filterable entity list with inline creation |
+| `recent-entities` | Recently modified entities |
+| `quick-capture` | Single-field entity creation |
+| `stats-counter` | Aggregated entity count/sum |
+| `entity-header` | Entity name, type icon, status badge |
+| `entity-properties` | Full property display for parent entity |
+| `view-kanban` | Full KanbanAdapter embedded in a widget |
+| `view-table` | Full TableAdapter in a widget |
+| `view-list` | Full ListAdapter in a widget |
+| `view-calendar` | CalendarAdapter in a widget |
+| `view-timeline` | TimelineAdapter in a widget |
+| `entity-content` | Related entities (notes, tasks) as a sub-board |
 
-#### Built-in agents (Synap Intelligence Service)
+**Error boundaries**: every widget is wrapped in a `WidgetErrorBoundary`. A crashed widget shows a compact error card — the rest of the dashboard continues rendering.
 
-15+ specialized agents built on Claude, orchestrated via a ReAct / LangGraph pattern:
+**Unknown widgets**: `UnknownWidgetPlaceholder` renders for unregistered widget types, with widget key, app-detection logic, and a marketplace CTA.
+
+### Entity Bento Mode
+
+Any entity can have its own bento dashboard. Toggle between Document and Dashboard modes:
+
+- **Document mode** (default): entity + attached rich-text document
+- **Dashboard mode**: entity rendered as a bento grid
+
+First switch to Dashboard → backend auto-creates a bento view with `entity-header` + `entity-properties` default blocks, linked via `entity.metadata.bentoViewId`. The toggle is in the entity header; access is write-gated.
+
+### Field System
+
+`@synap/entity-card` is the single rendering source of truth for property values across every view type. Auto-detection scores field importance so views pick smart defaults without configuration.
+
+---
+
+## Channels — interaction layer
+
+Channels are the conversational fabric of Synap. They replaced the earlier "threads" model with a richer, multi-modal interaction system.
+
+```typescript
+Channel {
+  id:          UUID
+  type:        ChannelType
+  workspaceId: UUID
+  name:        string
+  contextItems: ChannelContextItem[]   // linked entities or documents
+}
+```
+
+### Channel types
+
+| Type | Description |
+|------|-------------|
+| `ai_thread` | Conversation with the AI — main channel type |
+| `branch` | A fork of an ai_thread exploring an alternative path |
+| `entity_comments` | Inline comments on an entity (Notion-style) |
+| `document_review` | Review thread anchored to a document |
+| `view_discussion` | Discussion about a specific view |
+| `direct` | Human-to-human direct message |
+| `external_import` | Messages relayed in from external platforms |
+| `a2ai` | Agent-to-agent async communication (graph topology) |
+
+### AI triggering
+
+Channels of type `ai_thread` or `branch` automatically invoke the Intelligence Hub when a human message is sent. All other types bypass AI. No flag required — the channel type is the discriminator.
+
+### Streaming
+
+The AI response is streamed via SSE:
+- `chunk` — text token
+- `step` — tool execution step
+- `branch_decision` — AI chose to create a branch
+- `complete` — run finished, may include `createdProposals[]`
+- `error` — error with recovery hints
+
+### Branch management
+
+Creating a branch from an `ai_thread` forks the conversation at a specific message. Branches are full channels with their own history. Navigation between branches is visual (tree structure).
+
+---
+
+## Intelligence Hub
+
+A separate Hono server (`synap-intelligence-service/apps/intelligence-hub/`) is the AI brain. The Data Pod has zero intelligence — it governs. The Hub thinks.
+
+### Agent architecture — a peer network, not a hierarchy
+
+The Intelligence Hub runs a **network of peer agents**, not a single orchestrator that delegates to sub-processes. Each agent is an autonomous reasoning unit with its own tools, context window, and decision loop. Agents route to each other based on intent — no agent has god-status.
+
+```
+User message
+     │
+     ▼
+Intent Analyzer ──► Entity Extractor
+     │
+     ├──► Researcher ──► Knowledge Search
+     │
+     ├──► Code Agent
+     │
+     ├──► Writing Agent
+     │
+     └──► Action Agent ──► Hub Protocol (Data Pod)
+```
+
+Any agent can invoke any other agent as a tool call. An agent can also **spawn a channel** to continue reasoning asynchronously — this is the A2AI (agent-to-agent) pattern: agents send messages to each other through channels with full persistence, branching, and replay.
+
+Current agents:
 
 | Agent | Role |
 |-------|------|
-| Orchestrator | Main reasoning, routes to sub-agents |
-| Intent Analyzer | Extracts goals from free-form text |
-| Entity Extractor | Auto-creates entities from documents or conversation |
+| Intent Analyzer | Extracts goals, routes to the right agent(s) |
+| Entity Extractor | Auto-creates entities from conversation |
 | Researcher | Deep investigation and synthesis |
 | Code Agent | Generate, explain, review code |
 | Writing Agent | Drafts, rewrites, summarizes |
-| Action Agent | Executes approved tasks |
-| Knowledge Search | Semantic search across all entities |
-| Meta Agent | Self-reflection, planning |
+| Action Agent | Executes approved Hub Protocol calls |
+| Knowledge Search | Semantic + full-text search across entities |
+| Meta Agent | Self-reflection, replanning, error recovery |
 
-#### External AI (Hub Protocol)
+**Why no master orchestrator?** A central controller is a bottleneck and a single point of failure. In a peer model, agents compose: the Researcher can ask the Writing Agent to format its output, the Code Agent can ask Knowledge Search to find relevant entities, and none of this requires a coordinator. The Data Pod's governance layer is the control surface — not an agent.
 
-Any external AI service can connect to a pod via the **Hub Protocol** — a standard OAuth2 API that gives AI controlled, scoped access:
+### Agent Users
+
+Agents are first-class citizens in the permission model. Each agent type has a corresponding **user row** (`userType: "agent"`) in the users table with a workspace membership and an RBAC role. Agents operate under the same governance rules as humans.
 
 ```
-External AI Service
-  ↓  OAuth2 token (user-granted, scoped)
-POST /search        → semantic search over user's entities
-POST /retrieve/{id} → full entity + relationships
-POST /propose       → suggest a change (creates a proposal)
+agent-{agentType}-{shortId}@synap.agent
 ```
 
-The pod never lets external services write directly. They can only **propose**. The user approves.
+### Hub Protocol (API for external AI)
 
-#### Marketplace & custom skills
+Any external AI service can connect to a pod via the Hub Protocol — a standard API that gives AI controlled, scoped access:
 
-- **Marketplace**: community-built agents, one-click install, security-reviewed
-- **Custom skills**: users write TypeScript tools that run inside the intelligence service, private to their workspace
+```
+External AI (OpenClaw, GPT, local model, ...)
+  ↓  API key (user-granted, scoped)
+POST /trpc/hubProtocol.createEntity   → propose or auto-approve
+POST /trpc/hubProtocol.searchEntities → read-only search
+POST /trpc/hubProtocol.createChannel  → open a channel
+```
 
-#### AI Governance — the approval model
+Hub Protocol API keys auto-brand every request: `source: "intelligence"`, `isHubProtocol: true`. The branding cannot be spoofed. Write routes accept an optional `agentUserId` to attribute actions to a specific agent user.
+
+### AI Governance — the proposal model
 
 This is the core safety primitive:
 
 ```
-AI wants to create an entity
-  → publishes entities.create.requested event
-  → if workspace.aiAutoApprove = false:
-      → goes to approval queue
-      → user reviews (approve / deny with reason)
-  → if approved:
-      → publishes entities.create.validated
-      → worker commits the change
-  → if denied:
-      → proposal closed, nothing changes, reason recorded
+AI calls hubProtocol.createEntity
+  → checkPermissionOrPropose(ctx)
+      → if action in autoApproveFor[]:
+          → execute immediately, return entity
+      → else:
+          → write proposal row to DB
+          → return { status: "proposed", proposalId }
+          → user sees proposal in inbox
+          → approve → worker executes
+          → deny   → proposal closed, reason logged
 ```
 
-`aiAutoApprove` is configurable per workspace and per action type. You can auto-approve low-stakes operations (add a tag) while requiring review for destructive ones (delete an entity).
+Default `autoApproveFor` whitelist: `["search.*", "memory.recall", "entity.read", "document.read", "context.*"]`. Glob patterns supported. Configurable per workspace.
 
-### Inbox & External Data (Life Feed)
+Every AI decision is logged. The audit trail is immutable.
 
-A unified inbox that pulls from connected sources:
+### External Connections — three kinds
 
-- Gmail, Google Calendar, Slack (current integrations)
-- Swipeable feed: archive, snooze, act
-- Auto-processing: AI can suggest turning an email into a task entity (subject to approval)
-- Deep links back to the original source
+External connectivity in Synap follows three distinct patterns. Understanding which is which prevents confusion:
 
-### Search
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  1. Intelligence Services       │  What AI brain handles requests │
+│  2. External Channels           │  Where conversations come from  │
+│  3. Tool Protocols (MCP)        │  What tools AI can use          │
+└──────────────────────────────────────────────────────────────────┘
+```
 
-- **Full-text search**: PostgreSQL GIN indexes across all content
-- **Semantic search**: vector embeddings, meaning-based retrieval
-- **Property search**: filter by any property value
-- Available globally (Cmd+K command palette) and per-view
+**1. Intelligence Services** — swap the AI brain
 
-### Commands & Keyboard Shortcuts
+Each workspace can point at a different AI backend via the Hub Protocol:
 
-- **Command palette** (Cmd+K): universal entry point for any action
-- **Slash commands** in documents: `/create task`, `/search`, `/table`
-- **Custom commands**: workspace-level shortcuts for repeated actions
-- **Keyboard bindings**: configurable per user
+| Service | Description |
+|---------|-------------|
+| Synap IS (default) | Synap-managed, Claude-based, zero setup |
+| ZeroClaw | One-click provisioned add-on, Hub Protocol |
+| OpenClaw | Community open-source agent runtime, `synap-os` skill |
+| Custom | Any HTTP service implementing Hub Protocol |
 
-### Templates
+The `@synap/agent-service` package manages connected services: `useAgentServices()`, `ServiceChip`, `ServiceCard`. Users switch the active service from the intelligence settings panel.
 
-Save any entity (or entity schema) as a template:
-- Workspace-wide templates (shared by all members)
-- Personal templates (private)
-- Templates carry default property values, required fields, hidden fields
-- Apply a template → new entity pre-populated, validated on creation
+**2. External Channels** — relay conversations
 
-### Workspace Management
+External platforms relay messages in through `external_import` channels:
 
-- **Multi-workspace**: personal / team / enterprise types
-- **Roles**: Owner, Admin, Editor, Viewer
-- **Invitations**: token-based invite links (7-day expiry, revocable)
-- **Member management**: change roles, remove members, see join date
-- **Intelligence service selection**: swap to a different AI backend per workspace
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Telegram | Planned (next) | Free API, 1–3 days to wire |
+| Slack | Planned | Bolt SDK, 3–7 days |
+| WhatsApp | Planned | Meta approval 4–8 weeks |
+| Discord | Planned | via OpenClaw channels |
+| Custom webhook | Schema ready | `createExternalChannel` Hub Protocol call |
 
-### API Keys & Webhooks
+Architecture: external message → webhook receiver → normalized `Message` row → `external_import` channel → AI sees and responds → response relayed back through originating platform.
 
-- Generate personal API keys for programmatic access
-- Configure webhooks to push events to external URLs (Zapier, n8n, custom)
-- Every event in the system is webhook-eligible
+**3. Tool Protocols** — expand what AI can do
+
+The Intelligence Hub connects to external MCP (Model Context Protocol) servers as a client — one integration unlocks the entire MCP ecosystem:
+
+| Server | What it provides |
+|--------|-----------------|
+| `@playwright/mcp` | Browser automation (accessibility tree, no vision needed) |
+| `server-filesystem` | Scoped file system read/write |
+| `server-postgres` | Direct database queries |
+| Slack MCP | Read/write Slack messages |
+| `whatsapp-mcp` | WhatsApp web multi-device |
+| `mcp-server-git` | Git operations |
+
+Synap will also **expose itself as an MCP server** — Claude Desktop, Cursor, and ChatGPT will be able to query your entity graph, create entities, and open channels through the standard MCP protocol.
 
 ---
 
-## Event Chain & Architecture
+## Template Engine
 
-Synap is **event-sourced**. Every state change produces an immutable event before any database mutation happens.
-
-### Event naming convention
+The template engine provisions complete workspace configurations from a JSON definition:
 
 ```
-{table}.{action}.{modifier}
-e.g.:  entities.create.requested
-       entities.create.validated
-       workspaceMember.add.requested
+Template JSON
+  → WorkspaceProposal.layoutConfig
+  → execute() creates:
+      - profiles (entity types)
+      - property definitions
+      - views (home dashboard, main views)
+      - workspace settings (layout, sidebar items)
 ```
 
-- `requested` = intent has been declared, awaiting validation
-- `validated` = validated and approved, about to be committed
+### Built-in templates
 
-54 event types auto-generated from schema (9 tables × 6 events). All fully typed via `@synap-core/types`.
+| Template | Profiles | Views |
+|----------|----------|-------|
+| **CRM** | deal, contact, company | Pipeline (kanban), Contacts (table), Companies (table), Activity (timeline) |
+| **Second Brain** | note, project, reading | Notes (list), Projects (kanban), Reading (table), Graph |
+| **Content OS** | campaign, idea, asset | Calendar, Pipeline, Ideas (kanban), Campaigns (table) |
+| **Project Management** | task, milestone | Board (kanban), Timeline, Tasks (table) |
+| **Personal** | note, task | My Tasks, Notes |
+| **Blank** | — | Empty dashboard |
 
-### Full flow example (entity creation)
+Every template provisions:
+1. A home bento dashboard with at least a `welcome-header` widget
+2. Sidebar navigation items for the browser app
+3. Workspace `settings.layout` for the Electron app's pinned apps
 
-```
-User fills form → clicks "Create Task"
-  │
-  ▼
-trpc.entities.create (tRPC mutation)
-  │
-  ├─ checkPermissionOrPropose()
-  │    ├─ If denied → throw FORBIDDEN
-  │    └─ If approved → continue
-  │
-  ├─ WorkspaceRepository.create() → PostgreSQL
-  │
-  ├─ auditLog() → writes to events table
-  │
-  ├─ emitSideEffects() → pg-boss job queue
-  │    ├─ Search indexer worker (update embeddings)
-  │    ├─ Relation builder worker
-  │    └─ Webhook dispatcher worker
-  │
-  └─ return entity to client
-```
+### Profile scoping in templates
 
-### Job system (pg-boss)
-
-Background workers run in the same process as the API, scheduled via **pg-boss** (PostgreSQL-backed job queue):
-
-- No separate Redis or broker needed
-- Jobs are durable (survive restarts)
-- Dead-letter queue for failed jobs
-- Workers: search indexer, relation builder, webhook dispatcher, workspace initializer, email relay
-
-### Audit log
-
-The `events` table is the audit log:
-- Immutable (never updated or deleted)
-- Every record includes: userId, action, timestamp, subjectId, metadata
-- Metadata captures approval chain (who approved, why, auto vs. manual)
-- Full event replay available for compliance or debugging
+Templates use `shared` scope profiles to avoid slug collisions when a user applies multiple templates. A shared profile is created once and granted access to each workspace — property definitions are reused, not duplicated.
 
 ---
 
-## Security
+## Browser (Electron App)
+
+A dedicated Electron application provides the desktop OS experience:
+
+- **Activity bar**: left-side icon nav — Dashboard, Browser (Chromium webview), Whiteboard, Documents, Data, Intelligence, Terminal
+- **Workspace sidebar**: template-configured items (e.g., CRM's "Pipeline", "Contacts") rendered as nav items
+- **View resolution**: sidebar items resolve to actual view IDs lazily on click via `trpc.views.list.fetch`
+- **Connections**: Data Pod connection management, health indicator in header
+- **Settings**: per-workspace + per-profile configuration
+
+The browser is a full Chromium webview within the app. Users can browse the web, use web apps, and Synap's AI can interact with them (via future MCP/Playwright integration).
+
+---
+
+## Real-Time Collaboration
+
+```
+Frontend
+  ├── Presence socket   (who's online, cursors, typing indicators)
+  └── Yjs socket        (document/canvas content, CRDTs)
+          ↓
+  Realtime Service (Socket.IO + Yjs)
+          ↓
+  PostgreSQL + MinIO (persistence)
+```
+
+- **Yjs CRDTs**: structural conflict resolution — simultaneous edits always produce a valid merge
+- **Presence**: live cursors, typing indicators, user avatars
+- **Auto-save**: every 10s during active editing; snapshot on last user disconnect
+- **Offline support**: changes queue locally, sync on reconnect
+
+---
+
+## Security Model
 
 ### Authentication — Ory Kratos
 
-Synap uses **Ory Kratos** for identity (registration, login, MFA, session management):
-
-```
-Browser
-  ↓ session cookie (ory_kratos_session)
-Gatekeeper middleware
-  ↓ validates at /sessions/whoami
-tRPC context
-  ↓ userId injected
-All procedures
-```
-
-The frontend proxies API calls so everything appears same-origin. No CORS headers, no token passing across domains, cookies are first-party.
+Registration, login, MFA, session management via Ory Kratos. The frontend proxies API calls same-origin — no CORS, no token passing across domains, cookies are first-party.
 
 ### Authorization — RBAC + Proposals
-
-**Role hierarchy:**
 
 | Action | Owner | Admin | Editor | Viewer |
 |--------|:-----:|:-----:|:------:|:------:|
@@ -353,141 +545,144 @@ The frontend proxies API calls so everything appears same-origin. No CORS header
 | Manage members | ✓ | ✓ | — | — |
 | Delete workspace | ✓ | — | — | — |
 
-Permission rules are enforced in `checkPermissionOrPropose()` — a single function called at the top of every mutation. It either grants, denies, or returns a pending proposal.
-
-Workspace settings can override default rules per role and per table:
-
-```typescript
-workspace.settings.rolePermissions = {
-  editor: {
-    entities: { delete: true }  // override: editors can delete
-  }
-}
-```
-
-### Invite security
-
-- Tokens: 256-bit random (cryptographically secure, `crypto.randomBytes`)
-- Expiry: 7 days hard-coded
-- Single-use: token deleted on acceptance
-- Revocable at any time by owner/admin
-- Pod-to-control-plane communication uses a shared secret (`X-Internal-Key` header)
+`checkPermissionOrPropose()` is called at the top of every mutation. It grants, denies, or creates a proposal. Role overrides are configurable per workspace.
 
 ### Data isolation
 
-Each pod is a separate database. There is no shared multi-tenant database. Users on different pods cannot access each other's data at the infrastructure level.
+Each pod is a separate database. No shared multi-tenant database. Users on different pods cannot access each other's data at any infrastructure level.
+
+### Invite security
+
+256-bit random tokens, 7-day expiry, single-use, revocable at any time. Pod-to-control-plane communication uses a shared secret header.
 
 ---
 
-## Personalization
+## Event System & Audit Log
 
-### Per-user preferences
-- Theme: light / dark / auto
-- Default workspace
-- Sidebar width and collapse state
-- View defaults (default view type per entity type)
-- Notification settings
+Synap is event-sourced. Every state change emits an immutable event before any database mutation.
 
-### Per-workspace configuration
-- Default entity types shown on creation
-- AI governance (auto-approve threshold, required review list)
-- Role permission overrides
-- Intelligence service selection (Synap default, marketplace, custom)
-- Main whiteboard
-- Allowed external sharing
-
-### Intelligence service swapping
-
-Each workspace can point at a different AI backend:
-
-```typescript
-workspace.settings.intelligenceServiceId = "custom-service-uuid"
-workspace.settings.intelligenceServiceOverrides = {
-  chat: "gpt4-service-id",
-  analysis: "gemini-service-id"
-}
+```
+{table}.{action}.{phase}
+e.g.:  entities.create.completed
+       proposals.approve.completed
 ```
 
-This means a team can run their own locally-hosted LLM, a different provider, or the Synap-managed service — without changing anything else.
+The `events` table is the audit log:
+- Immutable — never updated or deleted
+- Every record: userId, action, timestamp, subjectId, metadata
+- Metadata captures approval chain: who approved, auto vs. manual
+- Full replay available for compliance or debugging
+
+Background workers run via **pg-boss** (PostgreSQL-backed job queue):
+- No separate Redis or broker
+- Workers: search indexer, relation builder, webhook dispatcher, workspace initializer, email relay
 
 ---
 
-## Tech Stack at a glance
+## Command Palette (Raycast-style)
+
+Universal command palette (`Cmd+K`) with a scope system:
+
+| Prefix | Scope |
+|--------|-------|
+| `e:` | Search entities |
+| `v:` | Switch view |
+| `cmd:` | Run command |
+| `t:` | Jump to template |
+| `d:` | Search documents |
+| `/`, `>` | Slash commands |
+
+Feature packages register panels via `registerPalettePanel()`. The palette is extensible without touching core code.
+
+---
+
+## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Next.js 16.1 (App Router), React 19 |
-| UI system | Tamagui 1.141 (Amber/Cyan design system, no shadows) |
+| UI system | Tamagui 1.141 (Amber/Cyan design system) |
 | API | tRPC 11 (end-to-end type safety) |
-| State | Zustand 5 (client) + TanStack Query 5 (server) |
-| Real-time | Socket.IO 4.8 + Yjs 13.6 (CRDTs) |
+| State | Zustand 5 + TanStack Query 5 |
+| Real-time | Socket.IO 4.8 + Yjs 13.6 |
 | Rich text | TipTap 3 (ProseMirror) |
 | Whiteboard | Tldraw 2.0 |
 | Auth | Ory Kratos 1.3 |
 | Database | PostgreSQL 15+ |
 | ORM | Drizzle ORM 0.45 |
 | Jobs | pg-boss 10 |
-| Storage | MinIO (S3-compatible) or Cloudflare R2 |
-| Build | pnpm monorepo, Turborepo 2.7 |
+| Storage | MinIO (S3-compatible) / Cloudflare R2 |
+| Build | pnpm monorepo, Turborepo |
 | Language | TypeScript 5.9 throughout |
+| Desktop | Electron (via electron-vite) |
+| AI | Claude (Anthropic), extensible via Hub Protocol |
+| Protocol | MCP (Model Context Protocol) — client + server |
 
 ---
 
-## Landing page copy (draft)
+## Tiers & Pricing
+
+| Tier | Users | Storage | AI | Price |
+|------|-------|---------|-----|-------|
+| **Solo** | 1 | 5 GB | Synap IS | $12/mo |
+| **Pro** | 5 | 25 GB | Synap IS | $29/mo |
+| **Team** | 25 | 100 GB | Synap IS | $79/mo |
+| **Enterprise** | Unlimited | Custom | Custom | Custom |
+
+Self-hosted is free. You pay only for Synap-managed infrastructure.
+
+---
+
+## Marketing Copy
 
 ### Hero
 
-> **Your data. Your AI. Your rules.**
+> **Your AI OS. Your rules.**
 >
-> Synap is an intelligent workspace where tasks, documents, contacts, and ideas live together — linked, searchable, and understood. AI surfaces patterns and suggests actions. You decide what happens.
+> Synap is the workspace where everything you know — tasks, contacts, documents, ideas — lives in one open model. AI surfaces patterns and proposes actions. You approve. Your data, your infrastructure, your call.
 
 ### Sub-headline
 
-> Run it on your own server or let us host it. Either way, you own the data.
+> Run it on your server or let us host it. Either way, you own the database.
 
-### Feature sections
-
----
-
-**One workspace for everything you know**
-
-Tasks, notes, projects, contacts, meeting notes — in Synap they're all the same kind of thing, so they can relate to each other. A task can mention a contact, depend on another task, and link to a document. When you change the task's status, everything that references it knows.
+### Feature pillars
 
 ---
 
-**See your data the way you think**
+**One model for everything you know**
 
-Switch between Table, Kanban, List, Timeline, Graph, and Whiteboard with one click. The data never moves — only the lens changes. Configure filters, grouping, and visible properties per view. Embed views inside documents.
-
----
-
-**AI that asks before it acts**
-
-Connect any AI service — Synap's built-in agents, a local model, GPT-4, Gemini, or a custom agent from the community marketplace. Every AI-suggested change goes through an approval queue. You review it, approve or deny it, and every decision is logged. No surprise overwrites.
+Tasks, notes, projects, contacts, meetings — in Synap they're all entities in the same graph. A task can mention a contact, depend on another task, and link to a document. View them as a table, a kanban board, a timeline, or a bento dashboard. The data never moves. Only the lens changes.
 
 ---
 
-**Real-time collaboration without the conflicts**
+**Dashboards, not just lists**
 
-Multiple people in the same document or whiteboard? Yjs CRDTs ensure there are never merge conflicts. See live cursors, typing indicators, and presence avatars. Edits sync in milliseconds. Work offline — everything catches up when you reconnect.
-
----
-
-**Open and self-hostable**
-
-The data pod is open source. Run it on your own server with Docker Compose in under 10 minutes. Your data lives in a standard PostgreSQL database you can inspect, export, and backup yourself. No lock-in.
+The bento grid turns any workspace or entity into a composable dashboard. Embed kanban boards, calendars, entity tables, stats counters, and AI chat panels in a single view. Drag to resize. No code.
 
 ---
 
-**Built for teams at any scale**
+**AI that works with you, not around you**
 
-Personal workspaces for solo users. Team pods for small groups with role-based access. Enterprise pods with SSO, audit logs, and custom AI governance policies. Invite collaborators with a shareable link, assign their role before they even sign in, revoke access any time.
+Connect any AI service — Synap's built-in agents, a local model, an open-source agent runner, or a custom service. Every AI-suggested change goes through a proposal queue. You review it, approve or deny it, and every decision is logged. No surprise overwrites. No black boxes.
 
 ---
 
-### One-liner options
+**Conversations as first-class objects**
 
-- *"The workspace where your data thinks with you."*
+Channels aren't just chat boxes. Branch a conversation to explore an alternative without losing the main thread. Attach entity context to a channel. Review document changes inline. Relay messages from Telegram, Slack, or WhatsApp — all with the same AI understanding your data.
+
+---
+
+**Open and self-hostable from day one**
+
+The data pod is open source. Deploy with Docker Compose. Your data lives in a plain PostgreSQL database you can inspect, export, and back up yourself. No vendor lock-in. No data held hostage.
+
+---
+
+### One-liners
+
+- *"Your data. Your AI. Your rules."*
+- *"The workspace OS where AI asks before it acts."*
 - *"All your data. One model. Any AI."*
-- *"Collaborate on everything. Control your AI. Own your data."*
-- *"The open workspace OS for data intelligence."*
+- *"Everything you know, in one open graph."*
+- *"From spreadsheet replacement to workspace OS."*

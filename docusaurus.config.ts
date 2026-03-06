@@ -95,8 +95,8 @@ const config: Config = {
               to: '/architecture/overview',
             },
             {
-              label: 'API Reference',
-              to: '/api/data-pod/overview',
+              label: 'Reference',
+              to: '/reference/event-catalog',
             },
           ],
         },

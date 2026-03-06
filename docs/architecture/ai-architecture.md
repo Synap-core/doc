@@ -240,11 +240,17 @@ await fetch(`${dataPodUrl}/trpc/intelligenceRegistry.register`, {
 
 ---
 
-## Internal Agents (Optional)
+## Internal Agents
 
-For tight integrations, you can use **LangGraph** inside the Data Pod:
+:::note Architecture update
+The LangGraph-based internal agent pattern described below was evaluated and deferred. The current Intelligence Hub uses a **peer-agent network** built on the Vercel AI SDK + Claude — agents route to each other based on intent with no central state machine. See [Multi-Agent System](/concepts/multi-agent-system) for the current architecture.
 
-### LangGraph State Machine
+The section below is kept for reference (the Hub Protocol boundary it describes is still accurate).
+:::
+
+For tight integrations, agents run inside the Intelligence Hub service and communicate via the Hub Protocol. A historical approach used **LangGraph** state machines:
+
+### LangGraph State Machine (historical reference)
 
 ```typescript
 // packages/ai/src/agents/my-agent.ts

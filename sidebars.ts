@@ -22,6 +22,8 @@ const sidebars: SidebarsConfig = {
       items: [
         'concepts/what-is-synap',
         'concepts/building-blocks',
+        'concepts/views',
+        'concepts/channels',
         'concepts/workspace-as-a-service',
         'concepts/contagious-layers',
         'concepts/composable-architecture',
@@ -55,7 +57,6 @@ const sidebars: SidebarsConfig = {
           ],
         },
         'architecture/ai-architecture',
-        'architecture/backend-intelligence-separation',
         'architecture/hub-protocol-flow',
 
         {

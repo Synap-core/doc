@@ -5,59 +5,47 @@ title: Vision & Philosophy
 
 # Vision & Philosophy
 
-> **Mission**: To become the standard for personal data sovereignty by proving that a privacy-first ecosystem can be more powerful, capable, and user-friendly than proprietary alternatives.
+> See the full, up-to-date vision in [Strategy → Vision](/strategy/vision).
 
-## The Problem: Techno-Feudalism
+---
 
-In the physical world, you have fundamental rights: ownership of your home, privacy within its walls, and stability in your environment. In the digital world, these rights have been eroded.
+## The Core Belief
 
-- **No Ownership**: You "rent" access to your data (Notion, Google, Apple).
-- **No Privacy**: Your actions are surveilled and monetized.
-- **No Stability**: Terms of Service and features change without your consent.
+In the digital world, your data should belong to you — not the SaaS vendor that hosts it. The tools you use every day (task managers, note apps, CRMs, spreadsheets) each own a slice of the same underlying graph of your work. They don't share it, they don't relate it, and their AI features have no unified understanding of it.
 
-We call this **Techno-Feudalism**: you are both the tenant and the product.
+Synap is the single open layer underneath all of it: an **AI operating system for knowledge work**, built around three composable concepts.
 
-## The Solution: Synap
+---
 
-Synap inverts the model. Instead of services owning your data, **you own your data** and grant services permission to use it.
+## The Triptych
 
-### Core Value Proposition
+| Layer | Concept | What it does |
+|-------|---------|-------------|
+| Data | **Entities** | Everything you know — typed, related, governed |
+| Visualization | **Views** | Any lens on the data — never a copy |
+| Interaction | **Channels** | How you and AI interact with and through data |
 
-1.  **Sovereignty**: Your data lives in your **Data Pod**, an encrypted, portable "digital home" that you control.
-2.  **Interopability**: A universal standard allows different apps to work on the same data.
-3.  **Intelligence**: Because AI has access to *all* your data (not just one silo), it can be exponentially more helpful.
+Everything else — documents, templates, the intelligence service, the browser app — is infrastructure that enables or extends these three.
 
-## Architecture Philosophy
+---
 
-### 1. The "Data Pod" (Layer 1)
-The infrastructure layer. An open standard for storing personal data.
-- **Self-Hostable**: Can run on a Raspberry Pi or a managed cloud instance.
-- **Encrypted**: Private by design.
-- **Universal**: Stores contacts, notes, tasks, and events in standard formats.
+## The Data Sovereignty Principle
 
-### 2. Synap App (Layer 2)
-The "Flagship" application. A proof-of-concept that demonstrates the power of the ecosystem.
-- **Time-Travel Data**: Event-sourced architecture allows infinite undo and history replay.
-- **Git-like Branching**: Conversations and workflows can branch for parallel exploration and merge back.
-- **Multi-Agent AI**: A swarm of specialized agents (Researcher, Coder, Planner) collaborating to solve complex tasks.
+A "pod" is a real backend — PostgreSQL, self-hostable — running on your infrastructure or Synap's. You can inspect the database, export it, and migrate away without losing anything. There is no proprietary format, no import/export tax, no lock-in.
 
-### 3. The Marketplace (Layer 3)
-An ecosystem of third-party applications that can interact with your Data Pod, creating a "network effect" of utility without compromising privacy.
+---
 
-## Key Differentiators
+## The AI Governance Principle
 
-| Feature | Legacy SaaS (Notion, Google) | Synap |
-| :--- | :--- | :--- |
-| **Data Ownership** | ❌ Locked in | ✅ Open-source & Portable |
-| **Context** | ⚠️ Limited by token windows | ✅ Infinite (RAG + Knowledge Graph) |
-| **Workflow** | Linear & Destructive | ✅ Branching & Non-destructive |
-| **Privacy** | ❌ Surveillance Capitalism | ✅ User Sovereignty |
+AI proposes. Humans approve. Every AI-suggested change goes through a proposal queue. Every decision is logged immutably. `autoApproveFor[]` whitelists let trusted operations bypass review — but the guarantee holds: nothing is silently overwritten.
 
-## Current Status (2025)
+---
 
-Synap is currently in **Beta**.
-- **Backend**: Fully functional event-sourced architecture with Hub Protocol.
-- **Frontend**: Next.js 16 + React 19 application with real-time collaboration.
-- **AI**: Operational "Intelligence Hub" with multi-agent orchestration.
+## The Open Ecosystem Principle
 
-We are building the foundation for a new digital era where users are citizens, not products.
+No single AI model will be best forever. The Hub Protocol is an open contract: any AI service — Synap-managed, self-hosted, open-source, or enterprise-custom — connects to a pod and operates under the same governance rules. MCP extends this to 10,000+ community tools.
+
+---
+
+**Full strategic direction**: [Strategy → Vision](/strategy/vision)
+**What's built and what's next**: [Strategy → Roadmap](/strategy/roadmap)

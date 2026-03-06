@@ -4,9 +4,9 @@ sidebar_position: 5
 
 # Multi-Agent System
 
-**A team of specialized AIs, not just one assistant**
+**A peer network of specialized AIs, not a hierarchy**
 
-Traditional AI assistants try to do everything. Synap uses multiple specialized agents coordinated by an orchestrator - like having an expert team instead of one generalist.
+Traditional AI assistants try to do everything with one model. Synap runs a **network of peer agents** — each a specialist with its own tools and context — that route to each other based on intent. No single agent controls the others. The Data Pod's governance layer is the control surface, not an agent.
 
 ---
 
@@ -36,36 +36,38 @@ Result: Jack of all trades, master of none
 
 ---
 
-## Synap's Solution: Specialized Team
+## Synap's Solution: Peer Agent Network
 
 ```
 Multi-Agent System:
 
 User: "Plan marketing campaign"
   ↓
-┌──────────────┐
-│ Orchestrator │ ← Coordinates everything
-└───────┬──────┘
-        │  Analyzes request
-        │  Delegates to specialists
-        │
-    ┌───┴───┬──────────┬────────────┐
-    │       │          │            │
-    v       v          v            v
-[Research][Technical][Creative][Your Custom]
-    │       │          │            │
-    └───────┴──────────┴────────────┘
-            │
-            v
-    Synthesizes results
+Intent Analyzer
+  │  Understands request
+  │  Routes to relevant agents
+  │
+  ├──► Researcher ──────────────────┐
+  │      Deep competitive analysis  │
+  │                                 │
+  ├──► Writing Agent ───────────────┤
+  │      Campaign copy              │  Results merged
+  │                                 │  back to channel
+  ├──► Knowledge Search ────────────┤
+  │      Past campaign entities     │
+  │                                 │
+  └──► Action Agent ────────────────┘
+         Proposes entity creation
+         (subject to approval)
 ```
 
-**Benefits**:
+**Key properties**:
 - ✅ Specialized expertise per domain
-- ✅ Parallel execution
-- ✅ Deep context in each domain
-- ✅ Orchestrator coordinates
-- ✅ Custom agents for your needs
+- ✅ Parallel execution — agents run concurrently
+- ✅ Any agent can invoke any other agent as a tool
+- ✅ No central coordinator — routing is intent-based
+- ✅ Agent-to-agent async via A2AI channels (persistent, replayable)
+- ✅ Governance at the Data Pod level, not the agent level
 
 ---
 
@@ -86,36 +88,47 @@ type AgentType = {
 **Built-in Agents**:
 
 ```
-🎯 Orchestrator (Coordinator)
-├─ Analyzes user requests
-├─ Delegates to specialists
-├─ Synthesizes results
-├─ Handles main conversation
-└─ Model: Claude 3.7 Sonnet
+🔍 Intent Analyzer
+├─ Understands goals from free-form text
+├─ Routes to relevant agents
+└─ Model: Claude Sonnet
 
-🔬 Research Specialist
+🔬 Researcher
 ├─ Deep topic investigation
-├─ Competitor analysis
-├─ Market research
-├─ Data gathering
-└─ Model: Claude 3.7 Sonnet
+├─ Competitor and market analysis
+├─ Data gathering and synthesis
+└─ Model: Claude Sonnet
 
-💻 Technical Specialist
-├─ Code architecture
-├─ API design
-├─ Database schemas
+💻 Code Agent
+├─ Code architecture and review
+├─ API and schema design
 ├─ Performance analysis
-└─ Model: Claude 3.7 Sonnet
+└─ Model: Claude Sonnet
 
-🎨 Creative Specialist
-├─ Content writing
-├─ Copywriting
-├─ Brand voice
-├─ Storytelling
-└─ Model: Claude 3.7 Sonnet
+✍️ Writing Agent
+├─ Content writing and copywriting
+├─ Summarization and rewriting
+├─ Brand voice consistency
+└─ Model: Claude Sonnet
 
-🛠️ Your Custom Agents
-└─ Domain-specific expertise
+🎯 Action Agent
+├─ Executes approved Hub Protocol calls
+├─ Creates entities, opens channels
+├─ Subject to proposal governance
+└─ Model: Claude Sonnet
+
+🔎 Knowledge Search
+├─ Semantic + full-text entity search
+├─ Context retrieval for other agents
+└─ (Tool, not a full agent)
+
+🪞 Meta Agent
+├─ Self-reflection and error recovery
+├─ Replanning when agents stall
+└─ Model: Claude Sonnet
+
+🛠️ Custom Agents
+└─ Domain-specific expertise, user-defined
 ```
 
 ---
@@ -145,38 +158,40 @@ const researchAgent: Agent = {
 
 ---
 
-### 3. Orchestrator Pattern
+### 3. Peer Routing Pattern
 
 **How it works**:
 
 ```
-1. User sends message
+1. User sends message to ai_thread channel
    ↓
-2. Orchestrator analyzes:
-   - What capabilities needed?
-   - Can I handle it?
-   - Should I delegate?
+2. Intent Analyzer runs:
+   - What is the goal?
+   - Which agents are relevant?
+   - Can this be done in parallel?
    ↓
-3. Decision:
-   a) Handle myself (simple query)
-   b) Delegate to one specialist
-   c) Coordinate multiple specialists
+3. Relevant agents invoked (possibly concurrently):
+   a) Single agent for focused requests
+   b) Multiple agents in parallel for compound requests
+   c) Agent chains: Agent A invokes Agent B as a tool
    ↓
-4. Execute
+4. Action Agent submits proposals to Data Pod
    ↓
-5. Synthesize results
+5. Results stream back to channel
    ↓
-6. Respond to user
+6. Proposals appear in user inbox for approval
 ```
+
+**Why no master orchestrator?** A central coordinator is a bottleneck and a single point of failure. In a peer model, agents compose: the Researcher can ask Knowledge Search to find relevant entities, the Writing Agent can request the Researcher's output as input. No coordinator needed — governance lives at the Data Pod layer.
 
 **Code Example**:
 ```typescript
-// Orchestrator's decision logic
-async function analyzeRequest(message: string) {
+// Intent Analyzer routing logic
+async function routeRequest(message: string) {
   const analysis = await analyzeLLM({
     message,
-    prompt: `Analyze this request. What capabilities are needed?
-      Options: research, technical, creative, general`
+    prompt: `Analyze this request. What agents are needed?
+      Options: researcher, codeAgent, writingAgent, knowledgeSearch, actionAgent`
   });
   
   if (analysis.capabilities.includes('research')) {
@@ -684,7 +699,7 @@ await synap.threads.createBranch({
 
 ## Inspiration
 
-- **LangGraph**: Multi-agent orchestration
-- **AutoGPT**: Agent autonomy
-- **BabyAGI**: Task decomposition
-- **CrewAI**: Role-based agents
+- **MCP (Model Context Protocol)**: Open tool-use standard — Synap implements both client and server
+- **AutoGPT / BabyAGI**: Agent autonomy and task decomposition patterns
+- **CrewAI**: Role-based agent specialization
+- **OpenClaw**: Community skill ecosystem and multi-channel relay

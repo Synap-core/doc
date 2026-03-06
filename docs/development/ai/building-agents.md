@@ -6,6 +6,10 @@ sidebar_position: 6
 
 **How to Add Intelligence to Synap**
 
+:::note
+Some sections below reference LangGraph as an internal agent option. LangGraph was evaluated and deferred — the current Intelligence Hub uses a peer-agent network built on the Vercel AI SDK. The external Hub Protocol pattern described here remains the recommended integration path.
+:::
+
 ---
 
 ## The Intelligence Services Model

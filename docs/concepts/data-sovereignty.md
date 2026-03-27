@@ -16,11 +16,20 @@ sidebar_position: 1
 
 ## Data Ownership Model
 
-### Data Pod (Synap Core OS)
-- ✅ **Owns all user data**
-- ✅ **Controls all access**
-- ✅ **Stores data permanently**
-- ✅ **Open source** - user can self-host
+### Data Pod — Your Dedicated Server
+A pod is not a database — it's a full private stack:
+- **PostgreSQL + pgvector** — structured entities, semantic search
+- **Typesense** — instant full-text search with typo tolerance
+- **MinIO** — S3-compatible file and object storage
+- **Synap Backend** — tRPC API, event chain, AI orchestration
+- **Caddy** — reverse proxy with automatic TLS
+
+All data in open formats: SQL tables, Markdown notes, S3 buckets.
+
+- ✅ **Owns all user data** — dedicated server, not a shared database
+- ✅ **Controls all access** — RBAC + event chain governance
+- ✅ **Stores data permanently** — your infrastructure, your backups
+- ✅ **Self-hostable** — same Docker Compose stack as managed pods
 
 ### External Intelligence Services
 - ❌ **Never store user data**
@@ -133,4 +142,11 @@ External services only request data that is strictly necessary for the requested
 ---
 
 **Next**: See [Hub Protocol Flow](../hub-protocol-flow.md) for complete flow documentation, or [Plugin System](./plugin-system.md) to learn how to add intelligence.
+
+---
+
+:::info Learn more on the website
+- [Self-Hosting guide](https://www.synap.live/guides/self-hosting) — practical overview of running Synap on your own infrastructure
+- [Data Pods](https://www.synap.live/product/pods) — learn about Synap's sovereign data architecture
+:::
 

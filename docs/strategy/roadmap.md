@@ -36,6 +36,11 @@ _Last updated: March 2026_
 - **Widget error boundaries**: crashed widget shows error card; rest of grid continues
 - **Unknown widget placeholder**: marketplace CTA for unregistered widget types
 - **Field system** (`@synap/entity-card`): single rendering source of truth across all view types
+- **`property-value` widget**: single property as a focused bento block; click-to-edit inline; compact/medium/full display modes; save flash feedback
+- **`property-group` widget**: titled card of a curated subset of properties; fully editable via `EntityPropertiesDisplay`; settings panel with ordered slug list
+- **Smart auto-layout generator**: `createDefaultEntityBentoBlocks(properties)` reads profile schema → featured chips row (status/priority/dates) + panelGroup cards + content area
+- **Two-level dashboard discovery**: profile-level via `ViewStylePicker → Dashboard`; entity-level via entity panel `Dashboard` tab + "Enable Dashboard" CTA
+- **BentoAdapter auto-save**: internal `trpc.views.update` with 1.5s debounce when used as entity BentoRenderer (no external `onConfigChange`)
 
 ### Channels (2026 Q1)
 - **Channel types**: `ai_thread`, `branch`, `entity_comments`, `document_review`, `view_discussion`

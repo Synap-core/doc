@@ -147,10 +147,21 @@ const sidebars: SidebarsConfig = {
     // Integrations
     {
       type: 'category',
-      label: 'Integrations',                
+      label: 'Integrations',
       items: [
-        'integrations/webhooks-guide',       
-        'integrations/n8n',                  
+        'integrations/webhooks-guide',
+        'integrations/n8n',
+        {
+          type: 'category',
+          label: 'Connect AI to your pod',
+          items: [
+            'integrations/overview',
+            'integrations/skill-invocation',
+            'integrations/chat-stream',
+            'integrations/sdk-direct',
+            'integrations/api-keys',
+          ],
+        },
       ],
     },
     

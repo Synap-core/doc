@@ -24,9 +24,9 @@ Everything else — documents, templates, the intelligence service, the browser 
 
 ## Three things that make it unusual
 
-1. **You own the data.** A pod is a real backend on your infrastructure (or Synap's). Standard PostgreSQL. Exportable. No lock-in.
-2. **AI proposes, humans approve.** No agent writes to your data without going through a proposal queue. Every decision is logged.
-3. **The intelligence is pluggable.** Swap AI services per workspace. Connect external agents via Hub Protocol. One wire adds 10,000+ MCP tools.
+1. **You own the data.** A pod is a dedicated private server — PostgreSQL + pgvector, Typesense search, MinIO file storage — on your infrastructure or Synap's. Open formats (SQL, Markdown, S3). Exportable. No lock-in.
+2. **Every write is on the event chain.** AI mutations go through proposals — you approve, reject, or edit. Every write from any source is recorded in an immutable event chain. Full audit trail, time-travel, rollback.
+3. **The intelligence is pluggable.** Swap AI models per workspace (Claude, GPT-4, Gemini, local). Connect external agents via Hub Protocol. One wire adds 10,000+ MCP tools.
 
 ---
 
@@ -35,3 +35,10 @@ Everything else — documents, templates, the intelligence service, the browser 
 1. **[Quickstart](./quickstart)** — Running instance in under 10 minutes
 2. **[What is Synap](../concepts/what-is-synap)** — The triptych in depth
 3. **[Architecture Overview](../architecture/overview)** — Technical deep dive
+
+---
+
+:::info Learn more on the website
+- [All guides](https://www.synap.live/guides) — practical walkthroughs for every Synap feature
+- [Download Synap](https://www.synap.live/download) — get started with the desktop app
+:::

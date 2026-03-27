@@ -90,3 +90,10 @@ Free-form views where position and relationships matter more than schema.
 
 ## 6. Migration Note (Feb 2025)
 We are moving from "Entity Types" (string slugs) to "Scope Profiles" (UUIDs) to ensure strict schema validation.
+
+---
+
+:::info Learn more on the website
+- [User-friendly guide to Views](https://www.synap.live/guides/views) — practical overview of the views system
+- [Compare Synap vs Notion](https://www.synap.live/compare/vs-notion) — see how it stacks up
+:::

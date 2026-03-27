@@ -143,3 +143,10 @@ const whiteboardView = {
 - [Event Architecture](../architecture/events/event-architecture.md) — How events enable composability
 - [Hub Protocol](../architecture/hub-protocol-flow.md) — How AI assembles bricks
 - [Building Blocks](./building-blocks) — The entity and view primitives
+
+---
+
+:::info Learn more on the website
+- [Bento Dashboards guide](https://www.synap.live/guides/bento-dashboards) — practical overview of composable dashboard layouts
+- [The Synap Manifesto](https://www.synap.live/manifesto) — the philosophy behind emergent complexity
+:::

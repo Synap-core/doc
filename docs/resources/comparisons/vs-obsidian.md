@@ -740,3 +740,10 @@ Typical: $50-200/month (team size independent)
 ---
 
 **Next**: [Synap vs Standard Notes](./vs-standard-notes) | [Migration Guide](../migration/from-obsidian)
+
+---
+
+:::info Learn more on the website
+- [Synap vs Obsidian — detailed comparison](https://www.synap.live/compare/vs-obsidian) — full side-by-side breakdown on the main site
+- [All guides](https://www.synap.live/guides) — practical walkthroughs for every Synap feature
+:::

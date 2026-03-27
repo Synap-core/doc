@@ -568,3 +568,10 @@ You can:
 ---
 
 **Next**: [Synap vs Obsidian](./vs-obsidian) | [Migration Guide](../migration/from-notion)
+
+---
+
+:::info Learn more on the website
+- [Synap vs Notion — detailed comparison](https://www.synap.live/compare/vs-notion) — full side-by-side breakdown on the main site
+- [All guides](https://www.synap.live/guides) — practical walkthroughs for every Synap feature
+:::

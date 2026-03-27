@@ -32,7 +32,7 @@ export default function Home(): JSX.Element {
   return (
     <Layout
       title={`${siteConfig.title}`}
-      description="Event-Sourced Knowledge Backend with AI">
+      description="Sovereign AI Workspace — Technical Documentation">
       <HomepageHeader />
       <main>
         <div className="container margin-vert--lg">
@@ -114,6 +114,51 @@ export default function Home(): JSX.Element {
                     Learn about Synap's vision, mission, and roadmap.
                   </p>
                   <Link to="/strategy/vision">Explore Vision →</Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="margin-top--lg" style={{borderTop: '1px solid var(--ifm-color-emphasis-200)', paddingTop: '2rem'}}>
+            <Heading as="h2" className="margin-bottom--md">Product</Heading>
+            <div className="row">
+              <div className="col col--4 margin-bottom--lg">
+                <div className="card">
+                  <div className="card__header">
+                    <Heading as="h3">📖 Guides</Heading>
+                  </div>
+                  <div className="card__body">
+                    <p>
+                      User-friendly guides on entities, views, channels, search, dashboards, and more.
+                    </p>
+                    <a href="https://www.synap.live/guides">Browse Guides →</a>
+                  </div>
+                </div>
+              </div>
+              <div className="col col--4 margin-bottom--lg">
+                <div className="card">
+                  <div className="card__header">
+                    <Heading as="h3">⚖️ Compare</Heading>
+                  </div>
+                  <div className="card__body">
+                    <p>
+                      See how Synap compares to Notion, Obsidian, ChatGPT, Roam, and 9 other tools.
+                    </p>
+                    <a href="https://www.synap.live/compare">View Comparisons →</a>
+                  </div>
+                </div>
+              </div>
+              <div className="col col--4 margin-bottom--lg">
+                <div className="card">
+                  <div className="card__header">
+                    <Heading as="h3">⬇️ Download</Heading>
+                  </div>
+                  <div className="card__body">
+                    <p>
+                      Get the Synap desktop app for macOS, Windows, and Linux.
+                    </p>
+                    <a href="https://www.synap.live/download">Download Synap →</a>
+                  </div>
                 </div>
               </div>
             </div>

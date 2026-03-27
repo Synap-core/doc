@@ -97,3 +97,10 @@ Layouts are defined per entity type and size (`compact`, `medium`, `large`, `ful
 - **Visual Hierarchy**: Visuals (Icon/Color) denote Type. Text denotes Content.
 - **Consistent Tokens**: A "Task" always looks like a "Task" (green icon, specific badging) regardless of view.
 - **Direct Manipulation**: Interactive everywhere. Update status in the List, it updates in the Graph instantly.
+
+---
+
+:::info Learn more on the website
+- [User-friendly guide to Entities](https://www.synap.live/guides/entities) — practical overview of the universal entity model
+- [Compare Synap vs Notion](https://www.synap.live/compare/vs-notion) — see how it stacks up
+:::

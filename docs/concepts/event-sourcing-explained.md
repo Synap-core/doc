@@ -790,3 +790,10 @@ for (const event of recentEvents) {
 - **Theory**: [Martin Fowler - Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html)
 - **Implementation**: [Event Store Documentation](https://www.eventstore.com/event-sourcing)
 - **CQRS**: Command Query Responsibility Segregation pattern
+
+---
+
+:::info Learn more on the website
+- [User-friendly guide to the Event Chain](https://www.synap.live/guides/event-chain) — practical overview of event sourcing in Synap
+- [Compare Synap vs Notion](https://www.synap.live/compare/vs-notion) — see how it stacks up
+:::

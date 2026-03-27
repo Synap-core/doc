@@ -66,3 +66,10 @@ When the AI wants to make significant changes (like rewriting a document/code), 
 4.  **Action**: LLM decides to call `update_document`.
 5.  **Hub Protocol**: Sends `createDocumentProposal` to Backend.
 6.  **Frontend**: Real-time update shows a "Review Proposal" card in the chat.
+
+---
+
+:::info Learn more on the website
+- [User-friendly guide to AI Features](https://www.synap.live/guides/ai) — practical overview of Synap's AI capabilities
+- [Compare Synap vs ChatGPT](https://www.synap.live/compare/vs-chatgpt) — see how Synap's governed AI differs from standalone chatbots
+:::

@@ -703,3 +703,10 @@ await synap.threads.createBranch({
 - **AutoGPT / BabyAGI**: Agent autonomy and task decomposition patterns
 - **CrewAI**: Role-based agent specialization
 - **OpenClaw**: Community skill ecosystem and multi-channel relay
+
+---
+
+:::info Learn more on the website
+- [User-friendly guide to AI Features](https://www.synap.live/guides/ai) — practical overview of Synap's multi-agent AI system
+- [Compare Synap vs ChatGPT](https://www.synap.live/compare/vs-chatgpt) — see how it stacks up
+:::

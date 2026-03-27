@@ -38,7 +38,7 @@ Entities link with typed relationships (`assigned_to`, `mentions`, `depends_on`,
 A network of specialized agents (Researcher, Code Agent, Writing Agent, Action Agent) that route to each other based on intent. Any agent can invoke any other. No central orchestrator.
 
 ### 🔒 [Data Sovereignty](./data-sovereignty) — you own the kernel
-A pod is a real PostgreSQL backend running on your infrastructure. Open source. Self-hostable. Exportable at any time.
+A pod is a dedicated private server — PostgreSQL + pgvector, Typesense search, MinIO file storage, and the Synap backend — running on your infrastructure. Open formats (SQL, Markdown, S3). Self-hostable. Exportable at any time.
 
 ### 📡 [Hub & Spoke](./hub-and-spoke) — pluggable intelligence
 Swap AI services per workspace. Connect external agents via Hub Protocol. MCP client unlocks 10,000+ community tools.
@@ -61,7 +61,7 @@ Because Synap is a platform with an open entity graph, the same infrastructure p
 
 | | Traditional SaaS | Synap |
 |--|-----------------|-------|
-| Data ownership | Vendor-owned | Your PostgreSQL |
+| Data ownership | Vendor-owned | Your dedicated server (PostgreSQL + Markdown + S3) |
 | AI | Bolt-on, single model | Pluggable, governed |
 | View types | Fixed per app | 10+ on same data |
 | History | Limited undo | Full event log |
@@ -70,3 +70,10 @@ Because Synap is a platform with an open entity graph, the same infrastructure p
 ---
 
 **Start here**: [Quickstart](../getting-started/quickstart) — running in 10 minutes
+
+---
+
+:::info Learn more on the website
+- [Synap homepage](https://www.synap.live) — discover the product at a glance
+- [About Synap](https://www.synap.live/about) — the team, vision, and mission
+:::

@@ -175,3 +175,10 @@ Channels complete the triptych. They are not just a chat feature — they are th
 - **AI agents** operate *inside* Channels with full context
 
 Wherever something happens in Synap — a decision, a discussion, a review, an automation — it happens in a Channel.
+
+---
+
+:::info Learn more on the website
+- [User-friendly guide to Channels](https://www.synap.live/guides/channels) — practical overview of the interaction layer
+- [Compare Synap vs Notion](https://www.synap.live/compare/vs-notion) — see how it stacks up
+:::

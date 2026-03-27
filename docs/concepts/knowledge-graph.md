@@ -515,3 +515,10 @@ for (const suggestion of suggestions) {
 - **Inspiration**: Obsidian, Roam Research, Notion relations
 - **Technology**: PostgreSQL foreign keys + pgvector for semantic similarity
 - **Visualization**: D3.js, Vis.js, Cytoscape.js compatible output
+
+---
+
+:::info Learn more on the website
+- [User-friendly guide to Entities](https://www.synap.live/guides/entities) — practical overview of the data model behind the knowledge graph
+- [Search in Synap](https://www.synap.live/guides/search) — how to find anything across your knowledge graph
+:::

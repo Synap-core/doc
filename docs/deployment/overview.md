@@ -87,3 +87,10 @@ pnpm dev
 
 **Next**: See specific deployment guides for detailed instructions.
 
+---
+
+:::info Learn more on the website
+- [Self-Hosting guide](https://www.synap.live/guides/self-hosting) — practical overview of deploying and running Synap on your own infrastructure
+- [Data Pods](https://www.synap.live/product/pods) — learn about Synap's sovereign data architecture
+:::
+

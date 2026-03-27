@@ -4,11 +4,11 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Synap Documentation',
-  tagline: 'Event-Sourced Knowledge Backend with AI',
+  tagline: 'Sovereign AI Workspace — Technical Documentation',
   favicon: 'img/logo.png',
 
   // Set the production url of your site here
-  url: 'https://docs.synap.ai',
+  url: 'https://doc.synap.live',
   // Set the /<baseUrl>/ pathname under which your site is served
   baseUrl: '/',
 
@@ -70,6 +70,16 @@ const config: Config = {
           label: 'Documentation',
         },
         {
+          href: 'https://www.synap.live',
+          label: 'Website',
+          position: 'left',
+        },
+        {
+          href: 'https://www.synap.live/guides',
+          label: 'Guides',
+          position: 'left',
+        },
+        {
           type: 'localeDropdown',
           position: 'right',
         },
@@ -118,6 +128,31 @@ const config: Config = {
           ],
         },
         {
+          title: 'Product',
+          items: [
+            {
+              label: 'Website',
+              href: 'https://www.synap.live',
+            },
+            {
+              label: 'Guides',
+              href: 'https://www.synap.live/guides',
+            },
+            {
+              label: 'Blog',
+              href: 'https://www.synap.live/blog',
+            },
+            {
+              label: 'Compare',
+              href: 'https://www.synap.live/compare',
+            },
+            {
+              label: 'Download',
+              href: 'https://www.synap.live/download',
+            },
+          ],
+        },
+        {
           title: 'More',
           items: [
             {
@@ -127,6 +162,10 @@ const config: Config = {
             {
               label: 'Roadmap',
               to: '/strategy/roadmap',
+            },
+            {
+              label: 'About the founder',
+              href: 'https://www.synap.live/about',
             },
           ],
         },

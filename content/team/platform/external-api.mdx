@@ -68,7 +68,7 @@ The unified invites migration renamed `workspaceInvites` → `invites`. Verify t
 
 **Webhook callbacks for async skills** — skills with `executionMode: "async"` currently return synchronously anyway. Add an optional `callbackUrl` in the invoke request body; IS posts the result there when execution completes.
 
-**Option E developer guide** — write `users-docs/docs/integrations/external-api.md` covering the three integration patterns: E1 (read entities, inject into own LLM), E2 (Hub Protocol direct), E3 (compose C+D).
+**Option E developer guide** — add a public page under `synap-team-docs/content/docs/integrate/` (or extend existing integrate docs) covering the three integration patterns: E1 (read entities, inject into own LLM), E2 (Hub Protocol direct), E3 (compose C+D).
 
 ### Long-term / v2
 

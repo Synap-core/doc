@@ -37,9 +37,9 @@ Previously removed at **monorepo root** (`synap/`):
 
 ## 3. Whole trees: duplicate public docs — **verify then delete or archive**
 
-### `users-docs/`
+### `users-docs/` (removed from monorepo 2026-04-14)
 
-- **What it is:** Older public-style docs tree (`docs/getting-started`, `docs/concepts`, `docs/integrations`, …).
+- **What it was:** Older public-style docs tree (`docs/getting-started`, `docs/concepts`, `docs/integrations`, …).
 - **Overlap:** High — same IA exists under `synap-team-docs/content/docs/**` (and often same filenames: `installation.md`, `quickstart.md`, concepts, integrations, deployment, etc.).
 - **Unique / risky:** Top-level design brainstorms (`AI_UX_*.md`, `PROPERTY_SYSTEM.md`, `OPENCLAW_*.md`, `SELF_HOSTING_GUIDE.md`, `RUNBOOK.md`, `CONTRIBUTING.md`, …) — **spot-check** for sentences not present in team-docs; if nothing unique → delete tree or replace with a **single `README.md`** pointing to the docs site.
 
@@ -141,7 +141,7 @@ Previously removed at **monorepo root** (`synap/`):
 
 1. ~~Delete root ephemeral files (section 2).~~ **Done.**  
 2. ~~Prune `hestia-cli` journal markdown (keep README / CHANGELOG / `docs/` as needed).~~ **Done.**  
-3. **users-docs:** parity pass → remove tree or keep as legacy Docusaurus only; root **README** states canonical site is `synap-team-docs`.  
+3. ~~**users-docs:**~~ **Removed** from the `synap/` workspace copy — canonical content lives in **`synap-team-docs`**. The GitHub repo **`Synap-core/doc`** was **force-pushed** with a clean history (no tracked `.next` / `node_modules`) to match this app.  
 4. **docs-internal:** file-by-file vs `content/team/**` → merge gaps → remove or archive; **README** at folder root points to team-docs.  
 5. **synap-backend/docs:** ~~add hub + trim ephemerals~~ **Partial (2026-04-13)** — next: migrate remaining `import-all.sh` sources to team MDX-only, then drop duplicate `.md` from backend.
 
@@ -157,3 +157,18 @@ Previously removed at **monorepo root** (`synap/`):
 | AI / workflow | Keep `CLAUDE.md` / rules in repos as today |
 
 *Generated as a consolidation audit; update this file as trees are removed.*
+
+---
+
+## 8. GitHub push failures (HTTP 400 on `git push`)
+
+If `git push` fails with **`RPC failed; HTTP 400`** while uploading **hundreds of MiB**, the pack almost always contains **build artifacts** that were accidentally committed (for example `.next/cache/**` webpack packs, `node_modules/**`).
+
+**Fix applied for `Synap-core/doc` (2026-04-14):**
+
+1. Ensure `.gitignore` excludes `.next/`, `node_modules/`, `*.tsbuildinfo`, archives (`*.tar.gz`).
+2. Replace history with a **clean root commit** (orphan branch + single commit) so unreachable blobs are dropped.
+3. Run `git reflog expire --expire=now --all` then `git gc --prune=now --aggressive`.
+4. `git push --force origin main` — pack should be **~1 MiB** for docs-only trees.
+
+Optional: `git config http.postBuffer 524288000` helps some proxies, but it does **not** fix committed multi-hundred-MiB blobs.

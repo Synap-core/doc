@@ -82,18 +82,12 @@ import "$SYNAP/docs-internal/north-star/openclaw-state-what-it-implies.md" \
 import "$SYNAP/docs-internal/north-star/openclaw-ecosystem-research.md" \
   "$CONTENT/home/openclaw-research.mdx" "OpenClaw Ecosystem Research" "Research into the OpenClaw ecosystem and integration opportunities."
 
-# Product vision from users-docs
-import "$SYNAP/users-docs/docs/vision.md" \
-  "$CONTENT/home/vision.mdx" "Product Vision" "Synap's core product vision."
-
-import "$SYNAP/users-docs/docs/strategy/vision.md" \
-  "$CONTENT/home/strategy-vision.mdx" "Strategy Vision" "Long-term strategic vision."
-
-import "$SYNAP/users-docs/docs/strategy/roadmap.md" \
-  "$CONTENT/home/roadmap.mdx" "Roadmap" "Product roadmap and upcoming milestones."
-
-import "$SYNAP/users-docs/product-overview.md" \
-  "$CONTENT/home/product-overview.mdx" "Product Overview" "High-level product overview for all audiences."
+# Product vision — `users-docs/` removed (2026-04-14). Edit team MDX directly:
+#   $CONTENT/home/vision.mdx
+#   $CONTENT/home/strategy-vision.mdx
+#   $CONTENT/home/roadmap.mdx
+#   $CONTENT/home/product-overview.mdx
+# Public counterparts live under synap-team-docs/content/docs/start/
 
 import "$SYNAP/docs-internal/DEV-PLAN.md" \
   "$CONTENT/home/dev-plan.mdx" "Development Plan" "Current development plan and sprint focus."

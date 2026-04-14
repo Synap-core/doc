@@ -172,3 +172,18 @@ If `git push` fails with **`RPC failed; HTTP 400`** while uploading **hundreds o
 4. `git push --force origin main` — pack should be **~1 MiB** for docs-only trees.
 
 Optional: `git config http.postBuffer 524288000` helps some proxies, but it does **not** fix committed multi-hundred-MiB blobs.
+
+---
+
+## 9. Vercel deployment (“No Output Directory named `build`”)
+
+This app is **Next.js** (`next build` → `.next/`, not a `build/` folder). If the Vercel project still has **Output Directory = `build`** from the old Docusaurus site, the deploy fails after a successful build.
+
+**Fix (do both):**
+
+1. **Project → Settings → General → Build & Development Settings**  
+   - **Framework Preset:** Next.js  
+   - **Output Directory:** leave **empty** (remove `build`). Vercel must not look for a static `build` folder.
+2. **Root Directory:** if the Git repo is only this app, leave empty; if the repo is a monorepo, set it to the folder that contains `package.json` (e.g. `synap-team-docs`).
+
+The repo includes `vercel.json` with `"framework": "nextjs"` so new projects detect Next.js correctly; an **existing** project may still need the dashboard Output Directory cleared once.

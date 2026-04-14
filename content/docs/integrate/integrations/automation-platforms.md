@@ -469,5 +469,5 @@ export class ActivepiecesConnector {
 
 - [N8N Documentation](https://docs.n8n.io/)
 - [Activepieces Documentation](https://www.activepieces.com/docs)
-- [LangFlow + Automation](./ai-integration-guide#langflow-visual-ai-builder)
+- [Agents integration track](/docs/integrate/agents)
 - [Data Pod Webhooks](./webhooks-guide)

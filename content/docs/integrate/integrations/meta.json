@@ -1,3 +1,4 @@
 {
-  "title": "Integrations"
+  "title": "Integrations",
+  "pages": ["overview", "api-keys", "skill-invocation", "chat-stream", "sdk-direct", "webhooks-guide", "automation-platforms", "n8n"]
 }

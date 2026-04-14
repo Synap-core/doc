@@ -34,7 +34,7 @@ Skills are named operations that run in a secure sandbox with full access to you
 
 Best when you want **deterministic behavior**: "extract entities from this text", "summarize overdue tasks", "create a note from these meeting notes".
 
-[Read the skill invocation guide →](./skill-invocation.md)
+[Read the skill invocation guide →](./skill-invocation)
 
 ---
 
@@ -44,7 +44,7 @@ A single endpoint backed by your pod's AI system. The AI has access to your enti
 
 Best when you want the AI to **figure out what to do**: "what's on my plate this week?", "draft a follow-up email based on my notes from yesterday".
 
-[Read the chat stream guide →](./chat-stream.md)
+[Read the chat stream guide →](./chat-stream)
 
 ---
 
@@ -54,7 +54,7 @@ For building real apps. `@synap/sdk` gives you typed tRPC access to every proced
 
 Best when you are **building something**: a custom UI, an LLM pipeline where you manage context yourself, a sync integration, or a script that reads Synap data and feeds it into a separate model.
 
-[Read the SDK and direct API guide →](./sdk-direct.md)
+[Read the SDK and direct API guide →](./sdk-direct)
 
 ---
 
@@ -62,7 +62,7 @@ Best when you are **building something**: a custom UI, an LLM pipeline where you
 
 All three options require an API key with the appropriate scopes.
 
-[API keys reference →](./api-keys.md)
+[API keys reference →](./api-keys)
 
 ---
 

@@ -1,7 +1,7 @@
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { docsSource } from '@/lib/source';
 import { SynapSpaceSelector } from '@/components/SynapSpaceSelector';
-import { LogIn, Server } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { buttonVariants } from 'fumadocs-ui/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SynapLogoMark } from '@/components/SynapLogoMark';
@@ -26,22 +26,18 @@ export default function Layout({ children }: { children: ReactNode }) {
             className={cn(
               buttonVariants({
                 color: 'secondary',
-                className: 'hidden items-center gap-1.5 rounded-full px-4 py-2 text-sm md:inline-flex',
+                className:
+                  'hidden size-9 items-center justify-center rounded-full p-0 text-fd-muted-foreground hover:text-fd-foreground md:ml-auto md:inline-flex',
               })
             )}
+            aria-label="Sign in"
+            title="Sign in"
           >
             <LogIn className="size-4" aria-hidden />
-            Sign in
           </a>
         ),
       }}
-      links={[
-        {
-          text: 'Team',
-          url: '/team/overview',
-          icon: <Server className="size-4" />,
-        },
-      ]}
+      links={[]}
       sidebar={{
         collapsible: true,
         defaultOpenLevel: 1,

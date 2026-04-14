@@ -1,0 +1,37 @@
+---
+title: Integration fundamentals
+description: Hub Protocol and backend integration model across agents, websites, and external systems
+---
+
+This is the main page for understanding **how Synap backend is integrated**.
+
+## Why Hub Protocol exists
+
+Hub Protocol (`/api/hub/*`) is the stable contract between the pod and external actors (intelligence service, OpenClaw, automation bridges, scripts).
+
+- Keeps access key-scoped and workspace-aware
+- Avoids coupling external systems to internal app implementation details
+- Preserves governance paths (`checkPermissionOrPropose`) for AI and automated mutations
+
+Architecture context: **[Hub protocol flow](/docs/architecture/hub-protocol-flow)**.
+
+## Webhooks and event-driven integration
+
+Use webhooks to connect external systems into Synap update flows:
+
+- **[Webhooks guide](/docs/integrate/integrations/webhooks-guide)**
+- **[Automation platforms](/docs/integrate/integrations/automation-platforms)**
+
+## RSS, feeds, and external channels
+
+For stream-like ingestion and channel-connected inputs:
+
+- **[Integrations overview](/docs/integrate/integrations/overview)**
+- **[Channels concept](/docs/architecture/concepts/channels)**
+- Team deep dive: **[/team/platform/unified-feed](/team/platform/unified-feed)**
+
+## Next paths
+
+- Building agent integrations: **[Agents](/docs/integrate/agents)**
+- Building website/app integrations: **[Websites](/docs/integrate/websites)**
+- Connecting sync/import pipelines: **[External sources](/docs/integrate/external-sources)**

@@ -200,7 +200,7 @@ See how Intelligence Registry implements all these patterns:
 - **Schema**: `packages/database/src/schema/intelligence-services.ts`
 - **Events**: Not needed (simple CRUD)
 
-[View code →](https://github.com/Synap-core/backend/tree/main/packages/api/src/routers/intelligence-registry.ts)
+[View code →](https://github.com/Synap-core/backend/blob/main/packages/api/src/routers/intelligence-registry.ts)
 
 ---
 
@@ -244,4 +244,4 @@ Frontends get full autocomplete!
 
 - **Need external processing?** → [Hybrid Plugins](./hybrid-plugins)
 - **Contributing to core?** → [Contributing to core](../../../contributing/guides/overview)
-- **See complete example** → [Life Feed Example](./examples/life-feed)
+- **See feed architecture in practice** → [Unified feed (team docs)](/team/platform/unified-feed)

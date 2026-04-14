@@ -102,7 +102,7 @@ Revocation is immediate. Any in-flight requests using the revoked key will retur
 
 ## Next steps
 
-- [Connect AI to your pod — overview](./overview.md)
-- [Skill invocation](./skill-invocation.md) — requires `skills.invoke`
-- [Chat stream](./chat-stream.md) — requires `chat.stream`
-- [SDK and direct API](./sdk-direct.md) — requires `read:entities` and/or `hub-protocol.*`
+- [Connect AI to your pod — overview](./overview)
+- [Skill invocation](./skill-invocation) — requires `skills.invoke`
+- [Chat stream](./chat-stream) — requires `chat.stream`
+- [SDK and direct API](./sdk-direct) — requires `read:entities` and/or `hub-protocol.*`

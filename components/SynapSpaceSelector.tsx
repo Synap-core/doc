@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from 'fumadocs-ui/components/
 import { useSidebar } from 'fumadocs-ui/provider';
 import { cn } from '@/lib/utils';
 import { publicSpaces, teamSpaces, type SpaceConfig } from '@/lib/spaces';
+import { useAuth } from '@/components/AuthProvider';
 
 function normalizePath(pathname: string) {
   if (pathname.length > 1 && pathname.endsWith('/')) return pathname.slice(0, -1);
@@ -34,8 +35,11 @@ function SpaceIcon({ space }: { space: SpaceConfig }) {
  * each space has its own accent on the trigger. Menu rows keep title + description.
  */
 export function SynapSpaceSelector({ variant }: { variant: 'public' | 'team' }) {
+  const { isAuthenticated } = useAuth();
+  const showTeamSpaces = variant === 'team' || isAuthenticated;
   const primaryList = variant === 'public' ? publicSpaces : teamSpaces;
-  const secondaryList = variant === 'public' ? teamSpaces : publicSpaces;
+  const secondaryList =
+    variant === 'public' ? (showTeamSpaces ? teamSpaces : []) : publicSpaces;
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { closeOnRedirect } = useSidebar();
@@ -84,13 +88,17 @@ export function SynapSpaceSelector({ variant }: { variant: 'public' | 'team' }) 
             selectedId={selected?.id}
             onPick={onPick}
           />
-          <div className="my-1 h-px bg-fd-border" />
-          <SpaceSection
-            title={variant === 'public' ? 'Team spaces' : 'Public spaces'}
-            spaces={secondaryList}
-            selectedId={selected?.id}
-            onPick={onPick}
-          />
+          {secondaryList.length > 0 && (
+            <>
+              <div className="my-1 h-px bg-fd-border" />
+              <SpaceSection
+                title={variant === 'public' ? 'Team spaces' : 'Public spaces'}
+                spaces={secondaryList}
+                selectedId={selected?.id}
+                onPick={onPick}
+              />
+            </>
+          )}
         </div>
       </PopoverContent>
     </Popover>

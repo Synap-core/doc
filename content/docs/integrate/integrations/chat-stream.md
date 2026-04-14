@@ -334,6 +334,6 @@ Requires SYNAP_POD_URL and SYNAP_API_KEY in environment.
 
 ## Next steps
 
-- [Option C — Skill invocation](./skill-invocation.md) — deterministic, no natural language
-- [Option E — SDK and direct API](./sdk-direct.md) — full typed access for custom pipelines
-- [API Keys](./api-keys.md) — manage scopes
+- [Option C — Skill invocation](./skill-invocation) — deterministic, no natural language
+- [Option E — SDK and direct API](./sdk-direct) — full typed access for custom pipelines
+- [API Keys](./api-keys) — manage scopes

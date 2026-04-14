@@ -136,4 +136,4 @@ type EntityList = RouterOutputs["entities"]["list"]["items"][number];
 
 ## Full procedure list
 
-See the [API Reference](../../reference/api-reference.md) for every available query and mutation, auto-generated from the live router.
+See the [API Reference](../../reference/api-reference) for every available query and mutation, auto-generated from the live router.

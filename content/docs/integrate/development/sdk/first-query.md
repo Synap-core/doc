@@ -107,6 +107,6 @@ import type { RouterInputs, RouterOutputs } from "@synap/sdk";
 
 ## Next
 
-- **[SDK overview](./overview.md)** — auth modes and patterns  
-- **[API reference](../../reference/api-reference.md)**  
+- **[SDK overview](./overview)** — auth modes and patterns  
+- **[API reference](../../reference/api-reference)**  
 - **[Self-hosting](/docs/architecture/deployment/data-pod/self-hosted)** — run your own pod  

@@ -490,8 +490,8 @@ describe('Analyzer Service', () => {
 ## Next Steps
 
 1. **Choose your approach** (Intelligence Service recommended)
-2. **Read Hub Protocol docs** → [Hub and spoke](../../../architecture/concepts/hub-and-spoke.md)
-3. **See composability** → [Composable architecture](../../../architecture/concepts/composable-architecture.md)
+2. **Read Hub Protocol docs** → [Hub and spoke](../../../architecture/concepts/hub-and-spoke)
+3. **See composability** → [Composable architecture](../../../architecture/concepts/composable-architecture)
 4. **Build and deploy**
 
 ---
@@ -499,4 +499,4 @@ describe('Analyzer Service', () => {
 **Resources**:
 - [Hub Protocol SDK](https://github.com/synap-core/hub-protocol-sdk)
 - [Intelligence Services Examples](https://github.com/synap-core/intelligence-services)
-- [Event sourcing explained](../../../architecture/concepts/event-sourcing-explained.md)
+- [Event sourcing explained](../../../architecture/concepts/event-sourcing-explained)

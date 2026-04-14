@@ -322,5 +322,5 @@ await fetch(lifefeedService.webhookUrl, {
 ## Next Steps
 
 - **Build a remote service** → [Remote Plugins Guide](./remote-plugins)
-- **See complete example** → [Life Feed Implementation](./examples/life-feed)
+- **See complete example** → [Unified feed (team docs)](/team/platform/unified-feed)
 - **Understand hybrid pattern** → [Hybrid Plugins](./hybrid-plugins)

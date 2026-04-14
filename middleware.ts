@@ -27,10 +27,13 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  const sessionId = request.cookies.get("session")?.value;
-  const userId = request.cookies.get("user-id")?.value;
+  const sessionId =
+    request.cookies.get("__Secure-better-auth.session_token")?.value ??
+    request.cookies.get("better-auth.session_token")?.value ??
+    request.cookies.get("__Secure-better-auth-session_token")?.value ??
+    request.cookies.get("better-auth-session_token")?.value;
 
-  if (!sessionId || !userId) {
+  if (!sessionId) {
     const cpApiUrl = process.env.NEXT_PUBLIC_CP_API_URL || "https://api.synap.live";
     const loginUrl = new URL(`${cpApiUrl}/auth/sign-in`, request.url);
     loginUrl.searchParams.set("callbackUrl", request.url);

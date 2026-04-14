@@ -1,7 +1,28 @@
 {
   "title": "Build & integrate",
-  "description": "Hub Protocol, cold-start capture, feeds, agents, CLI, skills, and reference",
+  "description": "Build on backend core, then integrate agents, websites, and external systems",
   "root": true,
   "icon": "code",
-  "pages": ["index", "agents", "development", "integrations", "reference"]
+  "pages": [
+    "index",
+    "---Build---",
+    "build-on-backend",
+    "development",
+    "---Integrate---",
+    "integrate-core",
+    "---Agents---",
+    "agents",
+    "---Websites & Apps---",
+    "websites",
+    "integrations/api-keys",
+    "integrations/sdk-direct",
+    "integrations/chat-stream",
+    "---External Sources---",
+    "external-sources",
+    "integrations/webhooks-guide",
+    "integrations/automation-platforms",
+    "integrations/n8n",
+    "integrations/skill-invocation",
+    "reference"
+  ]
 }

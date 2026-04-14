@@ -3,13 +3,19 @@ title: Channels and agents
 description: How agents operate in channel contexts and branch workflows.
 ---
 
-# Channels and agents
-
 Channels are the primary interaction surface for humans and agents.
 
 - agents read channel context
 - branch channels support parallel reasoning
 - proposal governance applies consistently across channels
+
+## Runtime bridge details
+
+Backend path that bridges channel events to OpenAI-compatible service calls:
+
+- [`packages/api/src/routers/channels.ts`](https://github.com/Synap-core/backend/blob/main/packages/api/src/routers/channels.ts)
+
+This is where channel state and external agent service invocations are connected.
 
 See:
 

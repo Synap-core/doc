@@ -291,7 +291,7 @@ Life Feed is the perfect hybrid plugin example:
 - Analysis: AI-powered inbox analysis
 - Callback: Returns priority/tags/summary
 
-[See full implementation →](./examples/life-feed)
+[See full implementation →](/team/platform/unified-feed)
 
 ---
 
@@ -307,6 +307,6 @@ Life Feed is the perfect hybrid plugin example:
 
 ## Next Steps
 
-- **See complete example** → [Life Feed Implementation](./examples/life-feed)
+- **See complete example** → [Unified feed (team docs)](/team/platform/unified-feed)
 - **Understand Intelligence Registry** → [Registry Guide](./intelligence-registry)
 - **Learn event sourcing** → [Event System](#) *(coming soon)*

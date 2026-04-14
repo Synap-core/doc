@@ -3,8 +3,6 @@ title: MCP
 description: Use Model Context Protocol to connect IDE and desktop assistants.
 ---
 
-# MCP
-
 Synap exposes MCP for tool-driven agent interactions.
 
 - compatible with assistants that support MCP

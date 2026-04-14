@@ -1,83 +1,49 @@
 ---
 title: Build & integrate
-description: Hub Protocol, cold-start capture, external data, agents, CLI, and skills — how pieces connect
+description: Build on Synap core, then integrate agents, apps, and external systems
 ---
 
 # Build & integrate
 
-This section is for **builders and operators**: how Synap’s **data pod**, **intelligence layer**, and **external tools** fit together — not a flat list of endpoints.
+For teams building **on top of Synap** or connecting Synap to external systems.
 
----
+## How this space is organized
 
-## Why this matters
+- **Build** — change or extend Synap backend capabilities safely
+- **Integrate** — connect agents, websites, and automation systems to an existing pod
+- **Reference** — exact contracts and catalogs when you already know what to call
 
-Synap is designed so **your graph is portable**: anything you import or connect becomes **entities, views, and channels** you can reuse across apps. Integrations are not sidecars; they feed the same event-sourced core and the same governance (permissions, proposals) as the product UI.
+Use this order: **Build first**, then **Integrate**.
 
----
+## Build
 
-## Cold start: import on sign-up, reuse forever
+Start here if you are adding capabilities to Synap itself.
 
-A new pod is empty by default. The **browser extension** (Chrome MV3, in `synap-app`) addresses **cold-start** by reading open tabs, clustering them, and **bulk-importing** pod-wide entities so the space starts full, not empty — then every capture stays in the graph for search, views, and AI. See **`EXTENSION.md`** in `synap-app/packages/apps/extension` and **[Synap products](/team/home/synap-products)**.
+- **[Build on the backend](/docs/integrate/build-on-backend)** — architecture-first backend extension path
+- **[Development](/docs/integrate/development/setup)** — setup, type packages, testing, SDK, and extension patterns
 
-**Integration takeaway:** treat onboarding imports as **first-class data**, not a one-off wizard — the same entities power automations and agents later.
+Core architecture before coding:
 
----
+- **[Data pod](/docs/architecture/components/data-pod)**
+- **[Event flow](/docs/architecture/event-flow)**
+- **[Validation policy](/docs/architecture/validation-policy)**
+- **[Hub Protocol flow](/docs/architecture/hub-protocol-flow)**
 
-## Hub Protocol: the stable surface for “anything else”
+## Integrate
 
-**Hub Protocol** (`/api/hub/*` on the pod) is the **main HTTP contract** for Intelligence ↔ Pod traffic and for **external agents** (other AIs, scripts, bridges). It keeps access **Bearer-key–scoped** and workspace-aware, instead of scraping the web app.
+Start here if Synap is already running and you want to connect systems to it.
 
-- **[Synap Intelligence](/docs/cloud/intelligence)** — how the agent layer uses the pod  
-- **[Integrations overview](/docs/integrate/integrations/overview)** — skill invocation, chat stream, SDK / tRPC / Hub REST (options C–E)  
-- **[AI agents & external tools](/docs/start/getting-started/ai-agents-and-tools)** — mental model in one page  
+- **[Integrate core](/docs/integrate/integrate-core)** — Hub Protocol model and event-driven integration basics
+- **[Agents](/docs/integrate/agents)** — Synap AI, OpenClaw, channels, MCP, and skills
+- **[Websites](/docs/integrate/websites)** — frontend/app integration patterns
+- **[External sources](/docs/integrate/external-sources)** — webhooks, automation systems, and sync/import pipelines
 
----
+Integration playbooks are split into the relevant section pages (Agents, Websites, External sources) instead of a separate redundant integrations bucket.
 
-## Channels & external streams
+## Reference
 
-**Channels** are where conversation and many **external imports** land — alongside entities and views they complete the product triptych. See **[Channels](/docs/architecture/concepts/channels)**.
+When you need exact interfaces and payload contracts:
 
-**RSS and feeds:** the pod can ingest **RSS/Atom** (and, in hosted stacks, **RSSHub via the control-plane proxy**) into feed jobs that become messages you can route and reason about. Deep architecture (executors, CP proxy): **[Unified feed](/team/platform/unified-feed)** · self-hosters: backend repo **`docs/RSS-SETUP.md`** (operators) and **`docs/FEED-API.md`** (HTTP surface).
-
----
-
-## Templates: ship a whole app shape on top of the system
-
-Workspace **templates** (presets, sidebar, bento, profiles) let you **stand up a full application pattern** — CRM, second brain, etc. — from a definition rather than clicking every entity into existence. See **[Roadmap / templates](/docs/start/strategy/roadmap)** and how templates wire relationships in **[Entity connections](/docs/architecture/concepts/entity-connections)**. **[Extending Synap](/docs/integrate/development/extending/overview)** covers internal vs remote vs hybrid modules.
-
----
-
-## OpenClaw, CLIs, and skills (concrete path)
-
-| Tool | Role |
-|------|------|
-| **`npx @synap/cli init`** | Guided **agent bridge** — point OpenClaw (or similar) at your pod, API keys, laptop flows. |
-| **Backend `synap` script** | **Pod lifecycle** when self-hosting from the backend repo — install, update, migrate (Docker). |
-| **Synap skill (`skills/synap/`)** | OpenClaw-facing skill that uses **Hub only** — no direct DB access from the agent. |
-| **`deploy/setup-openclaw.sh`** | Self-hosted: provisioning token → agent user + API key on the pod. |
-
-Details: **[AI agents & external tools](/docs/start/getting-started/ai-agents-and-tools)**. Skills exposed for HTTP invocation: **[Skill invocation](/docs/integrate/integrations/skill-invocation)**.
-
----
-
-## Governance (don’t skip this)
-
-User mutations and **agent** mutations are not the same code path: high-impact agent work goes through **proposals** where policy requires it. When you integrate, **do not bypass** `checkPermissionOrPropose()` patterns — see **[Contributing](/docs/contributing)** and product docs on governance.
-
----
-
-## Reference & setup
-
-| Need | Go to |
-|------|--------|
-| Local dev & repos | **[Development setup](/docs/integrate/development/setup.md)** |
-| TypeScript client & auth | **[SDK overview](/docs/integrate/development/sdk/overview.md)** |
-| tRPC procedure catalog | **[API reference](/docs/integrate/reference/api-reference.md)** |
-| Events & workers | **[Event catalog](/docs/integrate/reference/event-catalog.md)** |
-| Building agents on the pod | **[Building agents](/docs/integrate/development/ai/building-agents.md)** |
-
----
-
-## Contributing core product changes
-
-If you are changing **Synap itself** (not only integrating), use **[Open source → Contributing](/docs/contributing)**.
+- **[API reference](/docs/integrate/reference/api-reference)**
+- **[Events API](/docs/integrate/reference/events-api)**
+- **[Event catalog](/docs/integrate/reference/event-catalog)**

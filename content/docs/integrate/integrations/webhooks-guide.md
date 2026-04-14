@@ -327,7 +327,7 @@ await trpc.webhooks.create.mutate({
 // - Update external databases
 ```
 
-See [n8n Integration Guide](./n8n.md) for complete examples.
+See [n8n Integration Guide](./n8n) for complete examples.
 
 ---
 
@@ -583,7 +583,7 @@ app.post('/webhook', async (req, res) => {
 
 ## Next Steps
 
-- [n8n Integration](./n8n.md) - Complete n8n workflow examples
-- [Event catalog](../reference/event-catalog.md) - All available events
-- [Event sourcing explained](../../architecture/concepts/event-sourcing-explained.md) - Understanding events
-- [API reference](../reference/api-reference.md) - Procedure reference
+- [n8n Integration](./n8n) - Complete n8n workflow examples
+- [Event catalog](../reference/event-catalog) - All available events
+- [Event sourcing explained](../../architecture/concepts/event-sourcing-explained) - Understanding events
+- [API reference](../reference/api-reference) - Procedure reference

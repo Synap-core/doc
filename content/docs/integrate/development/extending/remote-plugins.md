@@ -203,7 +203,7 @@ See the complete implementation:
 - Webhook: Receives inbox items
 - Callback: Returns analysis
 
-[View example →](./examples/life-feed)
+[View example →](/team/platform/unified-feed)
 
 ---
 
@@ -246,5 +246,5 @@ Data Pod connects via HTTP - deployment is independent.
 ## Next Steps
 
 - **Need schema in Data Pod?** → [Hybrid Plugins](./hybrid-plugins)
-- **See complete workflow** → [Life Feed Example](./examples/life-feed)
+- **See complete workflow** → [Unified feed (team docs)](/team/platform/unified-feed)
 - **Learn Intelligence Registry** → [Intelligence Registry Guide](./intelligence-registry)

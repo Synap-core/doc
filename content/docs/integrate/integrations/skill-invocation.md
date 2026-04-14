@@ -231,6 +231,6 @@ Your API key is tied to a user and (optionally) a workspace. Skills scoped below
 
 ## Next steps
 
-- [Option D — Chat stream](./chat-stream.md) — natural language interface to your pod
-- [Option E — SDK and direct API](./sdk-direct.md) — full typed access
-- [API Keys](./api-keys.md) — manage scopes and rotation
+- [Option D — Chat stream](./chat-stream) — natural language interface to your pod
+- [Option E — SDK and direct API](./sdk-direct) — full typed access
+- [API Keys](./api-keys) — manage scopes and rotation

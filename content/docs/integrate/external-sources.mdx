@@ -1,0 +1,31 @@
+---
+title: External source integrations
+description: Connect external systems and data pipelines into Synap backend safely
+---
+
+This section covers inbound and bidirectional integrations from external systems.
+
+## Automation and orchestration
+
+- **[n8n integration](/docs/integrate/integrations/n8n)**
+- **[Automation platforms](/docs/integrate/integrations/automation-platforms)**
+- **[Skill invocation](/docs/integrate/integrations/skill-invocation)**
+
+## Webhook-centric ingestion
+
+- **[Webhooks guide](/docs/integrate/integrations/webhooks-guide)**
+- **[Events API](/docs/integrate/reference/events-api)**
+
+## Feed and channel ingestion
+
+- **[Integrations overview](/docs/integrate/integrations/overview)**
+- **[Channels concept](/docs/architecture/concepts/channels)**
+- Team deep dive: **[/team/platform/unified-feed](/team/platform/unified-feed)**
+
+## Operating model
+
+When integrating external sources, keep these rules:
+
+- write through backend-governed paths, not direct DB mutation
+- preserve workspace scoping and permission checks
+- prefer event-driven updates so downstream workers and search stay consistent

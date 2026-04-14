@@ -140,8 +140,8 @@ Events can carry optional metadata for context:
 | `automation` | Rule triggers | Rule ID, execution context |
 | `custom` | Extensions | Your own metadata |
 
-See [Event sourcing explained](../../architecture/concepts/event-sourcing-explained.md) for how events are modeled end to end.
+See [Event sourcing explained](../../architecture/concepts/event-sourcing-explained) for how events are modeled end to end.
 
 ---
 
-**Next**: See [Hub API](./hub.md) for Hub Protocol endpoints.
+**Next**: See [Integration fundamentals](/docs/integrate/integrate-core) for Hub Protocol entry points.

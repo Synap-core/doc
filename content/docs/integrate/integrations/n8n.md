@@ -467,11 +467,11 @@ while (retries < maxRetries) {
 ## Support
 
 - **Documentation**: [api.synap.ai/docs](https://api.synap.ai/docs)
-- **GitHub**: [github.com/synaptik-ai/synap](https://github.com/synaptik-ai/synap)
+- **GitHub**: [github.com/Synap-core/backend](https://github.com/Synap-core/backend)
 - **Discord**: [discord.gg/synap](https://discord.gg/synap)
 
 ---
 
 **Next:**
-- [API reference](../reference/api-reference.md) - Procedure reference
-- [API keys](./api-keys.md) - API key management
+- [API reference](../reference/api-reference) - Procedure reference
+- [API keys](./api-keys) - API key management

@@ -260,6 +260,6 @@ Wherever something happens in Synap — a decision, a discussion, a review, an a
 ---
 
 :::info Learn more
-- [Channels Architecture](/architecture/channels) — technical reference for the channels subsystem
+- [Channels Architecture](/team/platform/channels) — technical reference for the channels subsystem
 - [Multi-agent system](./multi-agent-system.md) — how sub-threads power agent orchestration
 :::

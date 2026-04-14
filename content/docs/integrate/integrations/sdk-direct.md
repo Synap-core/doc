@@ -283,8 +283,8 @@ The `useSynap()` hook returns the full typed tRPC client. All queries use TanSta
 
 ## Next steps
 
-- [Option C — Skill invocation](./skill-invocation.md) — call named operations
-- [Option D — Chat stream](./chat-stream.md) — natural language interface
-- [API Keys](./api-keys.md) — scope reference
-- [First SDK queries](../development/sdk/first-query.md) — React, TypeScript, or cURL
-- [Quickstart](../../start/getting-started/quickstart.md) — route to app, agents, or SDK
+- [Option C — Skill invocation](./skill-invocation) — call named operations
+- [Option D — Chat stream](./chat-stream) — natural language interface
+- [API Keys](./api-keys) — scope reference
+- [First SDK queries](../development/sdk/first-query) — React, TypeScript, or cURL
+- [Quickstart](../../start/getting-started/quickstart) — route to app, agents, or SDK

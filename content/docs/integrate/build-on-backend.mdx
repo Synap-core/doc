@@ -1,0 +1,31 @@
+---
+title: Build on the backend
+description: Build inside Synap backend safely, with architecture principles first
+---
+
+This section is for teams changing **Synap core backend behavior** (new capabilities, upgraded flows, platform updates), not only consuming existing APIs.
+
+## Start with architecture principles
+
+Before editing backend code, review:
+
+- **[Data pod](/docs/architecture/components/data-pod)** — backend boundaries and responsibilities
+- **[Event flow](/docs/architecture/event-flow)** — request → validation → executor pipeline
+- **[Validation policy](/docs/architecture/validation-policy)** — proposal governance and approval flow
+- **[Hub Protocol flow](/docs/architecture/hub-protocol-flow)** — how intelligence and external agents call into backend
+
+## Build workflow
+
+1. **Set up local backend**: **[Development setup](/docs/integrate/development/setup)**
+2. **Understand type surfaces**: **[Type packages](/docs/integrate/development/type-packages)**
+3. **Implement extensions**: **[Extending Synap](/docs/integrate/development/extending/overview)**
+4. **Validate behavior**: **[Testing guide](/docs/integrate/development/testing-guide)**
+
+## Common build goals
+
+- Announce a new backend capability through API/router + event chain updates
+- Upgrade existing backend features without breaking event governance
+- Add or evolve executors/workers while preserving policy checks
+- Extend intelligence-facing contracts through Hub-safe endpoints
+
+For external integration tracks (agents, websites, sources), go back to **[Build & integrate](/docs/integrate)**.

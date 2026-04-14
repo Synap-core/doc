@@ -502,7 +502,7 @@ event_type
 
 ## Next Steps
 
-- [Event sourcing explained](../../architecture/concepts/event-sourcing-explained.md) - Pattern reference
-- [Development setup](../development/setup.md) - Workers and local automation
-- [Webhooks guide](../integrations/webhooks-guide.md) - External integrations
-- [API Reference](./data-pod/events.md) - Event API endpoints
+- [Event sourcing explained](../../architecture/concepts/event-sourcing-explained) - Pattern reference
+- [Development setup](../development/setup) - Workers and local automation
+- [Webhooks guide](../integrations/webhooks-guide) - External integrations
+- [Events API](./events-api) - Event API endpoints

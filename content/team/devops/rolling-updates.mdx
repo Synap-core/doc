@@ -1,0 +1,14 @@
+---
+title: Rolling Updates
+description: GitHub CI → GHCR → webhook → pg-boss → pod-agent. Canary first, then fleet batches.
+---
+
+# Rolling Updates
+
+Rolling updates use staged rollout with explicit control points:
+
+- Build/publish via GitHub CI to GHCR.
+- Trigger update jobs through webhook + worker orchestration.
+- Roll out to canary first, then controlled fleet batches.
+
+This minimizes blast radius while preserving update velocity.

@@ -1,0 +1,350 @@
+---
+title: "IS Overview (Internal)"
+description: "Internal intelligence service overview and design notes."
+---
+
+# Intelligence Service — Architecture & Integration Guide
+
+**Date:** 2026-04-08
+**Status:** Implemented — covers provisioning, AI gating, and per-surface integration.
+
+---
+
+## Overview
+
+The Intelligence Service (IS) provides AI capabilities (chat, entity extraction, proactive insights, proposals) to Synap pods. Access is gated by subscription tier and provisioned per-pod via the Control Plane.
+
+This document covers:
+1. How IS provisioning works end-to-end
+2. The `@synap-core/intelligence-connect` shared package
+3. How each surface (Browser, Relay, CLI) gates AI features
+4. Token pricing and quota enforcement
+
+---
+
+## 1. Provisioning Flow
+
+```
+User subscribes (Stripe)
+  → CP creates: subscription + data_pod + intelligenceAccess
+  → Pod reaches "ready" state
+
+User activates AI (Browser Settings / Relay Settings / CLI)
+  → POST /intelligence/provision/{podId} (to CP)
+  → CP verifies subscription entitlement
+  → CP builds provision JWT (ES256, 10min TTL)
+  → CP calls IS Hub: POST /admin/provision-pod
+  → IS returns serviceApiKey
+  → CP stores encrypted key in DB
+  → CP relays key to pod: POST /api/provision/register-intelligence
+  → Pod stores encrypted (AES-256-GCM) in intelligence_services table
+  → Pod starts using IS for all AI operations
+```
+
+### Re-provisioning (Frontend-Driven)
+
+**Architecture principle:** The pod is agnostic — it does NOT call the Control Plane. Re-provisioning is the frontend's responsibility.
+
+When IS credentials fail:
+1. Pod detects 401 from IS → `markServiceCredentialError()` (marks DB status only)
+2. `GET /api/provision/status` reports `credentialsValid: false`
+3. Frontend detects via `useIntelligenceStatus` → status = `out_of_sync`
+4. Frontend calls CP: `POST /intelligence/provision/{podId}`
+5. CP generates fresh key, pushes to pod via `/api/provision/register-intelligence`
+6. Pod marks service as `active`
+7. Next AI request succeeds
+
+**Auto-provision triggers:**
+- **App launch** (`useRelaySetup` Step 5): checks if user has subscription but IS not provisioned → provisions automatically
+- **Capture fallback**: when `capture.structure` returns a single low-confidence note (IS unavailable), the capture client auto-provisions via CP and retries the call
+- **Settings**: user can manually provision/reconnect from AI & Automations page
+
+### Health Monitoring
+
+- pg-boss job pings IS every 2 minutes via `GET /health`
+- Tracks `lastHealthStatus`: healthy / degraded / unhealthy
+- Unhealthy services are skipped during routing
+
+---
+
+## 2. Token Limits & Pricing
+
+### Included Tokens (Browser + Relay)
+
+| Tier | Monthly Tokens | Monthly Requests |
+|------|----------------|------------------|
+| Solo | 0 (no AI) | 0 |
+| Pro (Pod+AI) | 1,000,000 | 20,000 |
+| Team | unlimited* | unlimited* |
+| Enterprise | unlimited* | unlimited* |
+| Intelligence Addon | 1,000,000 | 10,000 |
+
+*unlimited tiers fall back to 100M tokens / 2M requests
+
+**Source of truth:** `@synap-core/pricing` package (`tiers.ts`, `token-pricing.ts`).
+CP's `getTokenLimitsForTier()` imports from this package — no hardcoded values.
+
+### Per-Token Pricing (API channel)
+
+| Model Tier | Model | Price/1M tokens |
+|------------|-------|-----------------|
+| free | DeepSeek V3 | $0.05 |
+| balanced | Kimi K2.5 | $0.50 |
+| advanced | Claude Sonnet 4.6 | $8.00 |
+| complex | Claude Opus 4.6 | $40.00 |
+
+Browser/Relay usage counts against the monthly quota.
+API usage (`/v1/chat/completions`, OpenClaw) is billed per-token via Stripe meters.
+
+---
+
+## 3. `@synap-core/intelligence-connect` Package
+
+**Location:** `synap-app/packages/core/intelligence-connect/`
+
+### Architecture
+
+```
+Pure TypeScript (no React)           React Hooks
+─────────────────────────           ───────────
+types.ts     — CpFetchFn, configs   useIntelligenceStatus  — 10-state status
+api.ts       — fetch CP/Pod status  useProvisionIntelligence — activate/switch
+status.ts    — computeStatus()      useIntelligenceUsage    — token tracking
+gate.ts      — checkAIAvailability  useAIGate              — universal AI gate
+constants.ts — labels, limits
+```
+
+### AI Gate Pattern
+
+Every AI-calling surface should check `useAIGate()` before making AI requests:
+
+```typescript
+import { useAIGate } from '@synap-core/intelligence-connect/react';
+
+function MyAIFeature() {
+  const gate = useAIGate(options);
+
+  if (gate.isLoading) return <Spinner />;
+
+  if (!gate.available) {
+    return (
+      <Banner
+        message={gate.message}
+        actionLabel={gate.actionLabel}
+        actionHref={gate.actionHref}
+      />
+    );
+  }
+
+  // Proceed with AI call
+}
+```
+
+`AIGateResult` provides:
+- `available: boolean` — can AI calls proceed?
+- `statusKind` — the raw 10-state kind
+- `message` — human-readable reason when unavailable
+- `actionLabel` — button text ("Subscribe", "Activate", "Reconnect", etc.)
+- `actionHref` — where to navigate (`synap://settings/intelligence`, URL, etc.)
+- `isLoading` — still checking (don't show error)
+- `refresh()` — manually re-check
+
+### Platform Adapters
+
+Each app provides its own config via an adapter hook:
+
+**Browser:**
+```typescript
+import { useBrowserAIGate } from '../hooks/useBrowserAIGate';
+const gate = useBrowserAIGate();
+```
+
+**Relay:**
+```typescript
+import { useRelayAIGate } from '../hooks/useIntelligenceConnect';
+const gate = useRelayAIGate();
+```
+
+**CLI / Scripts (no React):**
+```typescript
+import { checkAIAvailability } from '@synap-core/intelligence-connect';
+const result = await checkAIAvailability(config);
+if (!result.available) console.log(result.message);
+```
+
+### Configuration
+
+Each adapter builds an `IntelligenceConnectConfig`:
+
+```typescript
+interface IntelligenceConnectConfig {
+  cpFetch: CpFetchFn;      // Authenticated CP REST calls
+  podUrl: string | null;    // Pod base URL
+  podId: string | null;     // Pod ID from CP
+  timeout?: number;         // Fetch timeout (default 5000ms)
+}
+```
+
+- **Browser**: `cpFetch` from `platformClient.ts` (IPC-backed for Electron cookie auth)
+- **Relay**: Module-scoped fetch with Bearer token from AsyncStorage
+- **CLI**: Direct fetch with stored credentials from `~/.synap/credentials.json`
+
+---
+
+## 4. Per-Surface Integration
+
+### Browser
+
+**Gating philosophy:** Implicit degradation. UI is always clickable — AI features fail gracefully at runtime. The IntelligenceProvisionSection in Settings is the explicit gating surface.
+
+| Component | Gate | Behavior when unavailable |
+|-----------|------|---------------------------|
+| IntelligenceApp | `intelligenceActive` prop | Shows "Activate" CTA |
+| Chat (channels.sendMessage) | Pod marks `credential_error` | Frontend detects and re-provisions via CP |
+| Capture (structure) | Fallback detection + auto-provision | Returns fallback → client provisions → retries → shows AI results |
+| Proposals | None | Query returns empty |
+| Settings | `useIntelligenceStatus` | Full 10-state provision UI |
+
+**Available hooks:**
+- `useBrowserAIGate()` — for new AI features that want explicit gating
+- `useIntelligenceStatus()` — for the settings/provision UI
+
+### Relay
+
+**Gating philosophy:** Explicit + graceful. AI surfaces check the gate and degrade with helpful messages.
+
+| Component | Gate | Behavior when unavailable |
+|-----------|------|---------------------------|
+| AI Chat (search) | `useRelayAIGate` | Returns message: "Subscribe to..." |
+| Quick Capture | `useRelayAIGate` | Falls back to offline structure |
+| Event Capture | `useRelayAIGate` via useCapture | Falls back to offline structure |
+| AI Settings | `useRelayIntelligenceStatus` | Status card + action buttons |
+| Feed (proactive) | None | No proactive messages if IS off |
+
+**Available hooks:**
+- `useRelayAIGate()` — check before AI calls
+- `useRelayIntelligenceStatus()` — full status for settings
+- `useRelayProvisionIntelligence()` — trigger provisioning
+- `useRelayIntelligenceUsage()` — token usage tracking
+
+### CLI
+
+**Gating philosophy:** Check and offer to provision during setup.
+
+| Command | Gate | Behavior |
+|---------|------|----------|
+| `synap init` | `isStep()` | Checks pod IS status, provisions via CP if subscribed |
+| `synap status` | `/api/provision/status` | Shows IS health, credentials validity |
+
+---
+
+## 5. 10-State Status Machine
+
+```
+┌─────────────────┐
+│    loading       │ ← Fetching CP + Pod status
+└────────┬────────┘
+         │
+    ┌────▼────┐     ┌──────────────────┐
+    │needs_auth│────▶│ Sign in to CP    │
+    └─────────┘     └──────────────────┘
+
+    ┌─────────────────┐     ┌──────────────────┐
+    │needs_subscription│────▶│ Subscribe (€30)  │
+    └─────────────────┘     └──────────────────┘
+
+    ┌──────────────┐     ┌──────────────────┐
+    │needs_provision│────▶│ Activate button  │
+    └──────────────┘     └──────────────────┘
+
+    ┌─────────────────────┐     ┌──────────────────┐
+    │provisioned_on_other │────▶│ Switch pod       │
+    └─────────────────────┘     └──────────────────┘
+
+    ┌────────────┐     ┌──────────────────┐
+    │out_of_sync │────▶│ Reconnect        │
+    └────────────┘     └──────────────────┘
+
+    ┌────────┐
+    │ active │ ← AI available ✓
+    └────────┘
+
+    ┌──────────┐
+    │ degraded │ ← AI available ✓ (but unhealthy)
+    └──────────┘
+
+    ┌────────────────────┐     ┌──────────────────┐
+    │subscription_lapsed │────▶│ Renew            │
+    └────────────────────┘     └──────────────────┘
+
+    ┌────────────────┐     ┌──────────────────┐
+    │pod_unreachable │────▶│ Retry            │
+    └────────────────┘     └──────────────────┘
+```
+
+---
+
+## 6. Key Files
+
+| Area | File | Purpose |
+|------|------|---------|
+| **Package** | `synap-app/packages/core/intelligence-connect/src/` | Shared IS logic |
+| **Package** | `.../react/useAIGate.ts` | Universal AI availability gate hook |
+| **Package** | `.../gate.ts` | Pure function version (CLI/scripts) |
+| **Package** | `.../status.ts` | 10-state computation (pure) |
+| **Package** | `.../api.ts` | CP + Pod fetch functions |
+| **Browser** | `browser/.../hooks/useBrowserAIGate.ts` | Browser adapter |
+| **Browser** | `browser/.../hooks/useIntelligenceStatus.ts` | Browser status adapter |
+| **Browser** | `browser/.../components/settings/IntelligenceProvisionSection.tsx` | Full provision UI |
+| **Relay** | `relay-app/src/hooks/useIntelligenceConnect.ts` | Relay adapter (all hooks) |
+| **Relay** | `relay-app/app/ai-settings.tsx` | IS status + usage UI |
+| **Relay** | `relay-app/src/hooks/useCapture.ts` | AI-gated capture |
+| **Relay** | `relay-app/src/hooks/useAIChat.ts` | AI-gated chat |
+| **CLI** | `synap-cli/src/commands/init.ts` | IS provisioning in setup |
+| **CLI** | `synap-cli/src/commands/status.ts` | IS health display |
+| **CP** | `synap-control-plane-api/src/routes/intelligence-provision.ts` | Provisioning + entitlement |
+| **CP** | `synap-control-plane-api/packages/pricing/src/tiers.ts` | Token limits (source of truth) |
+| **Pod** | `synap-backend/apps/api/src/routers/provision.ts` | Pod-side provision endpoints |
+| **Pod** | `synap-backend/packages/api/src/utils/credential-auto-repair.ts` | Marks `credential_error` status (no CP calls) |
+| **IS** | `synap-intelligence-service/.../middleware/multi-tenant-auth.ts` | API key + quota validation |
+
+---
+
+## 7. Adding AI Gate to a New Feature
+
+1. Import the gate hook for your platform:
+   ```typescript
+   // Browser
+   import { useBrowserAIGate } from '../hooks/useBrowserAIGate';
+   // Relay
+   import { useRelayAIGate } from '../hooks/useIntelligenceConnect';
+   ```
+
+2. Call it at the top of your component/hook:
+   ```typescript
+   const gate = useBrowserAIGate(); // or useRelayAIGate()
+   ```
+
+3. Check before AI calls:
+   ```typescript
+   if (!gate.available) {
+     // Show gate.message to user
+     // Optionally render a button with gate.actionLabel → gate.actionHref
+     return;
+   }
+   // Proceed with AI call
+   ```
+
+4. For non-React contexts (CLI, scripts):
+   ```typescript
+   import { checkAIAvailability } from '@synap-core/intelligence-connect';
+
+   const result = await checkAIAvailability({
+     cpFetch: myFetchFn,
+     podUrl: 'https://pod.example.com',
+     podId: 'pod-uuid',
+   });
+   if (!result.available) {
+     console.error(result.message);
+   }
+   ```

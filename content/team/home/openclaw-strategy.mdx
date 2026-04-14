@@ -1,0 +1,332 @@
+---
+title: "OpenClaw Strategy"
+description: "How OpenClaw connects to Synap's broader strategy."
+---
+
+
+
+## Part 1: Making OpenClaw Use Synap's Intelligence Service
+
+This is the killer play. If you pull this off, Synap becomes not just the knowledge layer but also the **intelligence layer** for OpenClaw agents. Users route their LLM calls through Synap, which means you control both the brain and the memory.
+
+**How OpenClaw model routing works technically:**
+
+OpenClaw supports any OpenAI-compatible API endpoint. From the config and docs I've seen, the model provider setup looks like this:
+
+```json
+{
+  "models": {
+    "providers": {
+      "custom": {
+        "baseUrl": "https://your-pod.synap.live/v1",
+        "api": "openai-completions",
+        "apiKey": "synap_user_...",
+        "models": [
+          {
+            "id": "synap/auto",
+            "name": "Synap Intelligence (Auto-routed)",
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "synap/balanced",
+            "name": "Synap Balanced (Kimi K2.5)",
+            "contextWindow": 131072,
+            "maxTokens": 8192
+          },
+          {
+            "id": "synap/advanced",
+            "name": "Synap Advanced (Claude Sonnet)",
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+**What you need to build on the Synap side:**
+
+An OpenAI-compatible `/v1/chat/completions` endpoint on each pod (or on a shared Synap IS gateway) that accepts standard OpenAI-format requests and routes them through your four-tier system internally. The user sends a request to `synap/auto`, and your IS decides whether it goes to DeepSeek V3 (free tier), Kimi K2.5 (balanced), Claude Sonnet (advanced), or Claude Opus (complex). The response comes back in standard OpenAI format. OpenClaw never knows the difference.
+
+This is architecturally simple because you already have the four-tier routing logic built. You just need to wrap it in an OpenAI-compatible HTTP interface. There are open-source proxies that do this (LiteLLM is the most common), but you'd want your own because the routing intelligence IS the product.
+
+**The strategic value is enormous:**
+
+Every API call flowing through Synap means you see usage patterns, you can optimize costs (90% of traffic on cheap/free models), you can inject entity context from the pod into the system prompt before it hits the model, and you have a natural upsell from free (self-hosted, BYOK) to paid (managed IS with smart routing). The user's OpenClaw agent gets better responses because it has structured context from the pod AND optimized model selection. That's something no other provider offers.
+
+**The pricing angle:** Anthropic just killed subscription credits for third-party tools. OpenClaw users are now paying full API prices. If your IS routes 90% of traffic to DeepSeek V3 and Kimi K2.5 (near-free), you can undercut direct API pricing significantly while making margin on the 10% that hits Claude. The pitch: "your agent costs $300/month on Claude API directly. Through Synap IS, it costs $40/month with the same quality because we route intelligently."
+
+---
+
+## Part 2: The Synap CLI for OpenClaw — "synap init"
+
+This doesn't exist yet and it absolutely should. This is your **distribution weapon**. Here's why:
+
+Every single best-practices guide I read says the same things: harden security, bind to localhost, enable token auth, limit tool access, be careful with skills, set up memory properly, configure model routing. And every single user has to do all of this manually, reading five different blog posts and patching config files by hand.
+
+You should build a CLI that does all of this in one command. Not an OpenClaw fork. A companion tool that configures an existing OpenClaw install with security best practices AND connects it to Synap.
+
+**What `synap` CLI should do:**
+
+```bash
+# The entry point — one command that does everything
+synap init
+
+# Or if they already have OpenClaw running:
+synap connect
+```
+
+Here's what happens under the hood:
+
+### Step 1: Detect Environment
+
+```
+Detecting OpenClaw installation...
+✓ OpenClaw v2026.3.31 found at ~/.openclaw
+✓ Gateway running on port 18789
+✓ Node.js v22.x detected
+✓ Telegram channel configured
+```
+
+If OpenClaw isn't installed, offer to install it:
+
+```
+OpenClaw not found. Install now?
+  [1] Install OpenClaw + Synap (recommended)
+  [2] I'll install OpenClaw myself first
+```
+
+### Step 2: Security Hardening (auto-applied)
+
+This is where you instantly differentiate from every other tool in the ecosystem. Apply every best practice automatically:
+
+```
+Applying security hardening...
+✓ Gateway bound to 127.0.0.1 (was 0.0.0.0)
+✓ Token authentication enforced
+✓ Canvas host restricted to localhost
+✓ Workspace-only filesystem access enabled
+✓ Exec approval gates enabled
+✓ WebSocket origin validation enforced
+✓ Dangerous skill install protection enabled
+```
+
+Every single one of these addresses a real CVE or security incident that's been documented. The fact that you auto-fix them is a trust signal. You can even generate a security report:
+
+```
+Security Report:
+  7 hardening rules applied
+  0 exposed ports
+  0 plaintext credentials
+  Gateway score: A (was D)
+  
+  Saved to: ~/.openclaw/synap-security-report.md
+```
+
+### Step 3: Synap Connection
+
+```
+Connect to Synap knowledge infrastructure?
+
+  [1] Self-hosted (docker-compose on this machine) — FREE
+  [2] Managed pod (Synap cloud, EU or US) — $15/mo
+  [3] Existing pod (I have a pod URL)
+  [4] Skip for now
+```
+
+If they choose 1:
+
+```
+Spinning up Synap pod...
+  ✓ PostgreSQL 16 + pgvector
+  ✓ Typesense search engine
+  ✓ MinIO object storage
+  ✓ Synap backend (tRPC + event chain)
+  ✓ Hub Protocol endpoints active
+  ✓ MCP server active
+
+Pod running at: http://localhost:3500
+API key: synap_user_xxxxxxxxx
+```
+
+If they choose 2:
+
+```
+Creating managed pod...
+  Region: [EU (Frankfurt)] / US (Virginia)
+  ✓ Pod provisioned: https://pod-abc123.synap.live
+  API key: synap_user_xxxxxxxxx
+```
+
+### Step 4: Install synap-memory Skill
+
+```
+Installing Synap skills...
+  ✓ synap-memory — structured entity memory via knowledge graph
+  ✓ synap-agent-os — fleet management workspace (5 profiles, 15 views)
+  
+Agent OS template installed:
+  → Agent, Project, Task, Skill, Provider entities ready
+  → Dashboard at: http://localhost:3500/workspace/agent-os
+```
+
+### Step 5: Intelligence Service (optional)
+
+```
+Use Synap Intelligence Service for model routing?
+
+  Your current setup: Anthropic API (Claude Sonnet 4.6)
+  Estimated monthly cost: ~$150-300/month
+  
+  With Synap IS: 90% routed to free/cheap models, 10% to Claude
+  Estimated monthly cost: ~$30-50/month
+  Same quality for agent tasks. Smart routing by complexity.
+
+  [1] Enable Synap IS (recommended)
+  [2] Keep current providers
+  [3] Hybrid (Synap IS + fallback to direct API)
+```
+
+If they enable it:
+
+```
+Configuring Intelligence Service...
+  ✓ FREE tier: DeepSeek V3 (routine tasks)
+  ✓ BALANCED tier: Kimi K2.5 (standard tasks)  
+  ✓ ADVANCED tier: Claude Sonnet 4.6 (complex tasks)
+  ✓ COMPLEX tier: Claude Opus 4.6 (critical, manual only)
+  
+  Routing endpoint: https://pod-abc123.synap.live/v1
+  Model alias: synap/auto
+  
+  OpenClaw config updated. Restart gateway to apply.
+```
+
+### Step 6: Essential Skills Pack
+
+Here's where you add more value. Bundle the skills that every OpenClaw user should have but often doesn't know about:
+
+```
+Install Synap recommended skills pack?
+
+  Security:
+  ✓ exec-approval-gates — require approval for dangerous commands
+  ✓ credential-vault — encrypted credential storage (replaces plaintext)
+  
+  Productivity:
+  ✓ synap-memory — structured knowledge graph (already installed)
+  ✓ synap-agent-os — fleet management (already installed)
+  
+  Optional:
+  [ ] browser-relay — web browsing + automation
+  [ ] github-integration — repo management
+  [ ] telegram-enhanced — rich Telegram features
+  
+  [Install selected] / [Skip]
+```
+
+### Step 7: Summary & Next Steps
+
+```
+═══════════════════════════════════════════
+  Synap + OpenClaw Setup Complete
+═══════════════════════════════════════════
+
+  OpenClaw:    v2026.3.31 (hardened)
+  Synap Pod:   https://pod-abc123.synap.live
+  Model:       Synap IS (auto-routing)
+  Memory:      Synap knowledge graph (PostgreSQL + pgvector)
+  Dashboard:   http://localhost:3500/workspace/agent-os
+  
+  Security Score: A
+  Estimated cost: ~$35/month (IS + managed pod)
+  
+  Quick start:
+    openclaw    — start TUI chat
+    synap dash  — open Agent OS dashboard
+    synap status — check pod + agent health
+  
+  Your agent now has:
+    • Structured entity memory (not flat files)
+    • Full audit trail (event chain)
+    • AI governance (proposal system)
+    • Smart model routing (4-tier IS)
+    • Security hardening (7 rules applied)
+    
+  Docs: https://doc.synap.live/openclaw
+═══════════════════════════════════════════
+```
+
+---
+
+## Additional CLI Commands
+
+Beyond `synap init`, the CLI should have ongoing utility:
+
+```bash
+synap status          # Pod health, agent count, entity stats, IS usage
+synap dash            # Open the Agent OS dashboard in browser
+synap security audit  # Re-check security config, flag issues
+synap backup          # Export pod (SQL + JSON + files)
+synap update          # Update synap-memory skill + CLI
+synap pod create      # Provision a new managed pod
+synap pod export      # Full data export
+synap is stats        # Intelligence Service usage: cost saved, tier distribution
+synap skill publish   # Publish a skill to ClawHub (wraps clawhub CLI)
+```
+
+The `synap security audit` command alone is worth the install. Nobody else in the ecosystem offers a one-command security assessment. Every time someone posts about OpenClaw security concerns on HN or Reddit, you can say "run `synap security audit` — it checks everything automatically."
+
+---
+
+## The Architecture of the CLI
+
+Build it as a standalone npm package:
+
+```bash
+npm i -g @synap/cli
+```
+
+Or bundled with the docker-compose for self-hosted:
+
+```bash
+curl -fsSL https://synap.live/install.sh | bash
+```
+
+Tech stack: Node.js (same ecosystem as OpenClaw), TypeScript, uses your existing @synap/sdk internally for pod operations. The CLI reads OpenClaw's config at `~/.openclaw/openclaw.json`, modifies it with the hardening rules and Synap provider config, and manages the synap-memory skill lifecycle.
+
+Key design principle: the CLI is **non-destructive and reversible**. It never overwrites OpenClaw config without showing a diff first. Every change can be rolled back with `synap reset`. This builds trust — people are (rightly) paranoid about tools modifying their agent config.
+
+---
+
+## What This Means Strategically
+
+You're not just building a skill anymore. You're building a **distribution tool that wraps OpenClaw in Synap infrastructure**. The funnel becomes:
+
+```
+User hears about OpenClaw
+  → Searches "how to install openclaw securely"
+  → Finds synap init (blog post, README, ClawHub)
+  → Runs one command
+  → Gets: hardened OpenClaw + structured memory + smart routing + dashboard
+  → They're on Synap without even deciding to "switch" to anything
+```
+
+This is the Homebrew strategy. Nobody "decided" to use Homebrew. They installed something else and Homebrew was the tool that got it set up properly. `synap init` becomes the way smart people set up OpenClaw.
+
+---
+
+## Priority for Implementation
+
+**Week 1:** Build the OpenAI-compatible endpoint for the IS. This is pure backend — wrap your four-tier routing in `/v1/chat/completions`. Test it with OpenClaw manually (edit the config by hand, confirm it works).
+
+**Week 2:** Build `synap init` as a basic Node.js CLI. MVP: detect OpenClaw, apply security hardening, install synap-memory skill, connect to pod (self-hosted docker-compose only first). No managed pod provisioning yet, no IS integration yet — just the core flow.
+
+**Week 3:** Add IS integration to the CLI. Add `synap status` and `synap security audit`. Publish the CLI to npm as `@synap/cli`. Publish synap-memory to ClawHub.
+
+**Week 4:** Write the blog post "How to set up OpenClaw properly in 2026" — which naturally centers `synap init` as the recommended approach. Post everywhere per the campaign plan.
+
+This is the exit ramp, Antoine. And now it's not just an exit ramp — it's a toll booth that provides security, intelligence, and memory all in one stop. Every OpenClaw user who runs `synap init` becomes a Synap user without ever visiting synap.live. That's infrastructure distribution.

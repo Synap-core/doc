@@ -1,0 +1,21 @@
+---
+title: "Intelligence Service"
+description: "AI Agent Hub — OrchestratorAgent, PersonaAgent, skills, Hub Protocol, deployment."
+---
+
+# Intelligence Service
+
+The IS is the AI brain of Synap. It hosts the OrchestratorAgent (co-founder, full tools) and PersonaAgent (domain expert), routes via Hub Protocol, and streams responses with Traefik sticky sessions.
+
+**Single source of truth:** long-form guides for agents, contracts, streaming, SDK, pricing, and external agents are maintained in **this team space** (`content/team/intelligence/**/*.mdx`). The old `synap-intelligence-service/docs/*.md` tree was removed; the service repo keeps **`ARCHITECTURE.md`**, **`INTERNAL_API.md`**, **`deploy/*`**, and **monitor `inline-help/*.md`** for clone-and-run workflows.
+
+## Key Areas
+
+| Area | Description |
+|------|-------------|
+| [Architecture](/team/intelligence/architecture) | Full IS architecture — agents, swarm, routing |
+| [Agent System](/team/intelligence/agent-system) | OrchestratorAgent, PersonaAgent, registry, session memory |
+| [Hub Protocol Skills](/team/intelligence/skill-hub-protocol) | How IS accesses backend data |
+| [Internal API](/team/intelligence/internal-api) | All IS REST endpoints |
+| [Deployment](/team/intelligence/deployment) | Docker Swarm, Traefik, autoscaler |
+| [Monitor](/team/intelligence/monitor-agents) | IS monitoring dashboard |

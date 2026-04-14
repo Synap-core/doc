@@ -1,0 +1,340 @@
+---
+title: "Platform Review: Skills"
+description: "Skills system completeness and gaps."
+---
+
+# 06 — AI Skills & Behavioral Templates
+
+## Current State
+
+### System Skills — 12 Built-in Markdown Files
+
+Located: `synap-intelligence-service/apps/intelligence-hub/src/skills/`
+
+| Skill File | Lines | Purpose |
+|------------|-------|---------|
+| `hub-protocol.md` | 125 | Governance rules, proposals, tool categories |
+| `inline-references.md` | 105 | Embed `[[entity:ID:Name]]` markers in responses |
+| `workspace-views.md` | 146 | View creation and configuration |
+| `propose-workspace.md` | 232 | Complete workspace proposal schema |
+| `entity-schema.md` | 120 | Profile and property definitions |
+| `entity-management.md` | 90 | Create/update entities |
+| `document-management.md` | 60 | Document operations |
+| `automations.md` | 264 | Automation and command setup |
+| `cli-execution.md` | 45 | Terminal command writing (tool doesn't exist yet) |
+| `kanban-view.md` | — | Kanban-specific configuration |
+| `bento-view.md` | — | Bento dashboard configuration |
+| `flow-view.md` | — | Flow diagram configuration |
+| `graph-view.md` | — | Graph visualization configuration |
+
+### Skill Loading Mechanism
+
+**File:** `synap-intelligence-service/apps/intelligence-hub/src/skills/skill-loader.ts`
+
+```typescript
+// Skills are loaded based on which tools the agent has
+const SKILL_TRIGGERS = [
+  { file: 'entity-management.md', tools: ['create_entity', 'update_entity', 'search_entities'] },
+  { file: 'workspace-views.md', tools: ['create_view', 'update_view'] },
+  { file: 'automations.md', tools: ['create_automation', 'create_command'] },
+  // etc.
+];
+
+// If agent has ANY of the listed tools, the skill is loaded
+// Skills are appended to agent's system prompt before execution
+```
+
+### Dynamic Skill System
+
+**Tool:** `create_skill` exists in intelligence service
+- Backend stores skills in database
+- Workspace-scoped with owner tracking
+- Loaded at runtime as `skill_*` tools
+
+**UI Entry Points:**
+- `synap-app/packages/apps/intelligence/src/tabs/ExtensionsTab.tsx` — skill creation via tRPC
+- Control plane admin dashboard — skill status/owner management
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| System skills directory | `synap-intelligence-service/apps/intelligence-hub/src/skills/` |
+| Skill loader | `synap-intelligence-service/apps/intelligence-hub/src/skills/skill-loader.ts` |
+| Dynamic skill loader | `synap-intelligence-service/apps/intelligence-hub/src/tools/dynamic-skill-loader.ts` |
+| Prompt composer | `synap-intelligence-service/apps/intelligence-hub/src/agents/base/prompt-sections.ts` |
+| Agent base (loads skills) | `synap-intelligence-service/apps/intelligence-hub/src/agents/base/` |
+| Create skill tool | `synap-intelligence-service/apps/intelligence-hub/src/tools/` (search for skill) |
+| Extensions tab UI | `synap-app/packages/apps/intelligence/src/tabs/ExtensionsTab.tsx` |
+| CP admin skills | `other/synap-control-plane/app/admin/intelligence/skills/page.tsx` |
+
+### Quality Assessment
+
+**GOOD:**
+- System skills are well-written with clear structure
+- Trigger-based loading is elegant — agents only get relevant skills
+- Skills are pure markdown — easy to write, version, and share
+- Prompt architecture is clean: Agent prompt (WHO) + Skills (HOW) + Context (WHAT)
+
+**ISSUES:**
+- No user-facing skill editor in browser (only admin tools)
+- No event-triggered skills (skills only load based on tools, not events)
+- No skill marketplace/sharing
+- Dynamic skill loading exists but isn't well-documented for users
+- Skills can't reference other skills (no composition)
+
+## Limitations
+
+### 1. Skills Are Passive
+Skills are loaded into the agent's prompt — they inform behavior but don't trigger it. There's no way to say:
+- "When a book entity is created, activate the book-reflection skill and start a conversation"
+- "Every Sunday at 10am, run the weekly-review skill"
+- "When user finishes a DJ session (captures music tracks), run the session-review skill"
+
+### 2. No User Skill Editor
+Users can't create or edit skills from the browser. The only paths are:
+- `ExtensionsTab` in the intelligence app (hidden, developer-oriented)
+- Direct markdown file creation (requires code access)
+- Control plane admin dashboard (admin only)
+
+### 3. No Skill Discovery
+Users don't know what skills exist or what they do. No:
+- Skill gallery or browser
+- Skill descriptions visible in the AI chat interface
+- "Available skills" indicator when chatting with AI
+
+### 4. No Skill Composition
+Skills can't reference or extend other skills. Each skill is standalone. Would be useful to:
+- "Content creation skill" extends "entity management skill" with writing guidelines
+- "Book review skill" includes "knowledge capture skill" patterns
+
+### 5. No Skill-to-Template Binding
+Templates don't include skills. When you install a "Knowledge Management" template, you don't get the associated AI behaviors (book reflection, reading notes, etc.).
+
+### 6. Skills Don't Carry Context
+Skills are generic instructions. They don't know about the user's specific data or preferences:
+- "Review my DJ session" skill doesn't know the user's music preferences
+- "Create content" skill doesn't know the user's voice guidelines
+- Skills can't reference entities ("use the guidelines stored in entity X")
+
+## Proposed Architecture
+
+### Skill Definition Format
+
+```typescript
+interface SkillDefinition {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+
+  // Content
+  prompt: string;           // Markdown instructions
+  contextEntities?: string[]; // Entity IDs to include as context
+  requiredProfiles?: string[]; // Profile slugs needed for this skill
+
+  // Triggers
+  triggers?: SkillTrigger[];
+
+  // Metadata
+  category: 'productivity' | 'knowledge' | 'creative' | 'devops' | 'personal' | 'custom';
+  scope: 'system' | 'workspace' | 'user';
+  version: string;
+}
+
+interface SkillTrigger {
+  type: 'entity_created' | 'entity_updated' | 'schedule' | 'manual' | 'keyword';
+
+  // For entity triggers
+  profileSlug?: string;
+  propertyFilter?: Record<string, unknown>; // e.g., { status: 'finished' }
+
+  // For schedule triggers
+  cron?: string;             // "0 10 * * 0" = every Sunday 10am
+
+  // For keyword triggers
+  keywords?: string[];       // Mentioned in chat → activate skill
+
+  // Behavior
+  autoStart?: boolean;       // Automatically start conversation vs just load skill
+  channel?: 'personal' | 'new_thread';  // Where to start the conversation
+}
+```
+
+### Event-Triggered Skills (Bridge #1)
+
+Connect skills to the automation system:
+
+```
+Entity created (profileSlug: 'book', status: 'finished')
+  → Automation trigger fires
+  → Action: execute skill 'book-reflection'
+  → AI starts conversation in personal channel:
+    "I see you finished reading '{bookTitle}'. What did you think about it?"
+```
+
+Implementation path:
+1. Add `skill.execute` as an automation step type
+2. Automation trigger matches entity events
+3. Step starts AI conversation with skill loaded
+
+### Skill Editor UI
+
+A modal or side panel in the browser for creating/editing skills:
+
+```
+┌─────────────────────────────────────────┐
+│ Create Skill                            │
+├─────────────────────────────────────────┤
+│ Name: [Book Reflection                ] │
+│ Icon: [] Category: [Knowledge      ] │
+│                                         │
+│ Instructions:                           │
+│ ┌─────────────────────────────────────┐ │
+│ │ When the user finishes a book,      │ │
+│ │ start a reflection conversation:    │ │
+│ │                                     │ │
+│ │ 1. Ask what they thought overall    │ │
+│ │ 2. Ask about key takeaways         │ │
+│ │ 3. Ask what surprised them         │ │
+│ │ 4. Suggest related books           │ │
+│ │ 5. Create reading-note entities    │ │
+│ │    for their insights              │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ Triggers:                               │
+│ ☑ When entity created                   │
+│   Profile: [book] Status: [finished]    │
+│ ☐ Scheduled                             │
+│ ☐ Keyword in chat                       │
+│                                         │
+│ Context entities:                       │
+│ + Add entity (e.g., "My Reading Goals") │
+│                                         │
+│ [Cancel]                    [Save Skill]│
+└─────────────────────────────────────────┘
+```
+
+### Skill Context Injection
+
+Skills can reference specific entities for personalization:
+
+```markdown
+# Content Creation Skill
+
+## Voice Guidelines
+Use the writing style described in [[entity:abc123:My Voice Guide]].
+Refer to [[entity:def456:Brand Guidelines]] for formatting rules.
+
+## Process
+1. Review the user's recent content ideas (profile: content-idea, status: idea)
+2. Suggest 3 angles based on their topic
+3. Draft an outline following the voice guidelines
+4. Review against brand guidelines
+```
+
+The skill loader resolves `[[entity:ID:Name]]` references and injects the entity content into the prompt.
+
+## Action Items
+
+### Phase 1: Skill Editor in Browser
+- [ ] Create `SkillEditor` component (modal or side panel)
+- [ ] Skill creation form: name, description, markdown editor, icon picker
+- [ ] Skill list view in workspace settings or AI settings
+- [ ] `trpc.skills.create` / `trpc.skills.update` / `trpc.skills.list` — verify these exist
+- [ ] Show active skills in AI chat interface ("This conversation uses: Book Reflection")
+
+### Phase 2: Event-Triggered Skills
+- [ ] Add `skill.execute` as automation step type
+- [ ] Connect entity triggers to skill execution
+- [ ] AI starts conversation in personal channel with skill loaded
+- [ ] Trigger configuration UI in skill editor
+- [ ] Schedule-based triggers (cron → pg-boss → skill execution)
+
+### Phase 3: Skill Context
+- [ ] Support `[[entity:ID:Name]]` references in skill prompts
+- [ ] Skill loader resolves references → injects entity content
+- [ ] "Context entities" field in skill editor
+- [ ] Required profiles validation (warn if needed profiles not installed)
+
+### Phase 4: Skill Marketplace
+- [ ] Skill packs bundled with profile packs and templates
+- [ ] Share skills on control plane marketplace
+- [ ] Community-contributed skills
+- [ ] Skill ratings and usage stats
+
+### Research Questions
+- [ ] How does GPTs/Custom GPTs handle behavioral instructions?
+- [ ] How does Anthropic's Claude Projects handle custom instructions?
+- [ ] How does Notion AI handle workspace-specific knowledge?
+- [ ] Should skills be versionable? (user upgrades skill → existing conversations adapt)
+- [ ] How to handle skill conflicts? (two skills giving contradictory instructions)
+- [ ] Performance impact of many skills loaded at once? (prompt token budget)
+
+## Example Skills
+
+### Book Reflection
+```markdown
+# Book Reflection
+
+When the user has just finished reading a book, guide them through a structured reflection:
+
+1. **First impression**: Ask what they thought overall — was it what they expected?
+2. **Key takeaways**: Ask for 3 main things they learned or that stuck with them
+3. **Surprises**: What challenged their existing beliefs or surprised them?
+4. **Connections**: How does this relate to other books they've read or ideas they have?
+5. **Application**: Is there anything they want to apply to their life or work?
+6. **Rating**: Ask them to rate it 1-5 and explain why
+
+After the conversation:
+- Create a `reading-note` entity for each key takeaway, linked to the book
+- Update the book's `key-takeaways` property with a summary
+- Update the book's `rating` property
+- Suggest 2-3 related books based on the themes discussed
+```
+
+### DJ Session Review
+```markdown
+# DJ Session Review
+
+After the user logs a DJ session (captures music tracks), help them reflect:
+
+1. **Session flow**: How did the set flow? Any rough transitions?
+2. **Track analysis**: Which tracks worked best? Which didn't land?
+3. **Crowd response**: If live, how did the audience react?
+4. **Technical notes**: Any mixing techniques to practice?
+5. **Library update**: Should any tracks be added/removed from regular rotation?
+
+After the conversation:
+- Create entities for new tracks mentioned
+- Update the user's DJ session entity with notes
+- Suggest practice areas based on self-assessment
+```
+
+### Weekly Review
+```markdown
+# Weekly Review (scheduled: every Sunday at 10am)
+
+Guide the user through a weekly reflection:
+
+1. **Accomplishments**: What did you complete this week?
+   - Search for entities updated this week (tasks completed, notes created)
+2. **In progress**: What's still ongoing?
+   - Search for tasks in "in-progress" status
+3. **Blockers**: Anything stuck? Need help?
+4. **Next week**: What are your top 3 priorities?
+5. **Gratitude**: What went well this week?
+
+After the conversation:
+- Create a `note` entity with the weekly review summary
+- Update overdue task priorities if discussed
+- Create new tasks for next week's priorities
+```
+
+## Relationship to Other Features
+
+- **Entity Profiles (02)** — Skills reference profiles. Profile packs should bundle skills.
+- **Templates (03)** — Templates should include skill definitions.
+- **Terminal Bridge (04)** — DevOps skills need terminal tool.
+- **Notifications (05)** — Triggered skills should notify user before starting.
+- **Vault (07)** — Skills that access external APIs need vault credentials.

@@ -1,0 +1,346 @@
+---
+title: "Entity Relations"
+description: "Entity relationships, profile inheritance, relation model."
+---
+
+# Entity Relations — Architecture, State & Roadmap
+
+**Status:** Core complete, `update()` added (2026-04-07), note sync in Relay implemented (2026-04-07), workspace-scoped property overlays shipped (2026-04-10, Phase 2 / migration 0065)
+**See also:**
+- `PROPERTY-DEF-SCOPING.md` — how property definitions are scoped across base / profile / workspace-overlay layers
+- `/docs/docs/concepts/entity-connections.md` (public docs) — user-facing relation model
+- `/docs/docs/concepts/profile-schemas.md` (public docs) — user-facing layered schema model
+
+---
+
+## Two Linking Systems
+
+Synap has two orthogonal ways to link entities. Use the right one for the right job.
+
+```
+┌──────────────────────────────┬────────────────────────────────────────────────────────┐
+│     STRUCTURAL LINKS         │           SEMANTIC RELATIONS                           │
+├──────────────────────────────┼────────────────────────────────────────────────────────┤
+│ Table: entity_property_index │ Table: relations                                       │
+│ Defined in profile schema    │ Created on-the-fly (user, AI, automation)              │
+│ One-directional              │ Bi-directional, traversable                            │
+│ e.g. Task.assignee = person  │ e.g. Note "relates_to" Person                         │
+│ Form-based UI, schema-first  │ Free-form, graph-first                                 │
+│ No metadata                  │ JSONB metadata (status, scores, timestamps)            │
+│ Not traversable by graph     │ Powers the knowledge graph + IS graph tools            │
+└──────────────────────────────┴────────────────────────────────────────────────────────┘
+```
+
+**Rule of thumb:**  
+- Predefined schema links (Task.assignee, Deal.contact) → **structural** (entity_id property)  
+- Ad-hoc connections, notes about people, campaign contacts, graph edges → **semantic** (`relations`)
+
+The `getConnections()` procedure returns BOTH unified in one response.
+
+---
+
+## Semantic Relations — Complete Model
+
+### Table: `relations`
+
+```
+id            uuid PK
+userId        text  NOT NULL          — creator
+workspaceId   uuid  NOT NULL          — workspace scope
+sourceEntityId uuid FK → entities.id  — origin
+targetEntityId uuid FK → entities.id  — destination
+type          text  NOT NULL          — relation type slug
+metadata      jsonb default '{}'     — extensible (status, scores, etc.)
+createdAt     timestamp
+```
+
+**Indexes (migration 0063):**
+```sql
+relations(source_entity_id, workspace_id)  — getRelated(), getConnections()
+relations(target_entity_id, workspace_id)  — incoming traversal
+relations(type, workspace_id)              — type-filtered queries
+relations(user_id, workspace_id)           — user-scoped listing
+```
+
+### Table: `relation_defs`
+
+Workspace-scoped type catalog. Every semantic relation type is registered here.
+
+```
+id, workspaceId, userId
+slug          text UNIQUE per workspace  — "relates_to", "assigned_to"
+displayName
+isDirectional boolean                    — whether A→B ≠ B→A
+uiHints       jsonb                      — category, color, icon, inverse labels
+```
+
+### Table: `profile_relations`
+
+Optional schema-level constraints: "contacts can work_at companies."  
+Junction: `(sourceProfileId, targetProfileId, relationDefId)`.  
+Not yet exposed in UI — exists for power-user validation.
+
+---
+
+## Built-in Relation Types (20)
+
+Seeded into every workspace by `ensure-default-relation-defs.ts`:
+
+| Slug | Use case | Directional |
+|------|----------|-------------|
+| `relates_to` | Generic fallback | No |
+| `mentions` | Referenced in content | No |
+| `links_to` | Hyperlink / citation | No |
+| `references` | Cites another entity | No |
+| `created_by` | Author/creator | Yes |
+| `assigned_to` | Person on a task | Yes |
+| `parent_of` | Hierarchical parent | Yes |
+| `belongs_to_project` | Project membership | Yes |
+| `blocks` | Prevents another task | Yes |
+| `depends_on` | Requires another task | Yes |
+| `tagged_with` | Categorization | No |
+| `attended_by` | Participant in event | Yes |
+| `works_at` | Person works at org | Yes |
+| `deal_for` | Sales deal for contact | Yes |
+| `met_at` | Person met at event (Relay) | Yes |
+| `works_on` | Person contributes to project (Relay) | Yes |
+| `has_skill` | Person has expertise (Relay) | Yes |
+| `affiliated_with` | Person affiliated with org (Relay) | Yes |
+| `knows` | Mutual connection (Relay) | No |
+| `discussed_with` | Had discussion (Relay) | No |
+
+Plus internal/system types: `embedded_in`, `visualized_in` (not user-facing).
+
+---
+
+## tRPC API (relations router)
+
+Mounted at `trpc.relations.*`:
+
+| Procedure | Input | Notes |
+|-----------|-------|-------|
+| `listTypes()` | — | All `relation_defs` for workspace, grouped by category |
+| `list()` | type?, limit, offset | Workspace-wide relation list |
+| `get()` | entityId, type?, direction | Raw relation records |
+| `getRelated()` | entityId, type?, direction | Resolved entity objects |
+| `getStats()` | entityId | Outgoing/incoming/total counts by type — uses SQL COUNT |
+| `getConnections()` | entityId, limit | **Unified**: graph + structural + threads |
+| `create()` | sourceEntityId, targetEntityId, type, metadata?, workspaceId? | Governance-gated |
+| `update()` | id? OR (sourceEntityId + targetEntityId + type), metadata?, workspaceId? | ← ADDED 2026-04-07 |
+| `delete()` | id, workspaceId? | Governance-gated, reverse-syncs properties |
+| `backfill()` | workspaceId | One-time job to backfill from entity_id properties |
+
+### The `update()` signature
+
+The Relay app doesn't always have the relation `id` — it identifies by `(sourceEntityId, targetEntityId, type)` triple. `update()` accepts both:
+
+```typescript
+// By ID (canonical)
+await trpc.relations.update.mutate({ id: 'rel-uuid', metadata: { status: 'reached' } })
+
+// By triple (Relay campaign contacts)
+await trpc.relations.update.mutate({
+  sourceEntityId: campaignId,
+  targetEntityId: personId,
+  type: 'target_contact',
+  metadata: { reached: true, reachedAt: new Date().toISOString() }
+})
+```
+
+---
+
+## Hub Protocol (IS ↔ Backend)
+
+REST endpoints in `hub-protocol-rest.ts`:
+
+```
+GET  /relations?userId&workspaceId&entityId&type   — fetch relations for entity
+POST /relations                                     — create relation (proposal-aware)
+     body: { userId, workspaceId, sourceEntityId, targetEntityId, type, metadata, reasoning? }
+     returns: { status: 'created'|'proposed', id, proposalId? }
+DELETE /relations/:relationId                      — delete
+```
+
+### IS Tools
+
+`create_relation` tool in `synap-intelligence-service/apps/intelligence-hub/src/tools/workspace/create-relation-tool.ts`:
+- Called whenever the IS decides two entities should be linked
+- Returns `{ status: 'created'|'proposed' }` — proposal gated via governance
+
+---
+
+## Property ↔ Relation Sync
+
+`property-relation-sync.ts` keeps structural links and semantic relations in sync:
+
+- **On create**: If the relation type maps to an `entity_id` property via `profile_relations.propertyDefId`, auto-sets that property on the source entity.
+- **On delete**: Auto-clears the corresponding property.
+
+This means you can model the same link two ways and they stay consistent. Example: Task has a structural `assignee` property (entity_id). When a `assigned_to` relation is created Task→Person, the `assignee` property is auto-set. When the relation is deleted, the property is cleared.
+
+---
+
+## The "Add Note to Person" Flow
+
+### Option A — Two calls (explicit, most flexible)
+
+```typescript
+// 1. Create the note
+const { id: noteId } = await trpc.entities.create.mutate({
+  profileSlug: 'note',
+  title: 'Meeting notes - John',
+  properties: { content: '...' }
+})
+
+// 2. Link it
+await trpc.relations.create.mutate({
+  sourceEntityId: noteId,
+  targetEntityId: personId,
+  type: 'relates_to'
+})
+```
+
+### Option B — Capture pipeline (one call, atomic)
+
+Best for AI-driven flows or when creating multiple entities + links at once:
+
+```typescript
+await trpc.capture.execute.mutate({
+  entities: [
+    { tempId: 'note', profileSlug: 'note', title: '...', properties: { content: '...' } },
+    { tempId: 'person', existingEntityId: personId }   // reference existing, don't create
+  ],
+  relations: [
+    { sourceTempId: 'note', targetTempId: 'person', relationType: 'relates_to' }
+  ]
+})
+```
+
+### Option C — With relation metadata (Relay campaigns)
+
+```typescript
+await trpc.relations.create.mutate({
+  sourceEntityId: campaignId,
+  targetEntityId: personId,
+  type: 'target_contact',
+  metadata: { status: 'not_reached', reached: false, addedAt: new Date().toISOString() }
+})
+
+// Later, update status
+await trpc.relations.update.mutate({
+  sourceEntityId: campaignId,
+  targetEntityId: personId,
+  type: 'target_contact',
+  metadata: { reached: true, reachedAt: new Date().toISOString() }
+})
+```
+
+---
+
+## Relay App Usage (Real-World Examples)
+
+### Campaign contacts (`useCampaignDetail.ts`)
+
+Campaign entity links to Person entities via `target_contact` relation. The relation metadata stores the contact's pipeline status:
+
+```
+Campaign ──target_contact──▶ Person
+                    metadata: {
+                      status: 'not_reached' | 'reached' | 'interested' | 'converted',
+                      reached: boolean,
+                      reachedAt?: ISO string
+                    }
+```
+
+### Workspace automations (`relay-automations.ts`)
+
+Automations 1 and 2 update entity properties directly via `entity_update` output nodes. No relations are created by automations currently (though the `create_relation` IS tool is available for custom flows).
+
+---
+
+## Relay App — What's Still Missing
+
+### 1. ~~Note-to-person linking UI~~ ✓ DONE (2026-04-07)
+
+`NotesTab` in `relay-app/app/person/[id].tsx` now syncs to the pod:
+- **Save**: `entities.create({ profileSlug: 'note', ... })` + `relations.create({ sourceEntityId: noteId, targetEntityId: personId, type: 'relates_to' })`
+- **Fetch**: `relations.get({ entityId: personId, type: 'relates_to', direction: 'target' })` → resolve source entities → filter `profileSlug === 'note'`
+- **Delete**: `relations.delete({ id: relationId })` + `entities.delete({ id: noteId })`
+- **Migration**: One-time AsyncStorage → pod sync on first load (keyed by `migrationAttempted` ref)
+
+### 2. Person timeline (interaction history)
+
+`usePersonDetail.ts:97` is explicitly disabled. The entity has interaction history via entity-linked channels. Fix:
+
+- Add `chat.getMessagesForEntity(entityId)` endpoint that queries messages from channels where `contextObjectId = entityId`
+- Re-enable the timeline in `usePersonDetail.ts`
+
+### 3. Task-to-person / note-to-event / note-to-campaign linking
+
+These flows don't exist yet in the Relay UI. Any screen creating an entity should offer a "Link to..." button that opens an entity picker, creates the relation, and invalidates `getConnections` on both entities.
+
+---
+
+## Performance (Current State)
+
+| Query | Pre-0063 | Post-0063 |
+|-------|----------|-----------|
+| `getRelated(entityId)` | Full scan | Index on source_entity_id + workspace_id |
+| `getConnections(entityId)` | Full scan | Same indexes |
+| `traverseGraph(entityId)` | Full scan per BFS hop | Same indexes |
+| `getStats(entityId)` | Loads all rows, counts in JS | SQL COUNT with GROUP BY |
+| `list(workspaceId)` | Workspace filter only | Index on user_id + workspace_id |
+
+---
+
+## Future Roadmap
+
+### Short-term (blocks current features)
+
+1. ~~**Note sync in Relay**~~ — ✓ DONE (2026-04-07). Notes saved as `note` entities linked via `relates_to`. AsyncStorage migration included.
+2. **Person timeline** — add `chat.getMessagesForEntity(entityId)` endpoint
+
+### Medium-term (improves power)
+
+3. **Custom relation type creation in UI** — `relation_defs.create` tRPC procedure exists, no UX for it yet
+4. **Profile-level relation constraints** — `profile_relations` table is populated but invisible to users. UI in profile editor: "This profile can be linked to: [Company] via [works_at]"
+5. **Relation batch create** — `capture.execute` already supports it; expose a dedicated `relations.createBatch()` for performance-critical flows
+6. **Relay `as any` cleanup** — `useCampaignDetail.ts` and other hooks call relations procedures via `(client as any)`. Should use typed `@synap/synap-client` types.
+
+### Long-term (graph power)
+
+7. **`traverseGraph()` depth-3 BFS** — already implemented, not exposed in any UI yet. Powers "2-hop connection" features ("you know X who knows Y")
+8. **Graph view** — relations table has all the edges. Missing: a graph cell type that visualizes them with React Flow or d3-force
+9. **AI relation inference** — IS creates `mentioned_in` / `discussed_with` / `works_on` relations automatically during conversation, all via the `create_relation` tool + proposals
+
+---
+
+## Key Files
+
+```
+Backend
+├── packages/database/src/schema/relations.ts              Table schema
+├── packages/database/src/schema/relation-defs.ts          Type catalog schema
+├── packages/database/src/schema/profile-relations.ts      Profile-level constraints
+├── packages/database/src/repositories/relation-repository.ts  CRUD + traverseGraph()
+├── packages/database/src/utils/default-relation-defs.ts   20 built-in types
+├── packages/database/src/utils/ensure-default-relation-defs.ts  Seeder
+├── packages/database/migrations-drizzle/0063_relations_indexes.sql  ← NEW
+├── packages/api/src/routers/relations.ts                  tRPC router (create/update/delete/get)
+├── packages/api/src/utils/property-relation-sync.ts       Structural ↔ semantic sync
+├── packages/api/src/routers/hub-protocol/relations.ts     Hub Protocol wrapper
+├── packages/api/src/routers/hub-protocol-rest.ts          REST: GET/POST/DELETE /relations
+
+Intelligence Service
+└── apps/intelligence-hub/src/tools/workspace/create-relation-tool.ts
+
+Relay mobile
+├── relay-app/src/hooks/useCampaignDetail.ts    Real usage: campaign→contact relations
+├── relay-app/src/hooks/usePersonDetail.ts      Gap: notes + timeline disabled
+
+Browser / synap-app
+├── synap-app/packages/features/entity-links/src/hooks/useCreateRelation.ts
+├── synap-app/packages/features/entity-links/src/hooks/useEntityConnections.ts
+├── synap-app/packages/features/entity-links/src/components/EntityLinkPicker.tsx
+└── synap-app/packages/synap-hooks/src/useRelationships.ts
+```

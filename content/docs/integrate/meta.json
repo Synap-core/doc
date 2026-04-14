@@ -1,0 +1,7 @@
+{
+  "title": "Build & integrate",
+  "description": "Hub Protocol, cold-start capture, feeds, agents, CLI, skills, and reference",
+  "root": true,
+  "icon": "code",
+  "pages": ["index", "agents", "development", "integrations", "reference"]
+}

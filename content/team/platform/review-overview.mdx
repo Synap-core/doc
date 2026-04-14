@@ -1,0 +1,127 @@
+---
+title: "Platform Review Overview"
+description: "Platform completeness review across all feature areas."
+---
+
+# Platform Review — Feature Completeness & Integration Gaps
+
+> Generated 2026-03-24. Updated 2026-03-25 (native widget runtime, data structure viewer, profile packs Phases A-C, notification system plan).
+
+## Purpose
+
+These documents map the current state of Synap's core platform capabilities, identify what's built vs what's missing, and define the work needed to connect everything into a cohesive product. Each document covers one capability area with:
+
+- **Current state** — what exists, code references, quality assessment
+- **Limitations** — what's missing, what's broken, what's stubbed
+- **Integration gaps** — how this connects to other features
+- **Action items** — concrete next steps, research questions, best practices to verify
+
+## Document Index
+
+| # | Document | Status | Completeness |
+|---|----------|--------|--------------|
+| 01 | [Widget System (Native + Iframe)](01-widgets.md) | Native runtime BUILT | ~90% |
+| 02 | [Entity Profile Extensibility](02-entity-profiles.md) | Profile packs Phases A-C DONE | ~85% |
+| 03 | [Template System (Composable)](03-templates.md) | CP packs seeded, browser cells fetch CP | ~85% |
+| 04 | [AI Remote Execution (Terminal Bridge)](04-terminal-bridge.md) | Research only | ~30% |
+| 05 | [Notification & Proposal UX](05-notifications.md) | Real-time bell + inline actions done. DB/registry/adapters pending. | ~80% |
+| 06 | [AI Skills & Behavioral Templates](06-skills.md) | 13 skills, no event triggers yet | ~70% |
+| 07 | [Vault Integration for AI](07-vault-ai.md) | Built, missing request flow | ~85% |
+
+## Implementation Plans
+
+| Plan | Target | Status |
+|------|--------|--------|
+| [PLAN-01: Native Dynamic Widgets](PLAN-01-enhanced-widgets.md) | Native widget runtime | **DONE** (2026-03-25) |
+| [PLAN-02: Composable Profile Packs](PLAN-02-profile-packs.md) | Additive profile packs for existing workspaces | **Phases A-C DONE** (2026-03-25), Phase D pending |
+| [PLAN-03: Event-Triggered Skills](PLAN-03-event-triggered-skills.md) | AI skills activated by entity events | **DONE** (2026-03-25) |
+| [PLAN-04: Unified Relations & Structure Viewer](PLAN-04-unified-relations-and-structure-viewer.md) | Consolidate 2 link systems + visual ERD app | **DONE** (2026-03-25) — both parts complete |
+| [PLAN-05: Unified Notification System](PLAN-05-notification-system.md) | Cross-platform notifications, AI request cards, real-time bell | **Phases 2+4 DONE** (2026-03-25), Phases 1,3,5,6 pending |
+
+## The 5 Missing Bridges
+
+Cross-cutting integration gaps that block the full product vision:
+
+| # | Bridge | Status | Impact |
+|---|--------|--------|--------|
+| 1 | **Native widget runtime** | **DONE** | Widgets are real React components |
+| 2 | **Event-triggered skills** | **DONE** — skill_triggers table, IS executor, Hub Protocol, SkillsManager UI | The "magic moment" — AI reacts to data changes |
+| 3 | **Profile packs** | **Phases A-C DONE** — Phase D (onboarding) pending | Composable workspace customization |
+| 4 | **Remote execution tool** | Research only | AI runs commands on pod (DevOps use case) |
+| 5 | **Secret request flow** | **DONE** — `request_secret` tool + proposal flow + VaultRequestCard | AI requests credentials via vault dialog |
+
+*Skill editor in Browser was listed as bridge #5 but is more of a convenience feature than a blocking gap. Replaced with profile packs which has higher product impact.*
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    WORKSPACE TEMPLATES                        │
+│  Composable: Profile Packs + View Configs + Bento + Skills   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐               │
+│  │ Entities  │  │  Views    │  │ Channels  │  ← Triptych   │
+│  │ (profiles)│  │ (lenses)  │  │ (comms)   │               │
+│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘               │
+│        │               │              │                      │
+│  ┌─────┴───────────────┴──────────────┴──────┐              │
+│  │            CELL SYSTEM                     │              │
+│  │  Native cells (React + shared externals)   │  ← DONE     │
+│  │  Iframe cells (sandboxed HTML, throwaway)  │              │
+│  │  72+ built-in + dynamic native + iframe    │              │
+│  │  Bento grids → Panels → Pages              │              │
+│  └─────────────────┬─────────────────────────┘              │
+│                    │                                         │
+│  ┌─────────────────┴─────────────────────────┐              │
+│  │          AI AGENT LAYER                    │              │
+│  │  Skills (13 system + native-widget)        │              │
+│  │  Tools (generate_widget now native-first)  │              │
+│  │  Proposals (governance) + Notifications    │              │
+│  └─────────────────┬─────────────────────────┘              │
+│                    │                                         │
+│  ┌─────────────────┴─────────────────────────┐              │
+│  │        INFRASTRUCTURE                      │              │
+│  │  Vault │ Terminal │ Connectors │ MCP       │              │
+│  └────────────────────────────────────────────┘              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Priority Order (Updated 2026-03-25)
+
+Based on impact, dependency chains, and what's already built:
+
+1. ~~**Widget System** (01)~~ — **DONE**. Native runtime implemented.
+2. ~~**Profile Packs** (02 + PLAN-02)~~ — **Phases A-C DONE**. Phase D (onboarding integration) is separate.
+3. ~~**Event-Triggered Skills** (06 + PLAN-03)~~ — **DONE**. `skill_triggers` table, IS executor, Hub Protocol endpoints, SkillsManager + SkillEditor browser UI, `POST /tasks/skill-trigger` IS route.
+4. ~~**Vault AI Phase 1** (07)~~ — **DONE**. `request_secret` IS tool, `POST /hub/vault/request` endpoint, `VaultRequestCard` browser component wired into proposal feed.
+5. ~~**Unified Relation Model** (PLAN-04)~~ — **DONE**. `syncPropertyToRelations` + `syncRelationToProperty`, `seed-property-relation-mappings`, `skill_triggers` schema. Auto-sync fully wired in entities + relations routers.
+6. **Onboarding Flow** — Users need to get into the product smoothly (separate plan: `vast-floating-dusk.md`).
+7. **Terminal Bridge** (04) — Unlocks DevOps workspace + AI debugging capabilities.
+8. **Notifications full system** (05 + PLAN-05) — Remaining: DB notifications table, registry, per-channel adapters, Telegram inline actions.
+
+## What Was Built (2026-03-25)
+
+### Native Widget Runtime — 14 files across 3 repos
+
+**Frontend (synap-app + browser):**
+- `shared-externals.ts` — Platform modules on `window.__SYNAP_MODULES__`
+- `NativeWidgetLoader.ts` — Blob URL loader, extracts CellRegistration
+- `WidgetRegistryProvider.tsx` — Updated: native + iframe dual registration
+- `index.ts` — New exports: installSharedModules, SHARED_MODULES, loadNativeWidget
+- `browserCellSetup.ts` — Pass 0: install shared externals at startup
+
+**Backend (synap-backend):**
+- `widget-compiler.ts` — esbuild JSX→IIFE with synap-externals plugin
+- `widget-definitions.ts` (schema) — Added `source`, `bundleSource`, `"native"` renderer type
+- `widget-definitions.ts` (tRPC router) — Native validation + compilation
+- `hub-protocol/widget-definitions.ts` — Same for IS-facing router
+- `0056_widget_native_columns.sql` — Migration for new columns
+
+**Intelligence Service:**
+- `generate-widget-tool.ts` — Dual-mode: native (default) + iframe
+- `hub-protocol.ts` (client) — Added `source` field, `"native"` type
+- `native-widget.md` — Skill file for AI widget authoring
+- `skill-loader.ts` — Triggers native-widget skill on `generate_widget` tool
+
+All three packages typecheck clean.

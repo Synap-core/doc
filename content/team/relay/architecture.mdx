@@ -1,0 +1,490 @@
+---
+title: "Relay Architecture"
+description: "3-surface feed model, data flow, store structure."
+---
+
+# Relay — Technical Architecture
+
+How Relay maps to existing Synap infrastructure. What to reuse, what to build, what to extend.
+
+---
+
+## 1. Package Structure
+
+### Synap Module (synap-app)
+
+```
+synap-app/packages/features/relay/
+├── src/
+│   ├── index.ts                    # Barrel export + cell registrations
+│   ├── cells/
+│   │   ├── relay-feed.tsx          # Feed cell (main view)
+│   │   ├── relay-people.tsx        # People grid/list/graph cell
+│   │   ├── relay-person-detail.tsx # Person detail cell
+│   │   ├── relay-events.tsx        # Events cell
+│   │   ├── relay-explore.tsx       # Query/search cell
+│   │   └── relay-capture.tsx       # Quick capture overlay
+│   ├── components/
+│   │   ├── feed/
+│   │   │   ├── FeedCard.tsx
+│   │   │   ├── ConversationCard.tsx
+│   │   │   ├── EncounterCard.tsx
+│   │   │   ├── NudgeCard.tsx
+│   │   │   ├── ClusterCard.tsx
+│   │   │   └── EventContextCard.tsx
+│   │   ├── person/
+│   │   │   ├── PersonCard.tsx       # Card for grid/list
+│   │   │   ├── IdentityPanel.tsx
+│   │   │   ├── TimelinePanel.tsx
+│   │   │   ├── IntelligencePanel.tsx
+│   │   │   └── MergeDialog.tsx
+│   │   ├── events/
+│   │   │   ├── EventCard.tsx
+│   │   │   ├── PrepBriefing.tsx
+│   │   │   └── AttendeeList.tsx
+│   │   ├── capture/
+│   │   │   ├── CaptureSheet.tsx
+│   │   │   ├── VoiceInput.tsx
+│   │   │   ├── AiPreview.tsx
+│   │   │   └── CardScan.tsx
+│   │   ├── graph/
+│   │   │   ├── NetworkGraph.tsx     # React Flow / d3-force
+│   │   │   ├── GraphNode.tsx
+│   │   │   └── GraphControls.tsx
+│   │   └── explore/
+│   │       ├── QueryInput.tsx
+│   │       ├── ResultCard.tsx
+│   │       └── SuggestedQueries.tsx
+│   ├── hooks/
+│   │   ├── useRelayFeed.ts
+│   │   ├── useRelayPeople.ts
+│   │   ├── usePersonDetail.ts
+│   │   ├── useRelayEvents.ts
+│   │   ├── useRelaySearch.ts
+│   │   ├── useQuickCapture.ts
+│   │   └── useEntityResolution.ts
+│   └── utils/
+│       ├── feed-ranking.ts
+│       ├── strength-score.ts
+│       └── graph-layout.ts
+├── package.json
+└── tsconfig.json
+```
+
+### Standalone Mobile App
+
+```
+relay-app/                          # New repo or top-level dir
+├── app/                            # Expo Router (file-based routing)
+│   ├── (tabs)/
+│   │   ├── feed.tsx
+│   │   ├── people.tsx
+│   │   ├── events.tsx
+│   │   └── explore.tsx
+│   ├── person/[id].tsx
+│   ├── event/[id].tsx
+│   ├── onboarding/
+│   │   ├── welcome.tsx
+│   │   ├── telegram.tsx
+│   │   ├── contacts.tsx
+│   │   ├── first-capture.tsx
+│   │   └── done.tsx
+│   └── _layout.tsx
+├── src/
+│   ├── components/                 # Mobile-specific shells
+│   │   ├── CaptureButton.tsx       # FAB component
+│   │   ├── CaptureSheet.tsx        # Bottom sheet wrapper
+│   │   └── TabBar.tsx
+│   ├── providers/
+│   │   ├── SynapProvider.tsx       # Pod connection wrapper
+│   │   └── RelayProvider.tsx       # Relay-specific context
+│   └── lib/
+│       ├── pod-connect.ts          # Uses @synap-core/pod-connect
+│       └── voice.ts                # expo-av for voice input
+├── package.json                    # Expo + Tamagui + @synap-core/*
+├── app.json
+├── tamagui.config.ts
+└── tsconfig.json
+```
+
+### Shared Packages (used by both surfaces)
+
+```
+@synap-core/client     → tRPC + TanStack Query + Socket.IO
+@synap-core/hooks      → useEntity, useCreateEntity, useRelations, etc.
+@synap-core/stores     → Zustand workspace/UI state
+@synap-core/react      → SynapProvider (simpler alternative)
+@synap-core/pod-connect → Pod handshake for mobile/landing
+@synap/hub-client      → AI streaming (Intelligence Service)
+@synap-core/ui-system  → Tamagui tokens, shared components
+```
+
+---
+
+## 2. Data Layer
+
+### Profile Extensions
+
+Extend the `person` system profile. No schema migration — properties are JSONB.
+
+```typescript
+// Additional properties for the person profile
+const relayPersonProperties = {
+  // Identity sources
+  telegramHandle: { type: 'STRING' },
+  telegramChatId: { type: 'STRING' },
+  linkedinUrl: { type: 'STRING' },
+  linkedinHeadline: { type: 'STRING' },
+  twitterHandle: { type: 'STRING' },
+  farcasterFid: { type: 'STRING' },
+  lensHandle: { type: 'STRING' },
+  walletAddresses: { type: 'ARRAY' },  // ETH/SOL addresses
+  sources: { type: 'ARRAY' },           // ["telegram", "linkedin", "manual"]
+
+  // Relay-computed
+  lastInteractionAt: { type: 'DATE' },
+  interactionCount: { type: 'NUMBER' },
+  strengthScore: { type: 'NUMBER' },     // 0-100
+  aiSummary: { type: 'STRING' },
+  focusAreas: { type: 'ARRAY' },
+};
+```
+
+### New Profile Types
+
+Add to `ensure-system-profiles.ts`:
+
+```typescript
+// Interaction — a meaningful exchange between people
+{
+  slug: 'interaction',
+  displayName: 'Interaction',
+  icon: 'message-circle',
+  color: 'sky',
+  properties: [
+    { slug: 'type', displayName: 'Type', valueType: 'STRING' },         // message|call|meeting|note
+    { slug: 'sourceChannel', displayName: 'Source', valueType: 'STRING' }, // telegram|linkedin|phone|manual
+    { slug: 'participants', displayName: 'Participants', valueType: 'ARRAY' },
+    { slug: 'summary', displayName: 'Summary', valueType: 'STRING' },
+    { slug: 'rawContent', displayName: 'Raw Content', valueType: 'STRING' },
+    { slug: 'topics', displayName: 'Topics', valueType: 'ARRAY' },
+    { slug: 'sentiment', displayName: 'Sentiment', valueType: 'STRING' },
+    { slug: 'duration', displayName: 'Duration', valueType: 'NUMBER' },   // minutes
+  ],
+  hideFromCreate: true, // system-created only
+}
+```
+
+### Relation Definitions
+
+Register via workspace setup (or ensure-system-relations utility):
+
+```typescript
+const relayRelations = [
+  { slug: 'met_at', displayName: 'Met at', isDirectional: true },
+  { slug: 'works_on', displayName: 'Works on', isDirectional: true },
+  { slug: 'has_skill', displayName: 'Has skill', isDirectional: true },
+  { slug: 'affiliated_with', displayName: 'Affiliated with', isDirectional: true },
+  { slug: 'discussed_with', displayName: 'Discussed with', isDirectional: false },
+  { slug: 'needs', displayName: 'Needs', isDirectional: true },
+  { slug: 'knows', displayName: 'Knows', isDirectional: false },
+  { slug: 'attended_by', displayName: 'Attended by', isDirectional: true },  // event → person
+  { slug: 'about_topic', displayName: 'About', isDirectional: true },        // interaction → topic
+];
+```
+
+### Graph Queries
+
+No graph DB. Use existing `relations` table with indexed queries.
+
+For 2-hop traversals (sufficient for personal network):
+```sql
+-- "Who knows Solidity and is in Paris?"
+-- Hop 1: person → has_skill → skill(Solidity)
+-- Filter: person.properties->>'location' LIKE '%Paris%'
+
+-- "Mutual connections between me and Person X"
+-- Find people where: relation(me, knows, Y) AND relation(X, knows, Y)
+
+-- "Connection path to Person Z"
+-- BFS through relations table, max 3 hops
+```
+
+Backend: new tRPC procedures in a `relay` router (or extend existing entity/relation queries).
+
+---
+
+## 3. Backend Extensions
+
+### New tRPC Router: `relay`
+
+```typescript
+// synap-backend/packages/api/src/routers/relay.ts
+export const relayRouter = router({
+  // Feed
+  getFeed: workspaceProcedure
+    .input(z.object({ cursor: z.string().optional(), limit: z.number().default(20) }))
+    .query(/* aggregate recent interactions, AI signals, encounters */),
+
+  // People with Relay enrichment
+  getPeople: workspaceProcedure
+    .input(z.object({ filters: relayFilterSchema, sort: relaySortSchema }))
+    .query(/* entities with profileSlug=person, Relay properties */),
+
+  // Graph data
+  getGraph: workspaceProcedure
+    .input(z.object({ filters: relayFilterSchema, depth: z.number().default(2) }))
+    .query(/* nodes + edges from relations table */),
+
+  // Entity resolution
+  getMergeCandidates: workspaceProcedure
+    .query(/* find potential duplicate persons */),
+
+  mergePersons: workspaceProcedure
+    .input(z.object({ sourceId: z.string(), targetId: z.string() }))
+    .mutation(/* merge two person entities, preserve event chain */),
+
+  // AI operations
+  generatePrepBriefing: workspaceProcedure
+    .input(z.object({ eventId: z.string() }))
+    .mutation(/* call IS to generate event prep */),
+
+  queryNetwork: workspaceProcedure
+    .input(z.object({ query: z.string() }))
+    .mutation(/* NL query → graph traversal via IS */),
+});
+```
+
+### New Workers (pg-boss)
+
+```typescript
+// Telegram bulk import
+'relay.telegram-import'     // Process exported Telegram chat history file
+'relay.telegram-group-scan' // Extract members from Telegram groups
+
+// AI processing
+'relay.extract-entities'    // Process raw text → create/link entities
+'relay.compute-strength'    // Periodic strength score recalculation
+'relay.generate-briefing'   // Generate person/event briefings
+'relay.detect-clusters'     // Periodic topic/community cluster detection
+
+// Feed generation
+'relay.generate-feed-items' // Create AI-driven feed items (nudges, alerts)
+
+// Entity resolution
+'relay.find-duplicates'     // Periodic fuzzy match scan
+```
+
+### Connector Extensions
+
+**Telegram import worker:**
+1. User uploads Telegram export (JSON)
+2. Worker parses message history
+3. Groups messages into "conversation sessions" (messages within 30min window)
+4. For each session: call IS `/api/structure` to extract entities
+5. Create/update Person entities, Interaction entities, relations
+6. Deduplicate via phone number / Telegram handle
+
+**Google Contacts mapper:**
+Extend existing `pull-sync` mapper for google-contacts:
+```typescript
+// Current: creates basic entity
+// Extended: also creates relations, extracts company → creates Company entity + affiliated_with
+```
+
+---
+
+## 4. Intelligence Service Extensions
+
+### New Skills
+
+```
+synap-intelligence-service/apps/intelligence-hub/src/skills/
+├── relay-extract.md        # Extract people/orgs/skills/topics from text
+├── relay-briefing.md       # Generate person or event briefing
+├── relay-query.md          # Parse NL query → graph traversal instructions
+├── relay-summarize.md      # Summarize conversation sessions
+├── relay-nudge.md          # Generate reconnection nudges
+└── relay-cluster.md        # Detect topic/community clusters
+```
+
+### New Tools
+
+```typescript
+// Tools the AI can use for Relay operations
+'relay_search_people'       // Search person entities with filters
+'relay_get_relations'       // Get relations for a person (graph neighbors)
+'relay_get_interactions'    // Get interaction history for a person
+'relay_compute_path'        // Find connection path between two people
+'relay_get_event_attendees' // Get attendees for an event
+```
+
+### Model Routing
+
+| Task | Model | Reason |
+|------|-------|--------|
+| Entity extraction from text | DeepSeek V3 | Bulk, low cost |
+| Conversation summarization | Kimi K2.5 | Medium complexity |
+| Person briefing generation | Claude Sonnet | Needs reasoning + good writing |
+| NL graph query parsing | Claude Sonnet | Needs intent understanding |
+| Pre-event intelligence | Claude Opus | Multi-hop reasoning across graph |
+| Reconnection nudge generation | Claude Sonnet | Needs empathy + context |
+
+---
+
+## 5. Mobile App Dependencies
+
+```json
+{
+  "dependencies": {
+    // Expo
+    "expo": "~54.0.0",
+    "expo-router": "~4.0.0",
+    "expo-av": "~15.0.0",            // Voice recording
+    "expo-camera": "~16.0.0",        // Card scan
+    "expo-contacts": "~14.0.0",      // Phone contacts access
+    "expo-haptics": "~14.0.0",
+    "expo-notifications": "~0.29.0",
+
+    // UI
+    "@tamagui/core": "^1.140.0",
+    "@tamagui/config": "^1.140.0",
+    "react-native-reanimated": "~3.17.0",
+    "@gorhom/bottom-sheet": "^5.0.0", // Capture sheet
+
+    // Synap
+    "@synap-core/client": "workspace:*",
+    "@synap-core/hooks": "workspace:*",
+    "@synap-core/stores": "workspace:*",
+    "@synap-core/pod-connect": "workspace:*",
+    "@synap/hub-client": "workspace:*",
+
+    // Data
+    "@tanstack/react-query": "^5.0.0",
+    "zustand": "^5.0.0",
+
+    // Graph (Phase 3)
+    "d3-force": "^3.0.0",
+    "react-native-svg": "^15.0.0"
+  }
+}
+```
+
+---
+
+## 6. Cell Registrations
+
+```typescript
+// In synap-app/packages/features/relay/src/index.ts
+import { registerCell } from '@synap/cell-runtime';
+
+registerCell({
+  kind: 'relay-feed',
+  displayName: 'Relay Feed',
+  category: 'communication',
+  component: RelayFeedCell,
+  defaultSize: { w: 12, h: 8 },
+});
+
+registerCell({
+  kind: 'relay-people',
+  displayName: 'Relay People',
+  category: 'data',
+  component: RelayPeopleCell,
+  defaultSize: { w: 12, h: 8 },
+});
+
+registerCell({
+  kind: 'relay-person-detail',
+  displayName: 'Person Detail',
+  category: 'entity',
+  component: RelayPersonDetailCell,
+  defaultSize: { w: 6, h: 8 },
+});
+
+registerCell({
+  kind: 'relay-events',
+  displayName: 'Relay Events',
+  category: 'data',
+  component: RelayEventsCell,
+  defaultSize: { w: 12, h: 6 },
+});
+
+registerCell({
+  kind: 'relay-explore',
+  displayName: 'Relay Explore',
+  category: 'ai',
+  component: RelayExploreCell,
+  defaultSize: { w: 12, h: 6 },
+});
+
+registerCell({
+  kind: 'relay-capture',
+  displayName: 'Quick Capture',
+  category: 'core',
+  component: RelayCaptureCell,
+  defaultSize: { w: 6, h: 4 },
+});
+
+registerCell({
+  kind: 'relay-graph',
+  displayName: 'Network Graph',
+  category: 'data',
+  component: RelayGraphCell,
+  defaultSize: { w: 12, h: 8 },
+});
+```
+
+---
+
+## 7. Auth & Pod Connection (Mobile)
+
+```typescript
+// relay-app/src/providers/SynapProvider.tsx
+// Reuses @synap-core/pod-connect for the handshake flow
+
+import { connectToSharedPod, handshakeWithPod } from '@synap-core/pod-connect';
+import { TRPCProvider } from '@synap-core/client';
+
+// Flow:
+// 1. User signs in (Better Auth session)
+// 2. App calls getSharedPodInfo() → gets pod URL
+// 3. App calls connectToSharedPod() → gets session token
+// 4. TRPCProvider wraps app with pod URL + token
+// 5. All @synap-core/hooks work identically to desktop
+```
+
+---
+
+## 8. What's NOT Needed
+
+- **No new database tables** for core entities (entities + properties JSONB)
+- **No graph database** (relations table with indexes is sufficient at personal scale)
+- **No new auth system** (Better Auth via pod-connect)
+- **No new real-time system** (Socket.IO via @synap-core/client)
+- **No new search infra** (Typesense + pgvector already available)
+- **No new AI pipeline** (Intelligence Service + capture pipeline)
+- **No new job system** (pg-boss, add new worker types)
+- **No new channel type** for proactive AI (two pod-wide channels per user: `isPersonal` for chat, `isProactiveFeed` for AI posts)
+
+## 9. Feed System (IMPLEMENTED — 2026-04-07)
+
+See `docs-internal/FEED-SYSTEM.md` for full spec.
+
+**3-surface model:**
+- Personal chat (`isPersonal: true`) — user↔AI only. Context stays clean.
+- Proactive feed (`isProactiveFeed: true`) — AI posts: briefings, event prep, automation outputs.
+- Notifications (DB table) — ephemeral nudges. "Reconnect with John."
+
+**Relay automation templates (5 total, installed via useRelaySetup):**
+| # | Name | Output surface |
+|---|------|---------------|
+| 1 | New Contact Enrichment | entity_update |
+| 2 | Strength Score Computation | entity_update |
+| 3 | Daily Reconnection Nudges | notification |
+| 4 | Event Prep Briefing | proactive feed |
+| 5 | Interaction Summary | entity_update |
+
+**useFeed.ts aggregates 5 sources:** people entities, proactive feed channel, notifCenter.list, campaigns, entity-linked channel messages.
+
+**tRPC router note:** `trpc.notifCenter.*` = automation notifications table. `trpc.notifications.*` = legacy inbox (N8N external items). Feed uses `notifCenter`.

@@ -1,0 +1,263 @@
+---
+title: "Hold Menu Implementation"
+description: "Hold/long-press menu implementation for mobile and desktop."
+---
+
+# Hold Menu — Implementation Plan
+
+The press-hold-drag-release floating menu system. One continuous touch
+from press to action, matching iOS native UIMenu behavior.
+
+**Date:** 2026-04-12.
+**Status:** Research complete, babel plugin added, ready to implement.
+**Prerequisite done:** `react-native-reanimated/plugin` added to `babel.config.js`.
+
+---
+
+## The UX flow
+
+1. User **long-presses** a card (350ms)
+2. While STILL PRESSING (finger never lifts):
+   - Scrim dims everything
+   - The pressed card is highlighted ABOVE the scrim (clone in Portal)
+   - A floating menu appears near the card
+   - Background scrolling is BLOCKED
+3. User **drags finger** into menu items — each highlights on hover
+4. User **releases on item** → action fires
+5. User **releases outside** → dismiss
+
+ONE touch. Never lifts finger between open and select.
+
+---
+
+## Architecture
+
+### Libraries (all already installed)
+
+- `react-native-gesture-handler` 2.28 — `Gesture.Pan().activateAfterLongPress(350)`
+- `react-native-reanimated` 4.1 — shared values, worklets, `measure()`
+- `@gorhom/portal` — render clone + menu above everything
+
+### The gesture
+
+```ts
+const gesture = Gesture.Pan()
+  .activateAfterLongPress(350)
+  .onStart((e) => {
+    'worklet';
+    isMenuActive.value = true;
+    runOnJS(setScrollEnabled)(false);
+    runOnJS(measureAndShowMenu)(e.absoluteX, e.absoluteY);
+    runOnJS(triggerHaptic)();
+  })
+  .onUpdate((e) => {
+    'worklet';
+    fingerX.value = e.absoluteX;
+    fingerY.value = e.absoluteY;
+  })
+  .onFinalize((e) => {
+    'worklet';
+    isMenuActive.value = false;
+    runOnJS(setScrollEnabled)(true);
+    runOnJS(handleRelease)(e.absoluteX, e.absoluteY);
+  });
+```
+
+One gesture object. `activateAfterLongPress(350)` means the Pan only
+activates after a 350ms hold — before that, regular FlatList scrolling
+works normally. Once the Pan activates, it owns the touch exclusively.
+
+### Scroll blocking
+
+When the Pan gesture activates (`onStart`):
+```ts
+runOnJS(setScrollEnabled)(false);  // FlatList stops scrolling
+```
+
+When it finalizes (`onFinalize`):
+```ts
+runOnJS(setScrollEnabled)(true);   // FlatList resumes
+```
+
+This is the same technique `react-native-draggable-flatlist` uses.
+Simple, reliable, cross-platform. The `blocksExternalGesture` API
+exists but has documented inconsistencies with dynamic list items.
+
+### Card above scrim (measure-then-clone-in-Portal)
+
+The card is inside a FlatList which clips `overflow: hidden`. We can't
+elevate it with zIndex. Instead:
+
+1. **Measure** the card's screen position using Reanimated's `measure()`
+   on a `useAnimatedRef` attached to the card wrapper.
+2. **Clone** the card component in the Portal layer, absolutely
+   positioned at the measured `{ pageX, pageY, width, height }`.
+3. The **original card** is visually hidden behind the scrim.
+4. The **clone** renders above the scrim, looking identical.
+
+Why clone, not screenshot: `react-native-view-shot` is async (10-50ms),
+too slow for a long-press that must feel instant. Cloning the React
+component is synchronous — just render the same props at a new position.
+
+### Menu item hit-testing
+
+Each menu item registers its screen-space rect on layout via
+`onLayout` + `measureInWindow`. During `onUpdate`, the gesture
+writes `fingerX/fingerY` to shared values. A `useAnimatedReaction`
+watches these values and determines which item (if any) the finger
+is over, driving an animated `backgroundColor` + `scale` style.
+
+On `onFinalize`, `handleRelease` receives the final `absoluteX/Y`,
+hit-tests against the stored rects, and fires the corresponding
+action callback if matched.
+
+---
+
+## Component tree
+
+```
+<PortalProvider>                          // _layout.tsx root
+  <GestureHandlerRootView>               // _layout.tsx root
+    <FlatList
+      scrollEnabled={scrollEnabled}       // controlled by gesture
+      renderItem={({ item }) => (
+        <HoldMenuTrigger                  // wraps each card
+          actions={PERSON_ACTIONS}
+          onAction={handleAction}
+          renderCard={(props) => <PersonCard {...props} />}
+        />
+      )}
+    />
+    <PortalHost name="hold-menu" />       // _layout.tsx, above everything
+  </GestureHandlerRootView>
+</PortalProvider>
+```
+
+Inside `HoldMenuTrigger`:
+```
+<GestureDetector gesture={panGesture}>
+  <Animated.View ref={cardRef}>
+    {renderCard({ focused: isActive })}   // card can style itself when focused
+  </Animated.View>
+</GestureDetector>
+
+{/* Portal renders above everything when active */}
+<Portal hostName="hold-menu">
+  {isActive && (
+    <>
+      <Animated.View style={scrimStyle} />           // full-screen dim
+      <Animated.View style={clonedCardStyle}>        // measured position
+        {renderCard({ focused: true })}              // clone of the card
+      </Animated.View>
+      <HoldMenuOverlay                               // the floating menu
+        actions={actions}
+        fingerX={fingerX}
+        fingerY={fingerY}
+        onAction={handleAction}
+      />
+    </>
+  )}
+</Portal>
+```
+
+### HoldMenuOverlay
+
+Renders the menu card (dark glass, rounded, separators). Each item
+uses `useAnimatedStyle` driven by `fingerX/fingerY` shared values:
+
+```ts
+const animatedStyle = useAnimatedStyle(() => {
+  const isOver = fingerY.value >= itemTop && fingerY.value < itemBottom
+                 && fingerX.value >= itemLeft && fingerX.value < itemRight;
+  return {
+    backgroundColor: isOver
+      ? 'rgba(255, 255, 255, 0.12)'
+      : 'transparent',
+    transform: [{ scale: withSpring(isOver ? 1.02 : 1) }],
+  };
+});
+```
+
+60/120fps highlighting driven entirely on the UI thread. No JS bridge
+round-trips during the drag.
+
+---
+
+## Files to create / modify
+
+| File | Action |
+|---|---|
+| `src/components/hold-menu/HoldMenuTrigger.tsx` | NEW — the main wrapper component |
+| `src/components/hold-menu/HoldMenuOverlay.tsx` | NEW — the floating menu card |
+| `src/components/hold-menu/HoldMenuItem.tsx` | NEW — individual menu item with animated hover |
+| `src/components/hold-menu/useHoldMenu.ts` | NEW — shared state (active item, finger pos, scroll control) |
+| `src/components/hold-menu/index.ts` | NEW — barrel |
+| `src/components/EntityContextMenu.tsx` | REWRITE — thin wrapper over HoldMenuTrigger |
+| `app/_layout.tsx` | ADD second PortalHost `hold-menu` (or reuse existing `floating-menu`) |
+| `babel.config.js` | DONE  — reanimated plugin added |
+| `app/(tabs)/people.tsx` | MODIFY — pass `scrollEnabled` + use HoldMenuTrigger |
+| `app/(tabs)/notes.tsx` | MODIFY — same |
+| `app/(tabs)/campaigns.tsx` | MODIFY — same |
+| `app/(tabs)/feed.tsx` | MODIFY — same |
+
+### FlatList scrollEnabled threading
+
+Each tab screen that has a FlatList with hold-menu cards needs to
+thread a `scrollEnabled` state:
+
+```tsx
+const [scrollEnabled, setScrollEnabled] = useState(true);
+
+<FlatList
+  scrollEnabled={scrollEnabled}
+  renderItem={({ item }) => (
+    <HoldMenuTrigger
+      actions={PERSON_ACTIONS}
+      onAction={handleAction}
+      onScrollEnabledChange={setScrollEnabled}
+      renderCard={(props) => <PersonCard item={item} {...props} />}
+    />
+  )}
+/>
+```
+
+`HoldMenuTrigger` calls `onScrollEnabledChange(false)` in the
+gesture's `onStart` and `onScrollEnabledChange(true)` in `onFinalize`.
+
+---
+
+## Estimated effort
+
+| Step | Time |
+|---|---|
+| `HoldMenuTrigger` + gesture setup | 45 min |
+| `HoldMenuOverlay` + animated items | 30 min |
+| `useHoldMenu` shared state | 15 min |
+| Wire to people/notes/campaigns/feed | 30 min |
+| Test + polish hover feedback | 20 min |
+| **Total** | **~2.5 hours** |
+
+---
+
+## What this replaces
+
+The current `floating/` directory (`FloatingContainer`, `FloatingMenuList`,
+`useFloatingMenu`) and `EntityContextMenu` will be replaced. The current
+approach has three unfixable issues:
+1. Portal overlay can't intercept an ongoing touch from the card
+2. ScrollView steals the gesture before the Portal overlay mounts
+3. The card can't render above the scrim (FlatList clips overflow)
+
+The new hold-menu system solves all three via:
+1. `Gesture.Pan().activateAfterLongPress` — one gesture, native thread
+2. `scrollEnabled={false}` toggle — blocks scroll during hold
+3. Measure-then-clone-in-Portal — card clone renders above scrim
+
+---
+
+## References
+
+- `react-native-hold-menu` — measure-clone-portal technique (not usable directly, wrong Reanimated version)
+- `react-native-draggable-flatlist` — scrollEnabled toggle technique
+- `react-native-gesture-handler` v2 docs — `Gesture.Pan().activateAfterLongPress()`
+- Current gesture button: `src/components/CaptureGestureButton.tsx` — uses `.runOnJS(true)` which still works alongside worklet callbacks

@@ -1,0 +1,17 @@
+{
+  "title": "Team documentation",
+  "pages": [
+    "overview",
+    "home",
+    "synap-app",
+    "synap-packages",
+    "browser",
+    "relay",
+    "raycast",
+    "eve-cli",
+    "intelligence",
+    "control-plane",
+    "platform",
+    "devops"
+  ]
+}

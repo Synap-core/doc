@@ -1,0 +1,168 @@
+---
+title: "Infrastructure Status"
+description: "Production readiness and changelog."
+---
+
+# Synap Infrastructure — Production Status
+
+> Updated: 2026-04-12
+
+## What We Have
+
+Synap is a sovereign personal data infrastructure with AI-powered organization. Users own their data on dedicated **Data Pods** — Docker Compose stacks on VPS servers managed by a central **Control Plane**.
+
+### Architecture
+
+```
+┌─────────────┐     HTTPS + ES256 JWT      ┌──────────────────┐
+│ Control      │ ──────────────────────────→ │ Data Pod (VPS)    │
+│ Plane API    │                             │                   │
+│              │  Webhook → pg-boss job      │ Caddy (TLS)       │
+│ pg-boss      │  → pod-agent command        │ pod-agent:4002    │
+│ (in-process) │  → update-pod.sh            │ backend:4000      │
+│              │  → callback                 │ realtime:4001     │
+│ JWKS /.well- │                             │ postgres, redis   │
+│ known/jwks   │ ← callback (JWT-auth)       │ kratos, minio     │
+└─────────────┘                             └──────────────────┘
+        │
+        │ Hub Protocol (Bearer token)
+        ▼
+┌─────────────┐
+│ Intelligence │
+│ Service      │
+│ (AI agents)  │
+└─────────────┘
+```
+
+### For Users
+
+- **Your data, your pod.** Each user gets a dedicated server. No shared databases. No data mining.
+- **Auto-updates.** When we push improvements, your pod updates automatically in ~40 seconds with near-zero downtime.
+- **Works offline.** The Electron app caches data locally. AI features need connectivity, but your notes and tasks work without internet.
+- **Biometric security.** Touch ID / Windows Hello on app startup. No passwords stored on servers.
+- **Multi-platform.** Electron desktop (primary), Expo mobile (Relay), web access planned.
+
+### For Synap (Operations)
+
+| Capability | Status | Details |
+|-----------|--------|---------|
+| **Auto-update** |  Production | CI push → webhook → pg-boss → pod-agent → pull + migrate + restart → callback. ~40s per pod. Near-zero downtime. |
+| **Pod provisioning** |  Production | Hetzner API + cloud-init → pod-agent handles lifecycle commands |
+| **Monitoring** |  Production | Health check every 5min, fleet reconciler every 30min, stuck-pod detector every 15min |
+| **Security** |  Production | ES256 JWT + JWKS (no stored secrets), nonce replay protection, audit logging on all mutations |
+| **Job queue** |  Production | pg-boss in-process (replaced Trigger.dev — 4 containers eliminated) |
+| **Canary deploys** |  Production | First pod updates, health check gate, then fleet in parallel batches |
+| **Pod lifecycle** |  Production | suspend, restore, configure, archive, exec — all via pod-agent HTTP commands |
+| **Warm pool** |  Production | Pre-provisioned pods for instant assignment |
+
+### What This Means
+
+**For a solo founder / small team, this is production-grade infrastructure.** The security model (JWT + JWKS, no SSH, no stored secrets) is better than most startups at this stage. The auto-update pipeline is fully automated. The job queue is simple and reliable.
+
+**The system scales to ~500 pods without changes.** Beyond that, the sequential rolling update and 5-minute health polling become bottlenecks. But that's a good problem to have.
+
+## Technical Details
+
+### Auto-Update Pipeline
+
+```
+1. Developer pushes to main branch
+2. GitHub CI builds Docker image → pushes to GHCR
+3. GitHub webhook → CP /webhooks/github (HMAC-SHA256 verified)
+4. CP creates image_releases record
+5. pg-boss rolling-update job executes:
+   a. Canary: update first pod, wait 5min for health
+   b. Fleet: parallel batches (batchSize=5, 30s delay between batches)
+6. For each pod:
+   a. Sign ES256 JWT with target version + callback URL
+   b. POST /api/pod-agent/command (pod verifies via JWKS)
+   c. pod-agent dispatches update-pod.sh:
+      - Pull new image (old backend still serving)
+      - Run migrations (old backend still serving)
+      - Force-recreate containers (~2-3s gap)
+      - Health check (5min timeout)
+      - Clean old images (keep last 3)
+   d. pod-agent sends callback to CP (Node.js https.request)
+   e. CP updates pod status to completed/failed
+```
+
+### Pod Management Commands
+
+| Command | What It Does | Auth |
+|---------|-------------|------|
+| `update` | Pull images, migrate, restart | ES256 JWT |
+| `suspend` | Stop all services except Caddy + pod-agent | ES256 JWT |
+| `restore` | Start all services, health check | ES256 JWT |
+| `configure` | Update .env vars, activate compose profiles | ES256 JWT |
+| `archive` | DB dump + volume tar → S3 presigned upload | ES256 JWT |
+| `exec` | Docker exec in container (requires `allowExec` claim) | ES256 JWT + allowExec |
+| `agent-update` | Rebuild pod-agent container | ES256 JWT |
+
+### Security Model
+
+| Layer | Protection |
+|-------|-----------|
+| Pod commands | ES256 JWT signed by CP, verified by pod via JWKS (HTTPS-only) |
+| Replay protection | UUID nonce per request, in-memory TTL (10min) |
+| Rate limiting | One active operation per command type |
+| Callback auth | Separate 30min JWT pre-signed by CP |
+| Docker socket | Only pod-agent has access (removed from backend) |
+| Audit logging | Every mutation logged (userId, workspaceId, action, sanitized input) |
+| API keys | Expiry enforced, lastUsedAt tracked (debounced 1/min) |
+| HTTP caching | `Cache-Control: private, max-age=60` for GET, `no-store` for mutations |
+| Pagination | Standardized across all list endpoints (`paginatedInput` + `buildPaginatedResponse`) |
+
+### API Standards
+
+All list endpoints return:
+```typescript
+{
+  items: T[],
+  pagination: {
+    hasMore: boolean,
+    limit: number,
+    offset: number
+  }
+}
+```
+
+All mutations are audit-logged with sanitized input (passwords/tokens stripped).
+
+### Job Queue (pg-boss)
+
+**Scheduled (cron):** health-check (5min), stuck-pod-detector (15min), fleet-reconciler (30min), warm-pool-replenish (5min), check-suspended-pods (daily), check-expired-trials (daily), cleanup-expired-trials (daily), reset-intelligence-quotas (monthly), reconcile-pod-monitoring (weekly)
+
+**On-demand:** provision-pod, deprovision-pod, suspend-pod, restore-pod, archive-pod, rolling-update, claim-warm-pod, openclaw-provision, connector-sync-notify, waitlist-drip, webhook-retry
+
+### What Was Removed (2026-04-05/06)
+
+| Removed | Replaced By | RAM Saved |
+|---------|------------|-----------|
+| Trigger.dev (4 containers) | pg-boss (in-process) | ~450MB |
+| SSH client + ssh2 dependency | Pod-agent HTTP commands | — |
+| synap_trigger database | pgboss schema in existing DB | — |
+| update-pod.ts (SSH task) | pod-agent + update-pod.sh | — |
+| Hardcoded CONTROL_PLANE_URL | JWKS URL from request header | — |
+
+### Security Hardening (2026-04-12)
+
+| Change | Details |
+|--------|---------|
+| Metrics endpoint auth | `GET /metrics` requires `IS_METRICS_TOKEN` bearer token; 503 if unset |
+| Admin rate limiting | 60 req/min per admin user on all `/admin/*` routes |
+| CP port binding | `127.0.0.1:3001` — not internet-accessible, Caddy-only |
+| HSTS enabled | `Strict-Transport-Security: max-age=31536000; includeSubDomains` |
+| Caddy security headers | `Permissions-Policy`, `X-Permitted-Cross-Domain-Policies`, `Referrer-Policy` |
+| `_gen()` hardened | Fails loudly if neither openssl nor /dev/urandom available |
+| Dokploy credentials isolated | `.dokploy-credentials` (chmod 600, gitignored) |
+| Docker networks pre-created | `_ensure_networks()` in synap-cp creates both networks before compose up |
+
+### Added (2026-04-12)
+
+| Added | Purpose |
+|-------|---------|
+| Dokploy | Container fleet management UI at `deploy.synap.live` |
+| RSSHub | Signal Feed proxy at `RSSHUB_URL` (internal) |
+| Browserless | Headless browser for feed scraping |
+| IS fleet health endpoint | `GET /admin/intelligence/fleet` — parallel health check of all IS instances |
+| pg-boss job visibility | `GET /admin/jobs` — queue stats + last 50 failed jobs |

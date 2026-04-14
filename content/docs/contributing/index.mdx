@@ -1,0 +1,33 @@
+---
+title: Contributing
+description: Repositories, how to contribute, and how Synap pieces fit together
+---
+
+Synap’s core stacks are open source. This section is **fully public**: licenses, repos, contribution paths, and a high-level **ecosystem map**.
+
+## Repositories (overview)
+
+Typical layout in the Synap org (names may evolve — link to GitHub as source of truth):
+
+| Area | Role |
+|------|------|
+| Data pod | API, database, jobs, Hub Protocol |
+| Apps | Web and shared frontend packages |
+| Desktop | Electron “Browser” app |
+| Intelligence service | Agent hub and orchestration |
+| CLI & skills | Developer tooling and OpenClaw bridge |
+
+> **Content TBD** — replace with canonical repo table and architecture diagram.
+
+## Contribute
+
+- [Contributing overview](./guides/overview) — core vs plugins, workflow
+- [Monorepo structure](./guides/monorepo-structure) — where code lives
+- [Code style](./guides/code-style) — conventions
+
+## Build without forking the core
+
+If you only want to **extend** Synap (integrations, agents, automations), start in **Build & integrate**:
+
+- [Development setup](../integrate/development/setup.md)
+- [Extending Synap](../integrate/development/extending/overview.md)

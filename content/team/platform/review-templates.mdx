@@ -1,0 +1,234 @@
+---
+title: "Platform Review: Templates"
+description: "Template system completeness and composable packs."
+---
+
+# 03 — Template System (Composable)
+
+## Implementation Status (updated 2026-03-25)
+
+**Profile packs (Phase A–C) are COMPLETE** — see `PLAN-02-profile-packs.md` for full details.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `profile-pack` category |  | CP schema + routes + browser cell |
+| `view-pack` / `bento-template` categories |  | Type system only; no dedicated browser UI yet |
+| `composesFrom` field |  | Schema only; browser merge logic pending |
+| 10 pack JSON files |  | `synap-control-plane-api/templates/packs/` |
+| Seed script Pass 2 |  | Seeds packs with `category: "profile-pack"` |
+| `installedPacks` in WorkspaceSettings |  | JSONB, no migration needed |
+| ProfilePackBrowserCell |  | CP fetch + offline fallback + install tracking |
+| CreateProfileCell CP fetch |  | Fetches single-profile packs from CP |
+| WsPacksTab in SettingsView |  | Shows installed packs + Add Pack button |
+| PropertyCreationPanel stepper |  | 3-step wizard (name → type → config) in data-structure package |
+| Pack selection in onboarding | ⏳ | Phase D — part of `@synap/onboarding-flow` |
+
+---
+
+## Current State
+
+### Template Architecture
+
+Templates are `WorkspaceProposal` JSON objects containing everything needed to create a workspace:
+- `profiles[]` — Entity type definitions
+- `views[]` — View configurations
+- `bentoLayout[]` — Dashboard widget arrangement
+- `suggestedEntities[]` — Seed data
+- `suggestedRelations[]` — Links between seed entities
+- `displayTemplates[]` — How entities render in cards/detail views
+- `layoutConfig` — Sidebar items, pinned apps, default view
+
+### Template Sources
+
+| Source | Location | Status |
+|--------|----------|--------|
+| **Local fallback** | `synap-app/packages/features/onboarding/src/templates/` | 3 templates (Project Mgmt, Personal, Blank) |
+| **Control Plane registry** | `synap-control-plane-api/templates/` | Flagship templates (CRM, Second Brain, Content OS, Agent OS) |
+| **Dev Dashboard** | `synap-dev-dashboard/src/template/` | Internal DevOps workspace |
+| **AI-generated** | Via `propose_workspace` tool | AI creates full proposals on-the-fly |
+
+### Creation Pipeline
+
+```
+Template JSON → createFromDefinition API → Backend:
+  1. Create workspace
+  2. Create profiles (entity types)
+  3. Create views with configs
+  4. Create bento dashboard
+  5. Create seed entities
+  6. Create relations
+  7. Create display templates
+  8. Set layout config
+  → Return workspaceId
+```
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| WorkspaceProposal type | `synap-dev-dashboard/src/types.ts` (local copy) |
+| Also defined in | `synap-app/packages/features/onboarding/src/templates/types.ts` |
+| Creation API | `synap-backend/packages/api/src/routers/workspaces.ts` (createFromDefinition) |
+| Template guide (53KB) | `synap-app/packages/features/onboarding/src/templates/TEMPLATE_GUIDE.md` |
+| Local templates | `synap-app/packages/features/onboarding/src/templates/` |
+| CP template serving | `synap-control-plane-api/templates/` |
+| Dev dashboard template | `synap-dev-dashboard/src/template/template.ts` |
+| Dev dashboard services | `synap-dev-dashboard/src/template/services.ts` |
+| Dev dashboard flow layout | `synap-dev-dashboard/src/template/flow-layout.ts` |
+| Browser workspace creation | `browser/electron/renderer/src/components/onboarding/` |
+| Template integration hook | `browser/electron/renderer/src/hooks/useTemplateIntegration.ts` |
+
+### Quality Assessment
+
+**GOOD:**
+- Template format is comprehensive and well-documented (53KB guide)
+- `createFromDefinition` handles the full pipeline in one API call
+- DevOps template is a good reference implementation
+- AI can generate templates via `propose_workspace`
+
+**RESOLVED (2026-03-25):**
+-  Templates are no longer all-or-nothing — profile packs add to existing workspaces
+-  Local fallback vs CP registry — ProfilePackBrowserCell has proper online/offline logic
+
+**STILL OPEN:**
+- Type duplication — `WorkspaceProposal` defined in 3+ places (no `@synap/template-types` package yet)
+- No versioning — templates can't be updated after installation
+- No template preview beyond pack list cards
+- `composesFrom` merge logic not yet implemented in browser
+
+## Limitations
+
+### 1. Monolithic Templates
+A template creates an entire workspace. You can't:
+- Add a profile pack to an existing workspace
+- Import just the views from a template
+- Merge two templates together
+- Update a workspace when its template gets updated
+
+### 2. No Composability
+Templates are flat JSON blobs. There's no:
+- Inheritance (template B extends template A)
+- Mixins (add "CRM profiles" to any template)
+- Conditional sections (include X only if user selects option Y)
+
+### 3. No Post-Install Updates
+Once a template is installed:
+- No way to push updates to existing workspaces
+- No migration path when profile definitions change
+- User has to manually recreate or modify
+
+### 4. Type Fragmentation
+`WorkspaceProposal` is defined in:
+- `synap-dev-dashboard/src/types.ts`
+- `synap-app/packages/features/onboarding/src/templates/types.ts`
+- Possibly in control plane code
+- Each copy may drift
+
+### 5. Template Discovery
+- No browseable template gallery in the browser
+- No template preview (screenshots, sample data)
+- No search/filter by category
+- CP marketplace exists but is focused on "packages" not "templates"
+
+## Proposed Architecture: Composable Templates
+
+### Profile Packs (see 02-entity-profiles.md)
+The smallest unit of template composition. Contains profiles + optional views + relations.
+
+### Template = Composition of Packs + Config
+
+```typescript
+interface WorkspaceTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: 'productivity' | 'knowledge' | 'development' | 'business' | 'personal' | 'custom';
+
+  // Composition
+  profilePacks: string[];        // IDs of profile packs to include
+  additionalProfiles?: ProfileDefinition[];  // Template-specific profiles
+
+  // Layout
+  bentoLayout: BentoWidget[];
+  bentoViewBlocks?: BentoViewBlock[];
+  views: ViewDefinition[];
+  layoutConfig: LayoutConfig;
+
+  // Seed data (optional)
+  seedEntities?: EntitySeed[];
+  seedRelations?: RelationSeed[];
+
+  // AI behavior
+  skills?: SkillDefinition[];    // AI skills activated with this template
+  automations?: AutomationDef[]; // Event triggers
+}
+```
+
+### Template Installation Flow
+
+```
+User selects template
+  → Preview (show profiles, views, sample dashboard)
+  → Customize (toggle profile packs, rename workspace)
+  → Install:
+    1. Resolve profile packs (fetch from CP or local)
+    2. Merge profiles (system + packs + template-specific)
+    3. Create workspace via createFromDefinition
+    4. Register skills
+    5. Set up automations
+    6. Optionally: AI walks user through initial data entry
+```
+
+### Template Update Flow
+
+```
+Template v2 published on CP
+  → User notified "Update available for Knowledge Base template"
+  → Preview changes (new profiles, new views, changed properties)
+  → Apply:
+    1. Add new profiles (non-destructive)
+    2. Add new views (non-destructive)
+    3. Update bento layout (if user hasn't customized)
+    4. Migrate properties (if schema changed)
+  → Rollback available for 30 days
+```
+
+## Action Items
+
+### Phase 1: Single Source of Truth for Types
+- [ ] Create `@synap/template-types` package (or add to `@synap-core/types`)
+- [ ] Consolidate `WorkspaceProposal` type — one definition, all consumers import it
+- [ ] Add `ProfilePack` type to the same package
+
+### Phase 2: Profile Pack Support
+- [x] ~~Backend: Accept profile pack IDs in `createFromDefinition`~~ — reused existing `createFromDefinition` with `workspaceId`
+- [x] ~~Backend: Profile pack resolution (fetch from CP, merge with local)~~ — done client-side in ProfilePackBrowserCell
+- [x] CP: Serve profile packs via REST API
+- [x] Browser: "Add Profile Pack" option in workspace settings (WsPacksTab)
+- [ ] Browser: Profile pack browser in onboarding flow (Phase D)
+
+### Phase 3: Template Preview + Gallery
+- [ ] Template preview component (show profiles, sample views, dashboard mockup)
+- [ ] Template gallery in browser (categories, search, featured)
+- [ ] Template screenshots/thumbnails on CP
+
+### Phase 4: Template Updates
+- [ ] Version field on templates
+- [ ] Diff engine: compare installed vs latest template version
+- [ ] Non-destructive update: add new profiles/views without removing user customizations
+- [ ] Migration scripts for property schema changes
+
+### Research Questions
+- [ ] How does Notion handle template installation and updates?
+- [ ] How does Linear handle workspace templates?
+- [ ] How does Airtable handle base templates with pre-built views?
+- [ ] Should templates be git-versioned? (like Terraform modules)
+- [ ] How to handle conflicts when user has customized a template-created view?
+
+## Relationship to Other Features
+
+- **Entity Profiles (02)** — Profile packs are the building blocks of composable templates
+- **AI Skills (06)** — Templates should bundle skills that activate with the template
+- **Widget System (01)** — Templates can include custom widget definitions
+- **Vault (07)** — DevOps template needs vault refs for service credentials

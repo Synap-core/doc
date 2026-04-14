@@ -1,0 +1,37 @@
+---
+title: System Patterns
+description: Event sourcing, CQRS, permission validation, and event flow in Synap.
+---
+
+# System Patterns
+
+Synap architecture is based on:
+
+- **Event sourcing** for immutable change history
+- **CQRS** for write/read separation
+- **Worker-based validation** for secure mutation flow
+- **Projection-first reads** for query performance
+
+## Canonical mutation flow
+
+1. `*.requested` event emitted
+2. validation/permission policy checks
+3. approved/validated event emitted
+4. executor writes projection state
+5. realtime and index updates propagate
+
+This keeps writes auditable and reads fast.
+
+## Why this matters
+
+- Full audit and rollback capability
+- Human-in-the-loop AI governance
+- Deterministic replay/debugging
+- Scalable background execution
+
+## Related pages
+
+- [Event architecture](/docs/architecture/events)
+- [Event sourcing explained](/docs/architecture/concepts/event-sourcing-explained)
+- [Why events](/docs/architecture/concepts/why-events)
+- [Hub Protocol](/docs/integrate/integrations/sdk-direct)

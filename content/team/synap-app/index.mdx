@@ -1,0 +1,71 @@
+---
+title: Synap App
+description: Web monorepo (Next.js, Tamagui) — shared packages, extension, non-primary web UI
+---
+
+Team docs for **`synap-app`**: **pnpm monorepo** (Next.js where used, **Tamagui**, shared packages consumed by Browser and tooling).
+
+**Full package map:** **[Synap app packages](/team/synap-packages)** — every major `@synap-core/*` workspace, why boundaries exist, GitHub paths, integration checklist.
+
+---
+
+## Why this surface exists
+
+- **Shared implementation layer:** `@synap/*` packages (client, hooks, stores, views, features) are the **main frontend codebase** even though **Browser (Electron) is the primary user-facing app**.  
+- **Chrome extension** — MV3 extension under `packages/apps/extension` (`EXTENSION.md` is the spec).  
+- **Web** — Remaining Next.js surfaces (e.g. internal or legacy) are **not** the canonical “signup app” or primary product shell.
+
+---
+
+## There is no separate “signup app”
+
+**Account creation, login, email verification, billing, and pod provisioning** live on the **marketing / landing + account** web stack (e.g. routes under `synap-landing`: `/(auth)/signup`, `/account/*`, etc.). That is **one web property**, not a standalone repo named “signup app.”
+
+**Synap App** may host **developer or ancillary** web UIs; do not position it as the end-user onboarding product — steer users to **synap.live** flows and then **Browser**.
+
+---
+
+## Who it is for
+
+| Audience | What they need |
+|----------|----------------|
+| **Frontend contributors** | Package map, Turborepo filters, design tokens from `@synap-core/ui-system`. |
+| **Integration partners** | What is **public API** (Hub, tRPC on pod) vs **UI-only**. |
+| **Extension / capture** | `EXTENSION.md`, integrate docs on cold start. |
+
+---
+
+## How it fits the stack
+
+- **Browser** — **[Browser](/team/browser)** consumes many of the same packages; document split (Electron main/preload vs renderer) in `browser/` repo.  
+- **Platform** — Pod contracts, realtime: **[Platform](/team/platform)**.  
+- **Intelligence** — Agent UX patterns: **[Intelligence](/team/intelligence)**.
+
+---
+
+## User flows (high level)
+
+- **Extension:** Tab capture → entities on pod (see public **[Build & integrate](/docs/integrate)**).  
+- **Web (where applicable):** Sign-in flows that still hit the pod or CP — keep consistent with landing/account site as source of truth for **auth UX copy**.  
+- **Dev:** `pnpm dev` per package filters; see contributing guides on the public site.
+
+---
+
+## Data flows
+
+- **Three-layer data:** hooks → stores → client (never skip layers).  
+- **Secrets** — Only on device / pod; extension and web must not log tokens.
+
+---
+
+## Deep dives
+
+- **[Frontend ↔ Intelligence integration](/team/synap-app/frontend-intelligence-integration)** — tRPC, Socket.IO, Hub Protocol bridge, streaming (moved from `synap-backend/docs/development/`).
+
+---
+
+## Guidelines
+
+- **[Home & vision](/team/home)** for voice.  
+- **[Design guidelines](/team/platform/design-guidelines)** for tokens — no raw hex in UI.  
+- Deep architecture notes may migrate from **Platform** into this space over time.

@@ -1,0 +1,633 @@
+---
+title: "CP Architecture"
+description: "Full CP API: pod lifecycle, billing, IS integration, 26 routers."
+---
+
+# Synap Control Plane — Architecture & User Journeys
+
+> Last updated: 2026-04-12
+> Covers: full pod lifecycle, billing integration, intelligence service, add-ons, security model.
+
+---
+
+## Table of Contents
+
+1. [System Overview](#1-system-overview)
+2. [Service Map](#2-service-map)
+3. [API Surface](#3-api-surface)
+4. [Data Model](#4-data-model)
+5. [Pod Status State Machine](#5-pod-status-state-machine)
+6. [User Journeys](#6-user-journeys)
+   - 6.1 Waitlist → Trial → Paid Subscription → Pod Setup → Provisioning
+   - 6.2 Subscription Cancelled → Suspension → Archive → Purge
+   - 6.3 Re-subscribe (Suspended Pod)
+   - 6.4 Re-subscribe (Archived Pod)
+   - 6.5 Tier Upgrade / Downgrade
+   - 6.6 Add-on: Intelligence Service
+   - 6.7 Add-on: Archive Retention Extension
+   - 6.8 Add-on: OpenClaw Agent
+   - 6.9 Payment Failed (Grace Period)
+7. [Background Jobs](#7-background-jobs)
+8. [Intelligence Service Integration](#8-intelligence-service-integration)
+9. [Billing & Stripe Integration](#9-billing--stripe-integration)
+10. [Auto-Update Pipeline](#10-auto-update-pipeline)
+11. [Security Model](#11-security-model)
+12. [Environment Variables Reference](#12-environment-variables-reference)
+
+---
+
+## 1. System Overview
+
+The **Control Plane API** is the central orchestration service for Synap. It:
+
+- Manages **waitlist, trials, and subscription billing** via Stripe
+- **Provisions** and **deprovisions** self-hosted Data Pod VMs on Hetzner Cloud
+- Manages the full **pod lifecycle** via ES256 JWT commands to a `pod-agent` process (no SSH)
+- Integrates with the **Intelligence Service** (IS) to authorize AI access per pod
+- Runs **background jobs** via pg-boss (in-process, PostgreSQL-backed — no external job service)
+- Sends **lifecycle emails** via Resend
+- Hosts **Dokploy** for container fleet management and IS Docker Swarm visibility
+- Exposes a REST API (Hono) consumed by the CP dashboard, Synap desktop/mobile apps, and pod-agents
+
+**Stack:** Hono (HTTP), Drizzle ORM (Postgres), pg-boss (background jobs), Better Auth, Stripe SDK.
+
+---
+
+## 2. Service Map
+
+### CP Server (`api.synap.live`)
+
+```
+Frontend / Electron / Relay App
+        |
+        v
+Control Plane API  (Hono REST, :3000, internal only)
+        |
+        v (Caddy proxies all external traffic)
+api.synap.live (port 443)
+  |
+  ├── /auth/*             → Better Auth (sessions, OAuth)
+  ├── /webhooks/stripe    → Stripe webhook handler
+  ├── /webhooks/github    → GitHub CI webhook (rolling updates)
+  ├── /billing/*          → Checkout, portal, pricing
+  ├── /pods/*             → Pod lifecycle user-facing API
+  ├── /intelligence/*     → IS provisioning for user's pod
+  ├── /admin/*            → Admin fleet management
+  ├── /internal/*         → CP ↔ pod callbacks (JWT-authenticated)
+  ├── /metrics            → Prometheus scrape endpoint (bearer token)
+  └── /.well-known/jwks.json → ECDSA P-256 public key for pods
+```
+
+### Key External Dependencies
+
+| Service | Purpose | Auth |
+|---------|---------|------|
+| Stripe | Billing, subscriptions, webhooks | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
+| Hetzner Cloud | VPS provisioning | `HETZNER_API_TOKEN` |
+| Cloudflare | DNS A-record management | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID` |
+| Intelligence Service | AI token authorization, fleet health | `INTELLIGENCE_HUB_INTERNAL_KEY` |
+| Neon / Postgres | Primary database | `DATABASE_URL` |
+| Resend | Transactional email | `RESEND_API_KEY` |
+| Nango | OAuth connector signals | `NANGO_SECRET_KEY` |
+| RSSHub | Signal feed proxy | `RSSHUB_URL` |
+
+---
+
+## 3. API Surface
+
+The CP exposes **26 route modules**:
+
+| Module | Mount Path | Auth | Purpose |
+|--------|------------|------|---------|
+| `auth` | `/auth/*` | Public (Better Auth) | Sessions, OAuth, CLI token |
+| `billing` | `/billing/*` | Session | Checkout, portal, pricing, addon |
+| `pods` | `/pods/*` | Session | Pod lifecycle, setup, intelligence |
+| `intelligence` | `/intelligence/*` | Session | IS provisioning for user's pod |
+| `intelligence-provision` | `/intelligence/provision/*` | Session | Advanced provision/reconnect flows |
+| `agent-service` | `/agent-service/*` | Session | Self-hosted IS registration |
+| `connectors` | `/connectors/*` | Session | Nango OAuth flow, sync signals |
+| `waitlist` | `/waitlist/*` | Public + Session | Join / advance waitlist |
+| `self-hosting` | `/self-hosting/*` | Session | Self-hosted pod registration |
+| `openclaw` | `/openclaw/*` | Session | OpenClaw agent management |
+| `packages` | `/packages/*` | Session | Marketplace packages |
+| `shares` | `/shares/*` | Public + Session | Entity share links |
+| `download` | `/download/*` | Session | CLI download endpoints |
+| `tickets` | `/tickets/*` | Session | Support ticket system |
+| `vendors` | `/vendors/*` | Session | Vendor integrations |
+| `dashboard` | `/dashboard/*` | Session | Dashboard-specific data |
+| `anonymous` | `/anonymous/*` | Public | Anonymous user flows |
+| `rsshub-proxy` | `/signals/*` | Session | RSSHub feed proxy |
+| `internal` | `/internal/*` | JWT (pod callback) | Pod → CP callbacks |
+| `webhooks` | `/webhooks/*` | Stripe/GitHub HMAC | Incoming webhooks |
+| `admin` | `/admin/*` | Session + isAdmin | Fleet management |
+| `health` | `/health` | Public | Service health check |
+| `metrics` | `/metrics` | Bearer token | Prometheus scrape |
+| `JWKS` | `/.well-known/jwks.json` | Public | ES256 public key for pods |
+
+### Key Admin Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /admin/users` | List all users with subscription + pod |
+| `GET /admin/pods` | Fleet overview with status |
+| `GET /admin/fleet` | Health check all active pods |
+| `GET /admin/intelligence/overview` | IS access stats |
+| `GET /admin/intelligence/fleet` | Health of all IS instances |
+| `GET /admin/jobs` | pg-boss queue visibility (last 24h) |
+| `GET /admin/updates/status` | Rolling update status |
+| `POST /admin/updates/trigger` | Trigger rolling update |
+| `GET /admin/dns-audit` | Cloudflare DNS vs DB reconciliation |
+| `GET /admin/shared-pods` | Multi-tenant shared pod management |
+| `GET /admin/pods/:id/diagnostics` | Deep pod health diagnostics |
+| `GET /admin/pods/:id/intelligence-issues` | IS provisioning issues |
+| `POST /admin/pods/:id/provision-intelligence` | Re-provision IS for a pod |
+
+---
+
+## 4. Data Model
+
+### Schema Tables
+
+**`users`** — Better Auth managed. Extended with `stripeCustomerId`, `preferredProvider`, `isAdmin`, `trialUsed`, `waitlistStatus`.
+
+**`subscriptions`** — One active subscription per user.
+- `tier`: `solo | pro | team | enterprise`
+- `status`: `active | past_due | trialing | cancelled | paused`
+- `trialEndsAt`: 7-day trial auto-created on signup
+- Links to Stripe via `stripeSubscriptionId` + `stripeCustomerId`
+
+**`data_pods`** — One pod per user (enforced by unique constraint).
+- `status`: see state machine in Section 5
+- Stores server metadata: `serverId`, `serverIp`, `serverType`, `serverLocation`
+- `addons`: JSONB map `{ openclaw: PodAddon, intelligence: PodAddon }`
+- `archiveUrl` + `archiveExpiresAt`: populated when pod is archived
+- `suspendedAt`: timestamp of cancellation (drives grace period)
+- `warmPoolId`: set when pod was claimed from warm pool
+
+**`intelligence_access`** — Authorization record for AI access.
+- Linked to both `users` and `data_pods`
+- `isActive`: whether AI requests are currently authorized
+- `monthlyTokenLimit` / `monthlyRequestLimit`: enforced by the IS
+- `hubPodId`: IS-side identifier (different from CP `podId`)
+- Owned by a tier subscription OR an `intelligence-service` add-on
+
+**`addon_subscriptions`** — Per-pod paid/free add-on activations.
+- `addonId`: `extra-storage | extra-ai-tokens | openclaw-agent | intelligence-service | archive-retention`
+- `metadata` JSONB: `{ billingPeriod: "monthly"|"annual" }` for archive-retention
+
+**`image_releases`** — Docker image registry (pushed by GitHub CI via webhook).
+- Used by rolling-update job to track available versions
+
+**`warm_pod_pool`** — Pre-provisioned pods for instant assignment on checkout.
+
+**`waitlist_entries`** — Waitlist management with invite codes.
+
+**`support_tickets`** — User support tickets.
+
+**`user_agent_services`** — Self-hosted IS URL registrations (one per user).
+
+**`audit_events`** — Immutable audit trail for all significant actions.
+
+**`provisioning_logs`** — Step-by-step log of each provisioning run.
+
+---
+
+## 5. Pod Status State Machine
+
+```
+[Trial signup OR Stripe checkout completed]
+         |
+         v
+  pending_configuration   ← user fills setup form
+         |
+  [POST /pods/:id/provisioning-setup]
+         |
+         v
+       pending             ← pg-boss provision-pod job queued
+         |
+         v
+  creating_server          ← Hetzner VM created
+         |
+         v
+  configuring_dns          ← Cloudflare A-record created
+         |
+         v
+    waiting_dns            ← polling DNS propagation
+         |
+         v
+ deploying_services        ← cloud-init + pod-agent starting
+         |
+         v
+   waiting_health          ← polling /health on pod
+         |
+         v
+ syncing_intelligence      ← registering with IS
+         |
+         v
+  sending_invitation       ← admin invite email sent
+         |
+         v
+        active             ← fully operational
+         |
+    [subscription.deleted or trial expired]
+         |
+         v
+      suspended            ← services stopped, server alive (7-day grace)
+         |
+    [day 7: check-suspended-pods cron]
+         |
+         v
+   pending_archive         ← archive job running
+         |
+         v
+      archived             ← data in S3, server deleted (90-day default)
+         |
+    [archiveExpiresAt reached]
+         |
+         v
+       deleted             ← archive purged, data permanently gone
+
+Side states:
+  warning      ← pod responding but with issues
+  error        ← provisioning failed (retried up to 3x)
+  updating     ← rolling update in progress
+  rolling_back ← update failed, reverting
+  restoring    ← restore-pod job running
+  deleting     ← deprovision job running (admin-triggered)
+```
+
+### Warm Pool
+
+Pre-provisioned pods (`warm_pod_pool`) can be claimed at checkout instead of provisioning from scratch, making the user experience nearly instant. The `warm-pool-replenish` cron keeps 2–3 pods ready.
+
+### One Pod Per User
+
+Enforced by a unique constraint on `data_pods`. Attempting to create a second returns `409 Conflict` with `existingPodId`, `existingPodStatus`, `existingPodSubdomain`.
+
+---
+
+## 6. User Journeys
+
+### 6.1 Waitlist → Trial → Paid Subscription → Pod Setup → Provisioning
+
+**Trigger:** User signs up (auto-trial) OR advances from waitlist OR completes Stripe checkout.
+
+**Trial flow (auto on signup):**
+1. New user signs up via Better Auth
+2. CP auto-creates a 7-day trial subscription (`status: "trialing"`)
+3. Trial includes limited IS access (token quota from tier defaults)
+4. Pod provisioning setup form shown immediately
+5. On trial expiry: `check-expired-trials` cron → suspends pod → `check-suspended-pods` drives archive
+
+**Paid flow:**
+1. User completes Stripe checkout for a paid tier (Solo €15/mo, Pro, Team, Enterprise)
+2. Stripe fires `checkout.session.completed` to `POST /webhooks/stripe`
+3. Control plane:
+   - Looks up user by `stripeCustomerId` (or `client_reference_id` for Payment Link)
+   - Resolves tier from price ID (checks env var overrides + pricing package defaults)
+   - Creates/updates `subscriptions` record (idempotent on `stripeSubscriptionId`)
+   - Checks for existing non-deleted pod → skips if found
+   - Checks for warm pool → claims instantly if available (`claim-warm-pod` job)
+   - Otherwise: creates `data_pods` record with `status: "pending_configuration"`
+   - Creates `intelligence_access` record (`isActive: true`)
+4. Frontend detects `status === "pending_configuration"` → shows setup form
+5. `GET /pods/:id/provisioning-setup` returns backend-driven JSON form (fields gated by tier)
+6. User submits `POST /pods/:id/provisioning-setup`
+7. CP validates subdomain, queues `provision-pod` pg-boss job
+8. `provision-pod` job: creates Hetzner VM → DNS → cloud-init → health check → IS register → invite email → `status: "active"`
+
+**Tier → Server mapping:**
+- Solo → `cx23` (2 vCPU, 4 GB RAM)
+- Pro → `cx33` (4 vCPU, 8 GB RAM)
+- Team → `cx43` (8 vCPU, 16 GB RAM)
+- Enterprise → custom
+
+---
+
+### 6.2 Subscription Cancelled → Suspension → Archive → Purge
+
+**Day 0:** `customer.subscription.deleted` → subscription marked cancelled, IS access deactivated, `suspend-pod` job: ES256 JWT command to pod-agent → services stopped, `status: "suspended"`, grace period email.
+
+**Day 6:** `check-suspended-pods` cron → 1-day warning email.
+
+**Day 7:** `archive-pod` job: DB dump + volume tar → S3 presigned upload → Hetzner VM deleted → DNS removed → `status: "archived"`, `archiveExpiresAt = now + 90 days`.
+
+**Day 30 / Day 55:** Retention warning emails.
+
+**Day 90:** Archive deleted from S3 → `status: "deleted"`.
+
+---
+
+### 6.3 Re-subscribe (Suspended Pod — within 7-day grace)
+
+Server still alive. `checkout.session.completed` → detect suspended pod → `restore-pod` job → pod-agent `restore` command → services restarted → `status: "active"`. Data intact, instant restart.
+
+---
+
+### 6.4 Re-subscribe (Archived Pod)
+
+Server deleted, data in S3. `checkout.session.completed` → detect archived pod → `restore-pod` job:
+1. Create new Hetzner VM
+2. Generate presigned GET URL (1h validity) for S3 archive
+3. Send `restore` command to pod-agent via JWT
+4. pod-agent downloads archive, restores volumes + DB
+5. Health check → IS re-register → `status: "active"` (~15 min total)
+
+---
+
+### 6.5 Tier Upgrade / Downgrade
+
+`customer.subscription.updated` → resolve new tier → update subscription → sync token/request limits to IS (`/internal/customers/sync`) → push tier JWT to all active pods via pod-agent `configure` command. Server type does NOT automatically resize on upgrade.
+
+---
+
+### 6.6 Add-on: Intelligence Service (€20/month)
+
+Standalone AI access without a paid pod tier.
+
+1. `POST /billing/checkout-addon` with `addonId: "intelligence-service"`
+2. On checkout: `addon_subscriptions` + `intelligence_access` created (`monthlyTokenLimit: 1_000_000`)
+3. On cancellation: IS access revoked
+4. Monthly `invoice.payment_succeeded`: add-on reactivated
+
+---
+
+### 6.7 Add-on: Archive Retention Extension
+
+Extends archive lifetime beyond 90 days.
+
+1. Monthly or annual billing period
+2. On checkout: `archiveExpiresAt` extended (+30 or +365 days)
+3. On each renewal: `archiveExpiresAt` extended again
+4. On cancellation: existing expiry NOT rolled back (user keeps what they paid for)
+
+---
+
+### 6.8 Add-on: OpenClaw Agent (Free)
+
+Enables OpenClaw AI agent on a pod. Free for all paid subscribers.
+
+1. Toggle in setup form or `PATCH /pods/:id/addons`
+2. Activated directly (no Stripe payment)
+3. `openclaw-provision` job: IS API key created → stored in pod vault → `addons.openclaw.status = "running"`
+4. Controllable via `OPENCLAW_DEFAULT_ENABLED` env var (auto-provision on all new pods)
+
+---
+
+### 6.9 Payment Failed (Grace Period)
+
+`invoice.payment_failed` → IS access remains active (grace period). Pod keeps running. If Stripe fires `subscription.deleted` after retries: full suspension flow. If payment recovers (`invoice.payment_succeeded`): reactivated.
+
+---
+
+## 7. Background Jobs
+
+All jobs run via **pg-boss** (in-process, PostgreSQL `pgboss` schema). No external job service.
+
+### Cron (Scheduled) Jobs
+
+| Job | Schedule | Purpose |
+|-----|----------|---------|
+| `health-check` | Every 5 min | Poll all active pods' `/health` endpoint |
+| `stuck-pod-detector` | Every 15 min | Detect pods stuck in transition states > threshold |
+| `fleet-reconciler` | Every 30 min | Reconcile pod status vs Hetzner + DNS |
+| `warm-pool-replenish` | Every 5 min | Keep 2–3 warm pods provisioned |
+| `check-suspended-pods` | Daily 01:00 | Drive archive/purge lifecycle for suspended/archived pods |
+| `check-expired-trials` | Daily | Detect expired trials → suspend |
+| `cleanup-expired-trials` | Daily | Purge old trial data |
+| `reset-intelligence-quotas` | Monthly | Reset IS token counters |
+| `reconcile-pod-monitoring` | Weekly | Sync pod list to Uptime Kuma |
+
+### On-Demand Jobs
+
+| Job | Triggered By | Purpose |
+|-----|-------------|---------|
+| `provision-pod` | Checkout webhook | Full pod provisioning (VM → DNS → cloud-init → health → IS) |
+| `deprovision-pod` | Admin | Hard delete: stop server + DNS + DB cleanup |
+| `suspend-pod` | Subscription cancelled | Stop pod services via pod-agent command |
+| `restore-pod` | Re-subscribe webhook | Restart suspended or restore archived pod |
+| `archive-pod` | `check-suspended-pods` | Dump data → S3 → delete VM |
+| `rolling-update` | GitHub webhook / admin | Zero-downtime fleet update |
+| `claim-warm-pod` | Checkout webhook | Assign warm pool pod instead of provisioning |
+| `openclaw-provision` | Add-on checkout | Provision OpenClaw on a pod |
+| `connector-sync-notify` | Nango webhook | Notify pod of new connector data |
+| `waitlist-drip` | Admin action | Send waitlist drip emails |
+| `webhook-retry` | Failed webhook handler | Retry failed outgoing webhook calls |
+| `sync-pod-monitoring` | Pod status change | Sync pod to Uptime Kuma |
+| `report-stripe-usage` | Monthly billing cycle | Report token usage to Stripe |
+
+### Job Visibility
+
+Admin endpoint `GET /admin/jobs` returns:
+- Queue stats per job (active / created / completed / failed / cancelled / expired in last 24h)
+- Last 50 failed jobs with error output (no PII — job `data` field excluded)
+- Includes `pgboss.archive` table if archiving is enabled
+
+---
+
+## 8. Intelligence Service Integration
+
+The Intelligence Service (IS) is a separate deployment (Docker Swarm on `ai.synap.live`) that handles AI agent orchestration, LLM calls, session memory, and token accounting.
+
+### IS Provisioning Flow (4 steps)
+
+```
+1. CP → Pod:    POST /api/provision/connect   (ES256 JWT with CP identity)
+2. CP → IS:     POST /admin/provision-pod     (X-Admin-Key: INTELLIGENCE_HUB_ADMIN_KEY)
+   IS delivers API key directly to Pod (via its own Hub Protocol channel)
+3. Pod → CP:    POST /internal/provision-callback  (JWT-authenticated callback)
+4. CP → IS:     POST /internal/customers/sync  (sync token limits)
+```
+
+No `provisionJwt` is passed through the IS — the IS delivers credentials directly to the pod. This eliminates cross-pod contamination (see `intelligence-provision-fixes-required.md` for remaining Hub/pod-side fixes).
+
+### CP → IS Communication
+
+All CP → IS calls use `X-Internal-Key: {INTELLIGENCE_HUB_INTERNAL_KEY}` (Hub Protocol Key).
+
+| CP calls IS | When |
+|---|---|
+| `POST /admin/provision-pod` | Pod provisioning complete |
+| `DELETE /admin/pods/:hubPodId` | Pod deprovisioned |
+| `POST /internal/customers/sync` | Subscription created/updated/cancelled |
+| `DELETE /internal/customers/:id` | IS access fully revoked |
+| `GET /health` | Fleet health polling |
+
+### IS Fleet Health
+
+`GET /admin/intelligence/fleet` polls all registered IS instances in parallel:
+- Primary IS (`INTELLIGENCE_HUB_URL`)
+- All `user_agent_services` records (self-hosted IS)
+- 3s timeout per instance, `AbortSignal.timeout(3000)`
+- Parses active/queued LLM concurrency from IS health response
+- Status: `healthy | degraded | unhealthy | unreachable | timeout`
+
+### Token Limits by Tier
+
+| Tier | Tokens/month |
+|------|-------------|
+| Solo | 500,000 |
+| Pro | 2,500,000 |
+| Team | 10,000,000 |
+| Enterprise | Unlimited |
+| IS add-on only | 1,000,000 |
+
+### IS Monitoring
+
+The IS exposes Prometheus metrics at `https://ai.synap.live/metrics` (bearer token auth). The CP's Prometheus instance scrapes this cross-server. CP metrics at `/metrics` also require `IS_METRICS_TOKEN` bearer auth.
+
+---
+
+## 9. Billing & Stripe Integration
+
+### Webhook Events Handled
+
+| Event | Handler |
+|-------|---------|
+| `checkout.session.completed` | Create subscription + pod (or addon activation) |
+| `customer.subscription.created` | No-op (handled by checkout.session.completed) |
+| `customer.subscription.updated` | Update status, sync tier/IS limits, push tier to pods |
+| `customer.subscription.deleted` | Suspend pods, revoke IS access |
+| `invoice.payment_succeeded` | Reactivate subscription + add-on renewals |
+| `invoice.payment_failed` | Log warning, keep IS active (grace period) |
+
+### Idempotency
+
+- Subscription insert: `ON CONFLICT DO NOTHING` on `stripeSubscriptionId`
+- Pod creation: guarded by one-pod-per-user unique constraint
+- Lifecycle state checks prevent double-suspension
+
+### Tier Resolution
+
+Price IDs resolved to tier via:
+1. `metadata.tierId` in checkout session (API checkout flow)
+2. `findTierByPriceId()` checking env var overrides (`STRIPE_PRICE_SOLO`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`) then pricing package defaults
+
+---
+
+## 10. Auto-Update Pipeline
+
+```
+1. Developer pushes to main branch
+2. GitHub CI builds Docker image → pushes to GHCR
+3. GitHub webhook → POST /webhooks/github (HMAC-SHA256 verified)
+4. CP creates image_releases record
+5. pg-boss rolling-update job:
+   a. Canary: update first pod, 5-min health gate
+   b. Fleet: parallel batches (batchSize=5, 30s between batches)
+6. Per pod:
+   a. Sign ES256 JWT (target version + callback URL + allowExec claim)
+   b. POST /api/pod-agent/command on pod (pod verifies via JWKS)
+   c. pod-agent runs update-pod.sh:
+      - Pull new image (old backend still serving)
+      - Run migrations (zero downtime)
+      - Force-recreate containers (~2-3s gap)
+      - Health check (5-min timeout)
+      - Clean old images (keep last 3)
+   d. pod-agent sends callback to CP (JWT-authenticated)
+   e. CP updates pod status: completed or rolled_back
+```
+
+### Pod-Agent Commands
+
+| Command | Purpose | Auth |
+|---------|---------|------|
+| `update` | Pull images, migrate, restart | ES256 JWT |
+| `suspend` | Stop services except Caddy + pod-agent | ES256 JWT |
+| `restore` | Start all services, health check | ES256 JWT |
+| `configure` | Update .env vars, activate compose profiles | ES256 JWT |
+| `archive` | DB dump + volume tar → S3 presigned upload | ES256 JWT |
+| `exec` | Docker exec in container | ES256 JWT + `allowExec` claim |
+| `agent-update` | Rebuild pod-agent container | ES256 JWT |
+
+No SSH is used. All pod management goes through the pod-agent HTTP API with ES256 JWT authentication.
+
+---
+
+## 11. Security Model
+
+### API Authentication
+
+Routes require a valid Better Auth session (cookie or Bearer token) except:
+- `GET /health`, `GET /.well-known/jwks.json` — public
+- `POST /webhooks/*` — HMAC-verified (Stripe/GitHub)
+- `GET /billing/pricing`, `POST /billing/portal-success` — public
+- `POST /auth/*` — Better Auth managed
+
+### Admin Routes
+
+`/admin/*` requires `session.user.isAdmin === true`. All admin endpoints are rate-limited at 60 requests/minute per admin user (`adminRateLimit`).
+
+### Pod Command Auth (ES256 JWT)
+
+The CP holds an ECDSA P-256 private key (`CP_EC_PRIVATE_KEY`). Pods verify commands by fetching the public key from `GET /.well-known/jwks.json` on the CP. JWT claims include:
+- `podId` — pod's unique identifier
+- `nonce` — UUID, rejected if seen within 10-min TTL
+- `exp` — short expiry (minutes)
+- `allowExec` — explicit claim required for `exec` commands
+
+Pods never trust commands that don't pass JWKS verification.
+
+### Webhook Verification
+
+- **Stripe:** `stripe.webhooks.constructEvent(body, sig, STRIPE_WEBHOOK_SECRET)` — raw body required
+- **GitHub:** `HMAC-SHA256(body, GITHUB_WEBHOOK_SECRET)` header verification
+
+### Metrics Auth
+
+`GET /metrics` requires `Authorization: Bearer {IS_METRICS_TOKEN}`. Returns `503` if `IS_METRICS_TOKEN` is unset (disabled), `401` if wrong token.
+
+### Rate Limiting
+
+| Middleware | Limit | Applied To |
+|-----------|-------|-----------|
+| `generalRateLimit` | 100 req/min | All routes |
+| `authRateLimit` | 10 req/min | `/auth/sign-in`, `/auth/sign-up` |
+| `provisioningRateLimit` | 3 req/hour (IP) | `POST /pods` |
+| `userProvisioningRateLimit` | 5 req/hour (user) | Pod setup form |
+| `strictRateLimit` | 5 req/min | Billing checkout/portal |
+| `adminRateLimit` | 60 req/min (admin user) | All `/admin/*` routes |
+
+Default store: in-memory. Set `RATE_LIMIT_STORE=redis` + `REDIS_URL` for distributed deployments.
+
+### Audit Logging
+
+Every mutation is logged to `audit_events` with `userId`, `podId`, `action`, sanitized `metadata` (tokens/passwords stripped).
+
+---
+
+## 12. Environment Variables Reference
+
+See `.env.example` for the full list with descriptions. Key required variables:
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `BETTER_AUTH_SECRET` | Session signing secret (min 32 chars) |
+| `BETTER_AUTH_URL` | CP public URL (e.g. `https://api.synap.live`) |
+| `FRONTEND_URL` | Dashboard URL (e.g. `https://dashboard.synap.live`) |
+| `HETZNER_API_TOKEN` | Hetzner Cloud API key for VPS provisioning |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token (Zone DNS Edit scope) |
+| `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `INTELLIGENCE_HUB_URL` | IS base URL (e.g. `http://localhost:4000`) |
+| `INTELLIGENCE_HUB_ADMIN_KEY` | IS admin API key for `/admin/*` endpoints |
+| `INTELLIGENCE_HUB_INTERNAL_KEY` | Hub Protocol key (min 32 chars) |
+| `RESEND_API_KEY` | Resend API key for transactional email |
+| `CP_EC_PRIVATE_KEY` | ES256 ECDSA P-256 PKCS#8 PEM key (pod auth) |
+| `CP_ENCRYPTION_KEY` | AES-256-GCM key for encrypting sensitive fields at rest |
+| `IS_METRICS_TOKEN` | Bearer token for Prometheus metrics scraping |
+| `APP_DOMAIN` | Root domain for pods (e.g. `synap.live`) |
+
+### Production-Specific
+
+| Variable | Description |
+|----------|-------------|
+| `DEPLOY_VERSION` | Pod installer version — **pin to a release tag**, never `main` in production |
+| `POD_SSH_PRIVATE_KEY` | Ed25519 key (base64) injected via cloud-init to pods (for legacy paths) |
+| `API_DOMAIN` | CP public domain for Caddy TLS (`api.synap.live`) |
+| `ADMIN_EMAIL` | Platform admin email for `./synap-cp provision-admin` |
+| `DOKPLOY_API_KEY` | Dokploy API key (auto-provisioned by `./synap-cp bootstrap-dokploy`) |
+| `REDIS_URL` | Redis URL for distributed rate limiting |
+| `SENTRY_DSN` | Sentry error tracking DSN |

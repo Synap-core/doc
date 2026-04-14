@@ -1,0 +1,11 @@
+{
+  "title": "Guides",
+  "pages": [
+    "overview",
+    "monorepo-structure",
+    "code-style",
+    "testing",
+    "router-development",
+    "event-system"
+  ]
+}

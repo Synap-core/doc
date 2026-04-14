@@ -1,0 +1,243 @@
+---
+title: "Security Audit"
+description: "Production readiness audit findings and fix status."
+---
+
+# Control Plane — Production Readiness Audit
+
+> Original audit: 2026-03-06
+> Updated: 2026-04-12 — reflects all changes made through April 2026
+> Scope: Full codebase review — correctness, security, reliability, observability, edge cases.
+
+Severity legend: **[CRITICAL]** blocks production · **[HIGH]** should fix before launch · **[MEDIUM]** fix soon after launch · **[LOW]** quality improvement
+
+---
+
+## Summary
+
+| Severity | Count | Status |
+|----------|-------|--------|
+| CRITICAL | 3 | All fixed |
+| HIGH | 10 | 9 fixed. H9, H10 (new) under review. |
+| MEDIUM | 8 | M3/M5/M6/M8 fixed. M1/M2/M4/M7 open (low-risk). |
+| LOW | 6 | L3/L5 fixed. L1/L2/L4/L6 open (code quality + config). |
+
+### Remaining operator actions (configuration, not code)
+
+| Item | Action required |
+|------|----------------|
+| `DEPLOY_VERSION` | Set to a release tag (e.g. `v1.0.0`) in `.env` before provisioning any pod |
+| `ARCHIVE_STORAGE_ENDPOINT/BUCKET/ACCESS_KEY/SECRET_KEY` | Create Hetzner Object Storage bucket; fill 4 vars in `.env` |
+| `STRIPE_PRICE_ADDON_ARCHIVE_RETENTION_MONTHLY/ANNUAL` | Create archive-retention product in Stripe dashboard; fill 2 vars in `.env` |
+| `IS_METRICS_TOKEN` | Generate and set in `.env`; write to `monitoring/secrets/cp_metrics_token` |
+| Dokploy IS server | Add IS server to Dokploy via Settings → Servers (see OPERATIONS-GUIDE.md) |
+
+---
+
+## CRITICAL (All Fixed)
+
+### C1 — `DEPLOY_VERSION=main` in production  FIXED
+
+Added startup assertion in `env.ts` that rejects `DEPLOY_VERSION=main` when `NODE_ENV=production`. Operators must pin to a release tag.
+
+---
+
+### C2 — Archive S3 credentials not set → silent archive failure  FIXED
+
+`archive-pod` job now hard-fails (pod stays `suspended`) if S3 credentials are missing. Emits a clear error log. No longer silently destroys user data by deleting server without a valid archive.
+
+---
+
+### C3 — SSH key not set → tasks crash  FIXED
+
+SSH has been **completely removed**. All pod management now goes through the pod-agent HTTP API with ES256 JWT authentication. `POD_SSH_PRIVATE_KEY` is no longer used for runtime operations (only injected via cloud-init for pod setup). No SSH dependency at runtime.
+
+---
+
+## HIGH
+
+### H1 — `pending_configuration` pods are orphaned if user never completes setup  FIXED
+
+`stuck-pod-detector` job (runs every 15 min) detects pods stuck in `pending_configuration` for >48h and sends a reminder email. Pods stuck >7 days trigger admin alert.
+
+---
+
+### H2 — Re-subscribe goes straight to restore, bypassing setup form
+
+Intentional by design. For suspended pods: restores to same server (correct). For archived pods: restores to same config on new server. Acceptable — changing location on re-subscribe is not a supported flow.
+
+---
+
+### H3 — `revokeIntelligenceForUser` uses raw `process.env`  FIXED
+
+All Hub calls now use the validated `env` object with correct `X-Internal-Key` header.
+
+---
+
+### H4 — `addonSubscriptions.metadata` JSONB vs string handling  FIXED
+
+Schema confirmed as `jsonb`. Object passed directly (no `JSON.stringify`). Drizzle type matches.
+
+---
+
+### H5 — `subscription.resubscribe` is not a valid `AuditAction`  FIXED
+
+Added to `auditActionEnum` and DB migration applied.
+
+---
+
+### H6 — `serverLocation` flows through to Hetzner API  FIXED
+
+Traced and confirmed: `serverLocation` from setup form is passed through `provision-pod.ts` → `HetznerProvisioner.createServer()`. Pod is created in user's selected location.
+
+---
+
+### H7 — Subdomain uniqueness check TOCTOU race  FIXED
+
+
+Subdomain check + update wrapped in DB transaction. Unique constraint violation caught and returned as `409`.
+
+---
+
+### H8 — Metrics endpoint unauthenticated (new finding, April 2026)  FIXED
+
+`GET /metrics` now requires `Authorization: Bearer {IS_METRICS_TOKEN}`. Returns `503` if `IS_METRICS_TOKEN` is not set (disabled endpoint), `401` if wrong token. Prometheus scrapes via `credentials_file` in `monitoring/prometheus.yml`.
+
+---
+
+### H9 — Control plane exposed on 0.0.0.0 (new finding, April 2026)  FIXED
+
+`control-plane` port binding changed to `127.0.0.1:3001:3000`. Only Caddy can reach it; direct internet access to port 3001 is blocked.
+
+---
+
+### H10 — Admin endpoints had no rate limiting (new finding, April 2026)  FIXED
+
+`adminRateLimit` (60 req/min per admin user, keyed by `user.id`) applied to the entire `/admin/*` router. Prevents runaway scripts from hammering fleet endpoints or triggering mass provisioning.
+
+---
+
+## MEDIUM
+
+### M1 — No retry for `pending_configuration` pods after setup submission fails
+
+If `provision-pod` job fails to queue after DB update to `"pending"`, pod is stuck. `stuck-pod-detector` catches this as a stuck-in-pending pod and alerts, but no auto-retry. **Open — low risk**, stuck-pod-detector provides visibility.
+
+---
+
+### M2 — `pushTierToPods` JWT embeds `resendApiKey`
+
+Pod JWT contains Resend API key in payload. Risk: if pod stores JWT or logs it, email key is exposed. **Open** — email key should be provisioned once at pod setup, not re-injected on tier change. Accepted as low-risk for now (pod stores keys in encrypted vault).
+
+---
+
+### M3 — Custom domain ignored in IS sync calls  FIXED
+
+All IS sync calls (`syncCustomer`, `provisionPod`) now use `pod.customDomain ?? pod.subdomain + APP_DOMAIN` for `dataPodUrl`. Custom domain pods no longer have mismatched IS records.
+
+---
+
+### M4 — `check-suspended-pods` day-count arithmetic is timezone-sensitive
+
+`Math.floor((now - suspendedAt) / DAY_MS)` could fire a day early/late across DST or NTP adjustment. **Open — very low risk** (server runs UTC, DST not a factor on the Linux host).
+
+---
+
+### M5 — No email sent when provisioning fails  FIXED
+
+`sendPodErrorEmail()` is correctly called on terminal failure (after all 3 retries exhausted). Tested in staging.
+
+---
+
+### M6 — Temp archive file not cleaned on S3 upload failure  FIXED
+
+`try/finally` added to always unlink temp archive file, even if S3 upload fails.
+
+---
+
+### M7 — Setup form doesn't re-validate tier when submitted
+
+If subscription tier changed between checkout and form submission, the pod gets the old server type. **Open — extremely unlikely** (checkout and form submit are typically seconds/minutes apart).
+
+---
+
+### M8 — `findTierByPriceId` only checked package defaults  FIXED
+
+`findTierByPriceId` now checks `STRIPE_PRICE_SOLO`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM` env var overrides first, then falls back to pricing package defaults. No longer misses tier on env-override deployments.
+
+---
+
+## LOW
+
+### L1 — Duplicate subdomain generator implementations
+
+Two implementations: `generateSubdomain` in `pods.ts` and `generatePodSubdomain` in `webhooks.ts`. **Open** — functionally equivalent, extract to `src/lib/subdomain.ts` is a good-to-have.
+
+---
+
+### L2 — `tier.features.serverType` uppercase dependency
+
+Pricing returns `"CX23"` but Hetzner expects lowercase. `.toLowerCase()` applied in all paths. **Open** — silent dependency, add test to catch if `.toLowerCase()` is removed.
+
+---
+
+### L3 — `addonSubscriptions.metadata` TypeScript schema type  FIXED
+
+`metadata` column correctly typed as `jsonb` in Drizzle schema. No more TypeScript errors.
+
+---
+
+### L4 — Hardcoded `"solo"` fallback tier
+
+`?? "solo"` scattered in multiple places. **Open** — extract to `DEFAULT_TIER` constant from pricing package.
+
+---
+
+### L5 — No cleanup of `intelligence_access` on pod permanent delete  FIXED
+
+Purge path now calls `intelligenceHub.deleteCustomer(accessRecord.id)` for all IS access records when marking pod as `"deleted"`.
+
+---
+
+### L6 — `STRIPE_PRICE_ADDON_ARCHIVE_RETENTION_MONTHLY/ANNUAL` not configured
+
+Archive-retention add-on returns `"not yet available"` until Stripe products are created and price IDs set. **Open** — operator action required.
+
+---
+
+## Infrastructure Changes (April 2026)
+
+These are architectural changes made since the original audit that affect the security and reliability posture:
+
+| Change | Impact |
+|--------|--------|
+| Trigger.dev → pg-boss | 4 containers removed, 450MB RAM freed, no external job service dependency |
+| SSH → pod-agent HTTP | All pod management via ES256 JWT; no SSH runtime dependency |
+| ES256 JWT + JWKS | Asymmetric auth — CP private key never leaves CP server |
+| JTI nonce replay protection | 10-min in-memory TTL prevents JWT reuse |
+| IS_METRICS_TOKEN | Prometheus scrape endpoint now authenticated |
+| adminRateLimit | 60 req/min per admin on all /admin/* routes |
+| control-plane localhost-only | Port binding to 127.0.0.1:3001 — not internet-accessible |
+| HSTS enabled | `Strict-Transport-Security: max-age=31536000; includeSubDomains` |
+| Caddy Permissions-Policy | `geolocation=(), camera=(), microphone=(), payment=()` |
+| `_gen()` hardened | Fails with error if neither openssl nor /dev/urandom available (no predictable fallback) |
+| Dokploy credentials isolated | Admin credentials in `.dokploy-credentials` (chmod 600, gitignored) — not mixed into `.env` |
+
+---
+
+## Recommended Action Order (Current)
+
+### Before First Production User
+
+All critical items are fixed. Remaining operator actions:
+1. Pin `DEPLOY_VERSION` to a release tag in `.env`
+2. Set archive storage credentials (`ARCHIVE_STORAGE_*`)
+3. Set `IS_METRICS_TOKEN` + write to `monitoring/secrets/cp_metrics_token`
+4. Create archive-retention Stripe products (`L6`)
+
+### Ongoing
+
+5. Monitor `GET /admin/jobs` for persistent job failures
+6. Add IS server to Dokploy (see OPERATIONS-GUIDE.md §"Dokploy Setup")
+7. Import Grafana dashboards (Node Exporter Full #1860, cAdvisor #14282)
+8. Configure Uptime Kuma monitors for all public endpoints

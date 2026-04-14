@@ -1,0 +1,25 @@
+{
+  "title": "DevOps",
+  "description": "Onboarding, Docker, security, tooling",
+  "root": true,
+  "icon": "terminal",
+  "pages": [
+    "index",
+    "---",
+    "New Developers",
+    "start-here",
+    "quick-start",
+    "unified-setup",
+    "frontend-connection",
+    "sdk-reference",
+    "---",
+    "Security",
+    "security-practices",
+    "ai-governance",
+    "auth-audit",
+    "---",
+    "Infrastructure",
+    "docker-architecture",
+    "backlink-strategy"
+  ]
+}

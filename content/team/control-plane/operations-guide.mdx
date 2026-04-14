@@ -1,0 +1,416 @@
+---
+title: "Operations Guide"
+description: "Install, update, Dokploy, monitoring, incident runbooks."
+---
+
+# Synap Control Plane — Operations Guide
+
+This document explains how the control plane infrastructure fits together and
+what manual steps are needed for anything not yet automated by `synap-cp`.
+
+---
+
+## Architecture Overview
+
+```
+Internet
+  │
+  ▼ :80/:443
+┌─────────┐
+│  Caddy  │  ← Automatic HTTPS (Let's Encrypt)
+└────┬────┘
+     │ routes by hostname
+     ├── api.synap.live      → control-plane:3000
+     ├── deploy.synap.live   → dokploy:3000
+     ├── nango.synap.live    → nango-server:3003
+     ├── grafana.synap.live  → grafana:3000  (synap-monitoring network)
+     └── registry.synap.live → registry:5000
+
+Docker networks:
+  synap-network     — all CP services (postgres, redis, caddy, control-plane,
+                      dokploy, registry, rsshub, browserless, nango)
+  synap-monitoring  — Prometheus + Grafana (docker-compose.monitoring.yml)
+                      Caddy bridges both networks to reach Grafana.
+```
+
+---
+
+## Fully Automated (no manual steps)
+
+These are handled by `./synap-cp install` or `./synap-cp update`:
+
+| Task | Trigger |
+|------|---------|
+| TLS certificates | Caddy auto-acquires via Let's Encrypt on first request |
+| DNS A records | `_provision_infra_dns()` — Cloudflare API on install/update |
+| Dokploy admin account | `_bootstrap_dokploy()` — creates admin + API key |
+| Compose stack registration | `_register_services_with_dokploy()` — after bootstrap |
+| Secret generation | `DOKPLOY_SECRET`, `CP_EC_PRIVATE_KEY` auto-generated if missing |
+| DB creation | `synap_dokploy`, `synap_nango` created if missing |
+| Network creation | `synap-network`, `synap-monitoring` created before `dc up` |
+| Orphan removal | `dc up -d --remove-orphans` cleans retired containers |
+
+---
+
+## Dokploy — Deployment Dashboard (`deploy.synap.live`)
+
+### What it replaces
+
+| Removed service | Dokploy equivalent |
+|-----------------|--------------------|
+| Trigger.dev     | Background jobs moved to pg-boss (no replacement UI needed) |
+| Uptime Kuma     | Dokploy service health monitoring |
+| Dozzle          | Dokploy container log viewer |
+
+### First-time setup (automated)
+
+`./synap-cp install` does this automatically. If it fails mid-way:
+
+```bash
+./synap-cp bootstrap-dokploy    # Create admin account + API key
+./synap-cp register-dokploy     # Register compose stack with Dokploy
+```
+
+### What auto-registration does
+
+Creates a project `synap-control-plane` in Dokploy with a Docker Compose app
+pointing at `/opt/synap/docker-compose.prod.yml`. All containers then appear
+in the Dokploy dashboard with live logs and CPU/RAM stats.
+
+If the Dokploy API format changes between versions (it uses tRPC internally),
+auto-registration may fail silently. In that case, register manually:
+
+**Manual registration in Dokploy UI:**
+1. Go to `https://deploy.synap.live`
+2. Create project: `synap-control-plane`
+3. Add app → Docker Compose → Source: Local path
+4. Path: `/opt/synap/docker-compose.prod.yml`
+5. Click "Deploy" to load services
+
+### Adding the IS server as a remote server
+
+The Intelligence Service runs on a separate server (not the CP host). To manage
+it from the Dokploy dashboard:
+
+1. `deploy.synap.live` → Servers → Add Server
+2. Fill in:
+   - **Name**: `intelligence-hub`
+   - **IP**: `<IS server IP from docs/INFRASTRUCTURE-STATUS.md>`
+   - **SSH user**: `root` (or the deploy user)
+   - **SSH key**: paste the contents of `/root/.ssh/id_rsa.pub` on the CP server
+     (Dokploy uses this key to SSH into the IS server)
+3. Click "Validate connection"
+4. Once connected, add the IS compose stack:
+   - Servers → `intelligence-hub` → Add Application → Docker Stack
+   - Source: remote path → `/opt/synap-is/deploy/docker-stack.yml`
+
+This gives you per-replica container logs, CPU/RAM, and restart buttons for
+every IS instance without needing direct SSH access.
+
+### IS swarm scaling via Dokploy
+
+After the IS server is added, you can scale replicas from the Dokploy UI:
+- Servers → `intelligence-hub` → IS service → Scale
+
+Or from the CP host via CLI (if you have SSH access):
+```bash
+# SSH into IS server, then:
+docker service scale synap_intelligence-hub=5
+```
+
+The IS autoscaler (`deploy/autoscaler.sh` on the IS server) handles automatic
+scaling based on LLM concurrency. Manual scaling overrides it temporarily;
+the autoscaler will correct back within 5 minutes.
+
+---
+
+## Monitoring Stack — Grafana (`grafana.synap.live`)
+
+### First-time setup
+
+The monitoring stack is separate from the main compose:
+
+```bash
+# Start Prometheus + Grafana
+./synap-cp monitoring start
+
+# Or manually:
+docker compose -f docker-compose.monitoring.yml up -d
+```
+
+Grafana will be available at `https://grafana.synap.live` once Caddy is running.
+
+Default credentials (change immediately):
+- User: `admin`
+- Password: set in `.env` as `GRAFANA_ADMIN_PASSWORD` (auto-generated by install)
+
+### Configuring dashboards
+
+Provisioned dashboards are in `monitoring/grafana/provisioning/`. Pre-configured:
+- **Container metrics** (cAdvisor): CPU, RAM, network per container
+- **CP API**: request rate, error rate, latency
+- **IS metrics**: LLM concurrency, active replicas, token usage
+
+To add the IS server's Prometheus as a data source:
+1. Grafana → Connections → Add data source → Prometheus
+2. URL: `http://<IS server IP>:9090`
+3. Name: `IS Prometheus`
+
+### Prometheus scrape targets
+
+`monitoring/prometheus.yml` currently scrapes:
+- `control-plane:3001/metrics` — CP API metrics
+- `ai.synap.live/metrics` — IS metrics (requires IS to be accessible)
+- `rsshub:1200/` — RSSHub health (no Prometheus endpoint, just liveness)
+- cAdvisor (all containers) — if cAdvisor is added to monitoring compose
+
+To add IS Prometheus remote-write back to CP Prometheus, add to `prometheus.yml`:
+```yaml
+remote_write:
+  - url: http://prometheus:9090/api/v1/write
+```
+(on the IS server's Prometheus config)
+
+---
+
+## Intelligence Service Fleet
+
+### Current model
+
+One managed IS at `ai.synap.live` handles all AI requests. Users can also
+register their own self-hosted IS instances (visible in CP admin as
+"User Agent Services").
+
+### Viewing fleet health
+
+Admin API (requires admin session):
+```
+GET /admin/intelligence/fleet
+```
+
+Returns real-time health of all IS instances (primary + user-registered) with:
+- Status: `healthy` / `degraded` / `unhealthy` / `unreachable` / `timeout`
+- LLM concurrency: active + queued requests
+- Latency (ms)
+- Uptime
+
+### Adding a second managed IS instance
+
+Currently the CP routes to a single `INTELLIGENCE_HUB_URL`. To add a second:
+
+1. Deploy the IS on a new server (same docker-stack.yml, different host)
+2. Register it in the CP database:
+   ```sql
+   INSERT INTO user_agent_services (id, user_id, name, url, status, created_at, updated_at)
+   VALUES (gen_random_uuid(), '<admin-user-id>', 'IS Region 2', 'https://ai2.synap.live', 'connected', now(), now());
+   ```
+   *(A proper admin API endpoint for this is planned — Phase 4)*
+3. The `/admin/intelligence/fleet` endpoint will pick it up immediately
+
+Pod routing to multiple IS instances requires a backend change
+(`synap-backend/packages/database/src/utils/default-intelligence-endpoint.ts`)
+to implement round-robin instead of `findFirst()`.
+
+---
+
+## pg-boss Job Queue
+
+Background jobs use pg-boss (PostgreSQL-backed job queue). Visibility:
+
+```
+GET /admin/jobs    # Queue stats + failed jobs + 7-day archive count
+```
+
+### Investigating stuck jobs
+
+```bash
+# SSH into CP server, then:
+docker exec -it synap-postgres psql -U synap -d synap_control_plane
+
+-- See active jobs
+SELECT id, name, data, createdon FROM pgboss.job WHERE state = 'active';
+
+-- See failed jobs with errors
+SELECT id, name, output, createdon, completedon
+FROM pgboss.job WHERE state = 'failed'
+ORDER BY completedon DESC LIMIT 20;
+
+-- Retry a failed job
+UPDATE pgboss.job SET state = 'created' WHERE id = '<job-id>';
+```
+
+### Known job queues
+
+| Queue | Purpose |
+|-------|---------|
+| `provision-pod` | Hetzner server create + setup |
+| `deprovision-pod` | Server teardown + DNS cleanup |
+| `rolling-update` | Fleet-wide pod updates |
+| `billing-sync` | Stripe subscription reconciliation |
+| `intelligence-health-check` | Periodic IS health polling |
+| `admin-renew` | Monthly admin session renewal |
+
+---
+
+## Network Topology
+
+```
+synap-network (bridge)
+  ├── control-plane
+  ├── postgres
+  ├── redis
+  ├── caddy              ← also on synap-monitoring
+  ├── dokploy
+  ├── registry
+  ├── rsshub
+  ├── browserless
+  └── nango-server (if enabled)
+
+synap-monitoring (bridge, external to main compose)
+  ├── prometheus
+  ├── grafana
+  └── caddy              ← bridges to grafana.synap.live proxy
+```
+
+`synap-monitoring` is created automatically by `_ensure_networks()` in `synap-cp`
+before any `dc up`. If you start services manually without `synap-cp`, create
+the network first:
+
+```bash
+docker network create synap-monitoring 2>/dev/null || true
+docker compose -f docker-compose.prod.yml up -d
+```
+
+---
+
+## Caddy — TLS & Routing
+
+Caddyfile location: `/opt/synap/Caddyfile`
+
+### Adding a new subdomain
+
+```bash
+./synap-cp domain add <subdomain> <upstream-container>:<port>
+# Example:
+./synap-cp domain add status status-page:3000
+```
+
+Or manually edit `Caddyfile` and reload:
+```bash
+docker exec synap-caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+### Checking TLS certificate status
+
+```bash
+docker exec synap-caddy caddy certificates
+```
+
+### Forcing certificate renewal
+
+```bash
+docker exec synap-caddy caddy renew
+```
+
+---
+
+## Backup & Recovery
+
+Automated daily backups: `synap-pgbackup` container backs up `synap_control_plane`
+and `synap_dokploy` databases to `/opt/synap/backups/`.
+
+```bash
+# Manual backup
+./synap-cp backup
+
+# List backups
+ls -lh /opt/synap/backups/
+
+# Restore
+./synap-cp restore /opt/synap/backups/<file>.sql.gz
+```
+
+---
+
+## Firewall
+
+The CP server should only expose ports 22 (SSH), 80 (HTTP→HTTPS redirect), 443 (HTTPS).
+All other ports should be blocked. Configure:
+
+```bash
+./synap-cp firewall
+```
+
+This sets up `ufw` with the correct rules. Verify with:
+```bash
+ufw status
+```
+
+Expected output:
+```
+22/tcp    ALLOW
+80/tcp    ALLOW
+443/tcp   ALLOW
+(everything else)  DENY
+```
+
+---
+
+## Runbook: Full Fresh Install
+
+```bash
+# 1. Clone repo on server
+git clone https://github.com/Synap-core/control-plane-api /opt/synap
+cd /opt/synap
+
+# 2. Copy env template and fill required values
+cp .env.example .env
+nano .env   # Fill: POSTGRES_PASSWORD, BETTER_AUTH_SECRET, HETZNER_API_TOKEN,
+            #       CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID, STRIPE_* keys,
+            #       INTELLIGENCE_HUB_URL, INTELLIGENCE_HUB_ADMIN_KEY,
+            #       RESEND_API_KEY
+
+# 3. Run install (handles everything else automatically)
+./synap-cp install
+
+# 4. Verify
+./synap-cp status
+./synap-cp health
+```
+
+After install, `./synap-cp status` should show all services green and
+report the admin credentials for Dokploy.
+
+## Runbook: Update Existing Install
+
+```bash
+cd /opt/synap
+./synap-cp update
+```
+
+This: pulls latest code → rebuilds image → runs migrations → recreates
+control-plane → starts all services with orphan removal → bootstraps any
+missing secrets/keys → notifies Dokploy.
+
+---
+
+## Environment Variables Reference
+
+See `.env.example` for full documentation. The most operationally important:
+
+| Variable | Where set | Auto-generated? |
+|----------|-----------|-----------------|
+| `POSTGRES_PASSWORD` | Manual | No |
+| `BETTER_AUTH_SECRET` | Manual | No |
+| `HETZNER_API_TOKEN` | Manual | No |
+| `CLOUDFLARE_API_TOKEN` | Manual | No |
+| `CLOUDFLARE_ZONE_ID` | Manual | No |
+| `STRIPE_SECRET_KEY` | Manual | No |
+| `INTELLIGENCE_HUB_URL` | Manual | No |
+| `INTELLIGENCE_HUB_ADMIN_KEY` | Manual | No |
+| `RESEND_API_KEY` | Manual | No |
+| `DOKPLOY_SECRET` | Auto (install/update) | Yes |
+| `CP_EC_PRIVATE_KEY` | Auto (install/update) | Yes |
+| `DOKPLOY_API_KEY` | Auto (bootstrap) | Yes |
+| `NANGO_SECRET_KEY` | Auto (install) | Yes |
+| `GRAFANA_ADMIN_PASSWORD` | Auto (install) | Yes |

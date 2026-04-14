@@ -1,0 +1,157 @@
+---
+title: "External API"
+description: "External API next steps and design decisions."
+---
+
+# External API — Next Steps & Known Gaps
+
+**Status:** Implementation complete (Options C + D). Pre-GA hardening in progress.
+**Date:** 2026-03-26
+**Audience:** Backend + Browser devs who built this system.
+
+---
+
+## 1. What Was Built
+
+### Option C — Skill Invocation
+
+Two endpoints exposing pod skills to external callers over plain HTTP:
+
+- `GET /api/external/skills` — lists all skills accessible to the authenticated API key (filtered by workspace, returns `id`, `name`, `description`, `inputSchema`, `executionMode`).
+- `POST /api/external/skills/:id/invoke` — invokes a skill by UUID, passes `input` through to the existing IS execution path, returns result synchronously. Skill sandbox (isolated-vm) is unchanged.
+
+Auth guard: `externalApiKeyAuth("skills.invoke")` from `packages/api/src/routers/external/middleware.ts`.
+
+### Option D — Chat Stream Proxy
+
+Two endpoints exposing IS chat to external callers over SSE:
+
+- `GET /api/external/chat/channels` — lists AI-thread channels the key's user can access (returns `id`, `name`, `kind`).
+- `POST /api/external/chat/stream` — accepts `{ query, channelId? }`, proxies to IS `/chat/stream`, streams SSE tokens back to the caller. If no `channelId` is provided, falls back to the user's personal channel.
+
+Auth guard: `externalApiKeyAuth("chat.stream")`. IS credentials are never forwarded to the caller.
+
+Infrastructure shared by both: `packages/api/src/routers/external/middleware.ts`. Mounted at `/api/external/*` in `apps/api/src/index.ts`.
+
+---
+
+## 2. What Is Not Built Yet
+
+### Near-term (required before GA)
+
+**Skill slugs** (`~0.5 day`)
+Skills are currently invoked by UUID only. Add a `slug` column (unique per pod, URL-safe string) to the `skills` table so callers can use human-readable paths like `/api/external/skills/extract-contacts/invoke`.
+- Files: `packages/database/src/schema/skills.ts`, new Drizzle migration (`pnpm drizzle-kit generate`), `packages/api/src/routers/external/skills.ts` (add `GET /skills/:slug` lookup).
+
+**OpenAPI spec** (`~1 day`)
+`GET /api/external/openapi.json` returning a static OpenAPI 3.1 document for all 4 endpoints. Required for Claude API function calling auto-discovery, Cursor tool discovery, and Zapier. No runtime schema generation — just a maintained static file.
+- File: `packages/api/src/routers/external/openapi.ts`. Mount before dynamic routes.
+
+**Settings UI: "Connect external tools"** (`~0.5 day`)
+In the API Keys settings tab, add a section that shows: the pod URL, a copyable API key creation flow with preset scope bundles (Read-only / Skills runner / Chat / Full external), and the equivalent `claude mcp add` snippet.
+- Files: browser settings view or `synap-app/packages/features/workspace-settings/`.
+
+**Fix `invites` export for `db.query`** (`~0.5 day`)
+The unified invites migration renamed `workspaceInvites` → `invites`. Verify that `synap-backend/packages/database/src/db.ts` (the `drizzle(pool, { schema })` call) includes the renamed table so `db.query.invites` resolves without a typecheck warning. Currently surfaces as a warning in `workspaces.ts` and `kratos-sync.ts`.
+
+### Medium-term
+
+**Rate limit config per scope** — `chat.stream` should have a lower cap (e.g., 20 req/min) than `hub-protocol` (600/min). Add per-route overrides in `external/chat.ts` and `external/skills.ts` rather than relying on the global limiter.
+
+**Scope bundles in API key creation UI** — preset bundles in the key creation dialog: Read-only, Agent, Skills runner, Chat, Full external. Saves devs from manually selecting individual scopes.
+
+**Skill slugs v2** — surface the `slug` field in the skill creation/edit form in the UI.
+
+**Per-skill access tokens** — optionally restrict a skill to a specific API key (fine-grained access for published/shared skills).
+
+**Skill output schema** — add `outputSchema: JSONSchema` to the `skills` table so callers know what shape to expect without invoking first.
+
+**Webhook callbacks for async skills** — skills with `executionMode: "async"` currently return synchronously anyway. Add an optional `callbackUrl` in the invoke request body; IS posts the result there when execution completes.
+
+**Option E developer guide** — write `users-docs/docs/integrations/external-api.md` covering the three integration patterns: E1 (read entities, inject into own LLM), E2 (Hub Protocol direct), E3 (compose C+D).
+
+### Long-term / v2
+
+**`@synap/cli`** — `npx @synap/cli connect` that reads a pod URL + API key, writes a local config file, and configures MCP or direct tool access in one command.
+
+---
+
+## 3. Known Limitations
+
+| Limitation | Impact | Fix |
+|---|---|---|
+| Skills invoked by UUID only | Brittle integrations, not human-readable | Skill slugs (near-term above) |
+| No OpenAPI spec | Manual curl only; no tool auto-discovery by Claude/Cursor/Zapier | `openapi.ts` endpoint |
+| `chat.stream` personal channel: 404 if user has zero workspaces | New users / fresh pods can't use chat proxy | Guard + clear error message before GA |
+| No per-skill rate limiting | One key can flood skill execution queue | Per-route rate limit overrides |
+| `executionMode: "async"` not differentiated | Async skills block the request anyway | Webhook callbacks (medium-term) |
+| No webhook callback support | Callers must poll or hold connection for slow skills | See above |
+| IS timeout hard-coded at 120s | Long-running skills silently cut off | Make configurable per skill or per invoke request |
+
+---
+
+## 4. How to Validate the Implementation
+
+No automated tests exist yet. Manual validation procedure:
+
+```bash
+# Step 1: Create an API key with skills.invoke + chat.stream scopes
+# Use tRPC (trpc.apiKeys.create) or the API Keys tab in Settings.
+# Store the returned key as KEY.
+
+export KEY="synap_pod_..."
+export BASE="http://localhost:4000"
+
+# Step 2: List skills
+curl "$BASE/api/external/skills" \
+  -H "Authorization: Bearer $KEY"
+# Expect: JSON array of skill objects with id, name, description, inputSchema.
+
+# Step 3: Invoke a skill by UUID
+# Replace <skill-id> with a real UUID from step 2.
+curl -X POST "$BASE/api/external/skills/<skill-id>/invoke" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"input": {}}'
+# Expect: JSON result from IS execution. No 401 / 403.
+
+# Step 4: List chat channels
+curl "$BASE/api/external/chat/channels" \
+  -H "Authorization: Bearer $KEY"
+# Expect: JSON array including at least the user's personal ai_thread channel.
+
+# Step 5: Chat stream (SSE)
+curl -X POST "$BASE/api/external/chat/stream" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "Hello, what can you do?"}' \
+  --no-buffer
+# Expect: SSE event stream. First tokens within ~2s. Connection closes cleanly.
+
+# Step 6: Wrong scope
+# Create a key with only skills.invoke, then hit /api/external/chat/stream.
+# Expect: 403 Forbidden.
+
+# Step 7: Invalid key
+curl "$BASE/api/external/skills" \
+  -H "Authorization: Bearer synap_pod_invalid"
+# Expect: 401 Unauthorized.
+```
+
+Edge cases to spot-check manually:
+- Invoke a skill that does not belong to the key's workspace → 404.
+- Invoke with malformed `input` that fails the skill's `inputSchema` → 400 with validation detail.
+- `POST /api/external/chat/stream` without a `channelId` on a fresh workspace (no channels yet) → should return a useful error, not a 500.
+
+---
+
+## 5. Files Reference
+
+| File | Purpose |
+|---|---|
+| `packages/api/src/routers/external/middleware.ts` | `externalApiKeyAuth(scope)` shared guard |
+| `packages/api/src/routers/external/skills.ts` | Option C endpoints |
+| `packages/api/src/routers/external/chat.ts` | Option D endpoints |
+| `apps/api/src/index.ts` | Mount point at `/api/external/*` |
+| `packages/database/src/schema/skills.ts` | Add `slug` column here |
+| `packages/database/src/db.ts` | Verify `invites` table in schema object |

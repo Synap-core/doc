@@ -1,0 +1,492 @@
+---
+title: "External Integrations"
+description: "External service integration design: Nango, webhooks, APIs."
+---
+
+# External Integration Design — Options C, D, E
+
+**Status:** Awaiting approval
+**Date:** 2026-03-26
+**Scope:** How external AI tools (Claude Code, custom agents, LLM pipelines) integrate with a Synap data pod
+
+---
+
+## 0. Guiding Principles
+
+1. **No new protocol.** No MCP, no GraphQL, no gRPC. Plain HTTP + SSE. Everything behind a pod URL.
+2. **No redundancy.** The skill execution path (pod → IS → isolated-vm) already exists. The IS chat stream already exists. We proxy and expose — we don't rebuild.
+3. **One auth model.** API keys with scopes, already in the DB. Two new scopes: `skills.invoke` and `chat.stream`.
+4. **Minimal new surface.** A single new route prefix: `POST|GET /api/external/...`. Clean separation from Hub Protocol (IS-internal) and tRPC (frontend).
+5. **Security-first.** Skill sandbox unchanged. Chat proxy never leaks IS credentials. Scopes enforced per-endpoint.
+
+---
+
+## 1. Architecture Overview
+
+```
+External Caller (Claude Code, custom agent, any HTTP client)
+  │
+  │  API key (Bearer sk_live_...)
+  ▼
+┌─────────────────────────────────────┐
+│  Pod Backend — /api/external/*      │
+│  (new — thin auth + routing layer)  │
+├────────────────┬────────────────────┤
+│  /skills/*     │  /chat/*           │
+│  scope:        │  scope:            │
+│  skills.invoke │  chat.stream       │
+└───────┬────────┴──────┬─────────────┘
+        │               │
+        │               │  proxy (IS URL from pod settings)
+        ▼               ▼
+  ┌──────────┐   ┌───────────────────────┐
+  │  IS      │   │  IS                   │
+  │  skills  │   │  POST /api/chat/stream│
+  │  execute │   │  SSE response         │
+  └──────────┘   └───────────────────────┘
+        │
+   isolated-vm sandbox
+   (existing, unchanged)
+```
+
+The pod backend is the single entry point. External callers never talk directly to IS. The pod validates, routes, and proxies.
+
+---
+
+## 2. Option C — Skills as HTTP-Invokable Operations
+
+### What it enables
+
+A skill becomes a named, callable HTTP endpoint. A developer (or AI) can:
+- List available skills with their input schemas
+- Invoke any skill by ID with typed inputs
+- Get structured results (JSON)
+
+Example — Claude Code invoking a "extract contacts from email" skill:
+```bash
+curl -X POST https://mypod.synap.live/api/external/skills/sk_abc123/invoke \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "input": { "emailBody": "Hi, I am John Doe..." } }'
+```
+
+### New API surface
+
+```
+GET  /api/external/skills
+     → List all active pod-scoped skills visible to the API key's user
+     → Returns: [{ id, name, description, parameters, executionMode }]
+     → Scope: skills.invoke
+
+POST /api/external/skills/:id/invoke
+     → Invoke a specific skill
+     → Body: { input?: Record<string, unknown>, workspaceId?: string }
+     → Returns: { success, result?, error?, executionTimeMs }
+     → Scope: skills.invoke
+```
+
+### Execution path (reusing what exists)
+
+```
+POST /api/external/skills/:id/invoke
+  1. Validate API key → get userId + scopes
+  2. Check scope: skills.invoke
+  3. db.query.skills.findFirst({ where: eq(skills.id, id) })
+  4. Check skill.status === "active"
+  5. Check visibility: pod-scope OR (workspace-scope AND user is member) OR (user-scope AND owner)
+  6. resolveIntelligenceService()   ← already exists in skills router
+  7. POST ${isUrl}/api/skills/execute  ← already exists in IS
+     { skillId: id, userId, parameters: input }
+     Header: X-API-Key: ${hubApiKey}
+  8. Return result as-is
+```
+
+No new IS code. No sandbox changes. Steps 1–5 are new; steps 6–8 are identical to the existing tRPC `skills.execute` procedure.
+
+### Skill discovery schema returned
+
+```typescript
+{
+  id: string;           // uuid — use this to invoke
+  name: string;         // human-readable
+  description: string | null;
+  scope: "pod" | "workspace" | "user";
+  parameters: SkillParameter[] | null; // existing field
+  executionMode: "sync" | "async";
+  timeoutSeconds: number;
+}
+```
+
+### Slug consideration
+
+Skills currently have `name` (human-readable) but no `slug`. For v1, invocation uses the UUID `id`. A `slug` field (unique per pod, URL-safe, auto-generated from name) is desirable for DX (`/skills/extract-contacts/invoke` vs `/skills/a3f8.../invoke`) but is a separate migration — deferred to v2.
+
+### Security
+
+- Skill code runs in the existing isolated-vm sandbox. No change.
+- The sandbox has access to 3 Hub Protocol bridges (`search`, `getEntities`, `getDocument`) — this is intentional and already exists.
+- Rate limiting: existing per-API-key rate limiter applies. Skill timeouts enforced in isolate.
+- User-scoped skills: only invocable with a key owned by that user. Workspace-scoped: only if API key owner is a workspace member. Pod-scoped: any valid `skills.invoke` key.
+- No skill can exfiltrate data outside what the Hub Protocol bridges expose — no network access in isolate.
+
+---
+
+## 3. Option D — Conversational Chat Endpoint
+
+### What it enables
+
+A single HTTP endpoint on the pod that accepts natural language and returns a streamed AI response, backed by the IS's OrchestratorAgent with full access to the pod's data.
+
+```bash
+curl -X POST https://mypod.synap.live/api/external/chat/stream \
+  -H "Authorization: Bearer sk_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What tasks are overdue this week?",
+    "channelId": "ch_personal"   // optional — auto-resolves personal channel if omitted
+  }' \
+  --no-buffer
+```
+
+Response is SSE:
+```
+data: {"type":"content","content":"You have 3 overdue tasks:\n"}
+data: {"type":"content","content":"1. Finish the proposal — due 2026-03-20\n"}
+data: {"type":"step","step":{"tool":"synap_search_entities","result":[...]}}
+data: {"type":"complete","data":{"channelId":"ch_abc","messageId":"msg_xyz"}}
+```
+
+### New API surface
+
+```
+POST /api/external/chat/stream
+     → Proxy to IS chat stream, auto-resolve personal channel
+     → Body: { query, channelId?, workspaceId?, agentType? }
+     → Returns: SSE (text/event-stream)
+     → Scope: chat.stream
+
+GET  /api/external/chat/channels
+     → List channels the API key user can chat in (personal + workspace ai_threads)
+     → Returns: [{ id, type, name, workspaceId }]
+     → Scope: chat.stream
+```
+
+### Execution path
+
+```
+POST /api/external/chat/stream
+  1. Validate API key → get userId + scopes
+  2. Check scope: chat.stream
+  3. Resolve channelId:
+     a. If provided: verify user has access (channel member or workspace member)
+     b. If not provided: get or create personal ai_thread for (userId, workspaceId)
+        → already exists: channels.getOrCreatePersonal() or similar tRPC procedure
+  4. Resolve workspaceId from channel if not provided
+  5. Resolve IS endpoint:
+     → intelligenceServices.findFirst({ where: active }) OR workspace.settings.intelligenceServiceUrl
+  6. Get IS API key:
+     → stored in workspace.settings.controlPlane.hubApiKey (set during provisioning)
+  7. Build IS request body:
+     {
+       query,
+       threadId: channelId,
+       userId,
+       workspaceId,
+       agentType: input.agentType ?? "meta",
+       dataPodUrl: `https://${podDomain}`,
+     }
+  8. Forward to IS: POST ${isUrl}/api/chat/stream
+     Header: X-API-Key: ${isHubApiKey}
+     Body: IS request body
+  9. Proxy SSE response back to caller (pipe stream)
+     → Set Content-Type: text/event-stream, Cache-Control: no-cache
+     → Forward each SSE frame as-is
+```
+
+### Key design decisions
+
+**Why proxy, not redirect?** The IS API key and URL must never leave the pod. The external caller authenticates against the pod; the pod handles IS auth internally.
+
+**Channel auto-resolution:** If no `channelId`, the pod auto-resolves the user's personal ai_thread channel. This means every API key's chat history is persistent — same channel as the in-app personal AI chat. This is intentional: external tools and the app share the same conversation history.
+
+**workspaceId:** Optional — if omitted, defaults to the user's primary workspace (first workspace membership). If the user has multiple workspaces, the caller should pass it.
+
+**agentType:** Defaults to `"meta"` (OrchestratorAgent). Callers can request specific agent personas but they must be valid registered agent types.
+
+**SSE frame format:** Passed through from IS unchanged. Callers get the exact same frame types as the browser app (`content`, `step`, `proposal`, `complete`, `error`). No translation layer.
+
+**No new IS code.** The IS already handles `POST /api/chat/stream` with all auth and streaming. The pod is purely a proxy + auth facade.
+
+### Security
+
+- The IS endpoint and IS API key are never exposed to external callers.
+- API key scoped to `chat.stream` — cannot access Hub Protocol directly with this scope.
+- Channel access enforced before proxying — callers can't chat in channels they don't have access to.
+- Rate limiting: apply stricter limits on `/api/external/chat/*` (e.g., 60 req/min vs Hub Protocol's 600/min) — chat is more expensive.
+- The IS already enforces quota (`enforceQuota` middleware) — double protection.
+
+---
+
+## 4. Option E — SDK + Context Injection (Document Only, No Implementation)
+
+### What it enables
+
+Developers build custom applications (LLM pipelines, automation scripts, VS Code extensions) that read/write Synap pod data and inject it as context into their own AI calls.
+
+This uses existing infrastructure only — `@synap/sdk`, `@synap/react`, Hub Protocol REST. No new endpoints needed.
+
+### The three patterns
+
+**Pattern E1 — Read data, inject into LLM context**
+```typescript
+import { createSynapClient } from '@synap/sdk';
+import Anthropic from '@anthropic-ai/sdk';
+
+const synap = createSynapClient({
+  podUrl: 'https://mypod.synap.live',
+  apiKey: 'sk_live_...',
+  workspaceId: 'ws_...',
+});
+
+// Read entities from pod
+const tasks = await synap.entities.list.query({ profileSlug: 'task', limit: 50 });
+const notes = await synap.entities.list.query({ profileSlug: 'note', limit: 20 });
+
+// Inject into Claude
+const claude = new Anthropic();
+const response = await claude.messages.create({
+  model: 'claude-opus-4-6',
+  messages: [{
+    role: 'user',
+    content: `My tasks: ${JSON.stringify(tasks)}\n\nMy notes: ${JSON.stringify(notes)}\n\n${userQuestion}`
+  }]
+});
+
+// Write result back to pod
+await synap.entities.create.mutate({
+  profileSlug: 'note',
+  title: 'AI Summary',
+  properties: { content: response.content[0].text }
+});
+```
+
+**Pattern E2 — Use Hub Protocol for AI operations**
+```typescript
+// Hub Protocol is a plain REST API — use fetch() directly
+const response = await fetch('https://mypod.synap.live/api/hub-protocol/search', {
+  headers: { Authorization: 'Bearer sk_live_...' },
+  method: 'GET',
+});
+
+// Trigger IS AI channel (ask AI, get async response in channel)
+await fetch('https://mypod.synap.live/api/hub-protocol/channels/trigger-ai', {
+  method: 'POST',
+  headers: {
+    Authorization: 'Bearer sk_live_...',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    channelId: 'ch_...',
+    userId: 'usr_...',
+    workspaceId: 'ws_...',
+    systemPromptOverride: 'You are a sales analyst...',
+  }),
+});
+```
+
+**Pattern E3 — Use Option C/D for high-level operations**
+```typescript
+// Call a skill
+const result = await fetch('https://mypod.synap.live/api/external/skills/sk_abc/invoke', {
+  method: 'POST',
+  headers: { Authorization: 'Bearer sk_live_...', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ input: { emailText: '...' } }),
+});
+
+// Or stream chat
+const stream = await fetch('https://mypod.synap.live/api/external/chat/stream', {
+  method: 'POST',
+  headers: { Authorization: 'Bearer sk_live_...', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ query: 'Summarize my week' }),
+});
+// Parse SSE from stream...
+```
+
+### Scope requirements per pattern
+
+| Pattern | Required scopes |
+|---------|----------------|
+| E1 (read + write via tRPC/SDK) | `read:entities`, `write:entities` |
+| E2 (Hub Protocol) | `hub-protocol.read`, `hub-protocol.write` |
+| E3 skills | `skills.invoke` |
+| E3 chat | `chat.stream` |
+
+### What this is NOT
+
+This is not an SDK that abstracts away IS or the pod's internal architecture. It is documentation + code examples showing how existing, stable primitives compose for developer use cases. No new code ships for E.
+
+---
+
+## 5. Auth Model — Unified API Keys
+
+### New scopes to add
+
+Two new scopes added to `API_KEY_SCOPES` in `api-keys.ts`:
+
+| Scope | Grants access to |
+|-------|-----------------|
+| `skills.invoke` | `GET /api/external/skills`, `POST /api/external/skills/:id/invoke` |
+| `chat.stream` | `POST /api/external/chat/stream`, `GET /api/external/chat/channels` |
+
+### Scope bundling
+
+When creating an API key, the UI should offer preset bundles:
+
+| Bundle name | Scopes | Use case |
+|-------------|--------|---------|
+| **Read-only** | `read:entities`, `hub-protocol.read` | Analytics, exports |
+| **Agent** | `read:entities`, `write:entities`, `hub-protocol.read`, `hub-protocol.write` | External IS, automation |
+| **Skills runner** | `skills.invoke` | Invoke pod skills from external tools |
+| **Chat** | `chat.stream` | Conversational AI access |
+| **Full external** | `skills.invoke`, `chat.stream`, `read:entities`, `write:entities` | Claude Code, power users |
+
+### API key UI (in settings, no new component needed)
+
+Add the "Connect external tools" section to the existing API Keys tab:
+- Show the pod URL (`https://mypod.synap.live`)
+- Show generated `claude mcp add` command (kept for MCP users) — but also show the simpler direct URLs for C/D
+- Copy-to-clipboard for the pod URL + API key
+
+---
+
+## 6. Rate Limiting
+
+| Endpoint group | Limit | Rationale |
+|----------------|-------|-----------|
+| `GET /api/external/skills` | 100/min | Cheap, listing only |
+| `POST /api/external/skills/:id/invoke` | 30/min | Sandboxed execution is costly |
+| `POST /api/external/chat/stream` | 20/min | IS quota + cost |
+| `GET /api/external/chat/channels` | 60/min | Cheap, DB read |
+| Hub Protocol (existing) | 600/min | Unchanged |
+
+---
+
+## 7. No-Redundancy Constraints
+
+These things will NOT be built or changed:
+
+| What NOT to do | Why |
+|----------------|-----|
+| New skill execution sandbox | Exists in IS. Reuse via proxy. |
+| New chat infrastructure | IS chat stream already exists. Proxy only. |
+| New auth system | API key system is complete. Add 2 scopes. |
+| OpenAPI for all 74 Hub Protocol endpoints | Too large, Hub Protocol is IS-internal. New `/api/external/` routes get their own minimal OpenAPI. |
+| New IS routes | IS is not touched. Pod is the external-facing layer. |
+| Slug field on skills (v1) | Use ID for now. Slug is a v2 improvement. |
+| GraphQL | Not needed. REST + SSE covers all cases. |
+| New tRPC procedures for external access | External callers use REST, not tRPC. |
+| MCP wrapper over C/D | These are the replacement for MCP, not additions to it. |
+
+---
+
+## 8. Implementation Plan
+
+### Phase 1 — Auth foundations (0.5 day)
+**File:** `synap-backend/packages/database/src/schema/api-keys.ts`
+- Add `"skills.invoke"` and `"chat.stream"` to `API_KEY_SCOPES`
+
+**File:** `synap-backend/packages/api/src/routers/api-keys.ts`
+- Add scope bundle presets to the `create` procedure's description
+- No logic change — scopes are already free-form string arrays
+
+### Phase 2 — Option C: Skill invocation endpoint (1 day)
+
+**New file:** `synap-backend/packages/api/src/routers/external/skills.ts`
+- Hono router mounted at `/api/external/skills`
+- Auth middleware: `externalApiKeyAuth` (new helper, reuses `apiKeyService.validateApiKey`)
+- `GET /` — list active pod-scope + workspace-scope skills for user
+- `POST /:id/invoke` — validate scope, find skill, delegate to IS
+
+**New file:** `synap-backend/packages/api/src/routers/external/middleware.ts`
+- `externalApiKeyAuth(requiredScope)` — extracts Bearer token, calls `apiKeyService.validateApiKey`, checks scope, injects `userId` + `scopes` into Hono context
+- Used by both C and D
+
+**Mount point:** `synap-backend/packages/api/src/index.ts` (or wherever Hono app is assembled)
+- `app.route("/api/external", externalRouter)`
+
+### Phase 3 — Option D: Chat proxy endpoint (1 day)
+
+**New file:** `synap-backend/packages/api/src/routers/external/chat.ts`
+- Hono router mounted at `/api/external/chat`
+- `GET /channels` — list accessible channels
+- `POST /stream`:
+  1. Resolve channelId (personal channel if not provided)
+  2. Resolve IS URL + IS API key from workspace settings / IS registry
+  3. Proxy fetch to IS `/api/chat/stream` with correct auth
+  4. Pipe SSE response back to caller
+
+**Existing code reused:**
+- `resolveIntelligenceService()` — already in skills router
+- `ensurePersonalChannel()` — already in `src/utils/personal-channel.ts`
+- Channel membership check — already in workspaces router
+
+### Phase 4 — OpenAPI spec for /api/external/* (0.5 day)
+
+**New file:** `synap-backend/packages/api/src/routers/external/openapi.ts`
+- Inline OpenAPI 3.1 spec object for the 4 external endpoints
+- Served at `GET /api/external/openapi.json` (no auth)
+- Allows AI tools that support OpenAPI (Claude API, GPT function calling) to auto-discover
+
+### Phase 5 — Settings UI: "Connect external tools" (0.5 day)
+
+**File:** `browser/electron/renderer/src/components/views/SettingsView.tsx` (or workspace-settings package)
+- Add subsection under API Keys tab: "Connect external tools"
+- Display: pod URL, copyable snippet for Claude Code (`claude mcp add` OR direct chat URL)
+- Show scope bundles in key creation dialog
+
+### Phase 6 — Option E: Documentation (0.5 day)
+
+**New file:** `users-docs/docs/integrations/external-api.md`
+- Covers all 3 patterns (E1/E2/E3)
+- Code examples in TypeScript + Python + curl
+- Links to API reference for the 4 external endpoints
+- "Getting started" flow: create API key → choose scope bundle → call your first endpoint
+
+---
+
+## 9. File Map Summary
+
+| File | Status | Action |
+|------|--------|--------|
+| `synap-backend/packages/database/src/schema/api-keys.ts` | Exists | Add 2 scopes |
+| `synap-backend/packages/api/src/routers/external/middleware.ts` | New | externalApiKeyAuth helper |
+| `synap-backend/packages/api/src/routers/external/skills.ts` | New | GET + POST endpoints |
+| `synap-backend/packages/api/src/routers/external/chat.ts` | New | GET channels + POST stream proxy |
+| `synap-backend/packages/api/src/routers/external/openapi.ts` | New | Static OpenAPI 3.1 spec |
+| `synap-backend/packages/api/src/index.ts` | Exists | Mount `/api/external` router |
+| `synap-backend/packages/api/src/routers/api-keys.ts` | Exists | Add scope bundle hints to create |
+| `browser/.../SettingsView.tsx` | Exists | Add "Connect external tools" UI |
+| `users-docs/docs/integrations/external-api.md` | New | E patterns docs |
+
+### Unchanged (explicitly)
+- `synap-intelligence-service/**` — zero changes
+- `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` — zero changes
+- `synap-backend/packages/api/src/routers/skills.ts` (execute procedure) — zero changes
+- All sandbox/isolate code in IS — zero changes
+- `@synap/sdk`, `@synap/react`, `@synap/agent-sdk` — zero changes
+
+---
+
+## 10. Total Scope
+
+| Phase | Days | Deliverable |
+|-------|------|-------------|
+| 1 — Scopes | 0.5 | 2 new API key scopes |
+| 2 — Option C | 1.0 | Skill invocation REST API |
+| 3 — Option D | 1.0 | Chat proxy REST + SSE |
+| 4 — OpenAPI | 0.5 | Auto-discoverable spec |
+| 5 — Settings UI | 0.5 | Connect external tools UX |
+| 6 — Option E docs | 0.5 | Developer integration guide |
+| **Total** | **4.0** | |
+
+Options C and D are independent. Phase 2 can ship before Phase 3. Phase 4 depends on both. Phase 6 is parallel to everything.

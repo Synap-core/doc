@@ -1,0 +1,609 @@
+---
+title: "Feed Architecture Analysis"
+description: "Analysis of feed architecture trade-offs and decisions."
+---
+
+# Unified Feed Architecture - Comprehensive Analysis
+
+**Date:** 2026-04-12  
+**Status:** Implementation Complete, Quality Review Phase
+
+---
+
+## Executive Summary
+
+The unified feed system has been successfully implemented across all repositories. However, several quality issues, type mismatches, and cleanup tasks remain before the feature is production-ready.
+
+| Category | Status | Priority |
+|----------|--------|----------|
+| Backend Infrastructure |  Complete | - |
+| Intelligence Service |  Complete | - |
+| Frontend Components |  Complete | - |
+| Code Quality |  Issues Found | High |
+| Type Consistency | 🔴 Mismatches | Critical |
+| Cleanup (Old Code) | 🔴 Needed | High |
+| User Flows |  Gaps | Medium |
+| Documentation | 🔄 Pending | Medium |
+
+---
+
+## 1. Overall Architecture & Data Flow
+
+### 1.1 System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         CONTROL PLANE                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
+│  │   RSSHub     │  │ Browserless  │  │ CP Proxy API │              │
+│  │   :1200      │  │   :3000      │  │  /api/rsshub │              │
+│  └──────────────┘  └──────────────┘  └──────┬───────┘              │
+└─────────────────────────────────────────────┼───────────────────────┘
+                                              │ HTTPS
+┌─────────────────────────────────────────────┼───────────────────────┐
+│                         DATA POD            │                       │
+│                                             ▼                       │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  pg-boss Job Queue (Unified with all other automations)     │   │
+│  │                                                              │   │
+│  │  feed-scheduler (cron: every minute)                        │   │
+│  │    ↓ Spawns based on schedule                              │   │
+│  │  feed-rss-executor                                          │   │
+│  │    ↓ Fetch RSSHub → Classify → Post messages               │   │
+│  │  feed-proactive-executor                                    │   │
+│  │    ↓ Query DB → Summarize → Post batch                     │   │
+│  │  feed-retention-worker (daily)                              │   │
+│  │    ↓ Archive old messages                                  │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                              │                                      │
+│                              ▼                                      │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  channels table (type: 'feed')                              │   │
+│  │  ├── agentConfig: FeedChannelConfig (JSONB)                 │   │
+│  │  ├── schedule: CronExpression                              │   │
+│  │  ├── feedScope: 'user' | 'workspace'                       │   │
+│  │  └── metadata: { lastRunAt, nextRunAt, itemCount }         │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                              │                                      │
+│                              ▼                                      │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  messages table                                             │   │
+│  │  ├── channelId (FK to feed channel)                         │   │
+│  │  ├── content: JSON { title, summary, url }                  │   │
+│  │  ├── metadata: FeedMessageMetadata                          │   │
+│  │  │   ├── feedItem: true                                    │   │
+│  │  │   ├── source: { platform, url }                         │   │
+│  │  │   ├── topics: string[]                                  │   │
+│  │  │   ├── relevanceScore: number                            │   │
+│  │  │   └── crossFeeds: CrossFeedReference[]                  │   │
+│  │  └── authorType: 'ai_agent'                                │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+                                │ tRPC / Hub Protocol
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         INTELLIGENCE SERVICE                        │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐     │
+│  │ feed-classification.ts  │  │ feed-summarization.ts │  │ feed-memory.ts │     │
+│  │ • Topic extraction     │  │ • Digest generation   │  │ • Preferences  │     │
+│  │ • Relevance scoring    │  │ • Multi-style support │  │ • URL tracking │     │
+│  │ • Batch processing     │  │ • &lt;500ms target       │  │ • Caching      │     │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘     │
+└─────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         FRONTEND (synap-app)                        │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  FeedCell.tsx                                               │   │
+│  │  ├── Renders feed channel messages                          │   │
+│  │  ├── Shows cross-feed chips ("Also in: X")                  │   │
+│  │  ├── Shows platform icons (HN, Reddit, etc.)                │   │
+│  │  └── Capture/dismiss actions                                │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                              │                                      │
+│  useChannelMessages(channelId) - Same hook for ALL channels         │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 Data Flow: RSS Feed Execution
+
+```
+1. CRON triggers every minute
+   └─→ feed-scheduler queries channels WHERE type='feed' AND due
+
+2. For each due RSS feed:
+   └─→ Enqueue feed-rss-execute job (pg-boss)
+
+3. feed-rss-executor:
+   ├─→ Fetch RSS routes via CP proxy (GET /api/rsshub-proxy/{route})
+   ├─→ Parse RSS/Atom/JSON feed
+   ├─→ Filter seen URLs (within tracking window)
+   ├─→ Call IS classify_feed_items tool (or stub if not ready)
+   ├─→ Filter by relevance score
+   ├─→ Limit items (maxItemsPerRun)
+   ├─→ Post messages (individual OR batch based on format.mode)
+   │   ├─→ Check cross-feed references ("also in X feed")
+   │   ├─→ Insert into messages table
+   │   └─→ Emit side effects (notifications, socket events)
+   └─→ Update feed status (lastRunAt, nextRunAt, itemCount)
+
+4. Frontend displays:
+   └─→ useChannelMessages poll/new messages
+   └─→ FeedCell renders with platform icons, relevance badges
+   └─→ CrossFeedChips show "Also in: Other Feed"
+```
+
+### 1.3 Data Flow: Proactive Feed (Morning Briefing)
+
+```
+1. CRON triggers at scheduled time (e.g., 8am weekdays)
+   └─→ feed-scheduler queries proactive feeds
+
+2. feed-proactive-executor:
+   ├─→ Query workspace data:
+   │   ├─→ Tasks due today
+   │   ├─→ Pending proposals
+   │   ├─→ Recent entities (last 24h)
+   │   └─→ User captures
+   ├─→ Call IS generate_feed_digest tool (or stub)
+   ├─→ Generate summary in configured style (bullet/narrative/structured)
+   ├─→ Post batch message to feed channel
+   └─→ Optionally: Post to notification, chat (per delivery.surfaces)
+
+3. Frontend displays digest as single message OR expanded items
+```
+
+### 1.4 Data Flow: On-Demand Trigger (Relay App)
+
+```
+1. User opens Relay app
+   └─→ useRelayFeed mounts
+   └─→ Check if "Relay Feed" channel exists (create if not)
+
+2. Auto-trigger refresh:
+   ├─→ Check last trigger time (respect 5min cooldown)
+   ├─→ POST /api/feeds/trigger (or trpc.feeds.trigger.mutate)
+   ├─→ Backend updates triggerRequestedAt
+   ├─→ feed-scheduler picks up immediately (no wait for cron)
+   └─→ Execute feed-proactive-executor
+
+3. Pull-to-refresh:
+   └─→ Same trigger flow
+   └─→ Shows loading spinner
+   └─→ Refreshes messages
+```
+
+---
+
+## 2. Type Architecture Analysis
+
+### 2.1 Critical Finding: Type Mismatch
+
+**VERDICT:** The frontend and backend have **semantically incompatible** type definitions for `FeedMessageMetadata`.
+
+| Field | Backend (@synap-core/types) | Frontend (local) | Status |
+|-------|----------------------------|------------------|--------|
+| `relevanceScore` | `number` (0-100) | `number` (0-1) | 🔴 **RANGE MISMATCH** |
+| `topics` | ❌ Missing | `string[]` | 🔴 Missing in backend |
+| `categories` | `string[]` | ❌ Missing | 🟡 Missing in frontend |
+| `sourceUrl` | `string` | ❌ Missing | 🔴 Missing in frontend |
+| `originalUrl` | ❌ Missing | `string` | 🔴 Missing in backend |
+| `crossFeeds` | ❌ Missing | `CrossFeedReference[]` | 🔴 **Missing in backend entirely** |
+
+**Impact:** Using these types interchangeably will cause:
+- Relevance scores displayed incorrectly (100x too large or small)
+- Missing topic tags in UI
+- Broken cross-feed reference chips
+- Type assertion runtime errors
+
+### 2.2 Export Issues
+
+**CRITICAL:** The `@synap-core/types` package does **NOT export** the feeds module:
+
+```json
+// synap-backend/packages/types/package.json exports
+"./feeds": {
+  "types": "./dist/feeds/index.d.ts",
+  "import": "./dist/feeds/index.js"
+}
+// ^^^ THIS IS MISSING!
+```
+
+**Result:** Feed types CANNOT be imported properly. Frontend duplicates types locally.
+
+### 2.3 Type Safety Issues in Relay
+
+The relay-app uses excessive `any` types:
+
+| File | Line | Issue |
+|------|------|-------|
+| `useFeed.ts:71` | `msg: any` | Should be `ChannelMessage` |
+| `useFeed.ts:178` | `channels: any[]` | Should be `Channel[]` |
+| `feed-helpers.ts:77` | `entity: any` | Should be `Entity` |
+
+### 2.4 Recommended Type Architecture
+
+```
+synap-backend/packages/types/
+├── feeds/
+│   ├── index.ts           # Main exports
+│   ├── config.ts          # RSSFeedConfig, ProactiveFeedConfig
+│   └── message.ts         # FeedMessageMetadata (canonical)
+└── package.json           # ADD "./feeds" export
+
+synap-app/
+└── NO LOCAL TYPES!        # Import from @synap-core/types/feeds
+
+relay-app/
+└── NO LOCAL TYPES!        # Import from @synap-core/types/feeds
+```
+
+**Canonical FeedMessageMetadata:**
+```typescript
+interface FeedMessageMetadata {
+  feedItem: true;
+  feedType: 'rss' | 'proactive';
+  
+  // Source (unified)
+  source: {
+    platform: string;        // "hackernews", "reddit"
+    url: string;            // Original URL
+    route?: string;         // "/hackernews/frontpage"
+  };
+  
+  // AI processing (normalized)
+  topics: string[];
+  categories: string[];     // Alias for topics
+  relevanceScore: number;   // 0-1 (frontend divides by 100 if backend sends 0-100)
+  aiClassified: boolean;
+  aiSummary?: string;
+  
+  // Cross-feed (added to backend)
+  crossFeeds: Array<{
+    feedId: string;
+    feedTitle: string;
+    postedAt: string;
+  }>;
+  
+  // Batch info
+  batched?: boolean;
+  batchId?: string;
+  batchIndex?: number;
+}
+```
+
+---
+
+## 3. Code Quality Assessment
+
+### 3.1 Backend (synap-backend)
+
+| Aspect | Grade | Notes |
+|--------|-------|-------|
+| Schema Design | A | Good Zod schemas, proper union types |
+| Worker Patterns | B+ | Follows patterns, but TODOs present |
+| Error Handling | B | Good try/catch, some silent failures |
+| Code Duplication | C | `calculateNextRun()` duplicated 4x |
+| Type Safety | B | One `any[]` in feeds.ts |
+| Database Queries | A | Proper Drizzle usage, no raw SQL |
+
+**Specific Issues:**
+
+1. **TODOs to Address:**
+   - `feed-rss-executor.ts:109`: `// TODO: Implement actual IS classification call`
+   - `feed-proactive-executor.ts:59`: `// TODO: Implement actual IS call for summarization`
+
+2. **Code Duplication:**
+   ```typescript
+   // calculateNextRun() exists in:
+   // - feed-scheduler.ts (lines 69-133)
+   // - feed-rss-executor.ts (lines 537-594)
+   // - feed-proactive-executor.ts (lines 409-467)
+   // - feeds.ts (lines 407-464)
+   
+   // FIX: Extract to shared utility
+   // packages/jobs/src/utils/feed-helpers.ts
+   ```
+
+3. **Silent Failures:**
+   ```typescript
+   // feed-rss-executor.ts:431-455
+   emitSideEffects(...).catch(() => {});  // Should log at least
+   ```
+
+### 3.2 Intelligence Service (synap-intelligence-service)
+
+| Aspect | Grade | Notes |
+|--------|-------|-------|
+| Service Design | A | Clean separation, good caching |
+| Tool Definitions | A | Follows defineTool pattern |
+| Performance | A | Targets &lt;100ms with batching |
+| Error Handling | A | Graceful fallbacks |
+| Hub Protocol | A | Proper client usage |
+
+**No significant issues.** The IS implementation is high quality.
+
+### 3.3 Frontend (synap-app)
+
+| Aspect | Grade | Notes |
+|--------|-------|-------|
+| Component Structure | A | Well-organized sub-components |
+| Tamagui Usage | B+ | Mostly proper, some hardcoded values |
+| Design Tokens | B | Some CSS variables instead of tokens |
+| Type Safety | B | Type assertions without validation |
+| Cell Pattern | A | Proper useCellContext usage |
+
+**Specific Issues:**
+
+1. **Hardcoded CSS Variables:**
+   ```tsx
+   // FeedMessageCard.tsx:155,163
+   color="var(--muted)"  // Should use $color9 or theme token
+   ```
+
+2. **Type Assertions:**
+   ```tsx
+   // FeedCell.tsx:286
+   const metadata = (message.metadata ?? {}) as FeedMessageMetadata;
+   // ^ No validation that message.metadata actually matches
+   ```
+
+### 3.4 Relay App
+
+| Aspect | Grade | Notes |
+|--------|-------|-------|
+| Hook Patterns | B+ | Good structure, excessive any types |
+| Mobile Considerations | A | Cooldown, offline cache, 7-day retention |
+| Type Safety | C | Many any types |
+| Error Handling | B | Good fallbacks |
+
+---
+
+## 4. Cleanup Required
+
+### 4.1 High Priority: Remove Deprecated Code
+
+**Signal Feed App (Browser)**
+```bash
+# REMOVE entire folder:
+browser/electron/renderer/src/apps/signal-feed/
+```
+
+**Signal Feed Package**
+```bash
+# REMOVE entire package:
+synap-app/packages/features/signal-feed/
+```
+
+**Browser Manifest Entry**
+```typescript
+// browser/electron/renderer/src/apps/manifest.ts
+// Remove lines 180-191 (signalFeed entry)
+```
+
+### 4.2 Medium Priority: Consolidate Proactive Workers
+
+**Old workers to remove:**
+- `synap-backend/packages/jobs/src/workers/proactive-morning-briefing.ts`
+- `synap-backend/packages/jobs/src/workers/proactive-weekly-digest.ts`
+- `synap-backend/packages/jobs/src/workers/proactive-health-check.ts`
+
+**Files to update:**
+- `synap-backend/packages/jobs/src/workers/index.ts` - Remove imports & registrations
+- `synap-backend/packages/jobs/src/cron.ts` - Remove cron schedules
+
+### 4.3 Low Priority: Documentation Cleanup
+
+**Remove outdated docs:**
+- `synap-backend/docs/signal-feed/` (entire folder)
+- Consider archiving: `docs-internal/SIGNAL-FEED-*.md`
+
+### 4.4 Impact Summary
+
+| Category | Files to Remove | Lines of Code |
+|----------|----------------|---------------|
+| Signal Feed App | 4 files | ~800 lines |
+| Signal Feed Package | 8 files | ~1200 lines |
+| Old Proactive Workers | 3 files | ~1200 lines |
+| Duplicate calculateNextRun | 4 occurrences | ~240 lines |
+| **TOTAL** | **~19 files** | **~3440 lines** |
+
+---
+
+## 5. User Flow Gaps
+
+### 5.1 Missing: Feed Creation UI
+
+**Current State:** Backend supports `feeds.createFeedChannel`, but no UI exists.
+
+**Impact:** Users cannot create RSS feeds. Only programmatically created feeds work (morning briefing, relay feed).
+
+**Recommendation:** Add feed creation flow (deferred per your earlier decision, but should be in roadmap).
+
+### 5.2 Missing: Feed Discovery
+
+**Current State:** Feed channels exist in DB but aren't prominently shown in Browser sidebar.
+
+**Impact:** Users don't know they have feeds.
+
+**Recommendation:** Add "Feeds" section to sidebar (like "Channels", "AI Assistants").
+
+### 5.3 Partially Implemented: Capture/Dismiss
+
+**Current State:** 
+- Types define `isCaptured`, `isDismissed` flags
+- UI has buttons for these actions
+- NO persistence implementation
+
+**Impact:** Capture/dismiss don't actually do anything.
+
+**Recommendation:** Implement persistence:
+```typescript
+// New table: feed_item_states
+{
+  userId: string;
+  messageId: string;
+  channelId: string;
+  isCaptured: boolean;
+  isDismissed: boolean;
+  capturedAt?: string;
+  dismissedAt?: string;
+}
+```
+
+### 5.4 Missing: Cross-Feed References
+
+**Current State:** Types define `crossFeeds: CrossFeedReference[]`, but:
+- Backend doesn't populate this field
+- UI shows chips but they're always empty
+
+**Impact:** "Also in: X feed" chips never appear.
+
+**Recommendation:** Implement URL tracking across feeds:
+```typescript
+// When posting feed item:
+const existingInOtherFeeds = await db.query.messages.findMany({
+  where: sql`${messages.metadata}->'source'->>'url' = ${item.url}`,
+  // ...
+});
+```
+
+---
+
+## 6. Recommendations Summary
+
+### Critical (Must Fix Before Production)
+
+1. **Fix Type Mismatches**
+   - Unify `FeedMessageMetadata` between backend and frontend
+   - Add missing `crossFeeds` field to backend
+   - Add `./feeds` export to `@synap-core/types/package.json`
+   - Remove local type duplicates in synap-app
+
+2. **Address TODOs**
+   - Implement actual IS classification call in feed-rss-executor
+   - Implement actual IS summarization call in feed-proactive-executor
+
+3. **Code Deduplication**
+   - Extract `calculateNextRun()` to shared utility
+   - Create `packages/jobs/src/utils/feed-helpers.ts`
+
+### High Priority (Should Fix Soon)
+
+4. **Remove Deprecated Code**
+   - Delete signal-feed app and package
+   - Remove old proactive workers
+   - Update manifests and registrations
+
+5. **Improve Type Safety**
+   - Replace `any` types in relay-app
+   - Add runtime validation for type assertions
+
+6. **Silent Failures**
+   - Add logging to `.catch(() => {})` blocks
+   - Emit failure events for monitoring
+
+### Medium Priority (Nice to Have)
+
+7. **User Experience**
+   - Add "Feeds" section to sidebar
+   - Implement feed creation UI
+   - Add feed health/status indicators
+
+8. **Persistence**
+   - Implement capture/dismiss persistence
+   - Implement cross-feed reference tracking
+
+9. **Documentation**
+   - Create user-facing feed documentation
+   - Update internal architecture docs
+   - Document migration process
+
+---
+
+## 7. Next Steps
+
+### Immediate Actions
+
+1. **Create PR with type fixes**
+   - Unify FeedMessageMetadata
+   - Add package.json export
+   - Remove local type duplicates
+
+2. **Create PR with code cleanup**
+   - Remove signal-feed app/package
+   - Remove old proactive workers
+   - Deduplicate calculateNextRun
+
+3. **Address TODOs**
+   - Wire up IS classification
+   - Wire up IS summarization
+
+### After Merges
+
+4. **Run migrations**
+   ```bash
+   cd synap-backend && pnpm migrate:feeds
+   ```
+
+5. **Test end-to-end flow**
+   - Create RSS feed via API
+   - Verify scheduler runs
+   - Verify messages appear in UI
+   - Verify cross-feed references
+
+6. **Update documentation**
+   - User docs for feed feature
+   - Internal architecture docs
+   - API reference for feeds router
+
+---
+
+## Appendix A: File Inventory
+
+### Backend Files Created/Modified
+
+| File | Lines | Status |
+|------|-------|--------|
+| `packages/api/src/types/feed-config.ts` | ~200 |  Complete |
+| `packages/jobs/src/workers/feed-scheduler.ts` | ~308 |  Complete |
+| `packages/jobs/src/workers/feed-rss-executor.ts` | ~594 |  TODOs present |
+| `packages/jobs/src/workers/feed-proactive-executor.ts` | ~467 |  TODOs present |
+| `packages/jobs/src/workers/index.ts` | ~30 modified |  Complete |
+| `packages/api/src/routers/feeds.ts` | ~500 |  Complete |
+| `packages/api/src/index.ts` | ~5 modified |  Complete |
+| `packages/jobs/src/migrations/*.ts` | ~1000 |  Complete |
+
+### IS Files Created
+
+| File | Lines | Status |
+|------|-------|--------|
+| `src/services/feed-classification.ts` | ~505 |  Complete |
+| `src/services/feed-memory.ts` | ~285 |  Complete |
+| `src/services/feed-summarization.ts` | ~358 |  Complete |
+| `src/tools/feed-tools.ts` | ~278 |  Complete |
+
+### Frontend Files Created
+
+| File | Lines | Status |
+|------|-------|--------|
+| `packages/core/channels/src/types/feed.ts` | ~200 | 🔴 Duplicates backend |
+| `packages/core/channels/src/cells/feed/FeedCell.tsx` | ~312 |  Complete |
+| `packages/core/channels/src/cells/feed/FeedMessageCard.tsx` | ~371 |  Complete |
+| `packages/core/channels/src/cells/feed/CrossFeedChips.tsx` | ~150 |  Complete |
+| `packages/core/channels/src/cells/feed/useFeedActions.ts` | ~160 |  Complete |
+
+### Relay Files Created/Modified
+
+| File | Lines | Status |
+|------|-------|--------|
+| `src/hooks/useRelayFeed.ts` | ~367 |  Complete |
+| `src/hooks/useTriggerFeed.ts` | ~207 |  Complete |
+| `src/hooks/useFeed.ts` | ~234 |  Modified |
+| `app/(tabs)/feed.tsx` | ~200 modified |  Modified |
+
+---
+
+*Analysis completed on 2026-04-12*

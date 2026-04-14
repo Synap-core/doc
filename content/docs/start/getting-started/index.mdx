@@ -1,0 +1,121 @@
+---
+title: "Getting Started"
+description: "Choose how you run Synap, then open the app, connect agents, or call the API"
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+import {
+  Cloud,
+  Container,
+  Terminal,
+  Zap,
+  Bot,
+  Code2,
+  CheckCircle,
+} from 'lucide-react';
+
+Pick **how you run a pod**, then **[Quickstart](./quickstart)** points you to the **app**, **AI agents**, or **SDK**.
+
+<Callout type="info" title="New here?">
+  Read **[What is Synap?](../concepts/what-is-synap)** first if you want the product picture in one pass.
+</Callout>
+
+## How you run Synap
+
+<Cards>
+  <Card
+    icon={<Cloud className="size-4" />}
+    title="Synap Cloud"
+    description="Sign in at synap.live — hosted provisioning; app download in the signup flow."
+    href="https://synap.live"
+  >
+    <ul className="mt-2 list-none space-y-2 p-0">
+      <li className="flex items-start gap-2">
+        <CheckCircle className="mt-0.5 size-4 shrink-0 text-fd-primary" />
+        <span>Fastest path to a workspace</span>
+      </li>
+      <li className="flex items-start gap-2">
+        <CheckCircle className="mt-0.5 size-4 shrink-0 text-fd-primary" />
+        <span>Same flow documented under Installation → Hosted</span>
+      </li>
+    </ul>
+  </Card>
+  <Card
+    icon={<Container className="size-4" />}
+    title="Docker / your infra"
+    description="Compose, images, and production checklists."
+    href="./installation#docker"
+  >
+    <ul className="mt-2 list-none space-y-2 p-0">
+      <li className="flex items-start gap-2">
+        <CheckCircle className="mt-0.5 size-4 shrink-0 text-fd-primary" />
+        <span>Official backend repo + deploy/</span>
+      </li>
+      <li className="flex items-start gap-2">
+        <CheckCircle className="mt-0.5 size-4 shrink-0 text-fd-primary" />
+        <span>Deep guides → Architecture → Deployment</span>
+      </li>
+    </ul>
+  </Card>
+  <Card
+    icon={<Terminal className="size-4" />}
+    title="CLI: pod + agents"
+    description="Repo synap script for install/update; npm CLI for OpenClaw & agents."
+    href="./installation#cli"
+  >
+    <ul className="mt-2 list-none space-y-2 p-0">
+      <li className="flex items-start gap-2">
+        <CheckCircle className="mt-0.5 size-4 shrink-0 text-fd-primary" />
+        <span>Server lifecycle vs npx @synap/cli</span>
+      </li>
+      <li className="flex items-start gap-2">
+        <CheckCircle className="mt-0.5 size-4 shrink-0 text-fd-primary" />
+        <span>Unifying toward one story (in progress)</span>
+      </li>
+    </ul>
+  </Card>
+  <Card
+    icon={<Code2 className="size-4" />}
+    title="From source"
+    description="Clone the monorepo and run pnpm + Docker for full development."
+    href="./installation#from-source"
+  />
+</Cards>
+
+Docs mirror: **[Installation → Hosted](./installation#hosted-synap-cloud)**.
+
+## Then do this
+
+<Cards>
+  <Card
+    icon={<Zap className="size-4" />}
+    title="Quickstart"
+    description="Route to app, agents, SDK, or deeper docs."
+    href="./quickstart"
+  />
+  <Card
+    icon={<Bot className="size-4" />}
+    title="AI agents & tools"
+    description="OpenClaw, Hub Protocol, npx @synap/cli init."
+    href="./ai-agents-and-tools"
+  />
+  <Card
+    icon={<Code2 className="size-4" />}
+    title="First SDK queries"
+    description="React, TypeScript, or cURL to your pod."
+    href="/docs/integrate/development/sdk/first-query"
+  />
+</Cards>
+
+## Install details & checklist
+
+1. **[Installation](./installation)** — full narrative for Cloud, Docker, CLI, and source.  
+2. **[Next steps](./next-steps)** — architecture, integrate, deploy, community.  
+3. **[Why events](/docs/architecture/concepts/why-events)** — mental model (Architecture space).
+
+## Help
+
+- [Discord](https://discord.gg/synap)  
+- [GitHub issues](https://github.com/Synap-core/backend/issues)  
+- [Testing guide](/docs/integrate/development/testing-guide) — local debugging  

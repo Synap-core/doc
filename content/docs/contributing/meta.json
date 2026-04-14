@@ -1,0 +1,7 @@
+{
+  "title": "Contributing",
+  "description": "Repositories, contribution guides, and ecosystem map",
+  "root": true,
+  "icon": "folder-git-2",
+  "pages": ["index", "guides"]
+}

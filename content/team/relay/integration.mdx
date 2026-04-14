@@ -1,0 +1,258 @@
+---
+title: "Integration Plan"
+description: "Relay integration plan with backend, IS, and native OS."
+---
+
+# Relay — Backend Integration Plan (v2 — Corrected)
+
+Updated 2026-04-03 after deep backend audit.
+
+---
+
+## Architecture Corrections
+
+1. **Properties** — NOT raw JSONB. Must create PropertyDef records + link via profile_properties junction table. See `ensure-system-profiles.ts`.
+2. **Interactions** — Use channels + messages system. No new `interaction` profile. A person's interaction history = a channel with `contextObjectType="entity"` + `contextObjectId=personId`.
+3. **tRPC Client** — Use `@synap-core/sdk` (`createSynapClient`). Works on React Native as-is. Don't rebuild from scratch.
+4. **Auth** — Follow Telegram Mini App pattern: CP handshake → JWT → Bearer token. Store in SecureStore.
+
+---
+
+## What Exists (ready to use)
+
+| Feature | Backend Procedure | Notes |
+|---------|-------------------|-------|
+| Entity CRUD | `trpc.entities.*` | create, list, get, update, search |
+| Capture pipeline | `trpc.capture.structure` → `execute` | Multi-entity AI extraction + batch save |
+| Profiles | `trpc.profiles.list` | person, contact, company, event exist |
+| Property definitions | `trpc.propertyDefs.create` + `trpc.profileProperties.link` | Extend person with Relay fields |
+| Relations | `trpc.relations.*` | create, getRelated, getConnections |
+| Channels (interactions) | `trpc.chat.listChannels({ contextObjectId })` | Entity-linked channels = interaction history |
+| Messages (timeline) | `trpc.chat.getMessages({ threadId })` | Paginated message history per channel |
+| Connectors | `trpc.connectors.*` | Google Contacts, Calendar via Nango |
+| Telegram | channel_connections + /link flow | Fully implemented |
+| Search | `trpc.search.entities` + `semantic` | Full-text + vector |
+| Notifications | `trpc.notifCenter.list` | Proactive feed items |
+| Proactive AI | `trpc.proactive.*` + cron workers | Morning briefing, weekly digest |
+| Workspace | `trpc.workspaces.*` | CRUD + settings |
+| tRPC client (RN) | `@synap-core/sdk` → `createSynapClient()` | Works on React Native, fetch-only |
+| AI streaming | `@synap/hub-client` | SSE streaming, RN-compatible |
+| API types | `@synap-core/api-types` → `AppRouter` | Type-safe client |
+
+## What Needs Extension
+
+| Gap | What to Do | Where |
+|-----|-----------|-------|
+| Person profile properties | Create PropertyDefs (telegramHandle, linkedinUrl, sources, strengthScore, aiSummary, focusAreas, walletAddresses) + link to person profile | `ensure-system-profiles.ts` |
+| Relay relation definitions | Add met_at, works_on, has_skill, affiliated_with, knows, discussed_with to default-relation-defs | `default-relation-defs.ts` |
+| DIRECT channel type | Currently defined but unused — validate it works end-to-end for person interaction channels | channels router |
+
+---
+
+## Implementation Tracks
+
+### Track 1: Backend — Extend Data Model
+**Where:** `synap-backend/`
+
+**1A. Add Relay PropertyDefs to person profile**
+- File: `packages/database/src/utils/ensure-system-profiles.ts`
+- Create PropertyDef records for: `telegramHandle` (STRING), `linkedinUrl` (STRING), `twitterHandle` (STRING), `farcasterFid` (STRING), `walletAddresses` (ARRAY), `sources` (ARRAY), `lastInteractionAt` (DATE), `interactionCount` (NUMBER), `strengthScore` (NUMBER), `aiSummary` (STRING), `focusAreas` (ARRAY)
+- Link each to person profile via profile_properties with displayOrder
+
+**1B. Add Relay relation definitions**
+- File: `packages/database/src/utils/default-relation-defs.ts`
+- Add: `met_at`, `works_on`, `has_skill`, `affiliated_with`, `knows`, `discussed_with`
+- Follow existing pattern (slug, displayName, isDirectional, uiHints)
+
+**1C. Validate DIRECT channel type**
+- Verify `ChannelType.DIRECT` works with `contextObjectType="entity"`
+- Test: create channel, send message, query by contextObjectId
+- If issues, use `EXTERNAL_IMPORT` as fallback
+
+---
+
+### Track 2: Mobile — Auth & Client Layer
+**Where:** `relay-app/src/lib/`
+
+**2A. Create `relay-app/src/lib/synap-client.ts`**
+- Use `@synap-core/sdk` → `createSynapClient()`
+- Wrap with React context for hooks access
+- Store podUrl + apiKey from auth flow
+
+```typescript
+import { createSynapClient } from '@synap-core/sdk';
+import type { AppRouter } from '@synap-core/api-types';
+
+export function createRelayClient(podUrl: string, sessionToken: string, workspaceId: string) {
+  return createSynapClient({ podUrl, apiKey: sessionToken, workspaceId });
+}
+```
+
+**2B. Create `relay-app/src/lib/auth.ts`**
+- Follow Telegram Mini App pattern
+- Step 1: Sign in to Control Plane (Better Auth)
+- Step 2: CP handshake → get JWT
+- Step 3: Exchange JWT with pod → get session token
+- Store tokens in expo-secure-store
+- Store podUrl + workspaceId in AsyncStorage
+
+**2C. Create `relay-app/src/providers/SynapProvider.tsx`**
+- React context wrapping `createRelayClient`
+- QueryClientProvider for TanStack Query
+- Auto-reconnect on token expiry
+- Exposes: `useSynapClient()` hook
+
+**2D. Add auth dependencies**
+```
+expo-secure-store, @react-native-async-storage/async-storage
+@synap-core/sdk (workspace:*), @synap-core/api-types (workspace:*)
+```
+
+---
+
+### Track 3: Feature Hooks
+**Where:** `relay-app/src/hooks/`
+
+Each hook is a clean file. Uses the Synap client from context.
+
+**3A. `usePeople.ts`** — People list
+```typescript
+// trpc.entities.list({ profileSlug: 'person', limit: 100 })
+// + trpc.entities.list({ profileSlug: 'contact', limit: 100 })
+// Merge, sort by lastInteractionAt desc
+```
+
+**3B. `useFeed.ts`** — Feed items
+```typescript
+// trpc.notifCenter.list({ limit: 20 }) — proactive AI items
+// trpc.entities.list({ profileSlug: 'person', limit: 10 }) — recent people (for encounter cards)
+// Merge into unified feed, sort chronologically
+```
+
+**3C. `useEvents.ts`** — Events
+```typescript
+// trpc.entities.list({ profileSlug: 'event' })
+// Split: upcoming (startDate > now) vs past
+```
+
+**3D. `usePersonDetail.ts`** — Single person + timeline
+```typescript
+// trpc.entities.get({ id }) — person data
+// trpc.relations.getRelated({ entityId: id }) — connections (skills, events, orgs)
+// trpc.chat.listChannels({ contextObjectId: id, contextObjectType: 'entity' }) — interaction channel
+// trpc.chat.getMessages({ threadId: channelId }) — timeline messages
+```
+
+**3E. `useCapture.ts`** — Quick capture pipeline
+```typescript
+// trpc.capture.structure({ text }) — AI extraction → proposals
+// trpc.capture.execute({ entities, relations }) — batch save
+```
+
+**3F. `useSearch.ts`** — Explore/query
+```typescript
+// trpc.search.entities({ query, profileSlug: 'person' }) — text search
+// trpc.search.semantic({ query }) — AI-powered (Phase 2)
+```
+
+**3G. `useConnectors.ts`** — Connector management
+```typescript
+// trpc.connectors.providers() — available connectors
+// trpc.connectors.connections() — active connections
+// trpc.connectors.session({ provider }) — start OAuth
+```
+
+---
+
+### Track 4: Workspace Setup
+**Where:** `synap-backend/` + `relay-app/`
+
+**4A. Relay workspace initialization**
+- On first Relay app launch (after auth), check if Relay profiles + relations exist
+- Call `trpc.profiles.list()` → verify person has Relay properties
+- If missing: call `trpc.propertyDefs.create()` + `trpc.profileProperties.link()` for each
+- Call `trpc.relations.listTypes()` → verify Relay relations exist
+- If missing: create via relation defs API
+
+**4B. Enable proactive AI**
+- Call `trpc.proactive.updatePrefs({ enabled: true, nudgeDensity: 'balanced' })`
+- Morning briefing + weekly digest workers start posting to personal channel
+- Feed hook reads these automatically
+
+**4C. Create/ensure person interaction channels**
+- When viewing a person for the first time, check for existing channel
+- `trpc.chat.listChannels({ contextObjectId: personId, contextObjectType: 'entity' })`
+- If none: create `trpc.chat.createChannel({ type: 'DIRECT', contextObjectType: 'entity', contextObjectId: personId })`
+
+---
+
+### Track 5: Connector Onboarding
+**Where:** `relay-app/src/`
+
+**5A. Telegram connection**
+- Generate link token via backend (existing flow)
+- Show "Send `/link TOKEN` to @SynapBot"
+- Poll `trpc.connectors.connections()` for status
+- On success: messages from Telegram flow into channels automatically
+
+**5B. Google Contacts**
+- `trpc.connectors.session({ provider: 'google-contacts' })` → Nango OAuth URL
+- Open in in-app browser (`expo-web-browser`)
+- On callback: sync starts, Person entities created automatically
+
+**5C. Google Calendar**
+- Same as contacts, provider: `google-calendar`
+- Synced events appear in Events tab
+
+---
+
+### Track 6: Wire Hooks into Screens
+**Where:** `relay-app/app/(tabs)/`
+
+Replace all MOCK_DATA with real hook calls:
+
+| Screen | Mock → Real |
+|--------|-------------|
+| `feed.tsx` | `MOCK_FEED` → `useFeed()` |
+| `people.tsx` | `MOCK_PEOPLE` → `usePeople()` |
+| `events.tsx` | `MOCK_EVENTS` → `useEvents()` |
+| `explore.tsx` | Static → `useSearch()` |
+| `person/[id].tsx` | `MOCK_PERSON` → `usePersonDetail(id)` |
+| `CaptureModal.tsx` | No-op → `useCapture()` |
+
+---
+
+## Execution Order (Parallelizable)
+
+```
+Phase 1 (parallel):
+├── Track 1: Backend data model extensions          [1 day]
+├── Track 2A-2D: Mobile auth + client layer         [2 days]
+│
+Phase 2 (after Phase 1):
+├── Track 3A-3G: Feature hooks                      [2 days]
+├── Track 4: Workspace setup                        [0.5 day]
+│
+Phase 3 (after Phase 2):
+├── Track 5: Connector onboarding                   [1-2 days]
+├── Track 6: Wire hooks into screens                [1 day]
+│
+Total: ~6-8 days (4-5 with parallelism)
+```
+
+---
+
+## Package Dependencies to Add to relay-app
+
+```json
+{
+  "@synap-core/sdk": "workspace:*",
+  "@synap-core/api-types": "workspace:*",
+  "@synap/hub-client": "workspace:*",
+  "expo-secure-store": "~14.0.0",
+  "expo-web-browser": "~15.0.0",
+  "@react-native-async-storage/async-storage": "~2.1.0"
+}
+```
+
+Note: Adding workspace deps requires Metro config for pnpm symlink resolution. May need `metro.config.js` update for `watchFolders` pointing to monorepo root.

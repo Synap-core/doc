@@ -1,0 +1,74 @@
+---
+title: "View Type: Kanban"
+description: "Kanban view skill guidance."
+---
+
+# Skill: Kanban View
+
+A kanban board groups entities into swimlane columns by a `select` field value.
+
+## Requirements
+
+1. The profile must have a `select` property def to group by (typically `status` or `stage`).
+2. The column `id` values must match the option `value` in the select property def.
+
+## Full example
+
+```
+// Step 1: Create (or find) the profile
+create_profile({ name: "Task", slug: "task" })
+→ profileId: "abc"
+
+// Step 2: Add a status field
+create_property_def({
+  profileId: "abc",
+  name: "Status", slug: "status", type: "select",
+  config: {
+    options: [
+      { value: "backlog",     label: "Backlog",      color: "#64748b" },
+      { value: "todo",        label: "To Do",        color: "#94a3b8" },
+      { value: "in_progress", label: "In Progress",  color: "#3b82f6" },
+      { value: "review",      label: "In Review",    color: "#f59e0b" },
+      { value: "done",        label: "Done",         color: "#22c55e" }
+    ]
+  }
+})
+
+// Step 3: Create the kanban view
+create_view({
+  name: "Task Board",
+  type: "kanban",
+  profileId: "abc",
+  config: {
+    groupByField: "status",
+    columns: [
+      { id: "backlog",     title: "Backlog",     color: "#64748b" },
+      { id: "todo",        title: "To Do",       color: "#94a3b8" },
+      { id: "in_progress", title: "In Progress", color: "#3b82f6" },
+      { id: "review",      title: "In Review",   color: "#f59e0b" },
+      { id: "done",        title: "Done",        color: "#22c55e" }
+    ]
+  }
+})
+```
+
+## Config reference
+
+```typescript
+{
+  groupByField: string;          // slug of the select property def
+  columns: Array<{
+    id: string;                  // must match select option value
+    title: string;
+    color?: string;              // hex color for the column header
+    limit?: number;              // optional WIP limit
+  }>;
+  swimlaneField?: string;        // optional secondary grouping (e.g. "assignee")
+}
+```
+
+## Tips
+
+- Columns must match the select option values exactly (case-sensitive).
+- If `groupByField` doesn't exist on the profile, the view will render but entities won't distribute correctly.
+- For CRM pipelines, use stage names: `prospecting → qualification → proposal → negotiation → closed_won`.

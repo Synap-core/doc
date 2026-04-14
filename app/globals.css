@@ -1,0 +1,39 @@
+@import '../node_modules/fumadocs-ui/dist/style.css';
+
+/*
+ * Tailwind JIT for *this app* — required. The fumadocs `style.css` import is a pre-built subset
+ * (only utilities fumadocs needed). Without a `@tailwind` directive here, PostCSS never runs Tailwind
+ * against `tailwind.config.ts` + `content`, so classes like `gap-12`, `py-10`, `p-6`, `rounded-2xl`
+ * on our pages are missing from the final CSS → spacing/layout looks broken or “ignored”.
+ */
+@tailwind utilities;
+
+/* ─── Synap Theme Variables ────────────────────────────────────────────────── */
+
+:root {
+  /* Brand accent — Synap emerald (light) */
+  --fd-primary: 160 84% 39%;
+  --fd-primary-foreground: 0 0% 99%;
+}
+
+/* fumadocs `docsUi` preset sets `.dark { ... }` — without this, dark mode keeps default near-white `--fd-primary` */
+.dark {
+  --fd-primary: 160 72% 45%;
+  --fd-primary-foreground: 160 30% 8%;
+}
+
+/*
+ * Custom marketing / forms: prefer one spacing ramp — p-3 (12) tight, p-4 (16) cards default,
+ * p-5–p-6 (20–24) comfortable insets, gap-6 between blocks. Mixing px-5 in dialogs with p-4 on
+ * fumadocs Cards without intent reads as “no system”.
+ */
+
+/* Logo mark — border-only depth (no glow shadow; matches fd tokens) */
+.synap-logo-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--fd-primary));
+  box-shadow: none;
+  border: 1px solid hsl(var(--fd-primary) / 0.45);
+}

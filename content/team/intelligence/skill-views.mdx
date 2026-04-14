@@ -1,0 +1,151 @@
+---
+title: "Skill: Workspace Views"
+description: "View management skill — querying and manipulating views."
+---
+
+# Skill: Workspace Views
+
+You can create and manage views in the user's workspace using `create_view`, `update_view`, and `list_views`.
+
+## When to create a view
+
+Create a view when the user asks to:
+
+- "Show my tasks as a kanban board"
+- "Give me a table of all contacts"
+- "Create a project timeline"
+- "I want a dashboard for my CRM"
+- Visualize any set of entities in a structured way
+
+Always call `list_views` first to check if a suitable view already exists before creating a new one.
+
+## View Types
+
+### list
+
+Simple vertical list sorted by creation date or a field.
+
+```json
+{ "type": "list", "name": "All Tasks", "profileId": "<task-profile-id>" }
+```
+
+### kanban
+
+Drag-and-drop board grouped by a status/select field.
+
+```json
+{
+  "type": "kanban",
+  "name": "Task Board",
+  "profileId": "<task-profile-id>",
+  "config": {
+    "groupByField": "status",
+    "columns": [
+      { "id": "todo", "title": "To Do", "color": "#94a3b8" },
+      { "id": "in_progress", "title": "In Progress", "color": "#3b82f6" },
+      { "id": "done", "title": "Done", "color": "#22c55e" }
+    ]
+  }
+}
+```
+
+Requires a `select` property def with the same values as the column ids.
+
+### table
+
+Spreadsheet-style grid. Best for data-heavy entity types.
+
+```json
+{
+  "type": "table",
+  "name": "Contacts Table",
+  "profileId": "<contact-profile-id>"
+}
+```
+
+### grid
+
+Card grid, responsive columns.
+
+```json
+{ "type": "grid", "name": "Products", "profileId": "<product-profile-id>" }
+```
+
+### gallery
+
+Image-focused card grid. Use when entities have a cover image or thumbnail.
+
+```json
+{ "type": "gallery", "name": "Assets", "profileId": "<asset-profile-id>" }
+```
+
+### calendar
+
+Date-based view. Requires a `date` or `datetime` property def.
+
+```json
+{
+  "type": "calendar",
+  "name": "Project Calendar",
+  "profileId": "<task-profile-id>",
+  "config": { "dateField": "due_date" }
+}
+```
+
+### timeline
+
+Gantt-style. Requires both a start and end date property def.
+
+```json
+{
+  "type": "timeline",
+  "name": "Project Timeline",
+  "profileId": "<project-profile-id>",
+  "config": { "startField": "start_date", "endField": "end_date" }
+}
+```
+
+### bento
+
+Dashboard grid with composable widgets. Does NOT require a profileId.
+Use `metadata: { homeScope: "workspace" }` to set as the workspace home dashboard.
+
+```json
+{
+  "type": "bento",
+  "name": "My Dashboard",
+  "metadata": { "homeScope": "workspace" }
+}
+```
+
+### flow
+
+Interactive node graph / flowchart using React Flow.
+
+```json
+{
+  "type": "flow",
+  "name": "Process Map",
+  "profileId": "<task-profile-id>"
+}
+```
+
+### graph
+
+Force-directed entity relationship graph.
+
+```json
+{
+  "type": "graph",
+  "name": "Knowledge Graph",
+  "profileId": "<contact-profile-id>"
+}
+```
+
+## Rules
+
+- Structured views (list/kanban/table/grid/gallery/calendar/timeline/flow/graph) **require a profileId**. Get it from `list_profiles` or `create_profile`.
+- Bento views do NOT require a profileId.
+- `create_view` is auto-approved — the view appears immediately.
+- `update_view` creates a proposal — the user must approve config changes.
+- Never delete views — this is not exposed to agents.

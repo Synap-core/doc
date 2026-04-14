@@ -1,0 +1,175 @@
+---
+title: "Implementation Plan"
+description: "Relay implementation plan, phases, and milestones."
+---
+
+# Relay — Implementation Plan
+
+Ordered work breakdown. Each item maps to user stories and technical components.
+
+---
+
+## Phase 1: Foundation (MVP)
+
+### Track A: Data Model (2-3 days)
+
+| # | Task | Files | Depends On |
+|---|------|-------|------------|
+| A1 | Extend person profile with Relay properties (telegramHandle, linkedinUrl, sources, strengthScore, aiSummary, focusAreas, walletAddresses, etc.) | `ensure-system-profiles.ts` | — |
+| A2 | Create `interaction` profile type | `ensure-system-profiles.ts` | — |
+| A3 | Create Relay relation definitions (met_at, works_on, has_skill, affiliated_with, knows, etc.) | New utility: `ensure-relay-relations.ts` | — |
+| A4 | Extend Google Contacts pull-sync mapper to create Company entities + affiliated_with relations | `synap-backend/apps/api/src/routers/connectors.ts` | A1, A3 |
+
+### Track B: Backend API (3-4 days)
+
+| # | Task | Files | Depends On |
+|---|------|-------|------------|
+| B1 | Create `relay` tRPC router with getFeed, getPeople, getGraph endpoints | New: `routers/relay.ts` | A1 |
+| B2 | Feed aggregation query — join recent interactions, encounters, system events | `routers/relay.ts` | A2, A3 |
+| B3 | People query with Relay filters (source, skill tags, recency, strength) | `routers/relay.ts` | A1 |
+| B4 | Entity resolution: deterministic merge (phone/email match) + manual merge mutation | `routers/relay.ts` | A1 |
+| B5 | Telegram bulk import worker — parse export JSON, session detection, entity extraction | New: `jobs/relay-telegram-import.ts` | A1, A2 |
+| B6 | Telegram group scan worker — extract members from groups where bot is present | New: `jobs/relay-group-scan.ts` | A1 |
+
+### Track C: Frontend — Synap Module (4-5 days)
+
+| # | Task | Files | Depends On |
+|---|------|-------|------------|
+| C1 | Create `@synap/relay` package skeleton with cell registrations | `synap-app/packages/features/relay/` | — |
+| C2 | Feed cell — card list, card types (conversation, encounter, nudge, event), infinite scroll | `cells/relay-feed.tsx` + `components/feed/` | B2 |
+| C3 | People cell — grid and list modes, filter panel, person cards | `cells/relay-people.tsx` + `components/person/` | B3 |
+| C4 | Person detail cell — identity panel, timeline panel, notes tab | `cells/relay-person-detail.tsx` + `components/person/` | B1 |
+| C5 | Quick capture overlay — text input, AI preview, confirm flow | `cells/relay-capture.tsx` + `components/capture/` | Existing capture pipeline |
+| C6 | Events cell — upcoming/past, event cards, attendee list | `cells/relay-events.tsx` + `components/events/` | B1, A3 |
+| C7 | Merge dialog — duplicate detection notification, merge preview, confirm | `components/person/MergeDialog.tsx` | B4 |
+
+### Track D: Mobile App Shell (3-4 days)
+
+| # | Task | Files | Depends On |
+|---|------|-------|------------|
+| D1 | Initialize Expo app with Tamagui, Expo Router, base config | `relay-app/` | — |
+| D2 | Pod connection flow — sign in, pod-connect handshake, TRPCProvider | `src/providers/SynapProvider.tsx` | — |
+| D3 | Tab navigation — Feed, People, Events, Explore + FAB | `app/(tabs)/_layout.tsx` | D1 |
+| D4 | Feed screen — reuse feed components from @synap/relay (via Tamagui) | `app/(tabs)/feed.tsx` | C2, D2 |
+| D5 | People screen — grid view, person cards | `app/(tabs)/people.tsx` | C3, D2 |
+| D6 | Person detail screen | `app/person/[id].tsx` | C4, D2 |
+| D7 | Quick capture — FAB → bottom sheet, text + voice input | `src/components/CaptureSheet.tsx` | C5, D1 |
+| D8 | Onboarding flow — welcome, Telegram link, contacts import, first capture | `app/onboarding/` | D2, B5 |
+
+### Track E: Connectors (2-3 days)
+
+| # | Task | Files | Depends On |
+|---|------|-------|------------|
+| E1 | Activate Google Contacts Nango sync for Relay users | CP connector config | A4 |
+| E2 | Telegram export upload endpoint — accept JSON, queue import worker | Backend route | B5 |
+| E3 | Mobile contacts import — Expo contacts API → create Person entities | `relay-app/src/lib/contacts.ts` | D2, A1 |
+| E4 | Automatic entity resolution after import — deterministic matching | Worker triggered after E2/E3 | B4 |
+
+**Phase 1 total: ~15-19 days across tracks (much is parallelizable)**
+
+---
+
+## Phase 2: Intelligence
+
+### Track F: AI Enrichment (4-5 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| F1 | IS skill: `relay-extract` — extract people/orgs/skills/topics from raw text | Phase 1 |
+| F2 | IS skill: `relay-summarize` — summarize Telegram conversation sessions | B5 |
+| F3 | IS skill: `relay-briefing` — generate person briefing (Intelligence panel) | F1 |
+| F4 | IS skill: `relay-nudge` — generate reconnection nudges | F1 |
+| F5 | Strength score computation worker — periodic recalculation | A1 |
+| F6 | Intelligence panel in Person Detail | F3 |
+
+### Track G: Entity Resolution v2 (2-3 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| G1 | Fuzzy name matching + contextual signals (same group, same event) | B4 |
+| G2 | AI-assisted merge confidence scoring | G1 |
+| G3 | HITL merge UI — review candidates, bulk confirm/reject | G1 |
+
+### Track H: LinkedIn & Calendar (2-3 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| H1 | LinkedIn URL enrichment endpoint — paste URL → scrape → AI extract | A1 |
+| H2 | Google Calendar Nango sync activation | E1 |
+| H3 | Calendar attendee extraction → Person entity linking | H2, A3 |
+
+### Track I: Explore / Query (3-4 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| I1 | IS skill: `relay-query` — parse NL query → structured filters + graph ops | Phase 1 |
+| I2 | Graph traversal queries (2-hop, mutual connections, path finding) | B1 |
+| I3 | Explore cell — query input, results with explanations, suggested queries | I1, I2 |
+
+**Phase 2 total: ~11-15 days**
+
+---
+
+## Phase 3: Full Graph & Web3
+
+### Track J: Graph Visualization (3-4 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| J1 | Graph view mode in People cell — React Flow / d3-force layout | C3 |
+| J2 | Node types: person (photo), event (icon), topic (cluster label) | J1 |
+| J3 | Edge rendering: thickness=frequency, opacity=recency | J1 |
+| J4 | Mobile graph view — d3-force + react-native-svg | D5, J1 |
+
+### Track K: Event Intelligence (2-3 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| K1 | IS skill: `relay-prep-briefing` — pre-event intelligence document | F3 |
+| K2 | Prep briefing UI — full document with sections | K1 |
+| K3 | 2nd-degree attendee suggestions (people your contacts know) | I2 |
+
+### Track L: Web3 Integrations (2-3 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| L1 | Wallet address property + on-chain activity lookup | A1 |
+| L2 | Farcaster profile linking | A1 |
+| L3 | Lens profile linking | A1 |
+
+### Track M: Advanced Intelligence (3-4 days)
+
+| # | Task | Depends On |
+|---|------|------------|
+| M1 | Community detection algorithm (from relations graph) | I2 |
+| M2 | Bridge node identification | M1 |
+| M3 | "You should introduce X to Y" suggestions | M1 |
+| M4 | Export graph (JSON-LD, CSV) | I2 |
+
+**Phase 3 total: ~10-14 days**
+
+---
+
+## Critical Path
+
+```
+A1 (person profile) ──→ B1 (relay router) ──→ C2-C6 (frontend cells)
+                    ├──→ B5 (telegram import) ──→ E2 (upload endpoint)
+                    └──→ D1-D8 (mobile app, parallel)
+
+C5 (capture overlay) depends on existing capture pipeline (already built)
+D2 (pod connect) depends on @synap-core/pod-connect (already built)
+```
+
+**Minimum viable demo:** A1 + B1 + B2 + C2 + C4 + C5 = ~5-7 days
+(Person profiles extended, feed with manual captures, person detail)
+
+---
+
+## Open Decisions (Pre-Implementation)
+
+1. **Repo structure:** New `relay-app/` at root level, or inside `other/` like synap-life-feed?
+2. **Relay as Browser app:** Register Relay as a new app in `manifest.ts`, or integrate into existing Library/Dashboard?
+3. **Telegram export format:** Support both Telegram Desktop JSON export and Telegram API JSON?
+4. **Voice transcription:** Whisper API (via IS) or on-device (expo-speech)?
+5. **Offline first:** How much data to cache locally on mobile? Just contacts list? Full timeline?

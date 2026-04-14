@@ -1,0 +1,210 @@
+---
+title: "Agent SDK README"
+description: "Getting started with the @synap/agent-sdk package."
+---
+
+# @synap/agent-sdk
+
+SDK for building external Synap agent services.
+
+See **[docs/AGENT_SERVICE_SDK.md](../../docs/AGENT_SERVICE_SDK.md)** for the full guide.
+
+## Install
+
+```bash
+pnpm add @synap/agent-sdk hono @hono/node-server
+```
+
+## Quick Start
+
+```typescript
+import { createAgentServer } from "@synap/agent-sdk/server";
+import { PodClient } from "@synap/agent-sdk/pod";
+import { registerAgent } from "@synap/agent-sdk/register";
+import { serve } from "@hono/node-server";
+
+const server = createAgentServer({
+  serviceId: "my-agent",
+  apiKey: process.env.SYNAP_API_KEY!,
+
+  specialisations: [{ id: "default", label: "My Agent", isDefault: true }],
+
+  async onChatStream(req, send) {
+    const pod = new PodClient(req.dataPodUrl!, req.dataPodApiKey!);
+    const context = await pod.getContext({
+      channelId: req.threadId,
+      userId: req.userId,
+    });
+
+    await send.content("Processing...");
+    // ... your AI logic ...
+    await send.complete({
+      content: "Done",
+      aiSteps: [],
+      proposedActions: [],
+      branchDecision: null,
+    });
+  },
+});
+
+await registerAgent({
+  podUrl: process.env.POD_URL!,
+  podApiKey: process.env.POD_HUB_API_KEY!,
+  serviceId: "my-agent",
+  name: "My Agent",
+  webhookUrl: process.env.WEBHOOK_URL!,
+  apiKey: process.env.SYNAP_API_KEY!,
+  capabilities: ["chat"],
+});
+
+serve({ fetch: server.app.fetch, port: 3000 });
+```
+
+## Exports
+
+| Import path                 | Contents                                  |
+| --------------------------- | ----------------------------------------- |
+| `@synap/agent-sdk`          | All exports (re-exports everything below) |
+| `@synap/agent-sdk/server`   | `createAgentServer()`                     |
+| `@synap/agent-sdk/pod`      | `PodClient` — Hub Protocol client         |
+| `@synap/agent-sdk/register` | `registerAgent()`, `tryRegisterAgent()`   |
+| `@synap/agent-sdk/types`    | TypeScript contract types only            |
+
+## Branch Modes
+
+When delegating work to sub-agents, choose between two modes:
+
+- **ephemeral** (default) — sub-agent runs in-process, no DB channel created, user never sees a branch card. Use for internal research, searches, and analysis that should be transparent.
+- **parallel** — a DB branch channel is created, a BranchCard appears in the chat UI, and the user can guide the branch while it works. Use for long-running investigations that benefit from user visibility.
+
+This mode is controlled by the `mode` parameter on the `dispatch_agent` tool (intelligence-hub side) or by calling `pod.createBranch()` directly in a custom IS.
+
+## Proposal Response Semantics
+
+Write operations (entity creation, document writes, branch creation) may return a proposal instead of executing immediately. This happens when the AI agent's governance settings require user approval:
+
+```typescript
+const result = await pod.createBranch({
+  userId: req.userId,
+  parentChannelId: req.threadId,
+  branchPurpose: "Investigate Q3 metrics",
+  agentUserId: req.agentUserId,
+});
+
+if (result.status === "proposed") {
+  // Branch is pending user approval — surface the proposalId
+  // in your complete event's createdProposals array so the
+  // frontend shows a pending proposal pill inline.
+  console.log("Proposal pending:", result.proposalId);
+} else {
+  // Branch was auto-approved and created immediately
+  console.log("Branch created:", result.channelId);
+}
+```
+
+Always include `createdProposals` in your `send.complete()` call so proposals are surfaced in the UI:
+
+```typescript
+await send.complete({
+  content: "Analysis complete.",
+  aiSteps: [],
+  proposedActions: [],
+  createdProposals: result.proposalId
+    ? [
+        {
+          proposalId: result.proposalId,
+          toolName: "createBranch",
+          description: "Create analysis branch",
+        },
+      ]
+    : [],
+  branchDecision: null,
+});
+```
+
+## SDK vs. First-Party Hub
+
+| Capability                         | SDK (`@synap/agent-sdk`)           | First-party hub only |
+| ---------------------------------- | ---------------------------------- | -------------------- |
+| HTTP server wiring                 |  `createAgentServer()`           | —                    |
+| Pod registration                   |  `registerAgent()`               | —                    |
+| Hub Protocol reads/writes          |  `PodClient`                     | —                    |
+| TypeScript contract types          |                                  | —                    |
+| 45+ built-in tools                 | ❌ Implement yourself              |                    |
+| System skill prompt library        | ❌ Copy manually (see below)       |                    |
+| Multi-agent registry (15+ types)   | ❌ Implement own routing           |                    |
+| Session-scoped memory + compaction | ❌ Use `getContext()` + own logic  |                    |
+| MCP server transport               | ❌ Use `@modelcontextprotocol/sdk` |                    |
+| Langfuse telemetry                 | ❌                                 |                    |
+| Agent state / activity reporting   | ❌                                 |                    |
+
+See **[IS Contract](/team/intelligence/contract)** for the full breakdown.
+
+## Inline Reference Convention
+
+Synap's frontend renders `[[entity:UUID:Name]]` as clickable entity chips. If your IS does not include this convention in its system prompt, the AI will produce plain text instead.
+
+Add to your system prompt:
+
+```
+When mentioning specific entities, people, documents, or views from the workspace,
+use the inline reference format: [[entity:UUID:Display Name]]
+Examples:
+  - Person:    [[entity:user-abc-123:Alice Johnson]]
+  - Document:  [[doc:doc-xyz-456:Q3 Report]]
+  - View:      [[view:view-789:Pipeline Dashboard]]
+Always use the actual UUID from workspace data, not a placeholder.
+```
+
+## PodClient — All Methods
+
+```typescript
+const pod = new PodClient(req.dataPodUrl!, req.dataPodApiKey!);
+
+// Messages
+pod.getMessages(channelId, limit?)
+pod.postMessage({ channelId, content, role?, agentUserId?, metadata? })
+
+// Context (assembled: messages + linked entities + memory summary)
+pod.getContext({ channelId, userId, workspaceId? })
+
+// Search
+pod.searchEntities({ query, workspaceId, userId?, limit?, entityTypes? })
+
+// Entities
+pod.getEntity(entityId)
+pod.createEntity({ workspaceId, agentUserId, type, name, metadata?, ... })
+
+// Documents
+pod.getDocument(documentId)      // → { id, title, content? } | null  [v0.3+]
+
+// Memory
+pod.recallMemory({ query, userId, workspaceId?, limit? })
+pod.rememberFact({ content, userId, workspaceId?, confidence?, agentUserId? })
+
+// User Skills
+pod.getUserSkills(workspaceId)   // → [{ id, name, description, code }]  [v0.3+]
+
+// Branches
+pod.getActiveBranches(threadId)
+pod.createBranch({ userId, parentChannelId, branchPurpose, agentType?, agentUserId?, reasoning? })
+```
+
+## PodClient — Branch Methods
+
+```typescript
+// Get active parallel branches for context injection
+const branches = await pod.getActiveBranches(req.threadId);
+// → [{ channelId, branchPurpose, status }, ...]
+
+// Create a parallel branch (goes through AI governance)
+const branch = await pod.createBranch({
+  userId: req.userId,
+  parentChannelId: req.threadId,
+  branchPurpose: "Research topic X",
+  agentType: "research",
+  agentUserId: req.agentUserId,
+  reasoning: "User asked for deep research",
+});
+// → { status: "proposed" | "created", channelId?, proposalId? }
+```

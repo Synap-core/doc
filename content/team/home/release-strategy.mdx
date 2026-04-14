@@ -1,0 +1,258 @@
+---
+title: "Release Strategy"
+description: "Browser and app release strategy."
+---
+
+# Browser Release Strategy
+
+Developer guideline for the Synap Electron app release pipeline.
+
+---
+
+## Architecture Overview
+
+| Component | Repo | Visibility |
+|-----------|------|------------|
+| Source code | `Synap-core/browser` | Private |
+| Compiled artifacts (DMG, EXE, AppImage, DEB) | `Synap-core/browser-exec` | Public |
+| Package registry | GitHub Packages (`npm.pkg.github.com`) | `@synap-core` scope |
+
+The `browser/` directory lives inside the monorepo at `/synap/browser/`, alongside `synap-app/`, `synap-backend/`, etc. All release tooling is run from the monorepo root.
+
+---
+
+## Package Naming
+
+All frontend packages use the `@synap-core/` scope (renamed from `@synap/` in March 2026). This scope matches the GitHub org name `Synap-core`, which is required for GitHub Packages publishing.
+
+---
+
+## CI/CD Pipeline
+
+### Why CI cannot use `workspace:*` directly
+
+The `browser/` package has approximately 70 `workspace:*` dependencies (`@synap-core/ai-chat`, etc.). In CI, only the `browser/` directory is checked out — there is no monorepo. As a result, `pnpm install` cannot resolve `workspace:*` dependencies from local disk.
+
+**Solution**: All `@synap-core/*` packages are published to GitHub Packages. CI installs from there using a `GITHUB_TOKEN` (auto-provided by Actions — no extra secret needed for read access within the same org).
+
+### GitHub Actions workflow
+
+File: `browser/.github/workflows/browser-release.yml`
+
+- Triggers on `v*` tag push or `workflow_dispatch`
+- Builds Linux (AppImage + deb) and Windows (NSIS + zip) in parallel
+- Uses `actions/setup-node` with `registry-url: https://npm.pkg.github.com` and `scope: @synap`, which auto-injects `NODE_AUTH_TOKEN`
+- Publishes artifacts to `Synap-core/browser-exec` via the `BROWSER_RELEASE_TOKEN` secret
+
+| Platform | CI | Runner | Cost multiplier |
+|----------|----|--------|-----------------|
+| Linux (AppImage + deb) | Automatic | `ubuntu-latest` | 1x — essentially free |
+| Windows (NSIS + zip) | Automatic | `windows-latest` | 2x — cheap |
+| macOS (DMG x64 + arm64) | Manual (local) | — | 10x — too expensive on hosted runners |
+
+### macOS builds (manual)
+
+macOS builds are done locally due to the GitHub Actions macOS runner cost (~10x the minute multiplier). Run from the monorepo root:
+
+```bash
+node scripts/release.mjs mac
+```
+
+Requires `GH_TOKEN` set to a PAT with `repo` scope on `Synap-core/browser-exec`.
+
+For signed and notarized builds (Gatekeeper-safe), pass `--sign` and set the following environment variables:
+
+```bash
+APPLE_ID=your@apple.com \
+APPLE_APP_SPECIFIC_PASSWORD=xxxx-xxxx-xxxx-xxxx \
+APPLE_TEAM_ID=XXXXXXXXXX \
+CSC_LINK=<base64 .p12 certificate> \
+CSC_KEY_PASSWORD=<cert password> \
+GH_TOKEN=<token> \
+node scripts/release.mjs mac --sign
+```
+
+---
+
+## Release Script
+
+File: `scripts/release.mjs` — run from the monorepo root with `node scripts/release.mjs [command]`.
+
+| Command | Description |
+|---------|-------------|
+| `status` | Show current version, git state, and last tag |
+| `bump [patch\|minor\|major\|x.y.z]` | Bump version in `browser/package.json` only |
+| `publish [patch\|minor\|major]` | Bump + commit + tag + push (triggers CI for Linux/Windows) |
+| `mac [--sign]` | Build and publish macOS DMGs locally |
+| `all [patch\|minor\|major] [--sign]` | Run `publish` then `mac` in sequence |
+| `login-packages` | One-time login to GitHub Packages (saves to `~/.npmrc`) |
+| `build-packages` | Build all `@synap-core/*` packages without publishing |
+| `publish-packages [--dry-run]` | Build and publish all `@synap-core/*` packages to GitHub Packages |
+
+---
+
+## Publishing `@synap-core/*` Packages
+
+All packages in `synap-app/packages/` have a `publishConfig` pointing to GitHub Packages. These must be published whenever packages change, before CI can resolve updated dependencies.
+
+### One-time auth setup
+
+```bash
+node scripts/release.mjs login-packages
+```
+
+This prompts for a GitHub username and PAT (requires `write:packages`, `read:packages`, and `repo` scopes), then saves the credentials to `~/.npmrc` permanently.
+
+### Publish packages
+
+```bash
+node scripts/release.mjs publish-packages
+```
+
+This builds all packages in topological order (best-effort, continues despite type errors) then publishes with `--ignore-scripts` to use the existing `dist/` output.
+
+### When to republish packages
+
+- When any `@synap-core/*` package adds or changes its public API
+- Before cutting a new browser release that uses updated package features
+- After adding a new package to the workspace
+
+---
+
+## electron-builder Quirks
+
+### `npmRebuild: false`
+
+`electron-builder.yml` sets `npmRebuild: false`. Without this flag, `@electron/rebuild` walks the entire monorepo's pnpm virtual store (`.pnpm/node_modules/`) and crashes on phantom or broken symlinks from packages that exist in other workspace repos. `node-pty` ships prebuilt binaries for each Electron version, so no source rebuild is needed.
+
+### Files to bundle
+
+The `files` section in `electron-builder.yml` only bundles `out/**/*` (Vite build output) and `package.json`. There is no `node_modules/` — all dependencies are bundled by `electron-vite` at build time.
+
+---
+
+## `.npmrc` Files
+
+### Monorepo root (`/synap/.npmrc`)
+
+```
+@synap-core:registry=https://npm.pkg.github.com
+```
+
+Routes all `@synap-core/` imports to GitHub Packages when outside the workspace context.
+
+### Browser (`browser/.npmrc`)
+
+```
+@synap-core:registry=https://npm.pkg.github.com
+# NODE_AUTH_TOKEN injected by actions/setup-node in CI
+# Locally, packages resolve from workspace:* symlinks — no token needed
+```
+
+---
+
+## pnpm Workspace
+
+File: `pnpm-workspace.yaml` at the monorepo root.
+
+Known quirks:
+
+- `strata/` entries were removed — the strata repo is not checked out in this monorepo
+- `synap-app/packages/core/command-template` and `synap-app/packages/react` must be explicitly listed (they are not auto-discovered)
+- `synap-dev-dashboard` uses `@synap-core/` scoped packages and must be updated on any renames
+
+---
+
+## Secrets Reference
+
+| Secret | Where | Purpose |
+|--------|-------|---------|
+| `BROWSER_RELEASE_TOKEN` | `Synap-core/browser` repo secrets | Classic PAT with `repo` scope on `browser-exec`. Used by CI to upload release artifacts. |
+| `GH_TOKEN` (local env var) | Developer machine | Same PAT or equivalent. Used by `release.mjs mac` to upload macOS artifacts. |
+| `APPLE_ID` | Local env (optional) | Notarization email |
+| `APPLE_APP_SPECIFIC_PASSWORD` | Local env (optional) | App-specific password for notarization |
+| `APPLE_TEAM_ID` | Local env (optional) | Apple Developer team ID |
+| `CSC_LINK` | Local env (optional) | Base64-encoded Developer ID `.p12` certificate |
+| `CSC_KEY_PASSWORD` | Local env (optional) | Password for the `.p12` certificate |
+
+`GITHUB_TOKEN` is auto-provided by Actions for read access to packages within the same org — no manual secret needed.
+
+---
+
+## Full Release Checklist
+
+### New browser release
+
+1. If any packages changed since last release, publish them first:
+   ```bash
+   node scripts/release.mjs publish-packages
+   ```
+2. Verify the working tree is clean:
+   ```bash
+   node scripts/release.mjs status
+   ```
+3. Run the full release:
+   ```bash
+   node scripts/release.mjs all [patch|minor|major]
+   ```
+   This bumps the version, commits, tags, and pushes — triggering CI for Linux and Windows. Then it builds macOS DMGs locally and uploads them to `browser-exec`.
+4. Monitor CI: `github.com/Synap-core/browser/actions`
+5. Verify the release: `github.com/Synap-core/browser-exec/releases`
+
+### First-time setup on a new machine
+
+1. Clone all repos into the same parent directory:
+   ```
+   synap/browser/
+   synap/synap-app/
+   synap/synap-backend/
+   synap/synap-intelligence-service/
+   ```
+2. Run `pnpm install` from the monorepo root.
+3. Authenticate with GitHub Packages (one-time):
+   ```bash
+   node scripts/release.mjs login-packages
+   ```
+4. Set the `GH_TOKEN` environment variable to a PAT with `repo` and `write:packages` scopes.
+
+---
+
+## Future: Self-hosted macOS Runner
+
+When a dedicated Mac is available (Mac Mini, old MacBook, or a CI service), the manual macOS step can be fully automated at no cost.
+
+1. On the Mac, install the GitHub Actions runner from:
+   `github.com/Synap-core/browser` → Settings → Actions → Runners → New self-hosted runner
+2. Assign the runner label `self-hosted-mac`.
+3. Uncomment the `build-mac` job in `browser/.github/workflows/browser-release.yml`:
+   ```yaml
+   build-mac:
+     name: Build macOS
+     runs-on: [self-hosted, self-hosted-mac]
+   ```
+4. Every tag push will then build all three platforms automatically.
+
+Alternative CI services if no Mac is available:
+
+| Service | Free macOS minutes | Notes |
+|---------|--------------------|-------|
+| Codemagic | 500/month | Enough for ~5 releases |
+| CircleCI | macOS tiers from $15/month | More volume |
+| GitHub Team | $4/user/month | Includes additional macOS minutes |
+
+---
+
+## Install URLs (once first release is published)
+
+```
+https://api.synap.live/download/latest?platform=mac&arch=arm64
+https://api.synap.live/download/latest?platform=mac&arch=x64
+https://api.synap.live/download/latest?platform=linux&arch=x64
+https://api.synap.live/download/latest?platform=win&arch=x64
+```
+
+Or via the install script:
+
+```bash
+curl -fsSL https://api.synap.live/install | bash
+```

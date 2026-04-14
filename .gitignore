@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Next.js / build
+.next/
+out/
+dist/
+build/
+
+# Fumadocs generated
+.source/
+
+# Env & local
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.log
+*.bak
+
+# TypeScript incremental
+*.tsbuildinfo
+
+# Archives (never commit site backups into git)
+*.tar.gz
+*.zip

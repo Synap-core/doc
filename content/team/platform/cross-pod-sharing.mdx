@@ -1,0 +1,201 @@
+---
+title: "Cross-Pod Sharing"
+description: "Sharing entities and data across pod boundaries."
+---
+
+# Cross-Pod Entity Sharing
+
+**Status:** Phase 0 implemented (intra-pod scoping). Phase 1 planned (frontend-mediated). Phase 2+ future roadmap.
+
+---
+
+## The Problem
+
+Synap is a sovereign data infrastructure: each user owns a **pod** — an isolated PostgreSQL + API instance. Sharing an entity *across pods* means sending data from pod A (Alice) to pod B (Bob). No cross-pod channel exists today.
+
+There are three architecturally distinct approaches, at increasing levels of infrastructure investment:
+
+---
+
+## Phase 1 — Frontend-Mediated (users with access to both pods)
+
+**Precondition**: the sender already has an authenticated session on the receiver pod (they were previously invited to a workspace there, or they own multiple pods).
+
+### How it works
+
+```
+Alice's Browser (Electron)
+    ├── read entity from pod A       (active session, tRPC)
+    └── create entity on pod B       (existing Kratos session for pod B domain)
+```
+
+Electron stores Ory Kratos session cookies **per domain** in `session.defaultSession`. If Alice has previously authenticated on pod B (e.g. Bob invited her to a workspace there), her `ory_kratos_session` cookie for pod B's domain is already present in Electron's cookie store. A `fetch` call to pod B with `credentials: 'include'` will automatically carry it.
+
+The existing tRPC client in `SynapProvider` uses a `podApiUrlRef` that's updated dynamically — the same pattern can be used to create ephemeral one-shot clients for secondary pods.
+
+### Implementation plan
+
+| Step | Work |
+|------|------|
+| 1 | **Pod list in SpaceSubmenu**: extend the submenu to show "Other pods" section below "Other workspaces". Source: `connectionStore.savedPods` (already populated when user visits pods) + CP `GET /pods` for verified pod list |
+| 2 | **Workspace query on target pod**: on hover of a target pod row, fetch `trpc.workspaces.list` via an ephemeral client pointed at that pod URL (same `httpBatchLink` pattern, with `credentials: 'include'`) |
+| 3 | **`copyToPod(entityId, targetPodUrl, targetWorkspaceId)`** in `useAddEntityToSpace` — creates entity on the target pod's tRPC endpoint, passing `x-workspace-id` header with the selected workspace ID |
+| 4 | **Auth failure handling**: if the fetch returns 401, show "You need to log in to that pod first" inline in the submenu with a "Open pod" button |
+
+### UX flow
+
+```
+Right-click entity
+└── Add to space ›
+        ├── [This pod]
+        │   ├── Work Team
+        │   └── Side Project
+        ├── ────────────────
+        ├── [Other pods]          ← new section
+        │   ├── Bob's Pod ›       ← hover → workspace list from pod B
+        │   │     ├── Personal
+        │   │     └── Projects    ← click → creates entity there
+        │   └── + Add pod...      ← opens "add known pod" dialog
+        └──  Make pod-wide
+```
+
+### Constraints
+
+- Requires the sender to have an active Ory Kratos session for the target pod domain.
+- Sessions are Electron-only today (cookie-based, domain-scoped). Web surface would need explicit token exchange.
+- Entity is **copied** (not moved or linked) — it becomes an independent entity on the target pod with no reference back to the source. No sync, no conflict resolution.
+- The target pod's schema may differ from the source (profile slugs, property defs). Copy is best-effort: known properties are preserved, unknown ones are dropped or stored raw.
+
+---
+
+## Phase 2 — CP-Mediated (any two users, no shared session required)
+
+The Control Plane orchestrates delivery using the ES256 JWT it already issues and every pod already trusts.
+
+```
+Alice's Browser
+    └── POST /share/entity to CP        (Alice's CP session)
+                │
+                ├── GET entity from pod A       (CP JWT → pod A)
+                ├── lookup recipient's pod URL  (dataPods table)
+                ├── create pending_share record
+                └── POST entity to pod B        (CP JWT → pod B, pending acceptance)
+                            │
+                            └── Bob's pod notifies Bob (bell + Telegram)
+                                Bob accepts → entity materialises
+                                Bob rejects → share expires (7d TTL)
+```
+
+This mirrors the existing `workspaces.acceptInviteViaCp` flow exactly — no new auth infrastructure is needed.
+
+**Why this is better than Phase 1:**
+- No pre-existing session required on pod B
+- Full audit trail (CP logs every share)
+- Bilateral consent by default (Bob approves before data lands)
+- CP can enforce rate limiting, abuse detection, GDPR right-to-erasure
+- Entity content transits CP but is never persisted there (in-flight only)
+- Works from the web surface, not just Electron
+
+**Estimated work**: ~4 days (CP route + pending_shares table + pod hub-protocol route + notification + browser UI).
+
+---
+
+## Phase 3 — Decentralised Pod Mesh (Blockchain Identity Layer)
+
+> This is the long-term architectural vision for a fully sovereign, CP-independent cross-pod network.
+
+### The Problem with CP-Mediated
+
+Phase 2 solves the immediate problem but keeps the Control Plane in the data path. For a product built on *sovereign data*, routing entity content through a central server is a philosophical contradiction, even if content is not persisted. It also creates a single point of failure and a scaling bottleneck as the network grows.
+
+### The Vision: Pods as First-Class Cryptographic Identities
+
+Each Synap pod gets a **Decentralised Identifier (DID)** — a public/private key pair that is the pod's permanent, portable identity on a distributed ledger. No central authority issues or revokes it.
+
+```
+Pod A DID:  did:synap:0x4a3f...  (ECDSA P-256 keypair, same curve as CP JWT today)
+Pod B DID:  did:synap:0x9c1e...
+```
+
+The ledger (a lightweight L2 or a purpose-built Synap chain) acts as:
+
+| Role | What it stores |
+|------|---------------|
+| **Identity registry** | Pod DID → current pod URL (resolvable, like DNS) |
+| **Trust graph** | Signed "I trust pod X" relationships between pods |
+| **Capability tokens** | Signed, expiring permissions ("pod A may write entities to pod B until T") |
+| **Audit trail** | Immutable, tamper-proof record of every cross-pod data transfer |
+
+### How cross-pod sharing works without CP
+
+```
+Alice wants to share with Bob:
+
+1. Alice's pod signs a capability token:
+   { from: did:synap:0x4a3f, to: did:synap:0x9c1e, action: "write_entity",
+     entityId: "...", expires: T+1h, nonce: "..." }
+   → signed with Alice's pod private key
+
+2. Token is published on-chain (or sent directly to Bob's pod)
+
+3. Bob's pod verifies: resolves Alice's DID → fetches Alice's public key from chain
+   → verifies signature → token is valid → accepts entity
+
+4. Transfer is recorded on-chain with both signatures
+
+No CP in the path. No central trust authority.
+```
+
+### Why a blockchain and not just HTTPS + key pinning
+
+- **Persistence**: pod URLs change (migrations, custom domains). The chain maps DID → current URL reliably, like a decentralised DNS.
+- **Revocation**: Alice can publish "capability revoked" on-chain. Bob's pod checks revocation list before accepting.
+- **Discovery**: "Find all pods that trust did:synap:0x4a3f" — traversable trust graph without asking CP.
+- **Auditability**: Alice and Bob can both independently prove the transfer happened, without trusting each other or a third party.
+- **Multi-operator**: When Synap allows third-party pod operators (agencies, enterprises), the blockchain is the neutral trust anchor. CP is no longer the sole authority.
+
+### Relation to CP
+
+The CP doesn't disappear — it handles billing, provisioning, and onboarding. But it becomes **optional for data operations** rather than mandatory. Think of CP as the "easy onboarding lane" and the blockchain mesh as the "full sovereign lane" for advanced users.
+
+### Technology candidates
+
+| Option | Tradeoffs |
+|--------|-----------|
+| **Ethereum L2** (Optimism / Base) | Mature ecosystem, high cost at volume, public by default |
+| **Ceramic / IPFS** | Good for DID documents, not great for capability tokens |
+| **Synap chain** (custom PoA) | Full control, zero cost, requires node operators |
+| **Nostr protocol** | Lightweight, event-based, but limited smart contract capability |
+| **Verifiable Credentials (W3C VC)** | Standard DID spec, CP issues VCs, pods verify offline — hybrid approach |
+
+The **W3C Verifiable Credentials** path is the most pragmatic bridge: CP issues VCs to pods at provisioning time (like it issues Hub Protocol keys today), pods verify them offline using the CP's published public key. This gives most of the Phase 3 benefits without requiring on-chain transactions for every transfer — the blockchain is reserved for revocation and trust graph only.
+
+### Timeline
+
+Phase 3 is a multi-quarter initiative. Prerequisites:
+- Phase 2 (CP-mediated) must ship and be stable first
+- Pod identity/DID spec needs product design
+- On-chain transaction cost modelling
+- Legal/compliance review (data sovereignty + GDPR for cross-border transfers)
+
+---
+
+## Summary
+
+| Phase | Mechanism | Auth | Scope | Status |
+|-------|-----------|------|-------|--------|
+| 0 | Intra-pod workspace scoping | User session | Same pod, cross-workspace |  Shipped |
+| 0b | Pod-wide entities (`workspaceId = null`) | User session | Same pod, all workspaces |  Shipped |
+| 1 | Frontend-mediated | Existing Kratos session on target pod | Users with access to both pods | 🔜 Next |
+| 2 | CP-mediated | CP ES256 JWT | Any two Synap users |  Planned |
+| 3 | Blockchain pod mesh | DID + on-chain capability tokens | Fully decentralised |  Vision |
+
+---
+
+## Current "Share" UI stub
+
+`EntityContextMenu` already has a disabled "Share" item (marked "Soon"). The activation path:
+
+- **Phase 1**: wire `onShare` in `EntityActionsProvider`; handler opens a pod picker that queries `savedPods` + ephemeral tRPC workspace fetch; creates entity on target pod
+- **Phase 2**: `onShare` sends to CP `POST /share/entity`; UI shows "Pending acceptance" state
+- **Phase 3**: `onShare` signs a capability token and broadcasts to the mesh; no CP call

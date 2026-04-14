@@ -1,0 +1,245 @@
+---
+title: "Pricing Plan"
+description: "Token and subscription pricing strategy."
+---
+
+# Token-Based Pricing — Implementation Plan
+
+**Date:** 2026-04-04
+**Status:** Plan — ready for validation before implementation.
+
+---
+
+## The Model
+
+| Channel | Pricing | Why |
+|---------|---------|-----|
+| **Browser app** (our UX) | Included in Pod+AI (€30/mo, 1M tokens) | We control routing, 90% goes to free models |
+| **Relay app** (our UX) | Included in Pod+AI | Same |
+| **`/v1/chat/completions`** (OpenClaw, API) | Per-token (pay-as-you-go) | External, unpredictable volume |
+| **Hub Protocol writes** | Free (no AI cost) | CRUD operations, no model calls |
+
+### Per-Token Pricing
+
+We pass through model costs with a markup:
+
+| Tier | Model | Our cost/1M tokens | User pays/1M tokens | Markup |
+|------|-------|-------|-----------|--------|
+| **free** | DeepSeek V3 | $0.014 | $0.05 | ~3.5x |
+| **balanced** | Kimi K2.5 | $0.15 | $0.50 | ~3.3x |
+| **advanced** | Claude Sonnet | $3.00 | $8.00 | ~2.7x |
+| **complex** | Claude Opus | $15.00 | $40.00 | ~2.7x |
+| **auto** | Smart routing | varies | varies | Same per-tier |
+
+With `synap/auto` (default), 90% of traffic goes to free/balanced. A typical OpenClaw user:
+- 100K tokens/day, 80% free, 15% balanced, 5% advanced
+- Monthly cost: ~$5-15 (vs $150-300 on raw Claude API)
+- Our margin: ~60% (covering infra + routing intelligence)
+
+### Subscription vs Pay-As-You-Go
+
+Users can have both:
+- **Pod+AI subscription** (€30/mo) → 1M tokens included, Browser/Relay usage
+- **API pay-as-you-go** → per-token for `/v1/chat/completions`, on top of subscription
+- **Pod only** (€15/mo) → API pay-as-you-go only, no included tokens
+
+---
+
+## What Already Exists
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Per-request token tracking |  Complete | `enhanced-usage-tracking.ts` — logs tokens_in/out, cost, model per request |
+| Usage logs table |  Complete | `usage_logs` — customerRefId, model, tokensTotal, costUsd |
+| Daily aggregates |  Complete | `usage_aggregates` — daily rollup per customer |
+| Monthly quota |  Complete | `intelligence_access.monthlyTokenLimit` |
+| Quota enforcement |  Complete | IS returns 429 when exceeded |
+| Quota reset |  Complete | Monthly cron job |
+| Internal cost tracking |  Complete | `cost-tracker.ts` — Redis monthly accumulator |
+| Stripe subscriptions |  Complete | Flat monthly billing |
+| **Stripe usage metering** | ❌ Missing | Need to report usage events to Stripe |
+| **Per-token price tiers** | ❌ Missing | Need Stripe products for each model tier |
+| **Usage dashboard** | ❌ Missing | User-facing token usage view |
+
+---
+
+## Implementation Plan
+
+### Phase 1: Stripe Meters (CP API)
+
+Per [Stripe's token billing docs](https://docs.stripe.com/billing/token-billing):
+
+**1a. Create Stripe meters** (Dashboard or API):
+```
+Meter: synap_tokens_free       (event_name: "synap_tokens_free")
+Meter: synap_tokens_balanced   (event_name: "synap_tokens_balanced")  
+Meter: synap_tokens_advanced   (event_name: "synap_tokens_advanced")
+Meter: synap_tokens_complex    (event_name: "synap_tokens_complex")
+```
+
+Each meter aggregates `sum` of `token_count` per customer per billing period.
+
+**1b. Create Stripe prices** tied to meters:
+```
+Price: synap_tokens_free       → $0.05 per 1M tokens
+Price: synap_tokens_balanced   → $0.50 per 1M tokens
+Price: synap_tokens_advanced   → $8.00 per 1M tokens
+Price: synap_tokens_complex    → $40.00 per 1M tokens
+```
+
+**1c. Usage-based subscription item:**
+When a user enables API access, add metered line items to their Stripe subscription. Each model tier = one line item with usage-based pricing.
+
+### Phase 2: Usage Reporting (IS → CP → Stripe)
+
+**Architecture:**
+```
+IS receives /v1/chat/completions request
+  → Routes to model tier
+  → Gets response with token count
+  → enhanced-usage-tracking.ts logs to usage_logs table
+  → NEW: pushes usage event to CP
+
+CP receives usage event
+  → Validates customer
+  → Batches events (aggregate per minute, per tier)
+  → Reports to Stripe: stripe.billing.meterEvents.create()
+  → Updates user's real-time usage dashboard
+```
+
+**Key: Batch, don't send per-request.**
+Per [Stripe best practices](https://www.buildmvpfast.com/blog/stripe-metered-billing-implementation-guide-saas-2026):
+- Accumulate in Redis (per customer, per tier, per minute)
+- Flush to Stripe every 60 seconds
+- If Stripe is down, queue in database, retry later
+
+**2a. IS: Report usage to CP** (new endpoint call in enhanced-usage-tracking.ts)
+
+The IS already calls `pushQuotaEvent()` (imported at line 14). Extend this to include the model tier and channel (browser vs API).
+
+**2b. CP: New endpoint `POST /billing/usage-event`**
+```typescript
+{
+  customerId: string,
+  tier: "free" | "balanced" | "advanced" | "complex",
+  tokensTotal: number,
+  channel: "browser" | "api" | "relay",  // distinguish included vs billed
+  timestamp: string
+}
+```
+
+Logic:
+- If `channel === "browser" || channel === "relay"` → count against monthly quota, don't report to Stripe
+- If `channel === "api"` → report to Stripe meter
+
+**2c. CP: Stripe usage reporting job**
+
+New worker: `report-stripe-usage.ts`
+- Runs every 60 seconds
+- Reads accumulated usage from Redis (per customer, per tier)
+- Calls `stripe.billing.meterEvents.create()` for each
+- Clears Redis after successful report
+- Fallback: if Redis fails, read from `usage_logs` directly
+
+### Phase 3: User-Facing Usage Dashboard
+
+**3a. CP API: `GET /billing/usage`**
+```json
+{
+  "period": { "start": "2026-04-01", "end": "2026-04-30" },
+  "included": {
+    "limit": 1000000,
+    "used": 342000,
+    "remaining": 658000,
+    "byModel": { "free": 280000, "balanced": 52000, "advanced": 10000 }
+  },
+  "api": {
+    "tokensUsed": 156000,
+    "estimatedCost": 2.34,
+    "byModel": { "free": 120000, "balanced": 30000, "advanced": 6000 }
+  },
+  "totalCost": {
+    "subscription": 30.00,
+    "apiUsage": 2.34,
+    "total": 32.34
+  }
+}
+```
+
+**3b. CLI: `synap status` shows usage**
+```
+  Tokens: 342K / 1M used (34%)
+  API:    156K tokens ($2.34 this period)
+```
+
+**3c. Landing/Web: Usage section in billing page**
+Token usage chart, cost breakdown by model, spending alerts.
+
+### Phase 4: Distinguish Browser vs API Requests
+
+The IS needs to know which channel a request came from:
+
+**How to detect:**
+- `/v1/chat/completions` requests → `channel: "api"` (per-token billed)
+- `/api/chat/stream` from pod → check the origin:
+  - If request has `X-Synap-Client: browser` header → `channel: "browser"` (included)
+  - If request has `X-Synap-Client: relay` header → `channel: "relay"` (included)
+  - Default → `channel: "api"` (per-token billed)
+
+The pod already proxies to IS. We add the header in the proxy layer.
+
+---
+
+## Files to Change
+
+### Intelligence Service
+| File | Change |
+|------|--------|
+| `middleware/enhanced-usage-tracking.ts` | Add `channel` field to usage events |
+| `routes/chat-stream.ts` | Pass channel info from request headers |
+
+### Backend (Pod)
+| File | Change |
+|------|--------|
+| `routers/external/openai-compat.ts` | Set `X-Synap-Channel: api` header when proxying to IS |
+| `routers/intelligence.ts` | Set `X-Synap-Channel: browser` for Browser requests |
+
+### Control Plane API
+| File | Change |
+|------|--------|
+| `routes/billing.ts` | Add `POST /billing/usage-event`, `GET /billing/usage` |
+| `jobs/report-stripe-usage.ts` | NEW — batch report to Stripe every 60s |
+| `db/schema/billing.ts` | Add `usage_events` table (or reuse IS `usage_logs`) |
+
+### Frontend
+| File | Change |
+|------|--------|
+| Billing views | Add usage chart, cost breakdown |
+| CLI status | Show token usage |
+
+---
+
+## Effort Estimate
+
+| Phase | Effort | Priority |
+|-------|--------|----------|
+| 1: Stripe meters + prices | 1h (Dashboard setup) | P1 |
+| 2a: IS channel tracking | 1h | P1 |
+| 2b: CP usage endpoint | 2h | P1 |
+| 2c: Stripe reporting job | 3h | P1 |
+| 3a: CP usage query | 1h | P2 |
+| 3b: CLI usage display | 30min | P2 |
+| 3c: Web usage dashboard | 3h | P3 |
+| 4: Channel detection | 1h | P1 |
+| **Total** | **~12h** | |
+
+---
+
+## Security & Reliability
+
+- **Usage events are fire-and-forget** — never block the AI response
+- **Redis buffer** — accumulate, then flush to Stripe (handles Stripe downtime)
+- **Daily reconciliation** — compare internal logs vs Stripe meter summaries
+- **Spending caps** — users can set max API spend per month (Stripe supports this)
+- **Rate limiting** — existing rate limits prevent abuse
+- **No double-counting** — deduplicate by request ID before Stripe submission

@@ -1,0 +1,211 @@
+---
+title: "Signal Feed Implementation"
+description: "Signal feed implementation guide and pipeline details."
+---
+
+# Signal Feed Implementation Master Plan
+
+## Documentation Created
+
+### 1. Architecture Overview
+**Location**: `docs-internal/SIGNAL-FEED-ARCHITECTURE.md`
+- System overview and principles
+- Component responsibilities
+- Data flow diagrams
+- Implementation phases
+
+### 2. RSSHub Integration
+**Location**: `synap-backend/docs/signal-feed/RSSHUB-INTEGRATION.md`
+- CP proxy API design
+- Supported platforms and routes
+- Rate limiting strategy
+- Error handling
+
+### 3. Entity Profile & Database Schema
+**Location**: `synap-backend/docs/signal-feed/ENTITY-PROFILE-AND-SCHEMA.md`
+- `signal_item` entity profile definition
+- Database tables: `signal_subscriptions`, `signal_classifications`, `signal_fetch_history`, `signal_auto_links`
+- Drizzle schema definitions
+- Auto-linking implementation
+
+### 4. Hub Protocol Endpoints
+**Location**: `synap-backend/docs/signal-feed/HUB-PROTOCOL-ENDPOINTS.md`
+- `/signals/fetch` - Fetch RSSHub data
+- `/signals/classify` - AI classification
+- `/signals/capture` - Create entity
+- `/signals/feed` - Get personalized feed
+- `/signals/context` - Get personalization context
+- `/signals/subscriptions` - Manage subscriptions
+- `/signals/batch` - Batch operations
+
+### 5. AI Classification & Memory
+**Location**: `docs-internal/SIGNAL-FEED-AI-CLASSIFICATION.md`
+- Topic extraction pipeline
+- Relevance scoring algorithm
+- Memory integration (subscriptions, classifications, session)
+- Proactive intelligence (morning briefing, automation triggers)
+- IS tool: `fetch_and_classify_signals`
+
+## Implementation Tasks by Repo
+
+### Task 1: Control Plane - RSSHub Proxy
+**Repo**: `synap-control-plane-api`
+**Owner**: Sub-agent 1
+
+**Files to create/modify**:
+1. `docker-compose.yml` - Add RSSHub + Browserless services
+2. `src/routes/rsshub-proxy.ts` - Proxy endpoint
+3. `src/lib/rate-limiter.ts` - Add RSSHub rate limiting
+4. `.env.example` - Add RSSHUB_URL variable
+5. `docs/signal-layer.md` - Update documentation
+
+**Files to remove** (from previous incorrect implementation):
+- `src/db/schema/signals.ts` - REMOVE (user data stays in pod)
+- `src/services/signal-service.ts` - REMOVE
+- `src/routes/signals.ts` - REMOVE
+- `src/routes/signals-public.ts` - REMOVE
+
+### Task 2: Backend - Entity Profile & Schema
+**Repo**: `synap-backend`
+**Owner**: Sub-agent 2
+
+**Files to create**:
+1. `packages/database/src/schema/signals.ts` - Drizzle schema
+2. `packages/database/src/schema/index.ts` - Export signals schema
+3. `packages/database/src/utils/ensure-signal-profiles.ts` - Profile registration
+4. `drizzle/migrations/00XX_signal_system.sql` - Migration
+
+**Files to modify**:
+1. `packages/database/src/utils/ensure-system-profiles.ts` - Add signal_item
+2. `packages/database/src/utils/ensure-default-views.ts` - Add signal view
+
+### Task 3: Backend - Hub Protocol Endpoints
+**Repo**: `synap-backend`
+**Owner**: Sub-agent 2
+
+**Files to create**:
+1. `packages/api/src/routers/hub-protocol/signals.ts` - All signal endpoints
+2. `packages/api/src/routers/hub-protocol/index.ts` - Register signals router
+
+**Implementation requirements**:
+- All 7 endpoints documented
+- Proper validation with Zod
+- Rate limiting per endpoint
+- Error handling
+- Test suite
+
+### Task 4: Intelligence Service - Classification & Memory
+**Repo**: `synap-intelligence-service`
+**Owner**: Sub-agent 3
+
+**Files to create**:
+1. `apps/intelligence-hub/src/tools/signal-tools.ts` - fetch_and_classify_signals tool
+2. `apps/intelligence-hub/src/services/signal-classification.ts` - Classification pipeline
+3. `apps/intelligence-hub/src/services/signal-memory.ts` - Memory integration
+4. `apps/intelligence-hub/src/workers/morning-briefing.ts` - Proactive worker
+5. `apps/intelligence-hub/src/skills/signal-skill.md` - IS skill documentation
+
+**Files to modify**:
+1. `apps/intelligence-hub/src/agents/tools/index.ts` - Register signal tools
+2. `apps/intelligence-hub/src/agents/orchestrator/tools.ts` - Add to orchestrator
+
+### Task 5: Frontend - SignalFeedCell
+**Repo**: `synap-app`
+**Owner**: Sub-agent 4
+
+**Files to create**:
+1. `packages/features/signal-feed/src/components/SignalFeedCell.tsx`
+2. `packages/features/signal-feed/src/components/SignalCard.tsx`
+3. `packages/features/signal-feed/src/components/SignalPreferences.tsx`
+4. `packages/features/signal-feed/src/hooks/useSignalFeed.ts`
+5. `packages/features/signal-feed/src/stores/signal-feed-store.ts`
+6. `packages/features/signal-feed/src/index.ts`
+7. `packages/features/signal-feed/package.json`
+8. `packages/features/signal-feed/tsconfig.json`
+
+**Files to modify**:
+1. `packages/core/capabilities/src/widgets.ts` - Register signal-feed widget
+2. `packages/core/cells/src/registerCoreDomainCells.ts` - Register cell
+3. `packages/core/feed/src/types.ts` - Add signal item type
+
+### Task 6: Browser - Sidebar Integration
+**Repo**: `browser`
+**Owner**: Sub-agent 5
+
+**Files to modify**:
+1. `electron/renderer/src/apps/manifest.ts` - Add signal-feed app
+2. `electron/renderer/src/apps/signal-feed/` - Create app shell
+3. `electron/renderer/src/stores/app-store.ts` - Add signal-feed state
+
+## Coordination Strategy
+
+### Phase 1: Infrastructure (Parallel)
+- Sub-agent 1: CP RSSHub proxy
+- Sub-agent 2: Backend schema + entity profile
+
+### Phase 2: Backend (Depends on Phase 1)
+- Sub-agent 2: Hub Protocol endpoints
+
+### Phase 3: Intelligence (Parallel with Phase 2)
+- Sub-agent 3: IS classification + memory
+
+### Phase 4: Frontend (Depends on Phase 2)
+- Sub-agent 4: SignalFeedCell
+- Sub-agent 5: Browser integration
+
+## Validation Criteria
+
+### CP RSSHub Proxy
+- [ ] Docker compose starts RSSHub + Browserless
+- [ ] `/api/rsshub-proxy/hackernews/newest` returns XML
+- [ ] Rate limiting enforced (100/hour)
+- [ ] Health check endpoint works
+
+### Backend Entity Profile
+- [ ] Migration runs successfully
+- [ ] `signal_item` profile appears in `system_profiles`
+- [ ] All 4 signal tables created
+- [ ] Foreign keys properly established
+
+### Hub Protocol Endpoints
+- [ ] All 7 endpoints implemented
+- [ ] Proper authentication via API key
+- [ ] Zod validation on all inputs
+- [ ] Rate limiting per endpoint
+- [ ] Unit tests for each endpoint
+
+### Intelligence Service
+- [ ] `fetch_and_classify_signals` tool works
+- [ ] Topic extraction returns valid topics
+- [ ] Memory updates on capture
+- [ ] Morning briefing generates content
+- [ ] Automation triggers fire correctly
+
+### Frontend Cell
+- [ ] SignalFeedCell renders in bento grid
+- [ ] SignalCard shows all required fields
+- [ ] Capture button triggers entity creation
+- [ ] Topic preferences save to local storage
+- [ ] Works without authentication (anonymous)
+
+### Browser Integration
+- [ ] Signal Feed appears in sidebar
+- [ ] Opens in main content area
+- [ ] Persists user's topic preferences
+- [ ] Connects to pod when authenticated
+
+## Next Steps
+
+1. **Validate Documentation**: Review all docs for completeness
+2. **Start Sub-agents**: Launch parallel implementations
+3. **Coordinate**: Ensure interfaces match between components
+4. **Test**: End-to-end testing once all components ready
+5. **Deploy**: Staged rollout starting with internal users
+
+## Success Metrics
+
+- Feed latency < 500ms P95
+- Classification accuracy > 80% (user-rated)
+- Capture rate > 10% of viewed items
+- Zero data sovereignty violations
+- All tests passing

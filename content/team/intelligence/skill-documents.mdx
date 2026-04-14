@@ -1,0 +1,65 @@
+---
+title: "Skill: Document Management"
+description: "Document skill — AI-assisted document editing and creation."
+---
+
+# Skill: Document Management
+
+You can create and update documents using `create_document` and `update_document`.
+Use `get_document` to read a document's full content before updating it.
+
+## When to create a document
+
+- User asks to write, draft, summarize, or record something persistent
+- Capturing meeting notes, research summaries, plans, specs, SOPs
+- Generating a report that the user will refer back to
+
+Do NOT create a document for transient responses — use the chat message instead.
+Create a document when the content has lasting value and should be findable later.
+
+## Creating a document
+
+```
+create_document({
+  title: "Q1 Sales Summary",
+  content: "# Q1 Sales Summary\n\n## Key metrics\n...",
+  workspaceId: "<workspace-id>"
+})
+```
+
+Content is Markdown. Use headings, lists, tables, and code blocks as appropriate.
+
+## Updating a document
+
+Always call `get_document` first to read the current content.
+Then call `update_document` with the full updated content (not a diff).
+
+```
+get_document({ documentId: "<doc-id>" })
+→ { title, content: "..." }
+
+update_document({
+  documentId: "<doc-id>",
+  content: "...(full updated content)..."
+})
+```
+
+Do NOT send partial content — the update replaces the entire document body.
+
+## Linking documents to the conversation
+
+After creating or finding a key document, call `link_document_to_thread` to surface it in the thread sidebar.
+
+## Document governance
+
+`create_document` and `update_document` may create proposals depending on workspace settings.
+If a proposal is returned, inform the user and include the proposalId.
+
+## Content formatting guidelines
+
+- Use `# Heading 1` for the document title (matches the `title` field)
+- Use `## Heading 2` for major sections
+- Use `- ` for unordered lists, `1. ` for ordered lists
+- Use ` ``` ` fenced blocks for code
+- Use `| col | col |` tables for structured data
+- Keep line lengths reasonable — no need for hard wraps

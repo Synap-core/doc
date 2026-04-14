@@ -1,0 +1,318 @@
+---
+title: "Next-Gen Capabilities"
+description: "Next generation Relay capabilities and features."
+---
+
+# Relay Next-Gen Capabilities Audit
+
+**Date:** 2026-04-11
+**Scope:** What modern phone capabilities Relay should tap into to feel like a 2026-class mobile app, plus a full research on speech-to-text options with a proposed 3-phase roadmap.
+
+---
+
+## Part 1 — What modern iOS/Android capabilities we're not using
+
+Current state: Relay uses Expo SDK 54, React Native 0.81, iOS 18 / Android 14 as baseline. We've wired haptics, microphone, contacts, camera-picker, file system, clipboard, and core gesture handling. That's the **table stakes** set. Everything below is table stakes *for 2026* that we don't yet use.
+
+### A. On-device AI surfaces (the big one)
+
+| Capability | What it is | Why it matters for Relay | Effort | Phase |
+|---|---|---|---|---|
+| **Apple Foundation Models** (iOS 18.2+) | Apple ships a ~3B-parameter LLM on-device via the new `FoundationModels` framework. You send a prompt, get a response, zero network, zero cost. A17 Pro+ only. | "Summarize my notes" / "Rewrite this" / "Draft a doc from these" with no backend roundtrip, no API cost, works airplane-mode. Exactly the Document Studio story. | Custom Expo module (~2 days) | Phase 3 |
+| **MLX Swift** (Apple's on-device ML runtime) | Apple's answer to llama.cpp for Apple Silicon. Loads quantized Llama/Mistral/Phi/Gemma. Much broader than Foundation Models (all devices, all models) but you ship the weights yourself. | Fallback for non-A17 devices, or to run a *different* model than Apple's (e.g., tuned for structured note extraction). | Custom module + model bundling (~4 days) | Phase 3 |
+| **llama.rn** | React-Native wrapper around llama.cpp. Works on iOS + Android. 3B-7B models quantized to 4-bit run on any modern phone. | Cross-platform on-device LLM without writing native code. | One install, ~1 day wiring | Phase 3 |
+| **Core ML** | Apple's on-device ML inference. Smaller models, broader device support (iPhone 12+). | Entity extraction, intent classification on captures. Faster than LLM for narrow tasks. | Native module or use via MLX | Phase 3 |
+| **Natural Language framework** | On-device tokenization, named-entity recognition, sentiment, language detection. Ships with iOS. | Tag extraction, language routing for STT, people-mention detection in notes. Free. | Custom Expo module (~1 day) | Phase 2 |
+| **Vision framework (Live Text)** | On-device OCR. Point camera at text → get text out. iOS 15+. | Business card scanning, whiteboard capture, extract text from photos in the capture pipeline. Killer feature for the Relay persona. | Custom module or `expo-camera` v16's text-recognition path (~1 day) | Phase 2 |
+
+### B. System integration (make Relay feel native)
+
+| Capability | What it is | Why it matters | Effort |
+|---|---|---|---|
+| **App Intents** (iOS 16+) | Typed actions that Siri, Shortcuts, Spotlight, and Focus can invoke without opening the app. "Hey Siri, new Relay note about Alice." | Zero-UI capture. This is the literal north star: capture without opening anything. Also makes Relay appear in Shortcuts automations built by power users. | Custom Expo module (~2 days) |
+| **Live Activities / Dynamic Island** | Lock-screen and notch persistent UI for ongoing state. | "Recording voice note... 12s" in the Dynamic Island while you walk. "Capture sent, AI parsing..." on the lock screen. Makes the async AI pipeline visible. | `expo-live-activity` or custom (~2 days) |
+| **Widgets (WidgetKit)** | Home-screen widget. Static or interactive (iOS 17+). | Tap-to-capture widget on home screen — no app launch. Shows today's captured count, recent note, streak. | Custom native module (~3 days) |
+| **Share Extension** | "Share to Relay" option in any app's share sheet. Selection → capture. | User reads an article in Safari → share → it lands in Relay as a bookmark+highlight. Zero context switch. | Custom native target (~3 days) |
+| **Spotlight indexing (Core Spotlight)** | Index entities into iOS system search. | Search Relay notes from the iOS Spotlight bar. Works with Siri Semantic Search (iOS 18+). | Custom module (~2 days) |
+| **Focus Filters** (iOS 16+) | Relay can register as a Focus Filter: hide work notes in Personal focus mode, etc. | Privacy + context sensitivity. Ties into the multi-space model (Relay / Knowledge / Studio each map to a focus mode). | Native target extension (~2 days) |
+| **Handoff + Universal Clipboard** | Capture on phone, continue on Mac. | When Relay ships on macOS, this is free cross-device state. | Native integration (~1 day per platform) |
+| **Shortcuts donation** | App "donates" actions the user frequently does; iOS surfaces them in Search + Siri Suggestions. | Auto-surface quick-capture if user opens app daily at 9am. | Part of App Intents work |
+
+### C. Camera + capture quality
+
+| Capability | What it is | Why it matters | Effort |
+|---|---|---|---|
+| **Document camera** (VisionKit `VNDocumentCameraViewController`) | Built-in iOS doc scanner with perspective correction + edge detection. | Notes from whiteboards, books, receipts. Much better than a plain camera picker. | Native wrapper (~1 day) |
+| **Live Text overlay** | Real-time OCR in the camera preview. User taps text in the viewfinder → it's selected. | "I see a phone number on this card, tap to add to contact." | Vision framework integration (~1 day) |
+| **HEIC/AVIF handling** | Modern image formats, Apple default since iPhone 7. | Smaller file sizes, better quality. Our current pipeline might be transcoding to JPEG, wasting bandwidth. | Config check + adjustment |
+
+### D. Realtime / collaboration
+
+| Capability | What it is | Effort |
+|---|---|---|
+| **Nearby Interaction** (iOS 14+) | Ultra-wideband peer discovery (iPhone 11+). "Share capture with someone next to me, no network." | Native wrapper (~2 days). Low priority. |
+| **SharePlay** (iOS 15+) | Collaborative capture over FaceTime. | Custom target (~3 days). Only if we ship a team feature. |
+| **MultipeerConnectivity** | Offline peer-to-peer sync over Bluetooth + Wi-Fi direct. | ~3 days. Relay-specific use: event mode co-capture. |
+
+### E. Payments + subscription
+
+| Capability | What it is | Effort |
+|---|---|---|
+| **StoreKit 2** | Modern Swift-first IAP API. `expo-in-app-purchases` wraps StoreKit 1; there's no first-party Expo wrapper for StoreKit 2 yet. | Custom module (~2 days). Needed before we turn on paid tiers. |
+| **App Store Connect subscription offers** | Promo codes, intro pricing, offer codes. | Zero code once StoreKit 2 is in place. |
+
+---
+
+## Part 2 — Speech-to-text: full research
+
+Three phases, proposed as a roadmap not an either/or.
+
+### Phase 1 — Native OS recognizers (**ship now**)
+
+Use what the OS already has.
+
+#### iOS: `SFSpeechRecognizer`
+
+- **Framework:** Apple's `Speech` framework. iOS 10+.
+- **On-device or cloud:** Both. Set `recognitionRequest.requiresOnDeviceRecognition = true` to force on-device. Available in 50+ languages for on-device mode.
+- **Accuracy:** Excellent for English in quiet rooms. Good for other major languages. Degrades in noise and with heavy accents.
+- **Latency:** 50-200ms for partial results. On-device mode has zero network latency.
+- **Cost:** Free.
+- **Streaming:** Yes, via `AVAudioEngine` tap feeding an `SFSpeechAudioBufferRecognitionRequest`. Partial results stream as the user speaks.
+- **Gotchas:** 1-minute session cap was removed in iOS 13. User must grant *two* permissions: microphone + speech recognition (separate). On-device mode isn't available for every language/locale.
+- **Used by:** iOS system dictation (the mic button on the keyboard), Apple Notes voice-to-text, Otter.ai's fallback, every messaging app's voice-to-text button.
+
+#### Android: `SpeechRecognizer`
+
+- **Framework:** `android.speech.SpeechRecognizer`. API 8+.
+- **On-device or cloud:** Cloud by default via Google Play Services. On-device available as `OnDeviceSpeechRecognizer` from API 33 (Android 13). Model download required on first use.
+- **Accuracy:** Excellent for English. Google's speech recognition engine is state-of-the-art for major languages.
+- **Latency:** Cloud mode has ~200-500ms network latency. On-device is near-instant.
+- **Cost:** Free.
+- **Streaming:** Yes, via `RecognitionListener.onPartialResults()`.
+- **Gotchas:** Requires Google Play Services (not available on non-GMS Android like Huawei HMS). On-device mode is model-download-gated.
+
+#### React Native wrappers
+
+| Package | Maintained | API quality | iOS | Android | Notes |
+|---|---|---|---|---|---|
+| **`expo-speech-recognition`** (jamsch) | Yes, active | Clean, modern |  |  | Config plugin, types, continuous/streaming/on-device flags. **What we installed.** |
+| `@react-native-voice/voice` | Sporadic | Older patterns |  |  | Works, but lacks some newer features like on-device override |
+| `react-native-voice` | Deprecated in favor of above | — | — | — | Don't use |
+
+**Phase 1 deliverable:** `expo-speech-recognition` is the right choice. Already wired in `useVoiceTranscription.ts`. Needs a dev client rebuild (`npx expo prebuild --clean && npx expo run:ios`) to link the native module. After that, voice works silently in the gesture button and fills CaptureModal with transcribed text.
+
+**What Raycast uses here (macOS):** Raycast's Quick AI and dictation features use Apple's native `SFSpeechRecognizer` on macOS for in-context voice capture. For the AI chat (which accepts voice input), they use **Whisper via the OpenAI API** server-side — not on-device. This is the same tradeoff we're about to make: fast native STT for interactive use, big-model cloud STT for long-form.
+
+**What Apple Voice Memos uses:** native `SFSpeechRecognizer` entirely. The transcription you see under each recording is 100% on-device.
+
+**What Otter.ai uses:** their proprietary cloud model for primary, with `SFSpeechRecognizer` as a fallback when offline. Their mobile app has a shrunken version of their model for offline mode but it's not open-sourced.
+
+**What WhatsApp voice-transcript uses (iOS 17+):** Apple Intelligence (Foundation Models + Speech framework) where available, falling back to native `SFSpeechRecognizer` for non-Apple-Intelligence devices.
+
+### Phase 2 — Open-source on-device STT (**ship next quarter**)
+
+When native recognizers aren't good enough — specifically for:
+- Non-English captures with heavy accents
+- Technical/domain vocabulary (startups, legal, medical)
+- Noisy environments
+- Privacy-sensitive capture (refuse cloud)
+- Languages iOS/Android don't support on-device
+
+#### Whisper.cpp + `whisper.rn`
+
+- **What it is:** OpenAI Whisper model running in C++ (whisper.cpp by Georgi Gerganov, same author as llama.cpp), wrapped for React Native as `whisper.rn` (by mybigday). MIT license.
+- **Model sizes:** tiny (75MB), base (150MB), small (500MB), medium (1.5GB), large (3GB). tiny.en and base.en are English-only and significantly smaller + faster.
+- **Accuracy:** tiny.en is surprisingly good for quick notes (~90% word accuracy on clean audio). medium.en rivals SFSpeechRecognizer. large-v3 exceeds it on technical vocabulary and non-English languages.
+- **Latency:** Real-time on modern phones for tiny/base. Small works but ~1.5x real-time. Medium starts to chug on older hardware.
+- **Hardware acceleration:** Metal on iOS (via MPS), Vulkan/OpenCL on Android. CPU fallback on older devices.
+- **Memory:** tiny loads to ~200MB RAM, base to ~400MB, small to ~800MB.
+- **Streaming:** whisper.rn supports chunked transcription (record for N seconds, run, append result). True realtime streaming requires more scaffolding but is doable.
+- **Distribution:** You bundle the model weights with the app OR download on first use. tiny.en at 75MB is bundleable; anything bigger should be download-on-demand from your CDN.
+- **Used by:** Shortwave, Descript's mobile app, several startup-built voice note apps in 2024-2025.
+
+#### Moonshine (Useful Sensors, 2024)
+
+- **What it is:** Newer (late 2024) open-source STT optimized specifically for mobile. Meaningfully faster than Whisper at similar accuracy for English.
+- **Model sizes:** tiny (27MB), base (60MB). That's it — English only.
+- **Accuracy:** Close to Whisper.base.en with ~1/3 the size and 2x the speed on mobile CPUs.
+- **License:** Apache 2.0, fully open.
+- **React Native support:** Not yet packaged. Would need a custom Expo module (~2-3 days).
+- **When it matters:** If we go Phase 2 and English is 95% of captures, Moonshine beats Whisper.cpp on every metric except language coverage. Consider for a Phase 2b optimization.
+
+#### VOSK
+
+- **What it is:** Open-source offline STT from Alpha Cephei. Predates Whisper-era models but is still actively maintained and remarkably efficient.
+- **Model sizes:** ~50MB for English small, ~1.5GB for English large.
+- **Accuracy:** Below Whisper but still usable. Strong for real-time streaming with low-latency partial results.
+- **React Native:** `react-native-vosk` exists, works, iOS + Android.
+- **License:** Apache 2.0.
+- **When it matters:** Real-time continuous dictation (not our use case — we want end-of-utterance transcription). Also the lightest option if device storage matters more than accuracy.
+
+#### Picovoice Leopard / Cheetah
+
+- **What it is:** Commercial mobile-first STT. Very small models, very high accuracy for English.
+- **License:** Free tier available, paid beyond ~100 devices.
+- **Pros:** ~20MB model, runs on anything, very fast, wake-word detection also from the same company.
+- **Cons:** Not open-source. Free tier cap is low. Pricing requires a conversation.
+- **When it matters:** If we want wake-word activation ("Hey Synap") in addition to STT, Picovoice is the only production-ready option on mobile.
+
+#### Comparison table
+
+| Option | Model size | iOS/Android | Latency | Accuracy | Cost | License |
+|---|---|---|---|---|---|---|
+| `SFSpeechRecognizer` (native) | 0 (OS built-in) | iOS | ~100ms | ★★★★★ EN, ★★★★ intl | Free | Apple |
+| `SpeechRecognizer` (native) | 0 / on-demand | Android | ~100ms | ★★★★★ EN | Free | Google |
+| Whisper.cpp tiny.en | 75MB | Both | ~real-time | ★★★★ | Free | MIT |
+| Whisper.cpp base.en | 150MB | Both | ~real-time | ★★★★ | Free | MIT |
+| Whisper.cpp small | 500MB | Both | ~1.5x realtime | ★★★★★ multi-lang | Free | MIT |
+| Moonshine tiny | 27MB | Both | ~1/2x realtime | ★★★★ | Free | Apache 2 |
+| VOSK small-en | 50MB | Both | ~real-time | ★★★ | Free | Apache 2 |
+| Picovoice Leopard | 20MB | Both | ~real-time | ★★★★ | Free tier | Commercial |
+| OpenAI Whisper API | 0 (cloud) | Both | ~500ms-2s | ★★★★★ | $0.006/min | Proprietary |
+
+### Phase 3 — On-device LLMs for transcript polish + direct dictation (**6+ months**)
+
+The frontier. Two distinct use cases:
+
+#### 3a. LLM-powered transcript post-processing
+
+After STT produces raw text, pass it through a small LLM to:
+- Add punctuation and capitalization (SFSpeechRecognizer is weak here)
+- Break into sentences/paragraphs
+- Extract named entities (people, places, dates) for auto-tagging
+- Detect intent ("this is a task" vs "this is a note" vs "this is a calendar event")
+- Rewrite in a cleaner style
+
+**Tools:**
+- **Apple Foundation Models (iOS 18.2+)** — 3B-param on-device LLM. Free. A17 Pro+ only. ~200ms for a typical prompt response.
+- **llama.rn** with a 3B-param quantized model (Phi-3-mini, Gemma-2B, Llama-3.2-1B) — cross-platform, ~1GB bundled model, ~500ms for a response on modern phones.
+- **MLX Swift** — Apple Silicon (iOS/macOS) only, but can run broader model zoo than Foundation Models.
+
+**Deliverable:** a `polishTranscript(raw) → structured` pipeline that runs after `stop()` and before the CaptureModal opens. User sees clean, punctuated, structured text instead of `this is a task buy milk tomorrow morning call leo about tokenomics`.
+
+#### 3b. Direct LLM-based dictation (skip classical STT entirely)
+
+Newer audio-in LLMs (like Whisper v3 large, or Moshi, or Apple's future Apple Intelligence voice mode) can take audio directly and produce not just transcription but structured output in one pass.
+
+**Current state:** No production-ready on-device audio LLM for mobile yet. Whisper.cpp is still the best open option but it's a transcription model, not a reasoning model. Apple's rumored voice mode for Apple Intelligence (iOS 18.4+) will be the first production on-device audio LLM on phones.
+
+**When to revisit:** Mid-2026 at the earliest. Track: Moshi-mobile, Qwen2-Audio, SpeechGPT.
+
+### Proposed north star
+
+**The goal:** voice capture that works offline, respects privacy by default, produces *structured* text (not raw transcription), and feels instant.
+
+**Phased path:**
+
+| Phase | Ship | What it delivers | Effort |
+|---|---|---|---|
+| **1 (now)** | `expo-speech-recognition` + dev client rebuild | Native STT in EN + intl, zero cost, instant latency. 90% use-case coverage. | Done (needs rebuild) |
+| **2 (Q3 2026)** | whisper.rn + tiny.en + user toggle in settings | "Private mode" voice capture, offline capable, any language. Non-English users get much better accuracy. | ~5 days |
+| **2b (Q3 2026 optional)** | Moonshine replaces tiny.en when English detected | Smaller bundle, faster transcription for the English path. | ~3 days |
+| **3 (Q4 2026)** | Foundation Models / llama.rn polish layer | Post-process transcripts: punctuation, paragraphs, entity extraction, intent routing. | ~1 week |
+| **3b (2027)** | Direct audio LLM | Voice → structured entity in one inference call. | Track tech, revisit |
+
+**User-visible settings:**
+- Voice engine: `Automatic | Native | On-device Whisper | Cloud Whisper`
+- Language: `Auto-detect | English | French | ...`
+- Privacy mode: `Off | On` (forces on-device, blocks cloud)
+
+---
+
+## Part 3 — What this means for the current codebase
+
+### Immediate wins (this week)
+
+1. **Ship the dev client rebuild** — `npx expo prebuild --clean && npx expo run:ios`. Unlocks `expo-speech-recognition` that we already wired. Voice works. Done.
+2. **Dynamic Island + Live Activity for voice recording** — when the user detaches the voice recording, show a Live Activity pill in the Dynamic Island with the recording duration. Makes the detached mode discoverable and premium. (~1-2 days, `react-native-live-activities` wrapper exists.)
+3. **App Intents for capture** — "Hey Siri, new Relay note" fires the capture pipeline with Siri's raw text, zero UI. (~2 days, custom Expo module.)
+
+### Medium-term (next month)
+
+4. **Vision framework Live Text** — point camera at a whiteboard, it captures the text. Dead simple via `expo-camera` v16's built-in text recognition or a ~1-day custom module.
+5. **whisper.rn** as Phase 2 voice engine. Tiny.en bundled (75MB is fine), toggle in settings. Most work is distribution — bundling the model file into the app correctly across iOS and Android.
+6. **Share Extension** — "Share to Relay" in any app. The URL/text lands in the capture pipeline. Already half-supported via deep links; promoting to a real share extension is a native target.
+
+### Strategic (next quarter)
+
+7. **Apple Foundation Models integration** for on-device transcript polish + "summarize my notes" in the Document Studio. Only runs on A17 Pro+ initially, but that's where your premium users will be in 6 months anyway.
+8. **Widget + home-screen quick-capture** — tap-to-capture without opening the app.
+9. **Spotlight indexing** — search Relay notes from iOS Spotlight. Makes Relay feel like part of the OS.
+
+### Not worth doing yet
+
+- Full custom LLM host. Use Apple's Foundation Models where available, fall back to llama.rn on other devices. Don't build your own model-hosting layer until we have product-market fit for the feature.
+- Nearby Interaction / SharePlay. Single-user use case doesn't need them yet.
+- CallKit. Not our domain.
+
+---
+
+## Part 4 — Architectural recommendations
+
+### Create a Voice abstraction layer
+
+Right now `useVoiceTranscription.ts` wraps `expo-speech-recognition` directly. To make Phase 2 and Phase 3 feasible without rewriting the gesture button every time, introduce a provider abstraction:
+
+```ts
+// src/hooks/voice/types.ts
+export interface VoiceEngine {
+  name: 'native-ios' | 'native-android' | 'whisper-rn' | 'cloud-whisper';
+  isAvailable: boolean;
+  start(): Promise<boolean>;
+  stop(): Promise<string>;
+  cancel(): void;
+  subscribeTranscript(cb: (partial: string) => void): () => void;
+}
+```
+
+Implementations:
+- `nativeEngine()` — wraps `expo-speech-recognition` (Phase 1, what we have)
+- `whisperRnEngine()` — wraps `whisper.rn` with bundled tiny.en model (Phase 2)
+- `cloudWhisperEngine()` — wraps a backend `/api/structure/audio` endpoint (alternative Phase 1 that needs no rebuild)
+
+A single `useVoice()` hook picks the engine based on user settings + device capability. The gesture button calls `voice.start() / voice.stop()` without knowing which engine is underneath.
+
+### Add a polish layer
+
+Separate pipeline step: `polishTranscript(rawText) → structuredCapture`. Runs after `stop()`, before the CaptureModal opens. Same interface regardless of whether the polish is "none" (pass-through), "regex" (fake punctuation), or "Foundation Models" (real LLM). Each engine is swappable.
+
+### Separate "capture pipeline" from "voice pipeline"
+
+Right now the CaptureModal runs AI structuring after text arrives. That's good. But the voice → text → structure chain has THREE slow steps:
+1. Record audio (~speech duration)
+2. Transcribe (~latency of STT engine)
+3. Structure via IS `/api/structure` (~network roundtrip + LLM call)
+
+Step 3 is by far the slowest. When we add Phase 3 (on-device LLM for structuring), step 3 can move on-device too, dropping the whole voice-to-captured-entity time from ~5s to ~1s. That's the real unlock.
+
+---
+
+## Part 5 — Quick reference: what other apps use
+
+| App | Voice engine | Polish layer | Source |
+|---|---|---|---|
+| Apple Voice Memos | `SFSpeechRecognizer` on-device | None | First-party |
+| Apple Notes (voice) | `SFSpeechRecognizer` + Apple Intelligence (iOS 18+) | Foundation Models | First-party |
+| WhatsApp voice → text (iOS 17+) | Apple Intelligence | Foundation Models | First-party (iOS) |
+| Raycast (macOS) voice | `SFSpeechRecognizer` for quick, OpenAI Whisper API for AI Chat | GPT-4 via their backend | Cloud + native hybrid |
+| Superhuman voice compose | `SFSpeechRecognizer` | GPT-4 via their backend | Cloud |
+| Otter.ai | Proprietary cloud model, `SFSpeechRecognizer` fallback | Proprietary | Cloud-first |
+| Descript mobile | Whisper.cpp on-device | Descript's editor model | On-device |
+| Shortwave | Whisper API | Cloud LLM | Cloud |
+| Notion Mail / Notion AI | OpenAI Whisper API | GPT-4 | Cloud |
+| Moshi (Kyutai) | Moshi model | Moshi model (unified) | Cloud, not yet mobile |
+| ChatGPT iOS voice | Whisper API + GPT-4o voice mode | GPT-4o | Cloud |
+
+**Takeaway:** Everyone with a paid cloud backend uses **OpenAI Whisper API for accuracy-critical cases** and **native `SFSpeechRecognizer` for fast casual dictation**. Nobody yet ships pure on-device LLM-based voice mode in production because the models are too big or too new. We have ~6-12 months to get there first.
+
+---
+
+## Recommendation to ship now
+
+1. **This week:** Dev client rebuild so Phase 1 (`expo-speech-recognition`) works. Ship voice capture with native recognizers. Move on.
+2. **Next 2 weeks:** Add Dynamic Island + Live Activity for the detached recording state. Makes voice capture feel premium and discoverable. Wire App Intents for "Hey Siri, new Relay note."
+3. **Next month:** Introduce the `VoiceEngine` abstraction, add `whisper.rn` as the second engine behind a user toggle. Ship Live Text via Vision framework for camera captures.
+4. **Next quarter:** Apple Foundation Models polish layer. On-device LLM for transcript cleanup + direct "summarize my notes" prompts in the Document Studio.
+
+Everything above is additive. Phase 1 works without any of the later phases. Each phase adds a layer without breaking the previous one.

@@ -1,0 +1,358 @@
+---
+title: "Server Model"
+description: "Multi-server architecture: CP, IS, pods, shared pod model."
+---
+
+# Synap Server Model — Architecture & User Flows
+
+**Date:** 2026-04-04
+**Status:** Vision document — align before implementing.
+
+---
+
+## The Model
+
+Synap sells **managed servers**. Each server is €15/mo. A server can run:
+
+- **Data Pod** — Synap backend (PostgreSQL, Typesense, pgvector, MinIO, Kratos)
+- **OpenClaw** — AI agent runtime (25 tools, 5700+ skills, 13 messaging channels)
+- **Redundant Pod** — Copy of a data pod for data safety (dual-pod sync)
+
+AI (Intelligence Service) is a separate product at €20/mo — it's a cloud service, not a server.
+
+### Pricing
+
+| Product | Price | What it is |
+|---------|-------|------------|
+| **Server** | €15/mo | One managed VPS (Hetzner CX33: 4 vCPU, 8GB RAM, 80GB SSD) |
+| **AI** | €20/mo | Intelligence Service access (1M tokens/mo) |
+| **Server + AI** | €30/mo | Bundle (save €5) |
+
+A user can buy multiple servers:
+- 1 pod = €15
+- 1 pod + 1 OpenClaw server = €30
+- 1 pod + 1 redundant pod = €30
+- 1 pod + 1 OpenClaw + AI = €45
+- 1 pod + 1 redundant pod + AI = €45
+- 2 pods + 1 OpenClaw + AI = €60
+
+**Discount:** AI bundle discount applies once (€5 off when buying AI with first server). Additional servers are always €15.
+
+**Self-hosted:** Free forever. User manages their own servers.
+
+---
+
+## What Each Server Type Does
+
+### Data Pod (primary product)
+- Runs: Synap backend, PostgreSQL, Typesense, MinIO, Kratos, Caddy
+- Stores: entities, documents, files, relations, memory, event chain
+- Exposes: Hub Protocol REST API at `/api/hub/*`
+- Users access via: Browser (Electron), web app, or API
+
+### OpenClaw Server (agent runtime)
+- Runs: OpenClaw agent runtime only
+- Connects to: a Data Pod via Hub Protocol REST
+- Handles: Telegram, WhatsApp, Slack, Discord, Email messaging
+- Value: gives your pod a "body" — it can act in the world, not just store data
+- Requires: at least one Data Pod (OpenClaw needs somewhere to store knowledge)
+
+### Redundant Pod (data safety)
+- Runs: Same stack as Data Pod
+- Connected to: primary pod via dual-pod sync (event log replication)
+- Purpose: if primary goes down, Browser auto-failovers to redundant pod
+- Data: bidirectional sync with LWW conflict resolution
+- Already built: `@synap/pod-failover` package, `useFailover` hook, `FailoverBanner`
+
+---
+
+## User Stories
+
+### Story 1: "I just want structured memory for my AI agent"
+
+**Who:** OpenClaw user, developer, self-hosted everything
+**Path:** OpenClaw → synap skill → self-hosted pod
+
+```
+1. User has OpenClaw running on their machine
+2. Installs synap skill
+3. Runs: docker compose up (Synap pod on same server)
+4. Runs: ./setup-openclaw.sh
+5. Done — agent has structured memory
+```
+
+**Cost:** Free
+**What we need:** Already built. Nothing to change.
+
+### Story 2: "I want a managed pod for my existing OpenClaw"
+
+**Who:** OpenClaw user who doesn't want to manage PostgreSQL
+**Path:** synap.live → subscribe → pod created → connect OpenClaw
+
+```
+1. User visits synap.live, signs up
+2. Chooses "Pod" plan (€15/mo)
+3. CP provisions VPS, installs Synap, sends email
+4. User creates account at pod.synap.live/registration
+5. Goes to Settings → API Keys → creates key
+6. Configures OpenClaw: SYNAP_POD_URL + SYNAP_HUB_API_KEY
+7. Done — managed pod, local OpenClaw
+```
+
+**Cost:** €15/mo
+**What we need:** Works today. Maybe streamline step 5-6 with a "Connect OpenClaw" wizard.
+
+### Story 3: "I want Synap to manage both my pod AND my OpenClaw"
+
+**Who:** User who wants zero ops
+**Path:** synap.live → subscribe → pod + OpenClaw server
+
+```
+1. User visits synap.live, signs up
+2. Chooses "Pod" (€15) + adds "OpenClaw Server" (€15) = €30/mo
+3. CP provisions Pod VPS (#1)
+4. CP provisions OpenClaw VPS (#2)
+5. CP connects them (API key exchange, Hub Protocol registration)
+6. User gets email: "Your pod and agent are ready"
+7. User opens Browser app, everything works
+```
+
+**Cost:** €30/mo (2 servers)
+**What we need:**
+- CP: new provisioning job for standalone OpenClaw VPS
+- CP: "add server" flow that lets user pick server type
+- Landing/billing: multi-server checkout
+- Pod detail page: show connected services
+
+### Story 4: "I want data redundancy"
+
+**Who:** User who can't afford to lose data
+**Path:** existing pod → add redundant pod
+
+```
+1. User has a managed pod (€15/mo)
+2. Goes to Settings → "Add redundant pod" (or CP dashboard)
+3. CP provisions second VPS (€15/mo)
+4. CP configures dual-pod sync between the two
+5. Browser auto-detects failover pair
+6. If primary goes down → FailoverBanner shows, auto-switches
+```
+
+**Cost:** +€15/mo (total €30 for 2 pods)
+**What we need:**
+- CP: provisioning job that creates pod + configures sync
+- CP/Browser: UI to configure pod pair
+- Backend: dual-pod sync activation endpoint
+- Billing: multi-server subscription
+
+### Story 5: "I want the full experience — pod, AI, and OpenClaw"
+
+**Who:** Power user, the "holy shit" moment
+**Path:** synap.live → bundle + OpenClaw
+
+```
+1. User visits synap.live
+2. Chooses "Pod + AI" bundle (€30/mo) + adds "OpenClaw Server" (€15/mo) = €45/mo
+3. CP provisions Pod VPS with Intelligence Service
+4. CP provisions OpenClaw VPS, connects to pod
+5. User opens Browser app
+6. AI auto-classifies captures, proposes connections
+7. OpenClaw handles Telegram/WhatsApp/Slack messages
+8. Morning briefing arrives via OpenClaw → processed by IS → stored in pod
+```
+
+**Cost:** €45/mo
+**What we need:** Combination of stories 3 + IS provisioning (already exists)
+
+### Story 6: "I want to move from self-hosted to managed"
+
+**Who:** Developer who outgrew self-hosting
+**Path:** self-hosted pod → managed pod (migration)
+
+```
+1. User has self-hosted pod with data
+2. Subscribes at synap.live (€15/mo)
+3. CP provisions new managed pod
+4. User configures dual-pod sync: self-hosted → managed
+5. Data replicates automatically
+6. User switches Browser to managed pod
+7. Eventually decommissions self-hosted
+```
+
+**Cost:** €15/mo (after migration)
+**What we need:** Already built (dual-pod sync). Need UI for "migrate from self-hosted" flow.
+
+---
+
+## What This Implies — For Us
+
+### Database Changes
+
+The current model has ONE subscription per user with a tier (solo/pro). The new model needs:
+
+```
+User → has many Servers
+Server → type: "pod" | "openclaw" | "redundant-pod"
+Server → links to: VPS, subscription line item
+Server → connects to: other servers (pod pairs, OpenClaw→pod links)
+```
+
+**Option A (minimal):** Keep `data_pods` table, add `server_type` column + `linked_pod_id` for connections. OpenClaw servers are just pods with `server_type = "openclaw"`.
+
+**Option B (cleaner):** Rename `data_pods` to `servers`, add `server_type`. All provisioning logic is already in the CP — just needs type awareness.
+
+### Billing Changes
+
+Currently: one Stripe subscription per user, one price.
+New: user can have multiple servers, each a line item.
+
+**Stripe approach:**
+- One subscription per user (Stripe supports multiple line items per subscription)
+- Each server = one line item at €15/mo
+- AI = one line item at €20/mo (or €15 if bundled)
+- Adding/removing servers = `subscription.items.add/remove`
+
+### CP Provisioning Changes
+
+Currently: `provisionPodTask` creates a data pod VPS.
+New: same task, but with `serverType` parameter.
+
+- `serverType: "pod"` → current behavior (install.sh → full stack)
+- `serverType: "openclaw"` → new cloud-init that only installs OpenClaw + connects to target pod
+- `serverType: "redundant-pod"` → current behavior + configure dual-pod sync to primary
+
+### Frontend Changes
+
+| Component | Current | New |
+|-----------|---------|-----|
+| **Landing pricing** | 3 tier cards (Solo/Pro/Team) | Server builder: pick servers + AI |
+| **Billing page** | Single plan card | List of active servers + AI status |
+| **Pod settings** | One pod | Multi-server management |
+| **CP Dashboard** | Pod list | Server list with type badges |
+| **Browser** | Single pod connection | Pod + connected services view |
+
+---
+
+## What This Implies — For the User
+
+### Simpler mental model
+- "I buy servers" — not tiers, not plans
+- Each server does one thing
+- Add more servers as needed
+- AI is optional
+
+### Clear upgrade path
+```
+Free (self-hosted) → €15 (managed pod) → €30 (+ OpenClaw OR redundancy) → €45 (+ AI)
+```
+
+### No lock-in
+- Data is always exportable (PostgreSQL + MinIO)
+- Self-hosted uses same code as managed
+- Dual-pod sync means you always have a copy
+- Cancel = servers stop, data kept for 30 days (archive retention addon extends)
+
+---
+
+## Implementation Priority
+
+### Phase 1: Foundation (done)
+- [x] synap skill
+- [x] setup-openclaw.sh + install.sh PROVISIONING_TOKEN
+- [x] Telegram deactivated (TELEGRAM_BOT_ENABLED feature flag)
+- [x] Pricing package updated: Pod €15, Pod+AI €30
+- [x] Hub Protocol docs fixed (/trpc → /api/hub)
+- [x] POST /api/hub/memory embedding optional
+
+### Phase 2: Multi-server billing (next)
+
+**Stripe model change:**
+Currently: 1 subscription = 1 tier (solo/pro). Tiers are mutually exclusive.
+New: 1 subscription = N line items. Each server is a line item at €15/mo. AI is a line item at €20 (or €15 bundled).
+
+```
+Stripe Subscription (1 per user)
+├── Line Item: "Managed Server" × 2  (€15 each = €30)
+├── Line Item: "Intelligence Service" × 1  (€20, or €15 if bundled)
+└── Total: €50/mo
+```
+
+**DB changes:**
+- `data_pods` table: add `server_type` column ("pod" | "openclaw" | "redundant")
+- `data_pods` table: add `linked_pod_id` (UUID, nullable — links OpenClaw to its pod, or redundant to primary)
+- `subscriptions` table: tier column becomes less relevant — the real billing is in Stripe line items
+- Keep tier for backward compat: "solo" = has servers, no AI. "pro" = has servers + AI.
+
+**CP API changes:**
+- `POST /pods` already exists — add `serverType` param (default "pod")
+- `POST /pods` with `serverType: "openclaw"` → new cloud-init that installs only OpenClaw
+- `POST /pods` with `serverType: "redundant"` + `linkedPodId` → pod + dual-sync config
+- Billing: `POST /billing/add-server` → adds line item to Stripe subscription
+- Billing: `DELETE /billing/remove-server/:podId` → removes line item
+
+**Frontend changes:**
+- Landing pricing: replace tier cards with server builder
+  "Start with a pod (€15) → add OpenClaw (+€15) → add AI (+€20) → add redundancy (+€15)"
+- Account settings: "My Servers" list showing all managed servers with type badges
+- CP Dashboard: server type badges on pod cards
+
+### Phase 3: OpenClaw dedicated server provisioning
+- [ ] Cloud-init script for OpenClaw-only VPS (lighter than full pod)
+- [ ] `provisionPodTask` handles `serverType: "openclaw"`:
+  - Installs Docker + OpenClaw container only
+  - Receives target pod URL + API key via cloud-init
+  - Connects to pod via Hub Protocol
+  - Registers as Intelligence Service on pod
+- [ ] CP connects managed OpenClaw to managed pod automatically
+- [ ] For cross-hosted: user enters pod URL + API key in CP dashboard
+
+### Phase 4: Redundancy
+- [ ] `provisionPodTask` handles `serverType: "redundant"`:
+  - Same as pod provisioning
+  - Additional step: configure dual-pod sync with `linkedPodId`
+- [ ] Browser: pod pair detection + failover UI
+- [ ] CP Dashboard: pod pair management
+
+### Component Map — What Exists vs What's Needed
+
+| Component | Location | Exists? | Change Needed |
+|-----------|----------|---------|---------------|
+| **Landing: SectionPricing** | synap-landing | Yes (stale) | Replace tier cards with server builder |
+| **Landing: pricing.json** | synap-landing/config | Yes (stale) | Update to €15/€30 model |
+| **Landing: PodView** | synap-landing/account/pod | Yes | Add server type, show linked services |
+| **Landing: BillingView** | synap-landing/account/billing | Yes | Show server line items, not single tier |
+| **Web: /settings/pods** | synap-app/apps/web | Yes | Rename to "Servers", add type badges |
+| **Web: /settings/billing** | synap-app/apps/web | Yes | Show line items, add/remove servers |
+| **Web: PricingGrid** | synap-app/packages/apps/billing | Yes | Replace with server builder |
+| **Web: AddOnsList** | synap-app/packages/apps/billing | Yes | Move OpenClaw to "server type" not "addon" |
+| **Browser: IntelligenceApp** | browser | Yes | Already supports OpenClaw (no change) |
+| **Browser: OpenClawOnboardingSheet** | synap-app/intelligence | Yes | Add self-hosted path (activateFn) |
+| **Browser: PodConnectPanel** | browser | Yes | No change |
+| **Browser: FailoverBanner** | browser | Yes | No change |
+| **CP: FleetPage** | cp-dashboard | Yes | Add server_type column + filter |
+| **CP: PodDetailPage** | cp-dashboard | Yes | Show linked services (OpenClaw, redundant) |
+| **CP: "Add OpenClaw" button** | cp-dashboard | NO | New: trigger OpenClaw provisioning |
+| **CP: Server type selector** | cp-dashboard | NO | New: when creating pod, choose type |
+
+### Phase 5: Polish
+- [ ] "Add OpenClaw" button in Browser Intelligence app (self-hosted path)
+- [ ] Migration wizard (self-hosted → managed)
+- [ ] Server cost calculator on landing page
+- [ ] Usage dashboards per server
+- [ ] Warning banner when OpenClaw addon shares VPS with pod
+
+---
+
+## Decisions (Resolved 2026-04-04)
+
+1. **Managed OpenClaw + self-hosted pod?** Yes, accepted. Doesn't complicate things — OpenClaw just needs a pod URL + API key regardless of where the pod runs.
+
+2. **Discount model:** Flat €15 per server. No volume discounts. Simple.
+
+3. **OpenClaw addon vs dedicated server:** Both offered.
+   - **Free addon** (same VPS): Docker profile on the pod server. Warning: shares resources, Synap is not responsible for performance impact or data issues caused by OpenClaw activities.
+   - **Dedicated server** (€15/mo): Separate VPS. Recommended for heavy agent workloads.
+
+4. **Minimum purchase:** Pod only (€15/mo). No AI required. User gets storage + governance + Hub Protocol API.
+
+5. **Cross-hosted connections:** Both guided wizard AND manual URL+key. Always guide the user. When we manage both, CP auto-connects. When mixed, a wizard walks the user through generating the API key and connecting. Security: API keys are scoped, rate-limited, and revocable.

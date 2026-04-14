@@ -1,0 +1,130 @@
+---
+title: "Market & Campaign"
+description: "Go-to-market strategy and positioning."
+---
+
+
+
+## The Distribution Map
+
+**Tier 1 — High-density, direct access to OpenClaw users:**
+
+The main OpenClaw Discord ("Friends of the Crustacean") has 164,000+ members. This is your primary target. It has dedicated channels for #help, #users-helping-users, and model discussions. There's also a secondary Discord (Clawdbot → OpenClaw) with 16,000+ members. The Discord community has a structured staff system with moderators, helpers, and configurators — which means if you contribute genuinely helpful content, you'll get visibility.
+
+ClawHub hosts 13,729 community-built skills and is the primary marketplace. It uses vector search for natural language discovery and supports CLI installation. Publishing there is the single highest-leverage action — every OpenClaw user discovers skills through `clawhub search`.
+
+The "awesome-openclaw-skills" GitHub repo by VoltAgent curates 5,400+ skills from the registry. Getting listed here is a second distribution layer on top of ClawHub.
+
+**Tier 2 — Reddit & forums where OpenClaw users congregate:**
+
+Key subreddits include r/openclaw (growing fast), r/clawdbot (old name, still active), r/LocalLLaMA, r/AI_Agents, and r/AiForSmallBusiness — all places where OpenClaw comes up frequently. r/LocalLLaMA is particularly interesting because those users run local models and care deeply about sovereignty — your exact audience.
+
+**Tier 3 — Hacker News (high-quality, high-risk):**
+
+Multiple OpenClaw threads have done well on HN: "Ask HN: Any real OpenClaw users?", "OpenClaw is a security nightmare", and "Share your productive usage of OpenClaw." The security criticism threads get significant engagement (112+ HN points). This is your angle — Synap directly solves the security and governance gaps that HN commenters keep complaining about.
+
+**Tier 4 — Content ecosystem:**
+
+There's a full content economy around OpenClaw: paid communities like "OpenClaw Lab" ($29/month, 265+ founders), courses on DataCamp, newsletters on Buttondown, tutorial sites like LearnOpenClaw, OpenClawLaunch, LumaDock, VelvetShark, and Practiceoverflow's Substack. These are all places where a "how to give your agent structured memory" tutorial would get distribution.
+
+**Tier 5 — Skill registries beyond ClawHub:**
+
+LobeHub has its own skills marketplace where OpenClaw skills get installed and reviewed. skills.rest is another directory. There are already multiple memory-related skills (agent-brain, openclaw-mem, memory-complete) — which means there's proven demand, but the existing solutions are all SQLite/flat-file based. Synap's PostgreSQL + pgvector knowledge graph is a massive upgrade.
+
+---
+
+## The Campaign — 4 Waves
+
+### Wave 1: "Plant the Seed" (Days 1–7)
+
+**Action 1: Publish synap-memory to ClawHub.**
+
+This is non-negotiable step one. The skill gets discovered through `clawhub search "memory"`, `clawhub search "knowledge graph"`, `clawhub search "agent management"`. Write a clean SKILL.md with YAML frontmatter. Category it under Productivity and Development Tools. Make the install one command: `clawhub install synap-memory`.
+
+**Action 2: Submit to awesome-openclaw-skills.**
+
+Open a PR on the VoltAgent repo. The skill will appear alongside agent-brain and openclaw-mem — but yours is the only one backed by PostgreSQL, pgvector, and a full entity graph. The README comparison writes itself.
+
+**Action 3: Post on the OpenClaw Discord — #users-helping-users channel.**
+
+Not a sales post. A contribution post. Title: *"I built a structured knowledge graph backend for OpenClaw agents — entities, relationships, proposals, full audit trail."*
+
+Content structure: the problem (agents lose context, memory is flat text, no governance), what you built (typed entities with relationships, semantic search, proposal system, event chain), how to install it (one command), a screenshot of the Agent Fleet dashboard showing agent/project/task/skill/provider entities in a relational view.
+
+Don't link to synap.live. Link to the GitHub repo. Let people discover the managed hosting option organically.
+
+**Action 4: GitHub repo README as the real landing page.**
+
+The README needs: a 3-sentence pitch ("OpenClaw agents store memory in flat files. Synap gives them a knowledge graph."), a single install command, a screenshot of the dashboard, an architecture diagram (agent → Hub Protocol → Synap pod → PostgreSQL/pgvector/Typesense), and a "self-hosted vs managed" section.
+
+---
+
+### Wave 2: "Feed the Conversation" (Days 8–14)
+
+**Action 5: Reddit posts across 3–4 subreddits.**
+
+r/openclaw: *"I replaced my agent's MEMORY.md with a PostgreSQL knowledge graph — here's what changed."* Walk through the before/after: flat file memory vs. typed entities with relationships. Show a concrete example — "my agent can now query 'what tasks are overdue for Project X and who's responsible?' instead of grep-ing conversation logs."
+
+r/LocalLLaMA: *"Sovereign knowledge infrastructure for local AI agents — your data stays in your PostgreSQL, any model plugs in."* This audience cares about self-hosting, privacy, model-agnosticism. Hit those points hard.
+
+r/AI_Agents: *"Why your agent needs structured memory, not conversation logs."* More conceptual. Explain entities vs. flat files, the proposal system for governance, why relational data beats RAG over flat text.
+
+**Action 6: Engage in existing OpenClaw security threads.**
+
+Every security discussion on HN and Reddit is an opportunity. When someone says "OpenClaw stores credentials in plaintext" or "there's no audit trail," you drop a comment: *"This is exactly why I built synap-memory — every agent action goes through a proposal system with full event chain history. Here's how it works: [link to GitHub]."* Not spammy. Substantive. Technical. Addressing the exact pain point.
+
+**Action 7: Reach out to 3–5 OpenClaw content creators.**
+
+The people writing tutorials, running newsletters, hosting paid communities — they're always looking for interesting content. Target: VelvetShark (wrote the memory masterclass — they're an OpenClaw codebase maintainer), Practiceoverflow's Substack, the OpenClaw Newsletter on Buttondown, DataCamp's OpenClaw content team. Offer to write a guest post or provide a demo. The angle: "structured memory is the next evolution for agent architecture."
+
+---
+
+### Wave 3: "The Technical Credibility Play" (Weeks 3–4)
+
+**Action 8: Show HN post.**
+
+Title: *"Show HN: I built a self-hosted knowledge graph that gives AI agents structured memory (PostgreSQL + pgvector)"*
+
+This is NOT an OpenClaw-specific post. It's a standalone infrastructure post that happens to integrate with OpenClaw. HN respects infrastructure plays. The post should explain: the Hub Protocol (open REST API any AI can implement), the proposal system (every AI write is reviewable), the entity graph (typed objects with relationships), and the self-hosted architecture (your own PostgreSQL, export anytime). Mention OpenClaw integration as one use case among several (Claude Desktop via MCP, Cursor, direct SDK usage).
+
+**Action 9: Publish "Why Your Agent Needs a Knowledge Graph" — long-form blog post.**
+
+Host on synap.live/blog. 2,500+ words. Technical depth. Diagrams. Code examples. Compare MEMORY.md (what OpenClaw does today) vs. structured entity graph (what Synap provides). Show concrete queries that are possible with Synap and impossible with flat files. This becomes your SEO anchor and the link you share everywhere.
+
+**Action 10: Record a 3-minute demo video.**
+
+Show the full flow: install synap-memory → agent captures structured data → query the knowledge graph → approve a proposal → view the Agent Fleet dashboard. Post on YouTube, embed in the blog post, share on Twitter/X. This video becomes your primary marketing asset.
+
+---
+
+### Wave 4: "Community Infiltration" (Ongoing)
+
+**Action 11: Be present in the Discord daily.**
+
+Not selling. Helping. Answer questions about memory, agent management, security. When someone asks "how do I make my agent remember things across sessions?" — that's your moment. Over time you become known as "the knowledge graph person" in the OpenClaw community. This is the unglamorous work that builds trust.
+
+**Action 12: French tech angle — parallel track.**
+
+LinkedIn posts in French: *"J'ai construit l'infrastructure de connaissance souveraine pour les agents IA — open source, auto-hébergé, made in France."* Target the French dev community, Parisian tech meetups, Station F network. The sovereignty narrative resonates 10x stronger in France than anywhere else. This is a parallel channel, not a replacement for the OpenClaw funnel.
+
+**Action 13: Track and engage with every new memory-related skill on ClawHub.**
+
+New memory skills get published weekly. Each one validates the demand for what you've built. When someone publishes a new SQLite-based memory skill, you can respectfully comment: "nice work — if you're interested in a relational approach with typed entities, check out synap-memory." Community engagement, not competition.
+
+**Action 14: OpenClaw Lab / Vibe Combinator communities.**
+
+These paid communities (265+ members in OpenClaw Lab alone) are full of founders actively building with OpenClaw. If $29/month gets you access to 265 founders who are your exact target users, that's the cheapest customer acquisition you'll ever find. Join, contribute value, show your tool.
+
+---
+
+## Metrics to Track
+
+Week 1: ClawHub installs of synap-memory (target: 50+). GitHub stars on the repo (target: 100+). Discord mentions / DMs asking questions (target: 10+).
+
+Week 2: Reddit post engagement (upvotes, comments). First self-hosted pod deployments from the community. First managed pod signups.
+
+Week 4: HN Show HN score (target: 50+ points). Blog post traffic. YouTube demo views. Total active users with 10+ entities (target: 50).
+
+---
+
+The whole campaign costs $0 and one month of focused execution. No ads, no paid acquisition, no landing page optimization. Just placing the right product in front of the right people who already have the exact problem you solve. The highway has 250K people driving on it. Build the exit ramp.

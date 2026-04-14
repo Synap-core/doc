@@ -1,0 +1,785 @@
+---
+title: "Unified Feed Architecture"
+description: "Unified feed architecture across all surfaces."
+---
+
+# Unified Feed Architecture - Validated Design
+
+**Status: Validated - Ready for Implementation**
+
+Incorporates all decisions:
+1.  Message format: configurable (individual vs batch)
+2.  Retention: configurable, default 30 days (relay: 7 days)
+3.  No templates - apps generate feeds programmatically
+4.  Reuse centralized event/job system (pg-boss) - no duplication
+5.  Cross-feed references instead of deduplication
+
+---
+
+## Core Principle
+
+> **A feed is a channel that gets populated by jobs. The job system we use is the SAME event chain and queue management we use for all other automations.**
+
+No new infrastructure. Feeds use:
+- `pg-boss` for job queuing (same as all other workers)
+- `events` table for audit trail (same as all mutations)
+- Standard tRPC hooks for frontend (same as all channels)
+
+---
+
+## Feed Configuration Schema
+
+```typescript
+// Base configuration for all feed types
+interface FeedChannelConfig {
+  feedType: 'rss' | 'proactive' | 'automation';
+  
+  // SCHEDULE: When to fetch
+  schedule: {
+    cron: string;                        // "0 8 * * *" = 8am daily
+    timezone: string;                    // "Europe/Paris"
+    onDemand?: {                         // Optional manual trigger
+      enabled: boolean;
+      minimumIntervalMinutes: number;    // 5 min cooldown
+    };
+  };
+  
+  // FORMAT: How to present items
+  format: {
+    mode: 'individual' | 'batch';        // One message per item vs digest
+    batchSize?: number;                  // Max items per batch message
+    maxItemsPerRun?: number;             // Limit items per execution
+  };
+  
+  // RETENTION: How long to keep messages
+  retention: {
+    archiveAfterDays: number;            // Default: 30, Relay: 7
+    maxMessageCount?: number;            // Alternative: keep last N
+    archiveTo?: 'delete' | 'archive_table' | 'cold_storage';
+  };
+  
+  // DELIVERY: Where to send items
+  delivery: {
+    surfaces: ('feed' | 'notification' | 'chat')[];
+    notificationPriority?: 'low' | 'normal' | 'high';
+    crossFeedReferences: boolean;        // Show "also in X feed" chips
+  };
+}
+```
+
+---
+
+## Feed Type Configurations
+
+### 1. RSS Feed
+
+```typescript
+interface RSSFeedConfig extends FeedChannelConfig {
+  feedType: 'rss';
+  
+  rss: {
+    routes: string[];                    // ["hackernews/frontpage"]
+    platforms?: string[];                // ["hackernews"]
+    
+    // Filtering
+    topicsFilter?: string[];             // ["ai", "startups"]
+    minRelevanceScore?: number;          // 0.0-1.0
+    
+    // AI processing
+    aiClassification: boolean;           // Run IS topic extraction?
+    aiSummarization: boolean;            // Generate summary?
+    
+    // Cross-feed deduplication
+    urlTrackingWindowHours: number;      // 48h = remember URLs for 2 days
+  };
+}
+```
+
+**Example: "AI News" Feed**
+```typescript
+{
+  feedType: 'rss',
+  rss: {
+    routes: ['hackernews/frontpage', 'reddit/r/artificial'],
+    topicsFilter: ['ai', 'machine learning', 'llm'],
+    aiClassification: true,
+    minRelevanceScore: 0.6
+  },
+  schedule: {
+    cron: '0 */4 * * *',                 // Every 4 hours
+    timezone: 'UTC'
+  },
+  format: {
+    mode: 'individual',                  // One message per HN post
+    maxItemsPerRun: 10                   // Max 10 items per fetch
+  },
+  retention: {
+    archiveAfterDays: 30
+  },
+  delivery: {
+    surfaces: ['feed', 'notification'],
+    crossFeedReferences: true            // "Also in Tech News feed"
+  }
+}
+```
+
+---
+
+### 2. Proactive Feed
+
+```typescript
+interface ProactiveFeedConfig extends FeedChannelConfig {
+  feedType: 'proactive';
+  
+  proactive: {
+    name: string;                        // "The Morning Feed"
+    
+    // Data sources to include
+    sources: {
+      workspaceActivity?: boolean;       // Tasks, proposals, mentions
+      recentEntities?: boolean;          // New entities this period
+      externalSignals?: boolean;         // Include RSSHub context?
+      healthMetrics?: boolean;           // Data quality
+      captureSummary?: boolean;          // What user captured yesterday
+    };
+    
+    // AI processing
+    summaryStyle: 'bullet' | 'narrative' | 'structured';
+    includeActionItems: boolean;         // Suggest next actions?
+    
+    // Period covered
+    lookbackHours: number;               // 24 = last 24 hours
+  };
+}
+```
+
+**Example: "The Morning Feed"**
+```typescript
+{
+  feedType: 'proactive',
+  proactive: {
+    name: 'The Morning Feed',
+    sources: {
+      workspaceActivity: true,
+      recentEntities: true,
+      captureSummary: true,
+      externalSignals: false             // Don't include RSS here
+    },
+    summaryStyle: 'bullet',
+    includeActionItems: true,
+    lookbackHours: 24
+  },
+  schedule: {
+    cron: '0 8 * * 1-5',                 // 8am weekdays
+    timezone: 'Europe/Paris',
+    onDemand: {
+      enabled: true,
+      minimumIntervalMinutes: 30         // Can trigger manually, 30min cooldown
+    }
+  },
+  format: {
+    mode: 'batch',                       // Single digest message
+    batchSize: 20
+  },
+  retention: {
+    archiveAfterDays: 30
+  },
+  delivery: {
+    surfaces: ['feed', 'notification'],
+    notificationPriority: 'normal'
+  }
+}
+```
+
+---
+
+### 3. Automation Feed
+
+```typescript
+interface AutomationFeedConfig extends FeedChannelConfig {
+  feedType: 'automation';
+  
+  automation: {
+    automationId: string;                // Link to automation
+    trigger: 'on_run' | 'on_success' | 'on_failure';
+    outputFormat: 'full' | 'summary' | 'status_only';
+  };
+}
+```
+
+---
+
+## Reusing Centralized Infrastructure
+
+### No New Queue System
+
+Feeds use the SAME `pg-boss` job queue as all other automations:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  pg-boss Job Queue (Existing)                                   │
+│                                                                 │
+│  Current workers:                                               │
+│  - proactive-morning-briefing                                   │
+│  - proactive-weekly-digest                                      │
+│  - automation-executor                                          │
+│  - connector-sync                                               │
+│                                                                 │
+│  NEW feed workers (just more job types):                        │
+│  - feed-scheduler (runs every minute, spawns feed jobs)         │
+│  - feed-rss-executor (processes RSS feeds)                      │
+│  - feed-proactive-executor (generates proactive digests)        │
+│  - feed-retention-worker (archives old messages)                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Scheduler Worker (One Global)
+
+```typescript
+// src/jobs/feed-scheduler.ts
+// Runs every minute via pg-boss cron
+
+async function feedSchedulerWorker() {
+  // Find feeds due for execution
+  const dueFeeds = await db.query.channels.findMany({
+    where: and(
+      eq(channels.channelType, 'feed'),
+      eq(channels.status, 'active'),
+      or(
+        // Scheduled execution
+        sql`${channels.metadata}->>'nextRunAt' <= NOW()`,
+        // Manual trigger requested
+        sql`${channels.metadata}->>'triggerRequestedAt' <= NOW()`
+      )
+    )
+  });
+  
+  for (const feed of dueFeeds) {
+    const config = feed.agentConfig as FeedChannelConfig;
+    
+    // Enqueue job in pg-boss
+    await boss.send(`feed-${config.feedType}-executor`, {
+      feedChannelId: feed.id,
+      triggeredBy: feed.metadata.triggerRequestedAt ? 'manual' : 'schedule',
+      startedAt: new Date().toISOString()
+    }, {
+      retryLimit: 3,
+      retryDelay: 60,
+      // Priority based on feed type
+      priority: config.feedType === 'proactive' ? 5 : 3
+    });
+    
+    // Update next run time
+    await updateFeedSchedule(feed);
+  }
+}
+```
+
+### Per-Feed Executor Workers
+
+```typescript
+// src/jobs/feed-rss-executor.ts
+// Processes individual RSS feed jobs
+
+async function feedRssExecutor(job: { data: { feedChannelId: string } }) {
+  const feed = await db.channels.findById(job.data.feedChannelId);
+  const config = feed.agentConfig as RSSFeedConfig;
+  
+  // 1. Fetch from RSSHub via CP proxy
+  const items = await fetchRssItems(config.rss.routes);
+  
+  // 2. Filter already-seen URLs (within window)
+  const newItems = await filterSeenUrls(feed.id, items, config.rss.urlTrackingWindowHours);
+  
+  // 3. Optional: AI classification
+  let processedItems = newItems;
+  if (config.rss.aiClassification) {
+    processedItems = await classifyItemsWithIS(newItems);
+  }
+  
+  // 4. Filter by relevance
+  processedItems = processedItems.filter(
+    item => item.relevanceScore >= (config.rss.minRelevanceScore || 0.5)
+  );
+  
+  // 5. Limit items per run
+  processedItems = processedItems.slice(0, config.format.maxItemsPerRun || 20);
+  
+  // 6. Post to channel based on format.mode
+  if (config.format.mode === 'individual') {
+    for (const item of processedItems) {
+      await postFeedItem(feed, item, config);
+    }
+  } else {
+    await postBatchDigest(feed, processedItems, config);
+  }
+  
+  // 7. Track seen URLs
+  await trackSeenUrls(feed.id, processedItems.map(i => i.url));
+  
+  // 8. Emit event for audit
+  await emitEvent({
+    type: 'feed.execution.completed',
+    subject: 'feed',
+    subjectId: feed.id,
+    metadata: {
+      itemsFetched: items.length,
+      itemsPosted: processedItems.length,
+      executionTimeMs: Date.now() - startTime
+    }
+  });
+}
+```
+
+### Retention Worker
+
+```typescript
+// src/jobs/feed-retention-worker.ts
+// Runs daily, archives old feed messages
+
+async function feedRetentionWorker() {
+  const feeds = await db.query.channels.findMany({
+    where: eq(channels.channelType, 'feed')
+  });
+  
+  for (const feed of feeds) {
+    const config = feed.agentConfig as FeedChannelConfig;
+    const archiveDate = new Date();
+    archiveDate.setDate(archiveDate.getDate() - config.retention.archiveAfterDays);
+    
+    // Find messages to archive
+    const oldMessages = await db.query.messages.findMany({
+      where: and(
+        eq(messages.channelId, feed.id),
+        lt(messages.timestamp, archiveDate),
+        isNull(messages.archivedAt)
+      )
+    });
+    
+    if (oldMessages.length === 0) continue;
+    
+    switch (config.retention.archiveTo) {
+      case 'delete':
+        await db.delete(messages).where(inArray(messages.id, oldMessages.map(m => m.id)));
+        break;
+        
+      case 'archive_table':
+        await db.insert(archivedMessages).values(
+          oldMessages.map(m => ({ ...m, archivedAt: new Date() }))
+        );
+        await db.delete(messages).where(inArray(messages.id, oldMessages.map(m => m.id)));
+        break;
+        
+      case 'cold_storage':
+        // Upload to S3, then delete
+        await uploadToColdStorage(feed.id, oldMessages);
+        await db.delete(messages).where(inArray(messages.id, oldMessages.map(m => m.id)));
+        break;
+    }
+    
+    console.log(`Archived ${oldMessages.length} messages from feed ${feed.title}`);
+  }
+}
+```
+
+---
+
+## Cross-Feed References (No Deduplication)
+
+Instead of hiding duplicates, we show them with context:
+
+### Message Metadata
+
+```typescript
+interface FeedMessageMetadata {
+  feedItem: true;
+  feedType: 'rss' | 'proactive';
+  source: {
+    platform: string;                    // "hackernews", "reddit"
+    url: string;                         // Original URL
+    route?: string;                      // "/hackernews/frontpage"
+  };
+  
+  // Cross-feed references
+  alsoInFeeds: Array<{
+    feedId: string;
+    feedTitle: string;
+    postedAt: string;
+  }>;
+  
+  // AI processing
+  relevanceScore?: number;
+  topics?: string[];
+  aiSummary?: string;
+}
+```
+
+### UI: Cross-Feed Chips
+
+```tsx
+// SignalCard.tsx
+function SignalCard({ message }) {
+  const metadata = message.metadata as FeedMessageMetadata;
+  
+  return (
+    <Card>
+      <Title>{message.content.title}</Title>
+      <Summary>{metadata.aiSummary}</Summary>
+      
+      {/* Cross-feed references */}
+      {metadata.alsoInFeeds?.length > 0 && (
+        <ChipGroup>
+          <Text size="xs" color="muted">Also in:</Text>
+          {metadata.alsoInFeeds.map(ref => (
+            <Chip key={ref.feedId} size="xs" variant="secondary">
+              {ref.feedTitle}
+            </Chip>
+          ))}
+        </ChipGroup>
+      )}
+      
+      {/* Source platform */}
+      <Badge>{metadata.source.platform}</Badge>
+    </Card>
+  );
+}
+```
+
+### Tracking Cross-Feed References
+
+When posting a feed item, check if URL exists in other feeds:
+
+```typescript
+async function postFeedItem(feed, item, config) {
+  // Check if this URL exists in other user feeds
+  const existingInOtherFeeds = await db.query.messages.findMany({
+    where: and(
+      eq(messages.authorType, 'ai_agent'),
+      sql`${messages.metadata}->'source'->>'url' = ${item.url}`,
+      not(eq(messages.channelId, feed.id))
+    ),
+    with: {
+      channel: {
+        columns: { id: true, title: true }
+      }
+    }
+  });
+  
+  // Create message
+  const message = await db.insert(messages).values({
+    channelId: feed.id,
+    content: formatFeedItem(item),
+    authorType: 'ai_agent',
+    authorId: 'feed_worker',
+    metadata: {
+      feedItem: true,
+      feedType: config.feedType,
+      source: { platform: item.platform, url: item.url },
+      alsoInFeeds: existingInOtherFeeds.map(m => ({
+        feedId: m.channel.id,
+        feedTitle: m.channel.title,
+        postedAt: m.timestamp
+      })),
+      relevanceScore: item.relevanceScore,
+      topics: item.topics
+    }
+  }).returning();
+  
+  // Update other feeds to reference this one
+  for (const existing of existingInOtherFeeds) {
+    await db.update(messages)
+      .set({
+        metadata: sql`${messages.metadata} || jsonb_build_object(
+          'alsoInFeeds', COALESCE(${messages.metadata}->'alsoInFeeds', '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+            'feedId', ${feed.id},
+            'feedTitle', ${feed.title},
+            'postedAt', ${message.timestamp}
+          ))
+        )`
+      })
+      .where(eq(messages.id, existing.id));
+  }
+}
+```
+
+---
+
+## Frontend: Unified Channel Experience
+
+### No Special Hooks Needed
+
+Feeds use the same hooks as all channels:
+
+```typescript
+// Any feed - same API
+const { data: feedChannel } = useChannel(feedId);
+const { messages, fetchNextPage } = useChannelMessages(feedId);
+const { sendMessage } = useSendMessage({ channelId: feedId });
+```
+
+### Feed-Specific Rendering
+
+```typescript
+// In your feed component
+const isFeed = channel.channelType === 'feed';
+const config = channel.agentConfig as FeedChannelConfig;
+
+// Render based on feed type
+if (config.feedType === 'rss') {
+  return <RSSFeedView messages={messages} config={config} />;
+} else if (config.feedType === 'proactive') {
+  return <ProactiveFeedView messages={messages} config={config} />;
+}
+```
+
+### On-Demand Trigger (Relay App)
+
+```typescript
+// relay-app/src/hooks/useFeed.ts
+export function useRelayFeed() {
+  const { activeWorkspace } = useWorkspace();
+  
+  // Get or create the Relay Feed channel
+  const { data: feedChannel } = useQuery({
+    queryKey: ['relay-feed', activeWorkspace?.id],
+    queryFn: async () => {
+      // Find existing or create
+      const channels = await trpc.channels.list.query({
+        workspaceId: activeWorkspace?.id,
+        channelType: 'feed'
+      });
+      
+      const relayFeed = channels.find(c => 
+        c.agentConfig?.feedType === 'proactive' &&
+        c.agentConfig?.proactive?.name === 'Relay Feed'
+      );
+      
+      if (relayFeed) return relayFeed;
+      
+      // Create default relay feed
+      return await trpc.channels.createFeed.mutate({
+        title: 'Relay Feed',
+        feedType: 'proactive',
+        config: {
+          proactive: {
+            name: 'Relay Feed',
+            sources: {
+              workspaceActivity: true,
+              recentEntities: true
+            },
+            summaryStyle: 'bullet',
+            lookbackHours: 24
+          },
+          schedule: {
+            cron: '0 */6 * * *',  // Every 6 hours as fallback
+            timezone: 'UTC',
+            onDemand: {
+              enabled: true,
+              minimumIntervalMinutes: 5
+            }
+          },
+          format: { mode: 'batch', batchSize: 10 },
+          retention: { archiveAfterDays: 7 },  // Shorter for relay
+          delivery: { surfaces: ['feed'], crossFeedReferences: true }
+        }
+      });
+    }
+  });
+  
+  // Trigger on app open
+  useEffect(() => {
+    if (feedChannel) {
+      trpc.feeds.trigger.mutate({
+        channelId: feedChannel.id,
+        reason: 'user_opened_app'
+      });
+    }
+  }, [feedChannel?.id]);
+  
+  // Use standard channel messages hook
+  const { messages } = useChannelMessages(feedChannel?.id);
+  
+  return { messages, feedChannel };
+}
+```
+
+---
+
+## Migration from Current Systems
+
+### 1. Morning Briefing → "The Morning Feed"
+
+```typescript
+// Migration script
+async function migrateMorningBriefing() {
+  const users = await db.query.users.findMany();
+  
+  for (const user of users) {
+    // Check if already has morning feed
+    const existing = await db.query.channels.findFirst({
+      where: and(
+        eq(channels.userId, user.id),
+        eq(channels.channelType, 'feed'),
+        sql`${channels.agent_config}->>'feedType' = 'proactive'`,
+        sql`${channels.agent_config}->'proactive'->>'name' = 'The Morning Feed'`
+      )
+    });
+    
+    if (existing) continue;
+    
+    // Get user's timezone from settings
+    const timezone = user.settings?.timezone || 'UTC';
+    
+    await db.insert(channels).values({
+      id: crypto.randomUUID(),
+      userId: user.id,
+      workspaceId: null,  // Pod-scoped
+      channelType: 'feed',
+      feedScope: 'user',
+      title: 'The Morning Feed',
+      agentId: 'orchestrator',
+      agentType: 'feed_worker',
+      agentConfig: {
+        feedType: 'proactive',
+        proactive: {
+          name: 'The Morning Feed',
+          sources: {
+            workspaceActivity: true,
+            recentEntities: true,
+            captureSummary: true,
+            externalSignals: false
+          },
+          summaryStyle: 'bullet',
+          includeActionItems: true,
+          lookbackHours: 24
+        },
+        schedule: {
+          cron: '0 8 * * 1-5',
+          timezone,
+          onDemand: { enabled: true, minimumIntervalMinutes: 30 }
+        },
+        format: { mode: 'batch', batchSize: 20 },
+        retention: { archiveAfterDays: 30 },
+        delivery: {
+          surfaces: ['feed', 'notification'],
+          notificationPriority: 'normal',
+          crossFeedReferences: true
+        }
+      } as ProactiveFeedConfig,
+      status: 'active',
+      metadata: {
+        migratedFrom: 'proactive-morning-briefing-worker',
+        migratedAt: new Date().toISOString()
+      }
+    });
+  }
+}
+```
+
+### 2. Signal Feed App → RSS Feed Channels
+
+```typescript
+// When user opens new Browser version
+async function migrateSignalFeedUser(userId: string) {
+  // Get their current signal feed preferences
+  const preferences = await getSignalFeedPreferences(userId);
+  
+  // Create RSS feed channels for their subscriptions
+  for (const sub of preferences.subscriptions) {
+    await db.insert(channels).values({
+      userId,
+      channelType: 'feed',
+      feedScope: 'user',
+      title: sub.name,
+      agentConfig: {
+        feedType: 'rss',
+        rss: {
+          routes: sub.routes,
+          topicsFilter: sub.topics,
+          aiClassification: true,
+          minRelevanceScore: sub.relevanceThreshold || 0.5
+        },
+        schedule: {
+          cron: '0 */4 * * *',
+          timezone: preferences.timezone || 'UTC'
+        },
+        format: { mode: 'individual', maxItemsPerRun: 10 },
+        retention: { archiveAfterDays: 30 },
+        delivery: {
+          surfaces: ['feed'],
+          crossFeedReferences: true
+        }
+      } as RSSFeedConfig
+    });
+  }
+  
+  // Mark signal-feed app as deprecated in user's sidebar
+  await hideSignalFeedApp(userId);
+}
+```
+
+---
+
+## Implementation Phases
+
+### Phase 1: Core Infrastructure (1 week)
+1. Zod schemas for feed configurations
+2. Feed channel composition
+3. `feed-scheduler` worker (spawns jobs)
+4. `feed-rss-executor` worker
+5. `feed-proactive-executor` worker
+
+### Phase 2: Migration (3 days)
+1. Migrate morning briefing → "The Morning Feed"
+2. Create migration path for signal-feed users
+3. Deprecate old workers (keep running, don't delete)
+
+### Phase 3: Frontend (1 week)
+1. Update feed rendering to show cross-feed chips
+2. On-demand trigger endpoint
+3. Relay app integration
+
+### Phase 4: Polish (3 days)
+1. Retention worker
+2. Monitoring & alerts
+3. Documentation
+
+---
+
+## Files to Create
+
+```
+synap-backend/
+├── packages/
+│   ├── jobs/
+│   │   └── src/
+│   │       ├── workers/
+│   │       │   ├── feed-scheduler.ts         # Spawns feed jobs
+│   │       │   ├── feed-rss-executor.ts      # RSS fetch + post
+│   │       │   ├── feed-proactive-executor.ts # Generate digests
+│   │       │   └── feed-retention-worker.ts   # Archive old messages
+│   │       └── fetchers/
+│   │           ├── rss-fetcher.ts            # RSSHub via CP
+│   │           └── proactive-aggregator.ts   # DB queries for digest
+│   └── api/
+│       └── src/
+│           ├── routers/
+│           │   └── feeds.ts                  # triggerFeed mutation
+│           └── types/
+│               └── feed-config.ts            # Zod schemas
+
+synap-app/
+└── packages/
+    └── core/
+        └── channels/
+            └── src/
+                ├── composition.ts            # Add feed composition
+                └── cells/
+                    └── feed/
+                        ├── FeedCell.tsx      # Feed channel cell
+                        └── CrossFeedChips.tsx # "Also in X" chips
+```
+
+---
+
+**Design validated. Ready to proceed with implementation?**

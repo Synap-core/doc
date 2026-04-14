@@ -1,0 +1,442 @@
+---
+title: "iOS Plan"
+description: "Next-gen iOS implementation plan."
+---
+
+# Relay — Next-Gen iOS Capabilities Plan
+
+**Date:** 2026-04-10
+**Target:** Expo SDK 54, React Native 0.81.5, iOS 18 minimum, New Architecture enabled
+**Scope:** Deep dive on the six priority system integrations that make Relay feel like a 2026-class iOS app. Companion doc: `NEXT-GEN-ANDROID-PLAN.md`. Action sequencing: `NEXT-GEN-SHIP-PLAN.md`.
+**Related:** `RELAY-NEXT-GEN-CAPABILITIES.md` (strategic landscape).
+
+The Relay user story all six capabilities serve: **capture without opening the app, find captures from anywhere in the OS, and make async AI work visible while it happens**. Every capability below is judged against that thesis.
+
+---
+
+## 0. Shared prerequisites
+
+Before any of these ship, Relay needs two architectural pieces landed on `main`:
+
+1. **Stable entity identifiers** — App Intents, Spotlight, Widgets, and Share Extension all need to round-trip an entity ID through system surfaces and deep-link back into `app/note/[id].tsx` / `app/person/[id].tsx`. The existing `relay://` scheme + `expo-router` linking already supports this; we just need a `canonicalRelayUrl(entity)` helper in `src/lib/deep-links.ts` that the native targets can call.
+2. **App Group entitlement** — `group.com.synap.relay`. Widgets, Share Extension, Live Activities, and App Intents all write into a shared `UserDefaults(suiteName:)` + `FileManager.containerURL(forSecurityApplicationGroupIdentifier:)` so the JS app can read what the extensions wrote and vice versa. This is a one-time Apple Developer Portal + `app.json` `entitlements` config change, but nothing ships before it lands.
+
+All six capabilities below assume these two exist.
+
+---
+
+## 1. App Intents (Siri / Shortcuts / Spotlight Actions)
+
+### What it is
+Apple's `AppIntents` framework (iOS 16+, meaningfully better in iOS 17 and iOS 18). A Swift-declared typed action that Siri, Shortcuts, Spotlight, Focus Filters, and the new Lock Screen can invoke without the app running. iOS 18 added automatic Siri discovery via `AppShortcutsProvider` — the user doesn't even need to build a Shortcut first.
+
+### Why Relay needs it
+"Hey Siri, new Relay note about Alice" is literally the north star: zero-UI capture. App Intents also drives two second-order wins:
+- **Shortcut donations** — every time the user taps the center button to capture, we donate an `INInteraction`; iOS surfaces the donated action in Spotlight, Search, and Siri Suggestions at the time of day the user normally captures.
+- **Parameter resolution** — `NoteTitle` / `PersonName` / `SpaceName` become first-class Siri entities. "New Relay note in Studio about the tokenomics meeting" parses the space and title out automatically.
+
+### First-party Expo support
+**None. This needs a custom Expo module.** There are two viable community starting points:
+
+| Package | State | What it gives you |
+|---|---|---|
+| `@bacons/apple-targets` | Experimental but widely used | Config plugin that generates a native iOS target folder, wires it into the Xcode project on every `expo prebuild`. Supports share, widget, live-activity, and intent extension target types. This is the foundation. |
+| `ynniv/expo-ios-app-intents` | Proof of concept (GitHub, ~2024) | Shows how to bridge `AppIntent.perform()` into a JS callback via `EventEmitter`. Not production-ready but a good reference. |
+
+Recommended path: `@bacons/apple-targets` to generate the target skeleton, then write the `AppIntent` Swift files ourselves and post `NSNotification` / write to the App Group `UserDefaults` to hand captured data to the JS app. JS reads it on next cold launch OR via a custom Expo module that wraps a `DarwinNotificationCenter` listener.
+
+### Implementation plan
+
+```
+relay-app/
+  targets/RelayIntents/
+    Info.plist
+    RelayIntents.entitlements
+    NewNoteIntent.swift          # @AppIntent with `title`, `spaceId?`, `body?`
+    NewTaskIntent.swift          # + dueDate parsing
+    CaptureFromTextIntent.swift  # single param: raw text, AI parses server-side
+    AddPersonIntent.swift        # for the relationship graph
+    RelayShortcuts.swift         # AppShortcutsProvider with 4 donated phrases
+    RelayEntities.swift          # Space, Note, Person, Task as AppEntity
+  modules/relay-intents/         # Expo local module
+    ios/RelayIntentsModule.swift # emits "onIntentInvoked" events to JS
+    src/index.ts                 # typed JS API + React hook
+```
+
+Bridge contract:
+```ts
+// modules/relay-intents/src/index.ts
+export type InvokedIntent =
+  | { kind: 'newNote'; title: string; body?: string; spaceId?: string }
+  | { kind: 'newTask'; title: string; dueDate?: string; spaceId?: string }
+  | { kind: 'captureText'; text: string }
+  | { kind: 'addPerson'; name: string; handle?: string };
+
+export function subscribeIntents(cb: (i: InvokedIntent) => void): () => void;
+export function donate(kind: InvokedIntent['kind'], params: Record<string, string>): Promise<void>;
+```
+
+On invocation, the Swift intent writes a pending-capture JSON blob to the App Group shared container, posts a Darwin notification, and returns `.result()` to Siri. The JS app reads the blob either on next activation (cold path) or via the Darwin notification listener (warm path) and dispatches it into the existing `useCapture()` pipeline.
+
+**Effort:** 3 engineer-days for first four intents + donation. **Priority: P0.**
+
+### Apple best practices + gotchas
+- **Keep intents fast** — `perform()` has a few seconds hard cap before Siri kills it. Hand-off to the main app via App Group, don't do network I/O inside the intent.
+- **Return an `IntentResult` with `dialog:`** so Siri speaks a confirmation. `"Got it, added to Relay."`
+- **Localized titles** — App Shortcuts phrases are pulled from `AppShortcutsProvider.appShortcuts` and must live in `.strings` files. App Store review rejects unlocalized Siri phrases.
+- **`openAppWhenRun = false`** where possible — silent capture is the whole point.
+- **Respect the new iOS 18 "Writing Tools" and Siri Semantic Search integration** — if your `AppEntity` conforms to `IndexedEntity`, it shows up in Siri's new semantic search automatically (see section 2).
+
+### Real-world example
+**Things 3** is the gold standard. Every action ("Add to Inbox", "Show Today", "Complete X") is an `AppIntent` with deep parameter resolution. Their Shortcut library has ~40 donated actions. Tap-to-add from Siri Suggestions is faster than opening the app. Copy their parameter-resolution UX: if the user says "new Relay note about Alice", resolve `Alice` against the existing Person entities via `EntityQuery` so it links to the right person automatically.
+
+### Interactions with the other 5 capabilities
+- **Spotlight (section 2)** — `AppEntity` + `IndexedEntity` conformance = automatic Spotlight indexing for free. One `AppEntity` declaration powers both.
+- **Share Extension (section 3)** — the share extension's final "Save" tap should `donate()` an `IntentResult` so "Share to Relay" appears as a Siri Suggestion.
+- **Widgets (section 4)** — widget tap targets in iOS 17+ are `AppIntent`s (not URL schemes). Every widget button/row calls into the same intent file the Siri path uses.
+- **Live Activities (section 5)** — an intent can `await startLiveActivity()`, so "Hey Siri, start voice note" spins up the Dynamic Island pill without the app foregrounding.
+- **Vision / Live Text (section 6)** — `CaptureFromTextIntent` is how Live Text → Relay works: the camera captures text, the intent receives it, the app structures it.
+
+---
+
+## 2. Spotlight indexing (Core Spotlight)
+
+### What it is
+Apple's `CoreSpotlight` framework (iOS 9+, much smarter in iOS 18 with Siri Semantic Search). Your app submits `CSSearchableItem` objects describing its content; iOS indexes them into the system-wide Spotlight bar. Results appear in Spotlight, Siri Suggestions, and — new in iOS 18 — are eligible for semantic search via Apple Intelligence on A17 Pro+ devices.
+
+### Why Relay needs it
+Pull down on the iOS Home Screen → type "tokenomics" → Relay note from yesterday appears, tap it, you're in the entity. Relay becomes searchable without being open. Combined with the persona-wide data Relay captures (notes, people, companies, events), this makes Relay feel like part of the OS.
+
+Second-order win: with iOS 18 semantic search, a user searching "that meeting about onboarding last month" will find the right Relay note even if the literal words aren't in the title.
+
+### First-party Expo support
+**Two community packages, both require prebuild:**
+
+| Package | State | Notes |
+|---|---|---|
+| `expo-spotlight` (Pflaumenbaum) | Active, Expo-native module | Cleanest API. `index`, `remove`, `clearDomain`, event listener for result taps. Expo config plugin. |
+| `react-native-spotlight-search` (jdmunro) | Older, stable | Predates Expo modules. Works but requires manual `AppDelegate` wiring. |
+
+Recommendation: **`expo-spotlight`** if it supports the iOS 18 `CSSearchableItemAttributeSet.contentType` semantic fields we need; otherwise fork or write our own (it's ~200 lines of Swift).
+
+### Implementation plan
+
+```
+src/lib/spotlight.ts
+  indexEntity(entity): Promise<void>      // called on mutation
+  removeEntity(id): Promise<void>
+  reindexAll(): Promise<void>             // on login / space switch
+  handleTap(item): void                   // routes to app/[kind]/[id]
+
+src/hooks/useSpotlightSync.ts             // subscribes to feed mutations
+modules/relay-intents/ios/RelayEntity.swift  // shared IndexedEntity decl
+```
+
+Index fields per entity type:
+- **Note** — title, body (first 500 chars), tags, space, updated date, optional thumbnail
+- **Person** — name, handle, email, company, avatar
+- **Task** — title, due, status, space
+- **Space** — name, description, type (personal/knowledge/studio)
+
+Reindex policy: incremental on every mutation via `useSpotlightSync`; full `reindexAll()` on login + workspace switch. Store a per-entity hash so we only push when content actually changed — Core Spotlight indexing is cheap but not free.
+
+**Effort:** 2 days. **Priority: P0.** Low risk, high perceived polish.
+
+### Apple best practices + gotchas
+- **Don't over-index.** Core Spotlight has a soft cap around 100k items per app before relevance degrades. Cap Relay at ~5k most-recent items per space, fall off older ones.
+- **Clear on logout.** Leaving other users' content in Spotlight after a logout is a review rejection ("leaking user data across accounts"). Call `clearAll()` on sign-out.
+- **Privacy — don't index secret/vault content.** Vault-tagged notes must be excluded; check `entity.privacy` before calling index.
+- **`CSSearchableItem.contentType`** — use UTIs (`public.text`, `com.apple.note`) so iOS knows how to render the preview card.
+- **Semantic search opt-in (iOS 18)** — set `CSSearchableItemAttributeSet.textContentType` and `supportsSemanticSearch = true` to become eligible for Apple Intelligence ranking.
+
+### Real-world example
+**Apple Notes** indexes every note's title + body and produces rich previews. **Bear** and **Obsidian mobile** both use Core Spotlight for this and it's their biggest "feels native" signal on App Store reviews. Copy Bear's preview: first paragraph + tag chips + updated-at timestamp.
+
+### Interactions
+- **App Intents (1)** — share `AppEntity` + `IndexedEntity` declarations so a single Swift type powers Siri parameter resolution *and* Spotlight. One source of truth for "what is a Note to the OS."
+- **Share Extension (3)** — newly-shared items get indexed on write. Indexing happens in the extension process, not the app, so the note appears in Spotlight before the app is next opened.
+- **Widgets (4)** — tapping a widget row can use a `relaunchURL` that opens the same `app/note/[id].tsx` deep link Spotlight uses.
+
+---
+
+## 3. Share Extension (iOS)
+
+### What it is
+A separate iOS app target using `UIActivityViewController` / `NSExtensionPrincipalClass`. Appears as "Relay" in any app's share sheet. Receives `NSItemProvider` payloads: URLs, text, images, PDFs, even screenshots.
+
+### Why Relay needs it
+This is the highest-frequency capture path in real life. Reading an article in Safari → share → "Relay" → done; the article becomes a `bookmark` entity with the Relay AI parsing title/author/excerpt in the background. Today Relay only supports deep-link-driven capture; Share Extension is the canonical "capture from anywhere" surface.
+
+### First-party Expo support
+**Yes, production-grade.**
+
+| Package | State | What |
+|---|---|---|
+| `expo-share-extension` (MaxAst) | Active, widely adopted | Config plugin + native template. Custom SwiftUI view, App Group sharing, access-group-aware auth, custom fonts, close/openHostApp helpers. This is the one to use. |
+| `expo-share-intent` | Active | Alternative — receives share payload into the main app via deep link. Lower-fidelity (no custom UI inside the sheet), faster to ship. |
+| `@bacons/apple-targets` (share target) | Works | Lower-level; more control, more boilerplate. |
+
+Recommendation: start with **`expo-share-intent`** for a 1-day MVP (payload arrives via deep link, existing `useCapture()` handles it), then upgrade to **`expo-share-extension`** for a custom SwiftUI sheet matching Relay's look.
+
+### Implementation plan
+
+**MVP (1 day):**
+```
+app.json plugins:
+  ["expo-share-intent", {
+    "iosActivationRules": { "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+                            "NSExtensionActivationSupportsText": true,
+                            "NSExtensionActivationSupportsImageWithMaxCount": 5 }
+  }]
+src/hooks/useShareIntentHandler.ts   // routes incoming payload to CaptureModal
+```
+
+**Power (3 days total):**
+```
+targets/RelayShare/
+  ShareViewController.swift        // SwiftUI root
+  ShareView.swift                  // title + space picker + quick tag
+  Info.plist                       // activation rules
+  RelayShare.entitlements          // App Group
+src/lib/share-extension.ts         // read queued shares from App Group on cold start
+```
+
+The power version shows a mini CaptureModal inside the share sheet: space picker, single-line title override, AI-suggested tags. Submit writes to the App Group queue; the main app drains the queue on next activation (or via background fetch).
+
+**Effort:** 1 day MVP, 3 days power. **Priority: P0.**
+
+### Apple best practices + gotchas
+- **256 MB memory cap** on share extensions. Don't load the full Relay JS bundle; render SwiftUI natively.
+- **Activation rules** — over-broad rules (accepting every file type) make the extension default-show in every sheet and annoy users. Limit to URL + text + image + PDF.
+- **No synchronous network calls** — the extension can be killed at any moment. Queue to App Group, sync later.
+- **Auth** — the extension needs access to the same Better Auth session token. Store it in Keychain with an access group (`$(AppIdentifierPrefix)group.com.synap.relay`) so both processes see it.
+- **App Store review** — extensions must "provide value, not just bounce to the main app." A share extension that just opens the app is grounds for rejection.
+
+### Real-world example
+**Raindrop.io** on iOS — exemplary share extension. Custom SwiftUI sheet, tag autocomplete, collection picker, optional note field, instant save. **Bear** is similar for notes. Both treat the share extension as a first-class capture surface, not a stub.
+
+### Interactions
+- **App Intents (1)** — on save, donate a `CaptureFromShareIntent` so iOS surfaces "Share to Relay" as a Siri Suggestion during the user's reading time.
+- **Spotlight (2)** — index the shared bookmark immediately from the extension process. The item is searchable in Spotlight within a second of share.
+- **Live Activities (5)** — if the share triggers a long AI structuring pass (e.g., a 20-page PDF), start a Live Activity from the extension so the user sees progress on the lock screen.
+- **Vision/Live Text (6)** — a shared photo runs through Live Text before the capture is finalized, so OCR'd text lands in the body automatically.
+
+---
+
+## 4. Widgets (WidgetKit) — home screen + Lock Screen
+
+### What it is
+Apple's `WidgetKit` (iOS 14+). SwiftUI views in multiple sizes (systemSmall/medium/large, accessoryCircular/Rectangular/Inline for Lock Screen + watchOS). iOS 17 added **interactive widgets** (buttons + toggles via `AppIntent`), which is the game changer — a widget button can fire a capture without opening the app.
+
+### Why Relay needs it
+- **Quick Capture widget** — one tap on the home screen, CaptureModal opens pre-focused on text field. No app switch, no cold start.
+- **Interactive voice capture (iOS 17+)** — a widget button that calls `StartVoiceCaptureIntent` and starts a Live Activity. Walk out of a meeting, tap the widget, speak, done.
+- **Today's feed widget** — glanceable card showing today's captures, streak, or upcoming tasks. Re-opens the engagement loop.
+- **Space switcher widget** — medium widget with 3 space buttons (Relay / Knowledge / Studio). Each button is an `AppIntent` that sets the active space.
+
+### First-party Expo support
+**Multiple viable paths:**
+
+| Package | State | Fit |
+|---|---|---|
+| `@bacons/apple-targets` | Experimental, widely used | Full Swift/SwiftUI control, generates widget target. Best for production. |
+| `@bittingz/expo-widgets` | v2 for Expo 51+ | Config plugin for both iOS + Android widgets. Higher-level; less control but faster to ship. |
+| `callstackincubator/voltra` | Newer (2025) | Write widgets as React components (!) — plugin generates SwiftUI under the hood. Hot reload, push updates. Worth watching. |
+| `software-mansion-labs/expo-live-activity` | Active | Covers the Live Activity side; see section 5. |
+
+Recommendation: **`@bacons/apple-targets`** for the MVP — it's the most battle-tested path, we already need it for Share + Intents, and writing SwiftUI views for widgets is ~50 lines each. Evaluate Voltra in Q3 if widget count grows past 5.
+
+### Implementation plan
+
+```
+targets/RelayWidgets/
+  RelayWidgetsBundle.swift              # @main WidgetBundle
+  QuickCaptureWidget.swift              # systemSmall, single button → AppIntent
+  TodaysCapturesWidget.swift            # systemMedium, shows last 3 entities
+  SpaceSwitcherWidget.swift             # systemMedium, 3 space buttons
+  LockScreenCaptureWidget.swift         # accessoryCircular, tap → open app
+  VoiceCaptureWidget.swift              # systemSmall, button → StartVoiceIntent + Live Activity
+  Timeline.swift                        # TimelineProvider reads App Group JSON
+  Intents.swift                         # AppIntent defs (shared with main target via symlink or sub-package)
+```
+
+Timeline provider reads a `widget-state.json` from the App Group, written by the JS app whenever the feed updates (via the `modules/relay-shared-storage` Expo module). No network calls from the widget process.
+
+**Effort:** 3-4 days (1 day scaffold, 1 day per widget type). **Priority: P1** for MVP, **P0** for interactive capture widget alone.
+
+### Apple best practices + gotchas
+- **Widgets can't run JS.** Swift + SwiftUI only. Plan the data contract carefully — the App Group file is the ONLY bridge.
+- **Reload budget** — iOS limits timeline reloads to roughly once every ~15 minutes baseline. Use `.after(Date)` + `WidgetCenter.reload` from the main app when data actually changes.
+- **Memory — 30 MB cap.** Keep widget images small (thumbnails, not hero images).
+- **Interactive widget buttons are `AppIntent`s** — not URL schemes, not custom delegate methods. Reuse section 1's intents directly.
+- **Dark mode + accent color** — respect `Environment(\.colorScheme)` and `Environment(\.widgetRenderingMode)`. Lock Screen widgets render in `.accented` mode.
+- **`.containerBackground`** — required in iOS 17+ for Home Screen widgets; failing to set it makes the widget invisible on iPadOS.
+- **App Store review** — widgets must be useful without opening the app. "Tap to open app" widgets alone get rejected.
+
+### Real-world example
+**Things 3** — the "Add a To-Do" widget is an iOS 17 interactive widget that opens a native quick-add sheet in-place. Zero app switch. Also look at **Bear's** today widget (systemMedium) — elegant preview of recent notes with a "+" button. **Fantastical** for the space-switcher-as-multi-button-widget pattern.
+
+### Interactions
+- **App Intents (1)** — every interactive button is an `AppIntent`. Zero duplication.
+- **Spotlight (2)** — tapping a timeline row opens the same Spotlight deep link.
+- **Share Extension (3)** — shared items appear in the Today's Captures widget within one timeline reload.
+- **Live Activities (5)** — the voice capture widget starts a Live Activity that replaces the widget's live state in the Dynamic Island.
+- **Vision/Live Text (6)** — a "Scan Text" widget button opens the camera + Live Text overlay directly.
+
+---
+
+## 5. Live Activities + Dynamic Island
+
+### What it is
+Apple's `ActivityKit` (iOS 16.1+ for Live Activities, iOS 16.2+ for Dynamic Island). A SwiftUI widget family (`ActivityConfiguration`) that displays time-bound state on the Lock Screen and in the Dynamic Island notch. Updates are pushed via `Activity.update(using:)` from the main app OR via APNs push for backgrounded updates.
+
+### Why Relay needs it
+Relay's AI pipeline has three inherently async moments that deserve visible state:
+1. **Voice capture recording** — "Recording... 00:12" pill in the Dynamic Island. Detached recording becomes discoverable and premium instead of hidden.
+2. **AI structuring** — "Structuring capture..." on the lock screen while the Intelligence Service runs. User knows the roundtrip is happening; if they lock the phone, the result lands in a notification.
+3. **Background imports** — "Importing LinkedIn contacts (234 / 500)" during a Phase 1 import.
+
+Without Live Activities, all three of these are invisible. With them, Relay feels like a 2026 app.
+
+### First-party Expo support
+**Yes, two production options:**
+
+| Package | State | Notes |
+|---|---|---|
+| `software-mansion-labs/expo-live-activity` | Active, maintained by Software Mansion | Start / update / end Live Activities from JS. SwiftUI view is a Swift file you write; data contract is a typed payload passed to `Activity.request(attributes:contentState:)`. |
+| `@bittingz/expo-widgets` with `useLiveActivities: true` | Config plugin | Bundles widget + live activity in one target. Good if you're already using it for widgets. |
+| Custom via `@bacons/apple-targets` (live-activity target) | Flexible | Full control. |
+
+Recommendation: **`expo-live-activity`** for the recording pill (Sprint 1) because it's the shortest path from JS to a working Live Activity. If we already adopted `@bittingz/expo-widgets`, use that instead to keep one config plugin.
+
+### Implementation plan
+
+```
+targets/RelayActivity/
+  RelayActivityAttributes.swift    # ActivityAttributes with state struct
+  RelayActivityView.swift          # Lock screen SwiftUI
+  RelayDynamicIsland.swift         # compact / expanded / minimal layouts
+
+src/lib/live-activity.ts           # Expo module wrapper
+src/hooks/useRecordingActivity.ts  # start on voice.start(), update every 1s, end on stop()
+src/hooks/useStructuringActivity.ts  # start on capture submit, end on AI response
+```
+
+Data contract:
+```ts
+type RelayActivityState =
+  | { kind: 'recording'; elapsedSec: number; amplitude: number }
+  | { kind: 'structuring'; label: string; progress: number | null }
+  | { kind: 'importing'; source: string; done: number; total: number };
+```
+
+Update cadence: recording amplitude every 500ms from `useVoiceTranscription`; structuring progress on each SSE chunk from `/api/structure/stream`; import progress from the existing `syncQueue`.
+
+**Effort:** 2 days for recording pill, +1 day each for structuring and import states. **Priority: P1.** The recording pill alone is worth shipping in Sprint 1 because it gives voice capture a premium feel.
+
+### Apple best practices + gotchas
+- **8-hour cap** — Live Activities auto-end after 8 hours. Relay's longest activities are minutes, so not a concern.
+- **Update budget** — iOS will start throttling after ~1 update/second. For amplitude, batch to ~2/sec.
+- **Push updates** require an APNs token specific to Live Activities (`apns-push-type: liveactivity`). Only needed if we want background push-driven updates (e.g., server-driven structuring progress). Not needed for MVP — all state is local.
+- **Compact / Expanded / Minimal layouts** — must implement all three for Dynamic Island, or iOS shows an ugly fallback.
+- **Dismiss policy** — use `.after(+ 5 min)` so a stale activity fades rather than sitting on the lock screen forever.
+- **iOS 17.2+ requirement for interactive elements** — buttons inside the activity are `AppIntent`s just like widgets.
+
+### Real-world example
+**Flighty** — the reference Live Activity app. Compact island shows flight status, tap expanded reveals full timeline. Copy their progression: start minimal, grow when user taps. **Apple Voice Memos** in iOS 18 uses a Live Activity pill for recording state — direct analogue for Relay's voice capture; the pill shows waveform + duration and tapping returns to the recording UI.
+
+### Interactions
+- **App Intents (1)** — interactive buttons inside the activity (e.g., "Stop" on recording) are `AppIntent`s. Same source as Siri path.
+- **Widgets (4)** — tapping the voice capture widget starts a Live Activity. One intent, two UI surfaces.
+- **Share Extension (3)** — shares that trigger long structuring spawn a Live Activity so progress is visible across the share-sheet close.
+- **Vision / Live Text (6)** — a Live Activity can host OCR progress when scanning a multi-page document.
+
+---
+
+## 6. Vision framework + Live Text
+
+### What it is
+Apple's `Vision` framework (iOS 11+, meaningfully better since iOS 15 with `VNRecognizeTextRequest`) plus `VisionKit` (`DataScannerViewController` from iOS 16+, `VNDocumentCameraViewController`). On-device OCR, on-device text detection in camera frames, zero network, zero cost. iOS 18 added handwriting recognition improvements and 13 new languages.
+
+### Why Relay needs it
+- **Whiteboard capture** — point camera at a whiteboard, tap text regions, they land in a note.
+- **Business card capture** — scan, extract name + phone + email + company, create a Person entity with relations pre-filled.
+- **Book/document quote capture** — tap highlighted text in a book page, it goes to a note linked to the book's bookmark entity.
+- **Receipt/invoice capture** — OCR + the Relay AI pipeline structures it into a `receipt` entity (once that profile exists).
+
+### First-party Expo support
+**Expo provides nothing directly, but the community stack is solid:**
+
+| Package | State | What |
+|---|---|---|
+| `react-native-vision-camera` (Marc Rousavy) | Industry standard | High-performance camera with frame processors. Works on Expo via config plugin. The substrate everything else uses. |
+| `react-native-vision-camera-ocr-plus` (jamenamcinteer) | Active fork, v4+ compatible | Frame processor plugin for real-time text recognition via ML Kit — works on both iOS and Android. **Use this for Android**. |
+| `react-native-vision-camera-v4-text-recognition` (pedrol2b) | Active | Similar; also frame processor over ML Kit. |
+| `@react-native-ml-kit/text-recognition` (Infinite Red) | Active | Still image OCR via ML Kit. No live overlay, but simpler. |
+| `expo-camera` v16+ | First-party | Has some text-recognition hooks but limited; not a full replacement for Vision. |
+| **Custom Expo module wrapping `DataScannerViewController`** | — | Pure Apple, no ML Kit dependency, tightest integration with iOS 16+ Live Text overlay. ~200 lines of Swift. Best-in-class iOS result. |
+
+Recommendation: ship a **custom Expo module wrapping `DataScannerViewController`** for iOS (native Live Text feel, matches Apple Notes) and use **`react-native-vision-camera-ocr-plus`** on Android where it's the only real path. Two implementations, one JS interface.
+
+### Implementation plan
+
+```
+modules/relay-vision/
+  ios/RelayVisionModule.swift
+      - scanText(options): Promise<TextScanResult>
+      - scanDocument(): Promise<DocumentScanResult>  # VNDocumentCameraViewController
+      - scanLiveText(videoRef): AsyncGenerator<string>  # DataScannerViewController
+  android/
+      - delegates to react-native-vision-camera-ocr-plus
+  src/index.ts                # typed JS API
+  src/RelayScannerScreen.tsx  # React screen that hosts the scanner
+```
+
+Bridge contract:
+```ts
+export type TextScanResult = {
+  text: string;
+  boundingBoxes: Array<{ x: number; y: number; w: number; h: number; text: string }>;
+  language: string;
+};
+
+export function scanText(options?: { live?: boolean }): Promise<TextScanResult>;
+export function scanDocument(): Promise<{ pages: string[]; pdfPath: string }>;
+```
+
+Integrate into the capture flow: add a "Scan" option to the CaptureModal input affordances (next to voice and photo). Tapping it pushes `RelayScannerScreen`; result feeds `useCapture({ text: result.text, source: 'vision' })`.
+
+**Effort:** 2 days for still-image OCR; +2 days for full live overlay with `DataScannerViewController`. **Priority: P1.**
+
+### Apple best practices + gotchas
+- **`DataScannerViewController` requires LiDAR on some modes** (only for `.distance`), but text recognition works on every iPhone 12+.
+- **Camera permission** — already granted in Relay; no new prompt.
+- **Language selection** — pass `recognitionLanguages: ["en-US", "fr-FR"]` (or auto-detect). Defaulting to the user's Apple locale gets 90% of captures right.
+- **Don't upload raw camera frames**. On-device inference only — it's the selling point vs a cloud OCR API.
+- **Handwriting** — in iOS 18, Vision handles cursive English reasonably well but degrades fast for other scripts. Show a "typed text works best" hint on first launch.
+- **`VNRecognizeTextRequest.recognitionLevel = .accurate`** is the right tradeoff for capture (vs `.fast` which is for live scanning).
+
+### Real-world example
+**Apple Notes — "Scan Documents"**: `VNDocumentCameraViewController` with automatic edge detection, perspective correction, multi-page. Ship the exact same flow for Relay's document capture. **Microsoft Lens** is the Android reference. **Obsidian mobile** uses ML Kit text recognition for inline text extraction in notes — works on both platforms via a vision-camera frame processor.
+
+### Interactions
+- **App Intents (1)** — `ScanTextIntent` → opens camera scanner directly. "Hey Siri, scan this."
+- **Spotlight (2)** — OCR'd text is indexed into the note body; searchable immediately.
+- **Share Extension (3)** — shared photos pass through Vision OCR before the capture modal opens, so the extracted text is pre-populated.
+- **Widgets (4)** — a "Scan" widget button opens the scanner.
+- **Live Activities (5)** — multi-page document scans show a Live Activity: "Scanning page 3 of 5".
+
+---
+
+## Cross-capability summary
+
+| # | Capability | Expo plugin? | Custom native? | Effort | Priority |
+|---|---|---|---|---|---|
+| 1 | App Intents | No (partial community) | Yes (Swift, ~3 days) | 3d | **P0** |
+| 2 | Spotlight | `expo-spotlight` | Minor Swift | 2d | **P0** |
+| 3 | Share Extension | `expo-share-intent` / `expo-share-extension` | Optional | 1-3d | **P0** |
+| 4 | Widgets | `@bacons/apple-targets` + SwiftUI | Yes | 3-4d | **P1** |
+| 5 | Live Activities | `expo-live-activity` | Minor SwiftUI | 2-3d | **P1** |
+| 6 | Vision / Live Text | `react-native-vision-camera` + custom | Yes | 2-4d | **P1** |
+
+**Total iOS effort: ~15-19 engineer-days for the full set.** Roughly half is Swift/SwiftUI in the target folders (not JS). The App Group + stable entity ID prerequisites each take half a day and unlock all six. Every capability reuses the same `AppEntity` + `AppIntent` declarations, so capability 1 is strictly foundational — ship it first.

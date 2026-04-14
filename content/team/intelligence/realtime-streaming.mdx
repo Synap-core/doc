@@ -1,0 +1,73 @@
+---
+title: "Realtime Streaming"
+description: "SSE streaming, Traefik sticky sessions, client reconnection."
+---
+
+# Real-Time Streaming Architecture
+
+This document describes how the Intelligence Service streams AI responses **step-by-step, tool-by-tool, and token-by-token** so the frontend and backend never wait for a full response and users see progress in real time.
+
+## Principles (aligned with OpenAI / Anthropic / Vercel AI SDK)
+
+1. **Emit as it happens** — No batching of steps at the end. Each thinking step, tool call, tool result, and content chunk is sent as soon as it is produced.
+2. **Single emission** — Each logical event is sent once. No re-sending `result.aiSteps` after the run (that caused duplication and delayed UX).
+3. **Order preserved** — The client receives events in the same order they occur: think → (optional) tool_call → tool_result → more think/content → … → complete.
+4. **Complete event for persistence** — The final `complete` event still carries full `content` and `aiSteps` so the backend can persist the message and clients that join late can reconstruct state.
+
+## Event flow
+
+### 1. Intelligence Service (source of truth)
+
+- **Route** (`apps/intelligence-hub/src/routes/chat-stream.ts`):
+  - Calls `agent.executeWithStream({ onThinking, onContent, onStep })`.
+  - **onThinking(step, title)** — Emits a `step` event (thinking) during context assembly. Used for “Assembling context…”, “Found N memories”, etc.
+  - **onContent(chunk)** — Emits `content` for each token chunk from the LLM.
+  - **onStep(step)** — Emits the full **step** object for every tool_call and tool_result as soon as the tool wrapper produces it. No batch loop after the run.
+- **Agent** (`agents/base/agent.ts`):
+  - Pushes thinking steps and calls `onThinking` during context assembly.
+  - Consumes `result.textStream` and forwards via `onContent`.
+  - Passes **onStep** into `createToolWrappers` so tools can emit steps in real time.
+- **Tool wrapper** (`agents/base/tool-wrapper.ts`):
+  - After creating **tool_call** step: pushes to `aiSteps`, calls `onThinking`, then **`onStep(toolCallStep)`**.
+  - After creating **tool_result** step: pushes to `aiSteps`, then **`onStep(toolResultStep)`**.
+  - Same for error steps: **`onStep(errorStep)`**.
+
+So: **thinking** (context) → emitted via onThinking. **Tool call / tool result** → emitted via onStep. **Content** → emitted via onContent. **No** post-run batch of steps.
+
+### 2. Backend (Data Pod)
+
+- **Channels router** (`synap-backend`): Consumes the SSE stream from the Intelligence Service and forwards each event:
+  - `chunk.type === "chunk"` (content) → `chat:stream`
+  - `chunk.type === "step"` → `ai:step`
+  - `chunk.type === "complete"` → persists message (with full content and aiSteps from complete payload), then emits `chat:stream` complete.
+- Storage: The assistant message is written **once** when the stream completes, using `content` and `aiSteps` from the **complete** event. No need to persist incrementally for the current design.
+
+### 3. Frontend
+
+- **useStreamingMessage** subscribes to `chat:stream` and `ai:step`, appends chunks and steps in order. Optional deduplication by `step.id` remains as a safety net (no longer required for the Intelligence Service, but helps if multiple sources emit).
+- **Streaming store** holds the in-flight message with `content` and `steps[]` in receive order. Steps are rendered in real time in **AIStepsPanel** (think → tool_call/tool_result pairs → “Running: …” when result not yet received).
+
+## Comparison with best practices
+
+| Aspect               | OpenAI / Anthropic / Vercel AI SDK                             | Synap (after this change)                                |
+| -------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| Token streaming      | SSE / WebSocket, content_block_delta / text delta              |  onContent(chunk) per token                            |
+| Tool call streaming  | ResponseFunctionCallArgumentsDelta / tool_call_streaming_start |  onStep(tool_call) when tool is invoked                |
+| Tool result          | After execution, one event per result                          |  onStep(tool_result) when tool returns                 |
+| Thinking / reasoning | content_block_delta (reasoning part) or step events            |  onThinking / step events for context and tool steps   |
+| No batch re-send     | Single stream of events                                        |  Steps sent only when they occur; no batch at end      |
+| Complete payload     | message_stop / complete with full content                      |  complete event with content + aiSteps for persistence |
+
+## Branching and sub-agents
+
+- **Branch decision** is still sent once after the run (or when the orchestrator decides), via the existing `branch_decision` event and `complete.data.branchDecision`.
+- Sub-agent runs (specialist channels) use the same streaming contract; each has its own stream and step sequence. No change required for branching.
+
+## What was removed
+
+- **Batch loop** in `chat-stream.ts`: the `for (const step of result.aiSteps)` that re-sent all steps after `executeWithStream` returned. That caused duplicate steps and made the UI feel “everything at once” instead of real time.
+
+## Optional future improvements
+
+- **experimental_toolCallStreaming** (Vercel AI SDK): If we adopt it, we could stream partial tool-call arguments as they are generated, for even earlier “Running: …” feedback.
+- **Proposals mid-stream**: If the backend or service ever emits `proposal` events during the run (e.g. when a tool creates a proposal), the same pattern applies: emit when it happens, include in `complete` for persistence.

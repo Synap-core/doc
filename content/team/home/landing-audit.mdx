@@ -1,0 +1,137 @@
+---
+title: "Landing Page Audit"
+description: "Landing page audit findings and gaps."
+---
+
+# synap-landing Audit — March 2026
+
+Complete inventory of all routes, user journeys, and gaps. Updated after the landing page redesign sprint.
+
+---
+
+## What the landing app is (and isn't)
+
+**Is:** Public marketing + **account web** in one property (synap-landing): auth routes (`/(auth)/signup`, login, etc.), billing, pod lifecycle, guides — **not** a separate “signup app” repo.
+**Is not:** The product. All actual knowledge management, AI, entity storage lives in the desktop app (`browser/`) and pod backend (`synap-backend/`).
+
+The landing / account site's job is to:
+1. Convert visitors into signups
+2. Guide signups through pod provisioning
+3. Handle transactional flows that must be web-based (email links, Stripe redirects, OAuth callbacks, invite acceptance)
+4. Provide developer and user documentation
+
+---
+
+## Route inventory
+
+###  Fully working
+
+| Route | Status | Notes |
+|-------|--------|-------|
+| `/` |  Complete | 11 sections, dark theme, all buttons use LandingButton |
+| `/download` |  Complete | OS detection, routes to `api.synap.live/download/latest` → GitHub Releases |
+| `/developers` |  Complete | SDK quickstart, capabilities, API scopes |
+| `/roadmap` |  Complete | 3 phases, milestone list |
+| `/lightpaper` |  Complete | Full technical paper |
+| `/manifesto` |  Complete | Sovereign web narrative |
+| `/for/ai` |  Complete | Any-model angle, 4 feature sections |
+| `/for/teams` |  Partial | Waitlist form not wired to CP API (TODO comment in handleSubmit) |
+| `/product/workspace` |  Complete | Triptych, entity types, views, cell system, "the test" |
+| `/product/pods` |  Complete | Stack, sovereignty guarantees, self-hosting |
+| `/product/security` |  Complete | Proposals, event chain, permissions |
+| `/compare/vs-notion` |  Complete | Static comparison |
+| `/compare/vs-obsidian` |  Complete | Static comparison |
+| `/guides/*` (9 pages) |  Complete | Quickstart, recipes, n8n, agents, commands, connections, threads, automations, llm-pack |
+| `/legal/*` (3 pages) |  Complete | Privacy, Terms, Cookies |
+| `/(auth)/login` |  Complete | Better Auth session |
+| `/(auth)/signup` |  Complete | Better Auth session |
+| `/(auth)/forgot-password` |  Complete | Email reset flow |
+| `/auth/reset-password` |  Complete | Token-based, calls CP API |
+| `/auth/verify-email` |  Complete | Token-based, deep links to desktop |
+| `/auth/callback` |  Complete | OAuth, deep links to desktop |
+| `/invite/[token]` |  Complete | Preview + accept, deep links to desktop |
+| `/account` |  Complete | Overview with pod + subscription status |
+| `/account/pod` |  Complete | Pod management (addons, backup, custom domain) |
+| `/account/pod/provision` |  Complete | Provisioning wizard |
+| `/account/billing` |  Complete | Subscription + Stripe portal |
+| `/account/settings` |  Complete | Profile settings |
+| `/billing/success` |  Complete | Polls CP API, deep links to desktop |
+| `/billing/cancel` |  Complete | Static fallback |
+
+###  Partial / needs work
+
+| Route | Issue |
+|-------|-------|
+| `/for/teams` | `handleSubmit` has TODO — needs CP API endpoint for waitlist emails |
+| `/use-cases/personal-knowledge-management` | Placeholder text for graph viz and AI chat sections — not actual components |
+| `/account/layout.tsx` + `*-view.tsx` | Uses raw Tamagui (`H2`, `Paragraph`) instead of `@synap-core/ui-system` — dark mode inconsistency risk |
+
+### ❌ Missing
+
+| Route | Notes |
+|-------|-------|
+| `/use-cases/developers` | Referenced in some places but no file exists |
+| `/use-cases/researchers` | Not created yet |
+| `/changelog` | Would be useful for existing users |
+| `/status` | Pod health / incident page (could be simple redirect to status.synap.live) |
+
+---
+
+## User journey completeness
+
+| Journey | Complete? | Notes |
+|---------|-----------|-------|
+| Discovery → conversion |  | Landing → pricing → download or signup |
+| Signup → email verify → account |  | Full flow works |
+| Signup → pod provision |  | Wizard → provisioning status → active |
+| Forgot password |  | Email → reset link → success |
+| Subscription → Stripe checkout |  | Via `/account/billing` → Stripe → `/billing/success` |
+| Accept workspace/pod invite |  | `/invite/[token]` → accept → desktop deep link |
+| Download desktop app |  | OS detection + terminal install script |
+| Telegram capture |  | Link present (`t.me/SynapOS_bot`) but bot handle needs verification |
+| OAuth login (GitHub, Google) |  | `/auth/callback` handles the redirect + deep link |
+| Teams collaboration invite |  | `/for/teams` is Phase 2, waitlist form incomplete |
+
+---
+
+## Content accuracy check
+
+| Section | Accuracy | Action needed |
+|---------|----------|---------------|
+| Hero — "22 built-in apps" |  | Matches browser manifest (22 apps) |
+| Hero — "Your pod, your data, your AI" |  | Accurate |
+| SectionSurfaces — Desktop App, Telegram, API |  | All three exist and work |
+| SectionIntelligence — Hub Protocol |  | Accurate, 20 sub-routers |
+| SectionInfrastructure — PostgreSQL + pgvector + Typesense + MinIO + Caddy |  | Matches pod stack |
+| SectionViews — "Infinite views" |  | 16 defined, 12 implemented — "infinite" is aspirational but defensible |
+| SectionEcosystem — connectors |  | **Fixed** — now shows Google Calendar, Google Contacts, GitHub, Telegram, n8n, Webhooks (deployed Phase 1 only) |
+| Developers page — "47+ tRPC routers" |  | Roughly accurate |
+| Developers page — "18 scopes" |  | Matches API keys system |
+| Pricing — Solo €19, Pro €39 (beta €19), Team €79 |  | Matches CP API pricing config |
+| Pricing — live beta remaining spots |  | Fetched from `GET /beta/status` |
+| /product/pods — stack (PostgreSQL, MinIO, Typesense, Synap Backend, Caddy) |  | Accurate — no Ory/Better Auth in pod stack; pod backend handles its own session auth; Better Auth is CP-only |
+| /guides/quickstart — endpoint `POST /api/hub/entities` |  | Verify this matches actual Hub Protocol route structure |
+| SectionFinalCTA — Telegram bot handle |  | **Fixed** — updated to `@SynapOS_bot` / `https://t.me/SynapOS_bot` |
+
+---
+
+## Dark mode theme issues found and fixed
+
+All product pages (`/product/security`, `/product/pods`, `/product/workspace`) were missing `backgroundColor: '$background'` on their `Page` styled component → appeared light. **Fixed.**
+
+Text overlap in "Why this matters" (security) and "Self-hosting" (pods) and "The test" (workspace) sections was caused by `SizableText` with numeric `lineHeight` multipliers (e.g. `lineHeight={1.7}`) rendering inline → paragraphs overlapping. **Fixed** by replacing with `&lt;p>` tags using explicit `px` values.
+
+---
+
+## Next actions (prioritized)
+
+| Priority | Action |
+|----------|--------|
+|  | ~~Telegram bot handle~~ — updated to `@SynapOS_bot` in `SectionFinalCTA.tsx` |
+|  | ~~SectionEcosystem connectors~~ — now shows Google Calendar, Google Contacts, GitHub, Telegram, n8n, Webhooks |
+|  | ~~Pod page auth confusion~~ — pod stack is correct (PostgreSQL, MinIO, Typesense, Synap Backend, Caddy); Better Auth is CP-only |
+| 🟡 | Wire `/for/teams` waitlist form to CP API endpoint |
+| 🟡 | Migrate `app/account/layout.tsx` and `*-view.tsx` from raw Tamagui to `@synap-core/ui-system` (dark mode consistency) |
+| 🟢 | Create `/use-cases/developers` page |
+| 🟢 | Verify `/guides/quickstart` endpoint format against actual Hub Protocol routes |
+| 🟢 | Add `/changelog` page |

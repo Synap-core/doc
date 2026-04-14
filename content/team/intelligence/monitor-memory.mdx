@@ -1,0 +1,65 @@
+---
+title: "Monitor: Memory"
+description: "Session memory monitoring and inspection."
+---
+
+# Memory System
+
+The memory system gives agents **persistent, searchable long-term memory**. Unlike conversation history (which is bound to a thread), memory facts survive across sessions and are automatically available to every agent.
+
+## How It Works
+
+When you send a message, the agent embeds it and runs a cosine-similarity search over all stored facts before constructing its reply. The most relevant facts are injected into the system prompt so the agent "remembers" preferences, decisions, and context without you re-explaining them.
+
+```
+User message
+    ↓
+Embed (OpenAI text-embedding-3-small, 1536 dims)
+    ↓
+Cosine similarity search (pgvector)
+    ↓
+Top 10 facts → injected into system prompt
+```
+
+## Storage
+
+Facts are stored in the `knowledge_facts` table (PostgreSQL + pgvector):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `fact` | text | The fact content |
+| `embedding` | vector(1536) | OpenAI `text-embedding-3-small` |
+| `confidence` | float (0–1) | Certainty score |
+| `source_entity_id` | uuid (nullable) | Linked entity, if any |
+
+## Confidence Scores
+
+| Range | Meaning |
+|-------|---------|
+| **0.9–1.0** | Explicitly told by the user |
+| **0.7–0.9** | Inferred from clear conversation signals |
+| **0.5–0.7** | Weak signal or uncertain |
+| **< 0.5** | Speculative — low weight |
+
+## How Agents Use Memory
+
+1. **Auto-recall** — Every agent turn calls `memoryService.recall()` with the user message. Results inject into the system prompt under `## Long-Term Memory`.
+2. **Explicit search** — Agents call the `memory_search` tool mid-conversation to query with a different angle.
+3. **Auto-learn** — Signals like _"I prefer…"_, _"Remember that…"_, _"I always…"_ are stored automatically at confidence 0.7–0.9.
+4. **Manual storage** — The `remember_fact` tool lets agents save facts you explicitly specify.
+
+## API Reference
+
+```
+POST   /api/hub/memory           Store a fact (auto-embeds)
+GET    /api/hub/memory           Keyword search by relevance
+POST   /api/hub/memory/search    Semantic search (cosine distance)
+DELETE /api/hub/memory/:id       Remove a specific fact
+```
+
+## Tips
+
+- **Be specific**: _"I prefer TypeScript for backend and Python for data pipelines"_ beats _"I like TS"_.
+- **High confidence** for preferences the agent should always respect.
+- **Source entities**: Linking a fact to a project entity ties it to that entity's context in future retrievals.
+- You can delete facts here at any time to correct the agent's memory.

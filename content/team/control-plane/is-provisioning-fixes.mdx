@@ -1,0 +1,130 @@
+---
+title: "IS Provisioning — Fix Status"
+description: "Cross-pod contamination fix tracking."
+---
+
+# Intelligence Provisioning — Fix Status
+
+> Updated: 2026-04-12
+> Tracks the status of IS provisioning fixes across CP, IS Hub, and pod backend repos.
+
+---
+
+## Context: What Was Broken
+
+When a user has multiple pods (e.g. a CP-provisioned pod + a self-hosted pod), the Intelligence
+Hub was receiving a `provisionJwt` in the `POST /admin/provision-pod` body and broadcasting it to
+**all pods registered for that user**. This caused the JWT intended for Pod A (containing Pod A's
+`podId`) to be received and stored by Pod B — overwriting Pod B's stored identity.
+
+Result: Pod B's `/api/provision/status` reports `controlPlane.podId = <Pod A's ID>`, and any
+subsequent Bearer JWT issued for Pod B (with the correct `podId`) is rejected:
+`403 "Token was not issued for this pod"`.
+
+---
+
+## Fix Status
+
+| Fix | Repo | Status | Blocking |
+|-----|------|--------|---------|
+| CP stops sending `provisionJwt` to Hub | **Control Plane API** |  **DONE** (deployed) | — |
+| Hub stops broadcasting `provisionJwt` | Intelligence Hub |  **Pending** (Hub team) | New pods get contaminated only if Hub still pushes on its own schedule |
+| Pod `/connect` allows `podId` overwrite | Pod backend |  **Pending** (pod team) | Frontend "Reconnect" button broken end-to-end |
+| `userAgentServices` per-pod vs per-user | CP (Option A shipped) |  **Option A shipped** | Option B is future work |
+
+---
+
+## CP-Side Changes (Done)
+
+The CP no longer passes `provisionJwt` in `POST /admin/provision-pod` to the IS. The IS is expected to deliver credentials directly to the pod via its own Hub Protocol channel.
+
+The new provisioning flow:
+```
+1. CP → Pod:    POST /api/provision/connect   (ES256 JWT — CP identity only)
+2. CP → IS:     POST /admin/provision-pod     (X-Admin-Key auth — no provisionJwt)
+3. IS → Pod:    IS delivers API key directly via Hub Protocol (IS's own channel to pod)
+4. Pod → CP:    POST /internal/provision-callback  (JWT-authenticated status callback)
+5. CP → IS:     POST /internal/customers/sync  (sync token limits)
+```
+
+---
+
+## Pending: Intelligence Hub — Stop Broadcasting `provisionJwt`
+
+**Repo:** Intelligence Hub (`ai.synap.live`)
+
+The Hub's `POST /admin/provision-pod` handler may still do:
+```
+for each pod in user.registeredPods:
+  push provisionJwt to pod via /api/provision/connect
+```
+
+This **must be removed**. The Hub should never push JWTs to pods. The CP is the sole orchestrator of the `connect` sequence, targeting only the specific pod being provisioned.
+
+If the Hub still accepts `provisionJwt` in the body for backwards compatibility, it must ignore it silently and not forward it anywhere.
+
+**Impact of not fixing:** New pods provisioned after the CP deploy won't get contaminated (CP no longer sends the JWT), but if the Hub still pushes on its own schedule (e.g. reconnect events), contamination can still occur.
+
+---
+
+## Pending: Pod Backend — Allow `podId` Overwrite on `/api/provision/connect`
+
+**Repo:** Pod backend (synap-platform/backend)
+
+**The problem:**
+
+`POST /api/provision/connect` receives a CP-signed JWT and stores the `podId` claim. Currently, once a `podId` is stored, subsequent `/connect` calls with a *different* `podId` in the JWT do not update the stored value (call returns 200 but stored `podId` is unchanged).
+
+This means a pod that received a contaminated JWT (wrong `podId`) cannot self-correct even when the CP sends the correct JWT.
+
+**Required change:**
+
+When `/api/provision/connect` receives a valid CP-signed JWT (signature verified against the CP's JWKS endpoint), it should **always overwrite** the stored `controlPlane` state — including `podId`.
+
+```typescript
+// Before (broken — prevents recovery):
+if (existingState.podId && existingState.podId !== jwt.podId) {
+  return { error: "Pod identity already established" }
+}
+
+// After (correct — CP JWT is authoritative):
+await db.controlPlaneState.upsert({
+  podId: jwt.podId,               // always overwrite — CP signature is the authority
+  controlPlaneUrl: jwt.controlPlaneUrl,
+  intelligenceHubUrl: jwt.intelligenceHubUrl,
+  tier: jwt.tier,
+  connectedAt: new Date(),
+
+});
+```
+
+**Security note:** Safe because the JWT must pass ES256 signature verification against `/.well-known/jwks.json` on the CP before any state is written. An attacker cannot forge a JWT without the CP's private key.
+
+**Impact of not fixing:** The frontend "Reconnect" button (CP → `/intelligence/provision/:podId` → pod `/api/provision/connect`) will appear to succeed (200) but the pod silently keeps the old `podId`, causing `validate-credentials` to return `403 "Token was not issued for this pod"` indefinitely.
+
+---
+
+## `userAgentServices` — Per-User vs Per-Pod
+
+**Current (Option A, shipped):** `user_agent_services` has a unique index on `user_id`. One self-hosted IS URL per user. For users with multiple self-hosted pods at different IS addresses, only one URL can be registered.
+
+**Workaround:** CP prefers `pod.customDomain` over `userAgentServices.url` when the pod has a custom domain set. Most multi-pod users have distinct domains per pod, so this works in practice.
+
+**Future (Option B):** Add `data_pod_id` FK to `user_agent_services`, drop unique constraint on `user_id`. Allows per-pod IS URL registration. Requires migration + UI update.
+
+**Decision:** Ship Option B when a user actually needs multiple self-hosted pods at different IS URLs.
+
+---
+
+## Testing the Fix End-to-End
+
+After both Hub and pod backend fixes are deployed:
+
+1. Create a user with two pods (one CP-provisioned, one self-hosted).
+2. Provision IS on the CP-provisioned pod.
+3. Verify the self-hosted pod's `/api/provision/status` still shows `controlPlane.podId = <its own ID>`.
+4. Provision IS on the self-hosted pod.
+5. Verify both pods have `connectionState: connected`, `credentialsValid: true`, `intelligenceService.status: active`.
+6. On the self-hosted pod, call `POST /api/provision/connect` with a JWT containing a *different* `podId` (simulating contamination), then call again with the correct `podId` — verify the second call overwrites and restores correct state.
+
+Admin diagnostics: `GET /admin/pods/:id/intelligence-issues` shows IS provisioning state and any mismatch between CP-stored `hubPodId` and pod-reported state.

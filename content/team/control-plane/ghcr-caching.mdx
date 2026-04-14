@@ -1,0 +1,124 @@
+---
+title: "GHCR Caching"
+description: "GitHub Container Registry caching for faster provisioning."
+---
+
+# GHCR Image Caching Strategy
+
+## Problem
+
+Each pod pulls `ghcr.io/synap-core/backend:&lt;version>` directly from GitHub Container Registry during updates. At scale (100+ pods), simultaneous pulls during rolling updates hit GHCR rate limits:
+
+- **Unauthenticated**: 100 pulls/6 hours
+- **Authenticated (PAT)**: 200 pulls/6 hours (applies to our CI token)
+- **GitHub Actions token**: 1,000 pulls/6 hours (not available on pods)
+
+With batch size 5 and 100 pods = 20 batches x 3 services (backend, realtime, migrate) = 300 image pulls. Even with Docker layer caching, each unique tag triggers a manifest pull that counts against the limit.
+
+## Current Mitigations
+
+### 1. Batch Staggering (implemented)
+
+The rolling update job (`src/jobs/rolling-update.ts`) uses:
+- **Canary first**: 1 pod updated and health-checked before proceeding
+- **Batch size**: default 5 (configurable per update)
+- **Inter-batch delay**: 30 seconds between batches
+
+Math for 100 pods: 1 canary (5min health check) + 20 batches x 30s delay = ~15 minutes total. Each batch triggers 5 pods pulling 3 images = 15 pulls per 30 seconds. This stays well within GHCR authenticated limits up to ~200 pods.
+
+### 2. Registry Mirror (implemented, not yet deployed)
+
+A Docker Registry pull-through cache runs on the CP server at `registry.synap.live`:
+
+- **How it works**: First request for an image proxies to GHCR and caches it. Subsequent requests are served from cache. Only 1 GHCR pull per image tag regardless of how many pods request it.
+- **Configuration**: `docker-compose.prod.yml` includes a `registry` service; `Caddyfile` routes `registry.synap.live` to it with auto-TLS.
+- **Pod integration**: `update-pod.sh` tries pulling from `REGISTRY_MIRROR` env var first, falls back to GHCR on failure.
+
+### 3. Docker Layer Caching (inherent)
+
+Docker only pulls changed layers. Since backend images share a Node.js base, most layers are cached after the first pull. Only the application layer changes per release (~50-100MB vs ~1GB total).
+
+## Deployment Steps
+
+### Enable the Registry Mirror
+
+1. **Add GHCR credentials to CP `.env`**:
+   ```bash
+   # On the CP server
+   echo "GHCR_USERNAME=synap-bot" >> /opt/control-plane-api/.env
+   echo "GHCR_TOKEN=ghp_xxxxxxxxxxxx" >> /opt/control-plane-api/.env
+   ```
+   The token needs `read:packages` scope. Without credentials, the registry can only cache public images.
+
+2. **Add DNS record**: Point `registry.synap.live` to `46.224.228.221` (the CP server).
+
+3. **Deploy the registry**:
+   ```bash
+   cd /opt/control-plane-api
+   docker compose -f docker-compose.prod.yml --profile standalone up -d registry caddy
+   ```
+
+4. **Verify**:
+   ```bash
+   curl https://registry.synap.live/v2/_catalog
+   # Should return {"repositories":[]}
+
+   # Test a pull through the mirror:
+   docker pull registry.synap.live/synap-core/backend:main
+   ```
+
+5. **Configure pods**: Set `REGISTRY_MIRROR=registry.synap.live` in each pod's `.env`. New pods provisioned via CP should get this automatically (add to provisioning template).
+
+### Storage Management
+
+The registry caches all pulled images indefinitely. To manage disk:
+
+```bash
+# Check registry disk usage
+docker exec synap-registry du -sh /var/lib/registry
+
+# Run garbage collection (removes unreferenced blobs)
+docker exec synap-registry bin/registry garbage-collect /etc/docker/registry/config.yml
+
+# Or set up a cron job for weekly GC
+echo "0 3 * * 0 docker exec synap-registry bin/registry garbage-collect /etc/docker/registry/config.yml" | crontab -
+```
+
+Expected disk usage: ~2-5 GB (3 image variants x ~500MB each, plus old cached tags).
+
+## When to Scale Further
+
+| Pod Count | Strategy | Notes |
+|-----------|----------|-------|
+| < 50 | Batch staggering only | 30s delay between batches of 5 is sufficient |
+| 50-200 | Registry mirror | Deploy the mirror; 1 GHCR pull per update, N cache hits |
+| 200-1000 | Mirror + larger batches | Increase batchSize to 10-20, mirror handles the load |
+| 1000+ | Multi-region mirrors | Deploy registry mirrors per region to reduce bandwidth |
+
+## Architecture
+
+```
+                  ┌─────────────────┐
+                  │    GHCR          │
+                  │  ghcr.io         │
+                  └────────┬────────┘
+                           │ 1 pull per tag
+                  ┌────────▼────────┐
+                  │  CP Registry    │
+                  │  registry.synap │
+                  │  .live:443      │
+                  └────────┬────────┘
+              ┌────────────┼────────────┐
+              │            │            │
+        ┌─────▼───┐  ┌────▼────┐  ┌────▼────┐
+        │  Pod 1  │  │  Pod 2  │  │  Pod N  │
+        │ (cache) │  │ (cache) │  │ (cache) │
+        └─────────┘  └─────────┘  └─────────┘
+```
+
+## Fallback Behavior
+
+If the registry mirror is down or unreachable:
+- `update-pod.sh` falls back to pulling directly from GHCR
+- A warning is logged but the update continues
+- No manual intervention needed

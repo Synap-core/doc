@@ -1,0 +1,211 @@
+---
+title: "Import Pipeline"
+description: "Source map, parser packages, dedup strategies, EntityUpsertService."
+---
+
+# Import Architecture
+
+**Last updated: 2026-04-07**
+
+How Synap handles all inbound data: device contacts, Telegram exports, LinkedIn archives, OAuth connector syncs, file uploads, and AI-structured content. Every source eventually creates entities through the same canonical path.
+
+---
+
+## Canonical Creation Path
+
+All entity creation in Synap flows through **`EntityRepository.create()`** — never raw `db.insert(entities)`.
+
+```
+Source data
+  → Parser (platform-specific file I/O)
+  → Worker / tRPC handler (dedup, mapping)
+  → EntityRepository.create({ profileSlug, title, properties, workspaceId, userId, skipValidation })
+      → ProfileResolutionService   → resolves profileId, entityScope (pod vs workspace)
+      → PropertyValidationService  → validates or skips (skipValidation: true for imports)
+      → db.insert(entities)        → correct workspaceId (null for pod-wide profiles)
+      → PropertyIndexService       → indexes searchable property values (Typesense)
+      → EventRepository.emit()     → entity.create.completed → automations fire
+```
+
+This gives every imported entity:
+- Correct pod-wide scoping (`person`, `contact`, `note` profiles get `workspaceId = null`)
+- Property indexing (Typesense full-text search works immediately)
+- Event emission (`entity.create.completed` → automation triggers work)
+
+**`skipValidation: true`** is used for all external imports. Import payloads include source-specific extras (`importedAt`, `telegramMessageCount`, `strengthScore`, etc.) not in the profile schema. These are stored as flexible JSONB — safe, intended behavior, consistent with `connectors.ts`.
+
+---
+
+## Source Map
+
+| Source | Entry point | Parser | Transport | Worker | Profile |
+|--------|------------|--------|-----------|--------|---------|
+| Telegram Desktop | `relay-app` file picker | `@synap-core/import-parsers` | tRPC `import.telegramContacts` | `telegram-bulk-import` (pg-boss) | `person` |
+| LinkedIn Archive | `relay-app` file picker | `@synap-core/import-parsers` | tRPC `import.linkedInContacts` | `linkedin-bulk-import` (pg-boss) | `contact` |
+| Device contacts | `relay-app` Contacts API | inline mapping | tRPC `import.contacts` | inline (direct EntityRepository) | `person` |
+| Files | Browser / API multipart | none | `POST /upload` (Hono REST) | inline in route handler | `file` |
+| OAuth connectors | Nango webhook → CP signal | connector-specific | `POST /api/hub/connector-sync` | `connector-sync` (pg-boss) | varies |
+| CSV / JSON batch | Browser ImportSection | none (base64) | tRPC `import.submitBatch` | inline in router | varies |
+| AI structuring | IS `/api/structure` | AI inference | Hub Protocol | inline in IS handler | any |
+| Bookmarks | Browser ImportSection | DOMParser | tRPC `entities.create` | inline per-row | `bookmark` / `article` |
+
+---
+
+## Dedup Registry
+
+Dedup uses `entity_external_links` as a universal dedup registry:
+
+```sql
+entity_external_links (
+  entity_id        TEXT NOT NULL,
+  provider         TEXT NOT NULL,   -- 'telegram' | 'linkedin' | 'google-contacts' | 'github' | ...
+  external_id      TEXT NOT NULL,   -- phone | email | profile URL | OAuth object ID
+  nango_connection_id TEXT NOT NULL  -- OAuth connection ID, or 'direct-import' sentinel
+  UNIQUE (provider, external_id)
+)
+```
+
+Import flow:
+1. Check `entity_external_links` by `(provider, externalId)` — exact match → skip or update
+2. Check `entities.properties` JSONB for shared identifiers (phone, email) — catches cross-provider overlap
+3. If no match → `EntityRepository.create()` + insert `entity_external_links` row
+
+The `DIRECT_IMPORT_CONNECTION_ID = "direct-import"` sentinel satisfies the `NOT NULL` constraint for non-OAuth imports (Telegram, LinkedIn, device contacts).
+
+### Dedup by source
+
+| Source | Primary dedup key | Secondary dedup key |
+|--------|------------------|-------------------|
+| Telegram | `externalId` = phone (if known), else `tg-name-{slug}` | `properties->>'phone'` JSONB |
+| LinkedIn | `externalId` = email (if known), else `li-name-{slug}` | `lower(properties->>'email')` JSONB |
+| Device contacts | `externalId` = phone or email | `properties->>'phone'` |
+| Connectors | `externalId` = OAuth object ID | `nangoConnectionId` + `externalId` |
+
+**Stability rule**: name-slug fallbacks (`tg-name-john-smith`) must be deterministic — no batch index suffix. Same contact imported twice produces the same externalId → idempotent.
+
+---
+
+## Shared Parser Package
+
+`@synap-core/import-parsers` — pure TypeScript, zero platform dependencies.
+
+```
+synap-app/packages/core/import-parsers/src/
+  types.ts      — EntityPayload, ParsedTelegramData, LinkedInConnection, ...
+  telegram.ts   — parseTelegramJson(), telegramDataToEntities()
+  linkedin.ts   — parseLinkedInCsv(), linkedInToEntities()
+  index.ts      — barrel
+```
+
+Platform-specific I/O (file pickers, filesystem reads) lives in the consuming app:
+- `relay-app/src/lib/telegram-import.ts` — expo-document-picker + expo-file-system wrapper
+- `relay-app/src/lib/linkedin-import.ts` — same pattern
+
+This means parsers can be tested in Node, used from Browser (via `FileReader`), and shared with IS without any React Native / Electron / Node dependencies bleeding across.
+
+---
+
+## Async Architecture
+
+Bulk imports (Telegram, LinkedIn) are fire-and-forget:
+
+```
+Frontend → tRPC mutation → pg-boss.send(QUEUE, payload) → return { jobId, total }
+                                       ↓  (async)
+                            pg-boss worker picks up job
+                            → EntityUpsertService.upsert() per contact (handles all dedup)
+                            → result: created / updated / matched counts
+```
+
+This lets imports of 1,000+ contacts return instantly. Progress tracking is not yet implemented — the frontend shows 100% immediately after the job is queued.
+
+---
+
+## Cross-Source Identity (Implemented)
+
+### EntityUpsertService + entity_identity_signals
+
+The same person imported from multiple sources is now handled automatically.
+
+**Table:** `entity_identity_signals` (migration `0008_entity_identity_signals.sql`)
+```sql
+UNIQUE (signal_type, signal_value)  -- one entity owns each identifier
+```
+
+**Service:** `EntityUpsertService` in `packages/database/src/services/entity-upsert-service.ts`
+
+```typescript
+const result = await upsertSvc.upsert({
+  profileSlug: 'person',
+  title: 'John Smith',
+  properties: { email: 'john@co.com', phone: '+33612345678' },
+  source: 'telegram',
+  externalId: 'tg-phone-33612345678',
+  signals: [{ type: 'phone', value: '+33612345678' }],
+  workspaceId, userId,
+});
+// result.action = 'created' | 'updated' | 'matched'
+```
+
+**Resolution order:**
+1. `entity_external_links (provider, externalId)` — exact re-import (O(1))
+2. `entity_identity_signals (signal_type, signal_value)` — cross-source match (O(1))
+3. `EntityRepository.create()` + register signals + external link
+
+**Signal types:** `email` | `phone` | `telegram_phone` | `linkedin_url` | `github_username` | `twitter_handle` | `website`
+
+**Normalization** (applied before storage and lookup):
+- email → lowercase + trim
+- phone → `+digits` only (no spaces/dashes/parens)
+- linkedin_url → lowercase, trailing slash stripped
+- github_username / twitter_handle → lowercase, `@` stripped
+
+**`extractSignalsFromProperties(properties, source)`** — helper that builds the signals array automatically from a standard properties object. Workers call this instead of constructing signals manually.
+
+### What this solves
+
+| Scenario | Before | After |
+|----------|--------|-------|
+| Re-import same Telegram export | Dedup by externalId | Same (Step 1) |
+| LinkedIn import same person as device contact (email match) | JSONB scan | Signal lookup O(1) |
+| Telegram (phone) + LinkedIn (email), different person objects | 2 entities | 2 entities (no shared signal) |
+| LinkedIn import that also includes phone, matching Telegram | JSONB miss | Signal match (Step 2) |
+
+Cross-source matching only works when at least one signal value overlaps between sources. A person known only by phone in Telegram and only by email in LinkedIn with no shared field still creates 2 entities — see "Planned: EntityMergeService" below.
+
+### Planned: EntityMergeService
+
+For ambiguous/probable matches (no shared signal but AI suspects same person):
+
+```typescript
+EntityMergeService.merge(primaryId, secondaryId)
+// → merge properties (fill nulls), migrate external links + signals, soft-delete secondary
+// → creates a proposal for user review when confidence < threshold
+```
+
+Not yet implemented. Post-MVP.
+
+---
+
+## Known Gaps
+
+### 1. Import progress
+
+pg-boss workers don't emit progress back to the frontend. When importing 500+ contacts the user sees nothing until the job completes. Fix: publish progress events via Socket.IO from the worker, subscribe in the UI hook.
+
+### 2. Sync-materializer bypass (intentional)
+
+`packages/database/src/utils/sync-materializer.ts` uses `db.insert(entities).onConflictDoUpdate()` — a legitimate exception. The materializer replays events from a remote pod by exact ID with upsert semantics. EntityRepository doesn't support upsert and shouldn't emit events for replicated data (automations must not double-fire across pods).
+
+---
+
+## Adding a New Import Source
+
+1. **Write a parser** in `@synap-core/import-parsers` if data is structured (JSON/CSV). Keep it pure TS.
+2. **Add a pg-boss worker** in `synap-backend/packages/jobs/src/workers/` for bulk async processing.
+3. **Add a tRPC endpoint** in `synap-backend/packages/api/src/routers/import.ts` that queues the job.
+4. **Use `EntityUpsertService.upsert()`** — pass `signals: extractSignalsFromProperties(props, source)`. No manual dedup code needed.
+5. **Register the worker** in `jobs/src/workers/index.ts` (`ALL_QUEUES` + `boss.work()`).
+6. **Add UI** in relay-app or Browser as appropriate.
+
+The goal: every source calls `EntityUpsertService.upsert()`. Per-source code is only property mapping.

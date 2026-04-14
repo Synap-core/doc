@@ -1,0 +1,266 @@
+---
+title: "Floating Container System"
+description: "Floating menus, panels, and container system design."
+---
+
+# Floating Container System
+
+A single, centralized primitive for every floating overlay in Relay:
+context menus, quick pickers, action chips, tooltips. One component,
+multiple layouts, fits any surface.
+
+**Date:** 2026-04-12.
+**Status:** Design spec — not yet implemented.
+
+---
+
+## The problem with the current approach
+
+The `FloatingMenu` component hardcodes "chips in a row above the anchor"
+— a direct copy of the gesture button's chip layout. But most long-press
+menus in Relay should look like a **vertical list in a floating card**
+(like iOS's native context menu card), not a horizontal chip row. The
+gesture button is a special case, not the template.
+
+The user wants ONE centralized system that adapts to any context:
+
+| Surface | Layout | Item style | Placement |
+|---|---|---|---|
+| Gesture button chips | Row | Pill chips | Above, arc |
+| Person card long-press | Column (card) | List rows with icons | Above or below |
+| Note card long-press | Column (card) | List rows | Above or below |
+| Campaign type picker | Column (card) | List rows with color dots | Below button |
+| Property cell long-press | Column (card) | List rows | Above cell |
+| Space switcher long-press | Column (card) | List rows | Above card |
+| Tooltip / hint | Single item | Text bubble | Above, centered |
+
+---
+
+## Architecture
+
+### `FloatingContainer` — the positioning primitive
+
+Renders a transparent Modal overlay that:
+- Measures the anchor element's screen position
+- Positions a content container near the anchor
+- Picks placement (above/below) based on available screen space
+- Animated reveal (spring scale + fade) from the anchor point
+- Scrim backdrop (tap to dismiss)
+- Keyboard-aware (shifts up if keyboard is visible)
+
+**Props:**
+```ts
+interface FloatingContainerProps {
+  visible: boolean;
+  anchor: { x: number; y: number; width: number; height: number };
+  onClose: () => void;
+  /** Where to place relative to anchor. 'auto' picks based on space. */
+  placement?: 'above' | 'below' | 'auto';
+  /** Max width of the container. Defaults to 220. */
+  maxWidth?: number;
+  /** Content to render inside the positioned container. */
+  children: React.ReactNode;
+  /** Scrim opacity. 0 = no scrim (tooltip), 0.4 = standard menu. */
+  scrimOpacity?: number;
+  /** Accent color for the container border glow. */
+  accentColor?: string;
+}
+```
+
+This component does NOT know about actions, chips, or list items. It just
+positions a floating box near an anchor. Everything else is composition.
+
+### `FloatingMenuList` — vertical action list (most common)
+
+A pre-built content component for `FloatingContainer`. Renders a vertical
+list of actions inside a rounded card — visually similar to iOS's native
+context menu card (dark glass background, subtle border, rounded corners,
+separator lines between items).
+
+```ts
+interface FloatingMenuListProps {
+  actions: FloatingAction[];
+  onAction: (key: string) => void;
+  /** Show SF Symbol icons on the right side (iOS style). */
+  showIcons?: boolean;
+}
+```
+
+Renders inside `FloatingContainer`:
+```tsx
+<FloatingContainer visible={visible} anchor={anchor} onClose={close}>
+  <FloatingMenuList actions={NOTE_ACTIONS} onAction={handle} />
+</FloatingContainer>
+```
+
+### `FloatingChipRow` — horizontal chips (gesture button style)
+
+The current chip-row layout, extracted as a composable piece. Used by
+the gesture button and nowhere else in the current app — but available
+if needed.
+
+```tsx
+<FloatingContainer visible={visible} anchor={anchor} onClose={close}>
+  <FloatingChipRow actions={CAPTURE_CHIPS} onAction={handle} />
+</FloatingContainer>
+```
+
+### `FloatingCard` — single card content (tooltip, preview)
+
+A simple card body for tooltips, previews, or any custom content:
+
+```tsx
+<FloatingContainer visible={visible} anchor={anchor} onClose={close}>
+  <FloatingCard>
+    <Text>Custom content here</Text>
+  </FloatingCard>
+</FloatingContainer>
+```
+
+---
+
+## Visual design
+
+### FloatingMenuList (the default for long-press menus)
+
+```
+┌──────────────────────┐
+│  View details        │   ← regular item, white text
+├──────────────────────┤   ← thin separator (rgba white 0.08)
+│  Share               │
+├──────────────────────┤
+│  Message             │
+├──────────────────────┤
+│  Delete              │   ← destructive item, red text
+└──────────────────────┘
+```
+
+- Background: `rgba(28, 25, 23, 0.92)` (Relay stone-900, high opacity)
+- Border: `rgba(168, 162, 158, 0.15)` (stone-400 tint)
+- Border radius: 14
+- Item height: 44
+- Item padding: 16px horizontal
+- Text: 15px, weight 500, `#F5F5F4` (stone-100)
+- Destructive text: `#EF4444`
+- Separator: 1px, `rgba(255, 255, 255, 0.06)`
+- Shadow: `0 8px 24px rgba(0, 0, 0, 0.5)`
+- Reveal: scale 0.92 → 1.0 + fade, spring tension 200
+
+This matches iOS's native context menu card aesthetic but in Relay's
+color palette.
+
+### FloatingChipRow (gesture button only)
+
+Stays as-is: horizontal pills with rounded borders, spread from center.
+The gesture button is the only consumer today.
+
+---
+
+## `useFloatingMenu` hook (unchanged API)
+
+```ts
+const menu = useFloatingMenu(PERSON_ACTIONS, handleAction);
+
+<Pressable
+  onPress={openDetail}
+  onLongPress={menu.show}
+  delayLongPress={350}
+  ref={menu.anchorRef}
+>
+  <PersonCard />
+</Pressable>
+{menu.element}
+```
+
+The hook returns:
+- `anchorRef` — ref to attach to the trigger element
+- `show()` — measures anchor + opens the container
+- `element` — the `&lt;FloatingContainer>` + `&lt;FloatingMenuList>` JSX to
+  render (pre-wired with the actions and close handler)
+
+This is the simplest consumer API. No wrapper component needed — the
+hook handles positioning, state, and rendering.
+
+---
+
+## Implementation plan (1-2 hours)
+
+### Step 1 — `FloatingContainer` (30 min)
+- Modal + Animated positioning
+- Auto placement (above/below based on screen space)
+- Spring reveal from anchor center
+- Scrim with configurable opacity
+- Test with a simple `&lt;Text>` child
+
+### Step 2 — `FloatingMenuList` (20 min)
+- Vertical list of actions
+- Separator lines
+- Destructive item styling
+- Haptic on press
+- Test on person card long-press
+
+### Step 3 — `useFloatingMenu` hook (15 min)
+- `measureInWindow` for anchor
+- State management (visible, anchor)
+- Returns `{ anchorRef, show, element }`
+
+### Step 4 — Apply to all surfaces (30 min)
+- Person cards
+- Note cards
+- Campaign cards
+- Feed items
+- Campaign `+ New` type picker
+- Space switcher cards
+- Property cells on detail screens
+
+### Step 5 — Extract gesture button chips (15 min)
+- Refactor CaptureGestureButton to use `FloatingContainer` +
+  `FloatingChipRow` instead of its inline chip rendering
+- This is optional — can defer since the gesture button works
+
+---
+
+## Key design principles
+
+1. **`FloatingContainer` is layout-agnostic.** It positions and animates
+   a box. It doesn't know what's inside.
+
+2. **Composition over configuration.** Instead of one mega-component
+   with `layout="column" | "row" | "grid"` props, we compose:
+   `FloatingContainer` + `FloatingMenuList` (or `FloatingChipRow` or
+   custom children).
+
+3. **Same timing everywhere.** Spring tension 200, friction 18. Every
+   floating element in the app opens and closes at the same speed.
+   Consistency > variety.
+
+4. **Dark glass aesthetic.** All floating containers use the same
+   background/border/shadow treatment. The content inside varies; the
+   container is uniform.
+
+5. **Haptic on every interaction.** Open = medium impact. Hover/press =
+   light. Select = selection. Destructive = warning notification.
+
+---
+
+## What NOT to build
+
+- **Nested submenus.** iOS context menus support them but the complexity
+  isn't worth it for Relay's use cases. If we need depth, use a bottom
+  sheet instead.
+- **Live preview behind the menu.** iOS 14+ UIMenu shows a scaled
+  preview of the pressed element. We skip this — it requires native
+  snapshot APIs that don't work on New Architecture yet.
+- **Drag-to-select on the list.** The gesture button has drag-to-chip
+  selection because it's a single-hand thumb interaction. List menus
+  are tap-to-select — more natural for a vertical list.
+
+---
+
+## References
+
+- Current (broken) implementation: `src/components/FloatingMenu.tsx`
+- Gesture button chips: `src/components/CaptureGestureButton.tsx`
+- Relay theme colors: `src/theme/relay-theme.ts`
+- iOS context menu reference: Settings → long-press any toggle → the
+  card that appears is the visual target for `FloatingMenuList`

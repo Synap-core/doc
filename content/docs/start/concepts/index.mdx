@@ -1,0 +1,30 @@
+---
+title: Concepts
+description: Product framing in Use Synap — technical deep dives live under Architecture
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { BookOpen, Network } from 'lucide-react';
+
+# Concepts
+
+**Use Synap** keeps a **short** concepts area: the product story and where to go next. Long architecture reads (entities, events, graph, agents, deployment) sit in the **[Architecture](/docs/architecture)** space so this sidebar stays scannable.
+
+## Start here
+
+<Cards>
+  <Card
+    icon={<BookOpen className="size-4" />}
+    title="What is Synap?"
+    description="One-page framing: entities, views, channels, and your pod."
+    href="./what-is-synap"
+  />
+  <Card
+    icon={<Network className="size-4" />}
+    title="System concepts (deep dives)"
+    description="Architecture, events, graph, agents, sovereignty — full library."
+    href="../../architecture/concepts"
+  />
+</Cards>
+
+When you are evaluating or self-hosting, use **[Architecture → Deployment](/docs/architecture/deployment)** for environments and the data pod.

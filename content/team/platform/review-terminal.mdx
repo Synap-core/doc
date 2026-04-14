@@ -1,0 +1,271 @@
+---
+title: "Platform Review: Terminal Bridge"
+description: "Terminal bridge / CLI integration review."
+---
+
+# 04 — AI Remote Execution (Terminal Bridge)
+
+## Current State
+
+### Terminal App — Built, User-Driven Only
+
+The browser has a fully functional terminal with multi-tab support, SSH, and CLI integration. But it's entirely user-driven — AI agents cannot spawn or control terminal sessions.
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| Terminal view | `browser/electron/renderer/src/components/views/TerminalView.tsx` (640 lines) |
+| Terminal IPC handler | `browser/electron/main/terminal/terminal-ipc.ts` |
+| CLI config manager | `browser/electron/main/cli/cli-config-manager.ts` |
+
+**Current Capabilities:**
+- Multi-tab local shell sessions (bash, zsh)
+- SSH to data pod (command pre-filled from pod URL)
+- Synap CLI launcher (npx @synap/cli)
+- CLI config management (auto-creates API key)
+- xterm.js rendering with theme support
+
+**What AI CAN'T do currently:**
+- Spawn a terminal session
+- Send commands to a terminal
+- Read terminal output
+- Control a terminal in a widget/panel
+
+### Intelligence Service — CLI Skill Exists but No Backend
+
+**Skill file:** `synap-intelligence-service/apps/intelligence-hub/src/skills/cli-execution.md`
+
+This skill teaches agents ABOUT terminal execution but the actual tool/backend doesn't exist. The agent can write shell commands in chat but can't execute them.
+
+### Automation System — Command Execution Exists
+
+The automation system has a `shell_command` step type for workflows:
+
+```typescript
+// From automation schema
+type AutomationStep =
+  | { type: 'shell_command'; command: string; timeout?: number }
+  | { type: 'http_request'; ... }
+  | { type: 'ai_prompt'; ... }
+  // etc.
+```
+
+This runs on the backend (pg-boss worker). It's not interactive and doesn't stream output, but it proves the backend CAN execute commands.
+
+### Proposal System — Terminal Not in Auto-Approve
+
+From `synap-backend/packages/api/src/utils/permission-check.ts`:
+- `terminal.spawn` is NOT in `DEFAULT_AUTO_APPROVE`
+- This means AI attempting terminal access would create a proposal
+- This is correct behavior — terminal access should require user approval
+
+## Limitations
+
+### 1. No AI → Terminal Tool
+The intelligence service has no `execute_command` or `spawn_terminal` tool. The infrastructure pieces exist separately:
+- Backend can run shell commands (automation system)
+- Browser has terminal sessions (xterm.js + node-pty)
+- AI has a skill file about CLI execution
+- None of these are connected
+
+### 2. No Terminal Widget
+Terminal is a full-page view only. Can't embed a terminal:
+- In a bento grid cell
+- In a side panel
+- In an entity detail view (e.g., for a "repository" entity)
+
+### 3. No Output Streaming
+Automation shell_command is fire-and-forget — runs command, returns result. No:
+- Live output streaming to AI or user
+- Interactive session (stdin/stdout)
+- Long-running process monitoring
+
+### 4. Security Model Not Defined
+For AI remote execution, we need:
+- What commands can AI run? (allowlist vs blocklist)
+- On which hosts? (pod only, or also external via SSH)
+- With what user? (dedicated agent user, not root)
+- Timeout limits?
+- Resource limits (CPU, memory, disk)?
+- Audit trail of all executed commands
+
+### 5. No Log Streaming
+AI can't read Docker/systemd logs from the pod. No tool to:
+- `docker logs &lt;container>`
+- `journalctl -u &lt;service>`
+- Tail application log files
+
+## Architecture Proposal
+
+### Two-Track Approach
+
+**Track A: Pod Command Execution (Hub Protocol)**
+For AI agents to run commands on the data pod:
+
+```
+AI Agent → execute_command tool
+  → Hub Protocol POST /api/hub/terminal/execute
+  → Backend: checkPermissionOrPropose()
+    → If auto-approved: execute in sandboxed shell
+    → If proposal: notify user, wait for approval
+  → Response: { stdout, stderr, exitCode, duration }
+```
+
+**Track B: Browser Terminal Widget (Electron IPC)**
+For embedding interactive terminals in the browser UI:
+
+```
+BentoGrid/Panel → TerminalCell component
+  → Electron IPC → node-pty session
+  → xterm.js renderer in cell
+  → AI can inject commands via postMessage bridge
+```
+
+### Hub Protocol: Terminal Router
+
+New sub-router for `hub-protocol-rest.ts`:
+
+```typescript
+// POST /api/hub/terminal/execute
+{
+  userId: string;
+  workspaceId: string;
+  command: string;
+  cwd?: string;          // Working directory (default: workspace dir)
+  timeout?: number;      // Max execution time (default: 30s, max: 300s)
+  env?: Record<string, string>; // Additional env vars
+}
+
+// Response
+{
+  status: 'ok' | 'proposed' | 'denied';
+  proposalId?: string;   // If proposed
+  result?: {
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    duration: number;     // ms
+    truncated: boolean;   // If output exceeded limit
+  };
+}
+```
+
+### Permission Model
+
+```typescript
+// In DEFAULT_AUTO_APPROVE (safe read-only commands)
+'terminal.read_logs',    // Read application logs
+'terminal.health_check', // Run health checks
+
+// Requires proposal (destructive/sensitive)
+'terminal.execute',      // General command execution
+'terminal.ssh',          // SSH to external host
+'terminal.docker',       // Docker commands
+```
+
+### Command Sandbox
+
+Backend executes commands in a restricted environment:
+- Dedicated `synap-agent` user (non-root)
+- Restricted PATH (no sudo, no package managers)
+- Cgroup limits (CPU, memory, disk I/O)
+- Network restrictions (no external connections by default)
+- Command allowlist for auto-approved operations
+- Full audit log (command, user, timestamp, output hash)
+
+### AI Tool Definition
+
+```typescript
+// execute_command tool for intelligence service
+{
+  name: 'execute_command',
+  description: 'Execute a shell command on the data pod. Requires user approval unless it\'s a read-only operation (logs, health checks).',
+  parameters: {
+    command: { type: 'string', description: 'Shell command to execute' },
+    cwd: { type: 'string', description: 'Working directory', optional: true },
+    timeout: { type: 'number', description: 'Timeout in seconds (max 300)', optional: true },
+    reason: { type: 'string', description: 'Why this command needs to run' },
+  },
+  // Goes through Hub Protocol → checkPermissionOrPropose()
+}
+```
+
+### Terminal Cell (Widget)
+
+Register a `terminal` cell type in cell-runtime:
+
+```typescript
+cellRegistry.register({
+  key: 'terminal',
+  component: TerminalCell,
+  meta: {
+    name: 'Terminal',
+    icon: 'terminal',
+    category: 'core',
+    description: 'Interactive terminal session',
+    defaultSize: { w: 6, h: 4 },
+  },
+  defaultProps: {
+    shell: 'default',  // Use system default shell
+    cwd: undefined,     // Default working directory
+  },
+});
+```
+
+## Action Items
+
+### Phase 1: Read-Only Pod Access (safe, high value)
+- [ ] Add `terminal` sub-router to Hub Protocol
+- [ ] Implement `read_logs` endpoint (Docker logs, journalctl)
+- [ ] Implement `health_check` endpoint (service status checks)
+- [ ] Add `read_pod_logs` tool to intelligence service
+- [ ] Auto-approve read-only terminal operations
+- [ ] Test: AI agent can read pod logs and diagnose issues
+
+### Phase 2: Command Execution (proposal-gated)
+- [ ] Implement `execute` endpoint with sandboxed shell
+- [ ] Permission model: `terminal.execute` requires proposal
+- [ ] Command sandbox: restricted user, cgroup limits, timeout
+- [ ] Audit logging for all executed commands
+- [ ] Add `execute_command` tool to intelligence service
+- [ ] Update `cli-execution.md` skill with new tool usage
+
+### Phase 3: Terminal Widget
+- [ ] Create `TerminalCell` component (wraps xterm.js for bento/panel)
+- [ ] Register in cell-runtime
+- [ ] Support SSH connections in widget mode
+- [ ] AI command injection via postMessage (for AI-controlled terminal widget)
+
+### Phase 4: Interactive Sessions
+- [ ] WebSocket-based terminal sessions (pod ↔ browser)
+- [ ] Live output streaming for long-running commands
+- [ ] Session recording and playback
+- [ ] AI can watch output and respond dynamically
+
+### Research Questions
+- [ ] How does GitHub Codespaces handle terminal security?
+- [ ] How does Railway/Render handle shell access to deployments?
+- [ ] What sandboxing approach: Docker exec, nsjail, bubblewrap, or plain user restrictions?
+- [ ] Should command execution be on the pod itself or on a separate "agent worker" container?
+- [ ] How to handle secrets in command environment (vault integration)?
+- [ ] What output size limit? (prevent `cat /dev/urandom` type abuse)
+
+## Security Considerations
+
+This is the highest-risk feature in the platform. AI executing arbitrary commands on a server requires:
+
+1. **Defense in depth** — Multiple security layers, not just permission checks
+2. **Least privilege** — Agent user has minimum necessary permissions
+3. **Audit everything** — Full command log with output hashes
+4. **Rate limiting** — Max commands per minute per agent
+5. **Circuit breaker** — Auto-disable if anomalous behavior detected
+6. **User override** — User can always disable terminal access globally
+
+## Relationship to Other Features
+
+- **Vault (07)** — Commands may need API keys from vault (`vault://` in env vars)
+- **Notifications (05)** — Command proposals should surface as notifications
+- **AI Skills (06)** — DevOps skills need terminal tool to be useful
+- **Widget System (01)** — Terminal cell expands widget capabilities
+- **Templates (03)** — DevOps template needs terminal widget in bento layout

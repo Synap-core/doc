@@ -1,0 +1,108 @@
+---
+title: "Backlink Strategy"
+description: "Internal link graph and cross-repo documentation strategy."
+---
+
+# Backlink & Distribution Strategy
+
+## Pages designed for backlinks
+
+### Comparison pages (high intent, "alternative to" searches)
+- `/compare/vs-notion` — targets "Notion alternative", "Notion vs"
+- `/compare/vs-obsidian` — targets "Obsidian alternative", "Obsidian vs"
+- `/compare/vs-mem` — targets "Mem.ai alternative"
+- `/compare/vs-chatgpt` — targets "ChatGPT alternative for notes", "ChatGPT workspace"
+- `/compare/vs-heptabase` — targets "Heptabase alternative"
+
+**Distribution**: Submit to comparison/review sites (AlternativeTo, G2, Product Hunt). Answer Quora/Reddit questions about tool comparisons with links to these pages.
+
+### Blog posts (thought leadership, developer community)
+- `ai-models-are-a-commodity` — Thesis post. Target HN, dev Twitter, AI newsletters.
+- `emergent-complexity` — Architecture post. Target HN, dev.to, engineering blogs.
+- `building-a-second-brain-2026` — PKM community. Target PKM subreddits, Forte Labs community, productivity newsletters.
+- `why-your-data-should-live-on-your-server` — Self-hosting community. Target r/selfhosted, HN, privacy-focused outlets.
+- `notion-vs-obsidian-vs-synap` — Comparison post. SEO magnet for long-tail comparison queries.
+
+### Technical docs (developer backlinks)
+- `/developers` — Developer platform page. Target dev directories, awesome lists.
+- `/guides/quickstart` — API quickstart. Submit to API directories.
+- `/guides/n8n-integration` — n8n community. Submit to n8n community templates.
+
+### Vision docs (press/thought leadership)
+- `/lightpaper` — Cite-worthy vision document. Link from press mentions, investor decks, founder interviews.
+- `/manifesto` — Shareable philosophy. Social media, founder profiles.
+
+---
+
+## Backlink acquisition channels
+
+### 1. Hacker News (highest quality dev backlinks)
+**What to post:**
+- "Show HN: Synap — AI workspace where your data lives on your own PostgreSQL server"
+- The `emergent-complexity` blog post
+- The `ai-models-are-a-commodity` blog post
+
+**When:** Space posts 2+ weeks apart. Best times: weekday mornings US Eastern.
+
+### 2. Reddit
+**Subreddits:**
+- r/selfhosted — Pod sovereignty angle. "I built a self-hostable AI workspace..."
+- r/PKMS — Second brain angle. Share `building-a-second-brain-2026`.
+- r/ObsidianMD — Comparison angle (be respectful, focus on trade-offs not marketing).
+- r/artificial — AI governance angle. Share the proposal system concept.
+- r/startups — Founder use case.
+
+### 3. Product Hunt
+**Launch strategy:**
+- Primary positioning: "AI-powered personal workspace on your own server"
+- Key differentiators to highlight: Any AI model, data sovereignty, proposal system
+- Timing: After hero section has real screenshots, not code mockups
+
+### 4. Dev directories & awesome lists
+- AlternativeTo (add Synap as alternative to Notion, Obsidian, Mem, Heptabase)
+- awesome-selfhosted (PR to add Synap)
+- awesome-pkm lists
+- n8n community templates (publish the integration)
+
+### 5. Newsletters & media
+**Target newsletters:**
+- Tiago Forte's "Praxis" (PKM audience, second brain angle)
+- Ben's Bites (AI tools audience)
+- TLDR (dev audience)
+- Console.dev (dev tools)
+- Selfh.st (self-hosted tools)
+
+**Pitch angle:** "The first AI workspace where your data lives on a server you own — any AI model plugs in, proposals keep humans in control."
+
+### 6. Dev.to / Medium / Hashnode (syndication)
+Cross-post blog articles with canonical links pointing back to app.synap.live/blog/[slug].
+Target tags: #ai #productivity #selfhosted #postgresql #knowledge-management
+
+### 7. GitHub
+- Open-source the Docker Compose config for self-hosting → README links back to app.synap.live
+- @synap/sdk package on npm → README links to developer docs
+- Consider open-sourcing non-core components to build developer trust
+
+---
+
+## Content calendar (first 4 weeks)
+
+| Week | Action |
+|------|--------|
+| W1 | Submit to AlternativeTo, Product Hunt upcoming. Post `ai-models-are-a-commodity` on HN. |
+| W2 | Cross-post `building-a-second-brain-2026` to dev.to + Medium. Share in r/PKMS. |
+| W3 | Post `emergent-complexity` on HN (Show HN format). Submit to awesome-selfhosted. |
+| W4 | `notion-vs-obsidian-vs-synap` to r/PKMS, r/ObsidianMD. Pitch to newsletters. |
+
+---
+
+## Tracking
+
+Track referral traffic from:
+- Hacker News (news.ycombinator.com)
+- Reddit (reddit.com)
+- Product Hunt (producthunt.com)
+- Dev.to (dev.to)
+- Newsletter clicks (UTM tags)
+
+Set up in Vercel Analytics or Plausible (privacy-friendly, no cookie banner needed).

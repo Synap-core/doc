@@ -1,0 +1,556 @@
+---
+title: "Auth Architecture"
+description: "Auth consolidation: Better Auth, API keys, CLI tokens."
+---
+
+# Synap Authentication Architecture
+
+Internal document. Audience: engineers making architectural decisions. Last updated: 2026-04-08.
+
+---
+
+## 1. Current State
+
+### 1.1 Stack Overview
+
+Synap currently runs two independent authentication systems that must be bridged at runtime.
+
+**Control Plane (CP)** runs [Better Auth](https://better-auth.com) — a TypeScript-native auth library handling CP user accounts (email/password, social OAuth, 2FA). User identity lives in the CP database: `userId`, `email`, `name`, display metadata. Better Auth manages sessions, cookies, and the CP dashboard login surface.
+
+**Pod** runs [Ory Kratos](https://www.ory.sh/kratos/) (identity management + session issuance) paired with [Ory Hydra](https://www.ory.sh/hydra/) (OAuth2 authorization server). The pod has its own `users` table that mirrors a subset of Kratos identity data. Kratos handles the identity lifecycle (create, update, recover, verify), while Hydra issues OAuth2 tokens for machine-to-machine flows. This is an operationally heavier stack — Kratos and Hydra are separate processes with separate databases and separate configuration surfaces.
+
+The two systems are intentionally isolated. A user authenticated with CP has no automatic session on any pod. Bridging them requires an explicit handshake.
+
+### 1.2 The Handshake JWT Bridge
+
+The CP-to-pod bridge uses ES256 asymmetric JWTs. The CP signs a short-lived JWT; the pod verifies it against CP's public key fetched from `/.well-known/jwks.json`. There are two JWT types:
+
+- `type: "handshake"` — provisions a user onto a pod (creates Kratos identity, creates `users` row)
+- `type: "agent_setup"` — provisions an AI agent identity (separate flow, covered in agent docs)
+
+The pod exposes `POST /api/handshake` which accepts the JWT, validates it, and creates (or idempotently upserts) the user identity in Kratos. After handshake, the pod can issue Kratos sessions for that user.
+
+JWKS rotation: CP's public keys are fetched by pods at startup and cached. If CP rotates its signing key, pods need to invalidate their JWKS cache or restart. There is no current push mechanism for this — it is a known operational gap (see Section 6).
+
+JTI (JWT ID) replay protection is implemented: each handshake JWT has a unique JTI stored in Redis after first use. Replayed JTIs are rejected.
+
+### 1.3 How Users Flow onto a Pod Today
+
+Three provisioning paths exist:
+
+```
+[Shared Pod — auto at signup]
+
+  CP signup complete
+       │
+       ▼
+  CP calls POST /api/handshake (server-to-server)
+  on the shared pod, with signed handshake JWT
+       │
+       ▼
+  Kratos identity created, users row inserted
+  User is now "on" the pod (but has no active session yet)
+       │
+       ▼
+  User opens Browser or Relay → app calls Kratos
+  to issue a session → user is logged in
+```
+
+```
+[Dedicated Pod — triggered by app]
+
+  CP provisions dedicated pod (Docker, VM)
+       │
+       ▼
+  User opens Browser or Relay app
+  App detects no pod session exists
+       │
+       ▼
+  App calls CP to get a signed handshake JWT
+  App calls POST /api/handshake on pod with JWT
+       │
+       ▼
+  Kratos identity created
+  App calls Kratos session endpoint → user is logged in
+```
+
+```
+[CLI — was broken, now being fixed]
+
+  npx @synap/cli init
+       │
+       ▼
+  User authenticates with CP (API key or browser)
+  CLI calls POST /pods/handshake-jwt on CP
+       │
+       ▼
+  CP returns signed handshake JWT
+  CLI calls POST /api/handshake on pod
+       │
+       ▼
+  Agent user created on pod
+  CLI calls POST /api/hub/setup/agent (PROVISIONING_TOKEN)
+  → agent API key returned, stored in ~/.synap/config.json
+```
+
+Note: the CLI fix creates an **agent** identity, not a human session. The CLI can then act as an AI agent but cannot act as the human user (no pod session, no tRPC user context).
+
+### 1.4 What Works
+
+- CP authentication (login, social, 2FA) via Better Auth — solid.
+- Shared pod auto-provisioning on signup — reliable, server-to-server, no user friction.
+- Browser and Relay app pod sessions — work once handshake has run, session cookie flows normally.
+- JTI replay protection — in place, protects handshake endpoint from replays.
+- ES256 asymmetric JWT verification — correct approach, public key only on pods.
+- Agent provisioning via PROVISIONING_TOKEN + hub setup — works for CLI agent flows.
+
+### 1.5 What Doesn't Work
+
+Detailed in Section 2. Summary:
+
+- Users cannot log into a pod with a password they know.
+- CLI cannot act as the human user (only as an agent).
+- Self-hosted pods cannot authenticate anyone without going through CP first.
+- No standard OAuth2 device flow for non-browser clients.
+- CP is a hard dependency even for users who want a fully self-hosted setup.
+
+### 1.6 The Deterministic Password Problem
+
+This is the most significant security and UX issue in the current architecture.
+
+When `POST /api/handshake` creates a Kratos identity, it must give Kratos a password for that identity (Kratos needs credentials to issue sessions). The current implementation generates that password deterministically:
+
+```
+password = HMAC-SHA256(JWT_SECRET, user.email)
+```
+
+This is a secret known to any system that has `JWT_SECRET`. It is not known to the user.
+
+**Security implications:**
+
+1. Anyone who obtains `JWT_SECRET` can derive the Kratos password for any user on that pod. `JWT_SECRET` is already a high-value secret (it signs JWTs), but now it is also a master password for every user identity on the pod. A single leaked environment variable compromises every account.
+
+2. The deterministic password is functionally a backdoor. It bypasses all of Kratos's password hardening (bcrypt, rate limiting, account lockout) because an attacker with `JWT_SECRET` doesn't need to brute-force — they compute.
+
+3. Kratos's credential recovery flows (email reset links, recovery codes) are useless. If a user somehow discovered the login form and tried "Forgot password," they would receive a new random password that then conflicts with what the app expects. The app would break.
+
+**UX implications:**
+
+1. Users can never authenticate to their pod through any path other than the Synap apps. If Browser or Relay has a bug that prevents app launch, the user is locked out. No fallback.
+
+2. Self-hosted users who want to connect a third-party app to their pod (e.g., a script, an external tool) cannot. There is no credential they can type in.
+
+3. If a user loses their CP account (account deletion, CP outage, CP company shutdown), they lose access to their pod entirely — even if the pod is self-hosted and physically running in their home.
+
+4. `synap login --pod URL` is not implementable with email+password today because the user does not have a usable password.
+
+**The fix:** The deterministic password must be eliminated. The correct model is: pod does not store Kratos passwords for CP-provisioned users at all. Authentication is delegated to CP via OIDC (Option D, Section 3.1), or pod runs its own Better Auth instance where users set their own passwords (Option standalone, Section 3.2).
+
+---
+
+## 2. Known Gaps
+
+| Gap | Description | Impact | Severity |
+|-----|-------------|--------|----------|
+| Deterministic password | Pod passwords derived from JWT_SECRET, unknown to user | Any `JWT_SECRET` leak = all accounts compromised; users can't log in independently | Critical |
+| No native pod credentials | User has no email+password they can use on pod directly | Locked out if CP unreachable; no self-hosted independence | High |
+| CLI human session | CLI can only act as agent, never as authenticated user | CLI can't do user-scoped operations (file upload, workspace management, etc.) | High |
+| Self-hosted CP dependency | Self-hosted pods still require a CP roundtrip for first auth | Defeats "sovereign" value proposition for self-hosted users | High |
+| No device auth flow | No OAuth2 device flow, no localhost callback for CLI/scripts | Non-browser clients can't authenticate as human user | High |
+| JWKS rotation gap | No mechanism to push key rotation to pods | Key rotation requires pod restarts or manual cache busts | Medium |
+| Kratos/Hydra ops complexity | Two extra processes (Kratos + Hydra), separate configs/DBs, Go binaries | Higher operational burden per pod deploy; more failure surfaces | Medium |
+| No cross-pod SSO | User must re-authenticate for each pod they access | Friction for multi-workspace users with multiple pods | Medium |
+| No passkeys/WebAuthn | Better Auth supports it, Kratos does too, but neither is wired up | Missing modern auth UX; increasingly expected by users | Low |
+| No pod-to-pod identity federation | Pod A cannot verify identity of user from Pod B | Blocks future cross-pod sharing features | Low |
+
+---
+
+## 3. Target Architecture
+
+### 3.1 Option D — CP as OIDC Provider
+
+Better Auth ships an [OIDC provider plugin](https://www.better-auth.com/docs/plugins/oidc-provider) that exposes standard OIDC discovery (`/.well-known/openid-configuration`), authorization, token, and userinfo endpoints. The CP becomes a first-class identity provider.
+
+Kratos natively supports [upstream OIDC providers](https://www.ory.sh/docs/kratos/social-signin/overview) — it can be configured to treat CP as a "social login" provider, using OIDC authorization code flow.
+
+**How it works end-to-end:**
+
+```
+[User opens pod URL in browser — no existing session]
+
+  Browser → pod app (no session cookie)
+       │
+       ▼
+  Pod app shows login screen with
+  "Login with Synap" button
+       │
+       ▼
+  Click → Kratos starts OIDC flow
+  Redirects to: https://api.synap.live/auth/authorize
+                ?client_id=pod-abc123
+                &redirect_uri=https://mypod.synap.live/oidc/callback
+                &response_type=code
+                &scope=openid email profile
+                &state=...&nonce=...
+       │
+       ▼
+  CP handles authorization (Better Auth OIDC plugin)
+  User is already logged into CP → immediate consent
+  OR user logs into CP now (email/password, social)
+       │
+       ▼
+  CP issues authorization code → redirects back to pod:
+  https://mypod.synap.live/oidc/callback?code=...&state=...
+       │
+       ▼
+  Kratos exchanges code for tokens at CP token endpoint:
+  POST https://api.synap.live/auth/oidc/token
+  → receives id_token (JWT with sub, email, name)
+       │
+       ▼
+  Kratos maps OIDC identity to pod identity
+  (creates user on first login, links on subsequent logins)
+  Issues Kratos session → session cookie set on pod domain
+       │
+       ▼
+  User is authenticated on pod. No deterministic password.
+  No handshake JWT needed for web browser flows.
+```
+
+**What this eliminates:**
+- Deterministic passwords — Kratos never needs a password for OIDC-sourced identities
+- Manual handshake calls from apps — the OIDC callback handles user provisioning automatically
+- CP→pod server-to-server provisioning at signup (shared pod) — first OIDC login provisions the user
+
+**What this does not solve:**
+- CLI flows (no browser redirect possible in all CLI scenarios)
+- Self-hosted users without a CP account
+- Direct email+password on pod
+
+**Implementation requirements:**
+- Enable Better Auth OIDC provider plugin on CP
+- Register each pod as an OIDC client on CP (client_id + client_secret stored in CP DB, pod URL as redirect_uri)
+- Configure Kratos `selfservice.methods.oidc` with CP as upstream IdP
+- CP provisioning endpoint: `POST /api/pods/register-oidc-client` — called when pod is provisioned
+- Handle Kratos identity linking (same email from OIDC = same pod user, not a duplicate)
+
+**Effort estimate:** ~5 days. Risk: medium. Better Auth's OIDC provider plugin is relatively new — validate it covers the required discovery/token/userinfo spec before committing.
+
+---
+
+### 3.2 Option Standalone — Native Email/Password on Pod
+
+The pod runs its own authentication stack capable of issuing sessions with email+password credentials that the user sets themselves, with no CP involved.
+
+There are two sub-options here:
+
+**3.2a: Expose Kratos email+password (minimal change)**
+
+Kratos already supports username/password flows. The current implementation creates identities with the deterministic password — the fix is to create them without a password (or with a random unguessable one that is never used), and instead expose a "set password" flow that sends a recovery link to the user's email on first login attempt.
+
+This is the lowest-effort path. It keeps Kratos but stops using deterministic passwords. The user's first login via an app triggers a Kratos recovery email; they click the link and set a real password. After that, email+password login works independently of CP.
+
+Challenge: Kratos's email/password forms are server-rendered flows. Integrating them into a React SPA (Browser, Relay) requires using Kratos's headless API mode, which is well-documented but requires careful session cookie handling.
+
+**3.2b: Migrate pod to Better Auth (recommended, higher effort)**
+
+Replace Kratos + Hydra entirely with a Better Auth instance on the pod. Better Auth is TypeScript-native, runs in the same Node.js process as the existing Hono backend, uses the same Drizzle/PostgreSQL setup, and the team already knows it from the CP implementation.
+
+```
+[Self-hosted pod — no CP account]
+
+  User opens https://mypod.example.com
+       │
+       ▼
+  Pod's Better Auth login screen (email + password)
+       │
+       ▼
+  User registers (first time) or logs in
+  Better Auth issues session cookie for pod domain
+       │
+       ▼
+  Full pod access. CP is never contacted.
+```
+
+```
+[Managed pod — user has CP account]
+
+  Same pod, but CP OIDC is configured as a social provider
+  in this pod's Better Auth instance
+       │
+       ▼
+  "Login with Synap" button → OIDC flow to CP
+  → CP issues code → pod Better Auth exchanges it
+  → session issued, same as email+password session
+```
+
+Email deduplication: if a user registers with `alice@example.com` directly on the pod AND later tries to login via CP OIDC with the same email, Better Auth's account linking logic should merge them. This needs explicit testing — Better Auth has account linking support but the merge semantics need validation with the OIDC provider plugin.
+
+**Effort estimate for 3.2b:** ~2 weeks. Risk: high. Existing Kratos identities need migration (extract credentials from Kratos identity store, import into Better Auth). Sessions cannot be migrated — all users will need to re-authenticate after migration. Phased rollout: run Better Auth alongside Kratos, route new registrations to Better Auth, migrate Kratos identities in a background job.
+
+---
+
+### 3.3 Option C — CLI Device Auth Flow
+
+Non-browser clients (CLI, scripts) cannot complete browser redirect flows. The standard solution is [OAuth2 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628) (RFC 8628), colloquially called "device flow."
+
+**Proposed flow for Synap:**
+
+```
+  $ synap login --pod https://mypod.synap.live
+
+  CLI calls: POST https://mypod.synap.live/auth/device/authorize
+  Response: {
+    device_code: "abc...",
+    user_code: "WXYZ-1234",
+    verification_uri: "https://app.synap.live/auth/pod-connect",
+    verification_uri_complete: "https://app.synap.live/auth/pod-connect?code=WXYZ-1234",
+    expires_in: 300,
+    interval: 5
+  }
+
+  CLI prints:
+  ──────────────────────────────────────────────
+  Open this URL in your browser to authenticate:
+  https://app.synap.live/auth/pod-connect?code=WXYZ-1234
+
+  Or go to https://app.synap.live/auth/pod-connect
+  and enter code: WXYZ-1234
+  ──────────────────────────────────────────────
+
+  CLI polls: POST https://mypod.synap.live/auth/device/token
+             { device_code: "abc..." }
+  every 5 seconds, waiting for authorization_pending to change
+```
+
+```
+  [In the browser — user follows the URL]
+
+  Browser → https://app.synap.live/auth/pod-connect?code=WXYZ-1234
+       │
+       ▼
+  User is already logged into CP (or logs in now)
+  Page shows: "Connect CLI to mypod.synap.live?"
+  User clicks Authorize
+       │
+       ▼
+  CP calls POST https://mypod.synap.live/auth/device/approve
+             { device_code: "abc...", user_id: "cp-user-id", ... }
+  (using signed handshake JWT as auth — server-to-server)
+       │
+       ▼
+  Pod creates user session (or uses existing one)
+  Issues a long-lived pod API token (not a session cookie)
+  Marks device_code as approved
+       │
+       ▼
+  CLI poll gets 200 back with:
+  { access_token: "pod-api-key-...", token_type: "Bearer" }
+
+  CLI stores token in ~/.synap/pod-session.json
+  $ synap login done. Connected to mypod.synap.live as alice@example.com.
+```
+
+**What this enables:**
+- CLI can act as human user (tRPC calls with user context, not just agent API key)
+- Any non-browser client can authenticate
+- The `pod-connect` page at `app.synap.live` handles the UX — single landing page for all pods
+
+**Implementation:**
+- Pod: new Hono routes `POST /auth/device/authorize`, `POST /auth/device/token`, `POST /auth/device/approve`
+- Redis (or in-memory for small pods): store `device_code → status + user` with TTL
+- CP: `POST /auth/device/approve` handler that signs a handshake JWT and calls the pod
+- Browser app: new page `PodConnectPage` at `/auth/pod-connect` — shows device code entry form + authorization button
+- CLI: polling loop in `@synap/cli` (Node.js `setInterval`, exit on token or expiry)
+
+**Alternative: localhost callback.** `synap login --pod URL` starts a local HTTP server on a random port, opens the browser to `https://app.synap.live/auth/pod-connect?podUrl=...&callbackPort=PORT`, and the page redirects to `http://localhost:PORT?token=...` after authorization. This is simpler to implement but fails in SSH environments and Docker containers. Device flow is more robust.
+
+**Effort estimate:** ~3 days. Risk: low. Device flow is well-specified and the building blocks (Redis, Hono routes, CLI polling) are all already in the stack.
+
+---
+
+### 3.4 Unified Stack Recommendation
+
+The current Kratos + Hydra setup on the pod is a liability:
+
+- Two extra Go processes per pod deployment
+- Separate configuration files (`kratos.yml`, `hydra.yml`) that must stay in sync with the Hono backend
+- Different programming language (Go) from the rest of the stack (TypeScript) — harder to debug, different observability
+- The deterministic password hack is a direct consequence of Kratos's opaque identity credential storage not playing well with the handshake model
+- The operational overhead shows up in every pod deploy, every pod upgrade, every troubleshooting session
+
+**Recommendation: migrate pod auth to Better Auth.**
+
+Better Auth on the pod would:
+- Run inside the existing Hono process (same Node.js, same port)
+- Use the existing Drizzle/PostgreSQL `users` table (or an extended version of it)
+- Share the same TypeScript codebase, tooling, and team expertise as CP
+- Support email+password natively, without deterministic password hacks
+- Support OIDC social providers (CP can be configured as one)
+- Support OAuth2 server mode (Hydra replacement) via Better Auth's OAuth2 server plugin
+- Eliminate Kratos and Hydra as separate services
+
+**Migration path:**
+
+```
+Phase 1 (no migration):
+  - Add Better Auth to Hono alongside Kratos
+  - New user registrations go to Better Auth
+  - Existing Kratos sessions still work (parallel auth middleware)
+  - Both session types coexist in the pod via a unified session resolver
+
+Phase 2 (migration script):
+  - Background job reads Kratos identities export (Kratos supports identity export via REST API)
+  - For each identity: insert into Better Auth user table
+  - Credentials cannot be migrated (Kratos bcrypt hashes are not portable to Better Auth)
+  - All Kratos-origin users marked with `requiresPasswordReset: true` in Better Auth
+  - On next login: Better Auth prompts password reset (email link)
+
+Phase 3 (cutover):
+  - Stop writing new identities to Kratos
+  - Drain Kratos sessions (TTL-based expiry)
+  - Remove Kratos and Hydra from docker-compose
+  - Remove kratos.yml and hydra.yml
+```
+
+**Risks:**
+- All existing sessions invalidate during Phase 3 — users must re-login
+- Self-hosted pods running Phase 1 or 2 simultaneously with managed pods creates complexity
+- Better Auth's OAuth2 server plugin (Hydra replacement) needs to be validated for the use cases Hydra currently covers (machine-to-machine agent tokens)
+
+**Honest assessment:** this migration is 2+ weeks of careful work and carries production risk. It should not be done under deadline pressure. The deterministic password problem can be partially mitigated before migration by implementing Option D (OIDC) for browser flows and Option C (device flow) for CLI — both of which eliminate the need for the problematic password in practice. Full migration to Better Auth is the cleanest long-term state but is not urgent if D + C are in place.
+
+---
+
+## 4. What Changes for Each Stakeholder
+
+### End User (Managed Pod via CP)
+
+**Today:** Log into CP, open Browser or Relay, app silently calls handshake, user is in. No visible friction for the happy path. Breaks if the app isn't working or if CP has an outage.
+
+**After Option D (OIDC):** Same happy path, but more robust. If CP is reachable, the OIDC flow is identical in friction to today. The pod no longer stores a secret password, so a `JWT_SECRET` leak no longer compromises user credentials.
+
+**After full migration (Better Auth):** User can also log in with email+password directly at the pod URL, without ever opening the Synap app. They set their password via a recovery email on first direct login. Bookmark your pod URL — it works like any website.
+
+### Self-Hosted User (No CP Account)
+
+**Today:** Must use PROVISIONING_TOKEN to create the first admin user. Can only authenticate through Browser or Relay (which call handshake). Cannot log in at a plain browser URL. Cannot give a colleague a login form to fill out. Effectively requires Synap-built apps as an authentication proxy.
+
+**After Option 3.2a (Kratos email/password exposed):** `POST /api/setup/admin` creates an admin with a real user-chosen password. Other users get invited via recovery email flow. No CP needed. Self-hosted independence restored.
+
+**After full migration (Better Auth):** Even simpler — Better Auth's setup wizard (`/auth/setup`) runs on first launch, admin creates account with email+password, invites others. No Kratos CLI commands needed. CP is entirely optional.
+
+### Developer (Extending Synap, Third-Party Apps)
+
+**Today:** Must obtain an agent API key via PROVISIONING_TOKEN or hub setup flow. No standard OAuth2 flow available. Cannot authenticate as a user.
+
+**After Option C (device flow):** `synap login --pod URL` gives CLI-level human user access. Developers can write scripts that act as the user, not just as an agent.
+
+**After Option D (OIDC):** Third-party apps can implement "Login with Synap" using standard OIDC client libraries. The CP is the authorization server, pods are resource servers. This is a legitimate developer platform auth story.
+
+**Auth contracts after full migration:**
+
+- Pod session: `Authorization: Bearer <better-auth-session-token>` or session cookie
+- Agent access: `Authorization: Bearer <hub-api-key>` (unchanged)
+- CP→Pod server auth: ES256 JWT in `Authorization: Bearer` header (unchanged — handshake JWTs stay for agent provisioning even after pod migration)
+- OIDC: standard `Authorization: Bearer <access-token>` from CP token endpoint
+
+---
+
+## 5. Implementation Roadmap
+
+Items are ordered by dependency and risk, not just impact.
+
+### Step 1 — Handshake JWT endpoint on CP + CLI fix [DONE, ~1 day]
+
+`POST /pods/handshake-jwt` on CP, called by CLI before agent setup. Fixes the CLI init flow. Existing work.
+
+### Step 2 — Expose Kratos email+password via API (~2 days)
+
+Stop using deterministic passwords. On `POST /api/handshake`, create the Kratos identity without a password (or with a cryptographically random one that is immediately discarded — Kratos supports passwordless identities via OIDC-only mode). Expose a "first login" flow: user visits pod URL, enters email, receives a Kratos recovery email, sets their own password. This is a mitigation, not the final fix, but it eliminates the `JWT_SECRET`-derived-password vulnerability.
+
+Note: this step changes how apps authenticate users. Apps currently skip the login screen entirely (they call handshake, then directly call Kratos session endpoint using the deterministic password). After this step, apps need to trigger the Kratos login flow properly. Browser and Relay need adjustment.
+
+### Step 3 — CLI device auth flow (~3 days)
+
+Implement RFC 8628 device authorization grant on pod (Redis-backed device codes, three Hono endpoints). Implement `PodConnectPage` in Browser renderer at `/auth/pod-connect`. Implement CLI polling loop in `@synap/cli`. Test in SSH/headless environments.
+
+This gives developers and CLI users human-level pod access for the first time.
+
+### Step 4 — CP as OIDC provider (~5 days)
+
+Enable Better Auth OIDC provider plugin on CP. Add pod OIDC client registration (`POST /api/pods/register-oidc-client`). Configure Kratos OIDC upstream for CP. Update pod provisioning flow to register as OIDC client at creation time. Add "Login with Synap" button to pod login screen. Test identity linking (existing Kratos user + OIDC sub from CP must link without duplicate).
+
+After this step, browser-based pod authentication no longer uses the handshake path at all. OIDC handles it. Handshake JWTs are only used for agent provisioning and server-to-server operations.
+
+### Step 5 — Pod migration to Better Auth (~2 weeks)
+
+Run Better Auth in parallel with Kratos (Phase 1). Write identity migration script (Phase 2). Validate sessions, account linking, and OAuth2 server functionality. Cutover (Phase 3). Remove Kratos and Hydra from docker-compose and deployment manifests.
+
+This is the final cleanup. Prerequisite: Steps 2–4 are done so that no code paths depend on deterministic passwords or Kratos-specific behavior.
+
+---
+
+## 6. Security Considerations
+
+### Deterministic Password Vulnerability
+
+Current severity: **Critical**. If `JWT_SECRET` is leaked (e.g., in a compromised `.env`, a log line, a debug endpoint), an attacker can compute the Kratos password for any user on any pod that uses the same `JWT_SECRET`. The attack is:
+
+```
+password = HMAC-SHA256(env.JWT_SECRET, target_email)
+POST /kratos/self-service/login (on target pod)
+{ email: target_email, password: derived_password }
+→ full session on target pod
+```
+
+Mitigation timeline: Step 2 (remove deterministic passwords) is the immediate fix. Step 4 (OIDC) or Step 5 (Better Auth migration) permanently eliminates the attack surface.
+
+Interim hardening: rotate `JWT_SECRET` periodically (this currently invalidates all existing pod sessions — another reason to fix this properly). Ensure `JWT_SECRET` is never logged. Use secrets management (Vault, AWS Secrets Manager, Docker secrets) rather than plain `.env` files in production.
+
+### JWT_SECRET Scope Reduction
+
+After completing the roadmap, `JWT_SECRET` should only be used for signing handshake JWTs used in agent provisioning. It should no longer derive any user credentials. This dramatically reduces the blast radius of a `JWT_SECRET` leak.
+
+### JWKS Rotation
+
+Current gap: pods cache CP's public key at startup. If CP rotates the ES256 keypair, pods that haven't restarted will reject all new handshake JWTs.
+
+Correct procedure until automated rotation is built:
+
+1. Add new keypair to CP JWKS response (alongside old key) — JWKs support multiple keys
+2. Start signing new JWTs with new key
+3. Old key remains in JWKS for TTL of any in-flight JWTs (a few minutes)
+4. After all pods have refreshed their JWKS cache (or been restarted), remove old key
+5. Pods should re-fetch JWKS on validation failure (try cache, retry from endpoint once on failure) — add this retry logic
+
+Automated rotation (future): CP emits a `jwks-rotated` webhook to all registered pod URLs. Pods re-fetch on receipt.
+
+### JTI Replay Protection
+
+Keep this. Handshake JWTs are high-value tokens — if intercepted, an attacker could re-provision a user identity. JTI replay protection in Redis means each handshake JWT works exactly once. TTL in Redis should match JWT expiry (typically 5 minutes for handshake tokens).
+
+### Hydra Token Store
+
+Currently per-pod, which is correct for isolation. Each pod's Hydra instance only knows about tokens it issued. After migration to Better Auth, sessions are similarly per-pod. Cross-pod SSO (see Section 7) would require a shared session store or token exchange, which is out of scope for now.
+
+### Agent API Keys vs User Sessions
+
+These are orthogonal and should remain so:
+
+- Agent API key: issued by pod's agent provisioning flow, stored in pod DB, used in `Authorization: Bearer` header, scoped to agent actions, governed by `checkPermissionOrPropose()`
+- User session: issued by Kratos (or Better Auth after migration), used as session cookie or bearer token, scoped to user actions, governed by standard RBAC
+
+Never use an agent API key to authenticate a human user action. Never use a user session to bypass proposal governance for agent actions.
+
+---
+
+## 7. Decisions Deferred
+
+**Multi-pod SSO.** A user with access to three pods today must authenticate separately on each pod. True SSO would let a CP login propagate to all pods without per-pod OIDC flows. Options: Hydra federation (complex), shared Better Auth session store in Redis (requires network trust between pods — problematic for self-hosted), or a CP-side session token that pods accept directly (similar to current handshake but long-lived). No decision made; defer until Option D is stable and the use case is validated.
+
+**Passkeys/WebAuthn.** Better Auth has a [Passkey plugin](https://www.better-auth.com/docs/plugins/passkey). Kratos has WebAuthn support. Either way, this is a one-sprint feature once the underlying auth stack is stable. Defer until after Step 5 (Better Auth migration) to avoid implementing on top of Kratos only to migrate it away.
+
+**Pod-to-Pod Identity Federation.** User on Pod A wants to share a view with a user on Pod B. Pod B must verify the identity of the Pod A user. This requires either a CP-brokered identity assertion or inter-pod JWKS trust. Out of scope until cross-pod sharing is productized. When the time comes: Pod A acts as a mini-OIDC provider (Better Auth can do this), Pod B registers Pod A as an upstream OIDC IdP, same pattern as CP-to-pod.
+
+**Hardware key / FIDO2 for agent identities.** AI agents should eventually have hardware-backed identity (TPM, secure enclave) rather than API keys stored in config files. Long-term architectural aspiration, not near-term work.

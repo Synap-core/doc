@@ -1,0 +1,7 @@
+{
+  "title": "Overview",
+  "description": "Team hub — links to every internal space",
+  "root": true,
+  "icon": "layout-dashboard",
+  "pages": ["index"]
+}

@@ -1,0 +1,674 @@
+---
+title: "Native OS UX Plan"
+description: "UX plan for share, spotlight, widgets, live activities."
+---
+
+# Native OS — UX integration plan
+
+How the `@synap-core/native-os` capabilities become features the user
+actually sees and uses in Relay. Companion to `NATIVE-OS-GUIDE.md`
+(implementation) and `NEXT-GEN-SHIP-PLAN.md` (sprint ordering).
+
+**Date:** 2026-04-11.
+**Scope:** Relay first. Browser mobile + future Expo apps reuse the same
+plan.
+
+---
+
+## Design principles
+
+Before the capability list, the rules every integration follows:
+
+1. **OS events reuse the deep-link pipeline.** The capture modal, entity
+   detail, space switcher — all of them already handle `relay://` URLs.
+   Every new OS entry point produces a URL and hands it to the router. No
+   new "share mode" or "intent mode" screens.
+
+2. **Zero per-platform branching at the UI layer.** If Relay needs to
+   check `Platform.OS` to render something, the abstraction failed. The
+   bridge reports availability; the UI hides/shows based on that, not on
+   the platform name.
+
+3. **Graceful degradation is invisible.** A capability that isn't
+   available doesn't produce an error state — it just doesn't exist in
+   the UI. The user never sees "sorry, not supported." They see the
+   affordances that work and nothing else.
+
+4. **Every surface earns its pixels.** A home-screen widget that shows
+   stale data is worse than no widget. A Dynamic Island pill that doesn't
+   update is worse than no pill. Each surface must have a continuous data
+   pipe — if we can't keep it live, we don't ship it.
+
+5. **Capture is the north star.** Every OS integration funnels back to
+   one of three actions: capture something new, find something existing,
+   or switch context. Nothing else.
+
+---
+
+## Priority order
+
+Ordered by user impact × implementation effort × unblocks-other-work.
+
+| # | Capability | User value | Effort | Status | Ship week |
+|---|---|---|---|---|---|
+| 1 | **Share Extension** | Daily use. Highest-frequency capture path. | 1 day | Peer ready, needs wiring | W1 |
+| 2 | **Spotlight (iOS)** | Zero-friction recall. Works from anywhere in iOS. | 2 days | Peer ready, needs wiring + id→kind encoding | W1 |
+| 3 | **Voice Live Activity (Android)** | Persistent recording indicator when backgrounded. | 1 day | Peer (Notifee) needed | W1 |
+| 4 | **Vision / OCR** | Capture from whiteboards, business cards, book pages. | 2 days | Peers needed, UI exists | W2 |
+| 5 | **Widgets — Quick Capture** | One-tap home-screen entry. | 3 days iOS / 3 days Android | Native targets not yet built | W3 |
+| 6 | **Widgets — Today's Captures** | Glanceable feed. | 2 days each platform | Native targets not yet built | W4 |
+| 7 | **App Intents — create-note** | "Hey Siri" voice capture. | 3 days iOS / 2 days Android | Native targets not yet built | W5 |
+| 8 | **Widgets — Space Switcher** | Multi-space users need this. | 1 day each platform | Depends on #5 landing first | W6 |
+| 9 | **Voice Live Activity (iOS)** | Dynamic Island is the premium polish. | 3 days | Native target not yet built | W6 |
+| 10 | **App Intents — full set** | Create task, open space, scan text as intents. | 3 days | Builds on #7 | W7 |
+| 11 | **Vision — live overlay** | Tap-to-select text regions in camera view. | 4 days | Power upgrade | W8 |
+| 12 | **Share Extension — custom sheet** | Branded SwiftUI sheet with AI preview. | 3 days iOS | Upgrade from #1 | W9 |
+
+---
+
+## 1. Share Extension
+
+### What the user sees
+
+- Opens Safari, reads an article, taps Share → **Relay** appears in the
+  share sheet alongside Messages, Mail, Notes.
+- Taps Relay → app cold-starts (if closed) → capture modal opens with
+  the article URL prefilled → AI structuring kicks in → user hits Send
+  → entity created, modal closes, back to Safari.
+- Same flow from: Mail (forward an email), Photos (share an image),
+  Twitter (save a tweet), Chrome / Gmail / Samsung Notes on Android.
+
+### Screens involved
+
+- **No new screens.** Reuses existing `CaptureModal` with `initialText`.
+- Modal needs a subtle "from [source app]" attribution badge above the
+  input so the user remembers the context. 1-line addition to
+  `CaptureModal.tsx` — read `source` query param from the deep link.
+
+### Data flow
+
+```
+Safari → Share → iOS Share Extension (expo-share-intent)
+                        │
+                        ▼
+            sharedStorage['share-queue'] = {...}
+                        │
+                        ▼
+            Relay foregrounds → NativeOSBridge useShareIntent fires
+                        │
+                        ▼
+            Linking.openURL('relay://capture?text=...&source=safari')
+                        │
+                        ▼
+            expo-router → Home tab → CaptureGestureButton opens modal
+```
+
+### What we need to build
+
+- [x] Bridge wiring (`NativeOSBridge.tsx` already subscribes to share)
+- [ ] Install `expo-share-intent` in `relay-app` + rebuild dev client
+- [ ] Attribution badge in `CaptureModal` reading the `source` query param
+- [ ] Handle image/file share payloads — wire into `@synap-core/capture-pipeline`'s
+      attachment path
+- [ ] App Store / Play Store asset: Share Extension icon (matches app icon)
+
+### Power upgrade (W9)
+
+Swap `expo-share-intent` → `expo-share-extension` for a custom SwiftUI
+share sheet with:
+- In-sheet space picker (choose which space to capture into)
+- AI tag preview (runs structuring in the extension process)
+- Instant save without app foreground
+
+Done entirely inside `native-os-share` — consumer code untouched.
+
+---
+
+## 2. Spotlight (iOS) + AppSearch (Android)
+
+### What the user sees
+
+- Pulls down on the iOS home screen → search "Alice" → **Relay** result
+  appears under Mail and Messages → taps → Relay opens to Alice's
+  person detail.
+- Same for notes, tasks, projects. Works from anywhere in iOS (Today
+  View, Home Screen search, Shortcuts, Lookup).
+- Android: Pixel Launcher search shows the same results; AppSearch
+  bridge ships in a later sprint.
+
+### Screens involved
+
+- **No new screens on the Relay side.** Reuses existing entity detail
+  screens (`app/person/[id]`, `app/note/[id]`, `app/campaign/[id]`, ...).
+- One new route: `app/entity/[id].tsx` — a generic resolver that looks
+  up the entity kind by id (via shared storage map) and redirects to
+  the kind-specific screen. Needed because Spotlight only hands us the
+  id on tap, not the kind.
+
+### Data flow
+
+```
+useFeed() in root provider
+        │
+        ▼
+useSpotlightSync(entities)  ← reindexes on every feed mutation
+        │
+        ▼
+Core Spotlight index (iOS system)
+        │
+        ▼
+User taps result → iOS opens relay://entity/:id
+        │
+        ▼
+app/entity/[id].tsx resolves kind → redirects to kind-specific screen
+```
+
+### What we need to build
+
+- [x] Bridge wiring (`useSpotlightSync` + `useSpotlightTap`)
+- [ ] Install `react-native-spotlight-search` + rebuild dev client
+- [ ] Root provider call to `useSpotlightSync(indexableEntities)` —
+      derives from the existing feed hook
+- [ ] `app/entity/[id].tsx` generic resolver route
+- [ ] Entity-id-to-kind map written to shared storage on every feed
+      mutation (same write path as widgets)
+- [ ] Decide: do we index vault entities? **Default no.** Add a
+      `searchable: boolean` flag to the entity → exclude vault items
+- [ ] Exclusion list in user settings: "Don't show [X] in system search"
+
+### Android follow-up
+
+Custom Kotlin AppSearch module. Tracked in `NEXT-GEN-ANDROID-PLAN.md`.
+Not blocking the iOS ship.
+
+---
+
+## 3. Voice Live Activity (Android via Notifee)
+
+### What the user sees
+
+- Starts a voice recording via the gesture button (drag to chip, hold).
+- A **persistent notification** appears in the Android status bar:
+  "Recording… 00:12" with a cancel button.
+- User swipes away from Relay to check a message in WhatsApp → comes
+  back → recording is still going, transcript is still accumulating.
+- Taps the notification → Relay foregrounds, gesture button is in
+  detached mode showing the Send affordance.
+
+### Screens involved
+
+- **No new screens.** The gesture button already has the detached-mode
+  UI. The live activity is a mirror of that state, shown outside the app.
+
+### Data flow
+
+```
+CaptureGestureButton starts voice → voice.isListening = true
+        │
+        ▼
+useLiveActivity({ kind: 'voice-recording', title: 'Recording…', elapsedSec })
+        │
+        ▼
+Notifee displayNotification({ ongoing: true, asForegroundService: true })
+        │
+        ▼
+User backgrounds app → notification stays, progress keeps updating
+        │
+        ▼
+voice.stop() → useLiveActivity(null) → Notifee cancelNotification
+```
+
+### What we need to build
+
+- [x] Bridge wiring (`useLiveActivity` hook exists)
+- [ ] Install `@notifee/react-native` + rebuild dev client
+- [ ] Notifee channel created at app start (`synap-live-updates`)
+- [ ] Elapsed time state in `CaptureGestureButton` (setInterval during
+      recording — 5 lines)
+- [ ] Hook the live activity state into the button's phase state
+      machine
+- [ ] Tap handler: `Notifee.onForegroundEvent()` → `Linking.openURL('relay://capture')`
+
+### iOS counterpart (W6)
+
+Same JS code. Dynamic Island pill via the Swift `RelayActivity` target.
+Ship plan Sprint 2.
+
+---
+
+## 4. Vision — Still image OCR
+
+### What the user sees
+
+- Opens capture modal → taps a new **"Scan"** button in the action bar
+  (between mic and camera) → camera opens → points at a whiteboard /
+  book page / business card → tap shutter → camera closes → text
+  appears in the capture input.
+- For business cards specifically: text is structured into a person
+  proposal automatically (name, email, phone, company).
+
+### Screens involved
+
+- **No new screens.** `expo-image-picker`'s camera is the interface.
+- Capture modal action bar gets a new button. Icon: `Scan` from
+  `lucide-react-native`.
+- Power upgrade (W8): dedicated `app/scanner.tsx` route with a live
+  VisionCamera overlay showing tap-to-select text regions.
+
+### Data flow
+
+```
+User taps Scan button in CaptureModal
+        │
+        ▼
+vision.scanText() → expo-image-picker camera
+        │
+        ▼
+User snaps photo → ML Kit / Vision recognize
+        │
+        ▼
+Returns { text } → setText((prev) => prev + '\n' + text)
+        │
+        ▼
+User edits if needed → Send → AI structuring
+```
+
+### What we need to build
+
+- [x] Bridge wiring (`vision.scanText`)
+- [ ] Install `@react-native-ml-kit/text-recognition` + rebuild
+- [ ] `ScanButton` component in `CaptureModal` — hide if
+      `!vision.availability.available`
+- [ ] Business card detection heuristic: if OCR result contains both an
+      email pattern and a phone pattern, route through
+      `@synap-core/capture-pipeline` with `intent: 'person'`
+- [ ] Capture pipeline: accept `source: 'vision'` in the structuring
+      request so the AI knows the text came from OCR (may contain
+      errors, should be more forgiving)
+
+---
+
+## 5. Widgets — Quick Capture (first widget to ship)
+
+### What the user sees
+
+- Long-press home screen → Add Widget → Relay → **Quick Capture** →
+  drag onto home screen.
+- Widget shows a big "+" icon with "Capture" label and the active space
+  color as background.
+- One tap → Relay opens directly to the capture modal (empty).
+- Power mode (future): long-press the widget → a voice capture variant
+  appears, one tap starts a voice recording and a Live Activity.
+
+### Screens involved
+
+- **New native targets:** `RelayWidgets.swift` (iOS) and `QuickCaptureWidget.kt`
+  (Android). These are Swift/Kotlin, not JS.
+- **No changes to Relay JS.** The widget button target is a deep link
+  `relay://capture` which the existing router handles.
+
+### Data flow
+
+```
+Widget tap → intent = relay://capture
+        │
+        ▼
+iOS / Android open Relay with the URL
+        │
+        ▼
+expo-linking resolves → CaptureModal opens
+```
+
+For state display (Today's Captures widget — ships after Quick Capture):
+
+```
+Relay feed mutates (any capture, sync, delete)
+        │
+        ▼
+widgets.setState('todays-captures', { count, items: [...] })
+        │
+        ▼
+sharedStorage['widget:todays-captures'] = JSON
+        │
+        ▼
+Widget timeline reload → widget reads shared storage → renders
+```
+
+### What we need to build
+
+- [ ] iOS: `RelayWidgets` extension target via `@bacons/apple-targets`.
+      SwiftUI widget view reads App Group UserDefaults for state.
+- [ ] Android: Glance widget under `android/app/src/main/java/.../widgets/`.
+      Custom Expo config plugin to inject the widget provider.
+- [ ] State writes from JS (already possible via `widgets.setState`)
+- [ ] Widget reload trigger after each state write — needs the native
+      `WidgetCenter.reloadAllTimelines()` call wired in
+- [ ] Design: widget preview images for the gallery picker
+
+---
+
+## 6. Widgets — Today's Captures
+
+### What the user sees
+
+- Medium widget showing "Today" header + last 3 captures with
+  thumbnails and kind icons (note, task, person, ...).
+- Tap a capture → opens that entity's detail.
+- Updates within 1 second of creating a new capture in Relay.
+
+### Screens involved
+
+- New widget target (separate from Quick Capture).
+- No JS screen changes — taps route via `canonicalRelayUrl` → existing
+  entity detail routes.
+
+### Data flow
+
+Same as #5 but with richer state payload.
+
+### What we need to build
+
+- [ ] SwiftUI + Glance widget views
+- [ ] Thumbnail pipeline: widgets can't fetch remote images (CPU/memory
+      constrained). Shared storage must contain local file:// URIs —
+      either pre-cached in the main app or using `expo-image`'s
+      disk cache path
+- [ ] Tap → `WidgetCenter` sends the URL to the main app → router
+      handles
+
+---
+
+## 7. App Intents — Create Note
+
+### What the user sees
+
+- User holds the Home button / says "Hey Siri, new Relay note about
+  the design review meeting" → Siri confirms "Note added to Relay" →
+  note appears in the feed next time Relay foregrounds (or immediately
+  if it's already open).
+- Same on Android: "Hey Google, new Relay note…"
+- Also appears in Spotlight Actions, Shortcuts suggestions, iOS 18
+  AppShortcutsProvider.
+
+### Screens involved
+
+- **No Relay screen changes.** Intent handlers run in native code, write
+  to the backend via `@synap-core/capture-pipeline` called from the
+  bridge's JS handler, and the feed refreshes on next foreground.
+- **New:** a lightweight "intent receipt" toast shown when Relay opens
+  with a recently-fired intent. "Note created from Siri" — 3-second
+  fade. Builds user trust in the zero-UI flow.
+
+### Data flow
+
+```
+"Hey Siri, new Relay note about..." → iOS App Intent target
+        │
+        ▼
+RelayIntents.swift CreateNoteIntent.perform()
+        │
+        ▼
+sharedStorage['intent-queue'] = [{kind: 'create-note', params: {text: '...'}}]
+        │
+        ▼
+Writes through to Relay's local entity store (via a shared native
+helper that reuses the capture-pipeline types)
+        │
+        ▼
+Intent completes, Siri confirms "Note added"
+        │
+        ▼
+Next time Relay foregrounds: useIntentHandler fires, shows receipt toast
+```
+
+### What we need to build
+
+- [ ] iOS: `RelayIntents.swift` with `CreateNoteIntent` conforming to
+      `AppIntent` + `AppEntity` for note references
+- [ ] Android: `shortcuts.xml` + `CreateNoteActivity.kt`
+- [ ] Shared native helper for intent→entity persistence (so we don't
+      duplicate the capture pipeline in Swift/Kotlin)
+- [ ] Toast component for intent receipts
+- [ ] Intent donation on every in-app capture (already implemented at
+      facade level, just need to call it from the capture pipeline's
+      success handler)
+
+---
+
+## 8. Widgets — Space Switcher
+
+### What the user sees
+
+- Medium widget with 3 space tiles (current + 2 most recent).
+- Tap a tile → Relay opens directly into that space, skipping the
+  intermediate tab bar.
+- Tile backgrounds use each space's accent color.
+
+### Screens involved
+
+- Widget target only.
+- `relay://space/:slug` route already exists in the native-os deep-link
+  contract.
+
+### What we need to build
+
+- [ ] Widget view (SwiftUI + Glance)
+- [ ] Shared-state writer updates on every `spaceId` change in the
+      workspace store
+- [ ] Space switcher already exists in Relay — this just gives it a
+      home-screen entry
+
+---
+
+## 9. Voice Live Activity (iOS) — Dynamic Island
+
+### What the user sees
+
+- Starts voice recording → a **pill slides out of the Dynamic Island**
+  with a red dot + "Recording 00:12".
+- Long-press the pill → expanded view showing transcript preview + a
+  Stop button.
+- Keeps updating while the app is backgrounded.
+- On iPhones without Dynamic Island (< iPhone 14 Pro): a **lock screen
+  card** serves the same purpose.
+
+### Screens involved
+
+- No Relay screen changes.
+- New native target: `RelayActivity` (ActivityKit + WidgetKit widget
+  extension for the Dynamic Island views).
+
+### What we need to build
+
+- [ ] `RelayActivity` Swift target via `expo-live-activity` or
+      `@bacons/apple-targets`
+- [ ] Compact / expanded / minimal view SwiftUI code
+- [ ] Bridge between `native-os-live-updates` TS facade and the iOS
+      Live Activity API (replace the current iOS stub)
+- [ ] Interactive Stop button using App Intent (requires #7 to land
+      first)
+
+---
+
+## 10. App Intents — Full set
+
+Extends #7 to cover:
+
+- `CreateTaskIntent(title, dueDate?)` — "Hey Siri, remind me to call
+  Alice tomorrow"
+- `OpenSpaceIntent(slug)` — "Open the PKM space in Relay"
+- `ScanTextIntent` — "Hey Siri, scan this" (fires vision.scanText)
+- `CapturePersonIntent(source)` — "Capture a person from my clipboard"
+
+Each needs its own Swift `AppIntent` conformance + Android Activity.
+Rich parameter resolution — Siri should be able to prompt "Which space?"
+interactively when the parameter isn't clear.
+
+---
+
+## 11. Vision — Live overlay (power upgrade)
+
+### What the user sees
+
+- Taps Scan → camera opens in **live mode** with text regions
+  highlighted in real time → user taps a specific region → only that
+  text is captured (not the whole frame).
+- Useful for: picking one paragraph from a book, one row from a
+  spreadsheet, one line from a receipt.
+
+### Screens involved
+
+- Dedicated `app/scanner.tsx` route with a VisionCamera view +
+  tap-to-select overlay.
+- Camera controls: flash, flip, multi-capture mode.
+
+### What we need to build
+
+- [ ] `app/scanner.tsx` route
+- [ ] iOS: upgrade `native-os-vision` to use
+      `DataScannerViewController` (iOS 16+) — gives us the live
+      overlay for free
+- [ ] Android: `react-native-vision-camera` + frame processor +
+      custom React overlay drawing on top
+- [ ] Multi-region selection UI
+- [ ] Document scanner upgrade (iOS `VNDocumentCameraViewController`)
+      for multi-page PDF capture — used for scanning notebook pages
+
+---
+
+## 12. Share Extension — Custom sheet
+
+Replaces the default `expo-share-intent` sheet with a branded SwiftUI
+experience:
+
+- Relay logo header + space picker pill
+- AI tag preview (structuring runs inside the extension process)
+- "Save" and "Save + Open Relay" buttons
+- All without foregrounding the main app
+
+Swap `native-os-share` to wrap `expo-share-extension` instead of
+`expo-share-intent`. Consumer code untouched — just the sub-package
+implementation changes.
+
+---
+
+## Cross-capability UI additions
+
+Small but high-visibility changes across existing screens:
+
+### Capture modal
+
+- [ ] **Source attribution badge** — reads `source` query param (`share`,
+      `intent:create-note`, `vision`, ...). Renders as a small pill
+      above the input: "from Safari" / "from Siri" / "from camera".
+- [ ] **Scan button** — new action bar entry, hidden when vision
+      unavailable.
+
+### Settings
+
+- [ ] **"OS integrations" section** — shows availability of each
+      capability with a live toggle where applicable. Gives the user a
+      single place to see what's working and what isn't.
+  ```
+  Share to Relay           ✓ Enabled
+  Spotlight indexing       ✓ Enabled          [ ] Include vault items
+  Siri Shortcuts           ⏳ Coming soon
+  Widgets                  ⏳ Coming soon
+  Live Activities          ✓ Enabled (Android)
+  Camera OCR               ✓ Enabled
+  ```
+- [ ] **Reindex Spotlight button** — for when the user deletes a lot of
+      entities and wants to force a clean rebuild.
+
+### Onboarding
+
+- [ ] **Step after "Welcome":** "Share to Relay from any app" — shows a
+      quick animation of the share sheet flow and instructs the user to
+      try it. Two-second dwell, skippable.
+
+### Feed (main home tab)
+
+- [ ] **Intent receipt toast** — shown once per foreground if an intent
+      fired while the app was closed. "Note added from Siri" / "Task
+      created from Shortcut". Fades after 3 seconds.
+
+---
+
+## Metrics to track per capability
+
+Not currently wired but should be added to the existing analytics layer:
+
+- Share Extension: shares received per day, conversion rate (queued →
+  captured → saved), drop-off at each step.
+- Spotlight: queries that hit Relay results, tap-through rate.
+- Intents: intents fired per day, intents donated per day, Siri
+  suggestion surface rate.
+- Widgets: impressions (from timeline reload events), taps.
+- Live Activity: activation rate (recording started → activity shown),
+  cancellation source (tap inside vs outside app).
+- Vision: scan attempts per day, average OCR text length, correction
+  rate (user edited the extracted text before sending).
+
+---
+
+## Sprint-to-capability mapping
+
+| Sprint | Capabilities | Peers to install | Native work |
+|---|---|---|---|
+| **S0 (3d)** | Foundations | — | App Group entitlement, deep-link table |
+| **S1 (W1-W2)** | Share, Spotlight iOS, Voice Live Activity Android, Vision | `expo-share-intent`, `react-native-spotlight-search`, `@notifee/react-native`, `@react-native-ml-kit/text-recognition` | Config plugins only |
+| **S2 (W3-W4)** | Widgets Quick Capture + Today's Captures | — | WidgetKit + Glance targets |
+| **S3 (W5-W6)** | App Intents iOS + Android, Widgets Space Switcher, Voice Live Activity iOS | — | AppIntent Swift + shortcuts.xml Kotlin + Live Activity target |
+| **S4 (W7-W8)** | Full intent set, Vision live overlay | `react-native-vision-camera` | Live overlay UI |
+| **S5 (W9)** | Custom Share Extension sheet, App Store polish | `expo-share-extension` | Custom SwiftUI sheet |
+
+---
+
+## Open questions
+
+1. **Vault exclusion UX.** Default is "never index vault items." Does
+   the user get a toggle per entity, per profile, or just a global
+   settings switch?
+
+2. **Entity id → kind resolver.** Three options:
+   (a) Encode the kind into the id as a prefix (`note:abc123`).
+       Minimal code but requires a DB migration on every existing id.
+   (b) Maintain an id→kind map in shared storage, updated on every
+       feed mutation. No migration, adds ~50KB of RAM per 1000
+       entities.
+   (c) Route all taps through a generic `/entity/:id` resolver that
+       looks up the entity in the existing store. Cleanest code, adds
+       one redirect hop on every tap.
+   **Recommendation:** (c). The redirect is invisible (< 50ms) and we
+   avoid DB migration.
+
+3. **Intent receipts — always show or only first-time?** Always risks
+   toast fatigue. First-time may confuse users who don't understand
+   what happened. **Recommendation:** show for the first 3 intents
+   across the app's lifetime, then silent unless the user re-enables.
+
+4. **Widget refresh cadence.** Widgets can't pull — they reload on a
+   timeline budget that iOS decides. Today's Captures widget wants
+   sub-second refresh after a capture. This requires us to call
+   `widgets.reloadKey('todays-captures')` on every feed mutation, which
+   needs the native `WidgetCenter.reloadAllTimelines()` bridge wired up.
+   **Blocker:** Sprint 2 work.
+
+5. **Siri voice capture vs existing voice flow.** When the user says
+   "Hey Siri, new Relay note," should Siri capture the audio and hand
+   us the text, or should we open Relay's own voice capture flow? The
+   Siri-native path is lower latency but gives us no AI structuring
+   preview. **Recommendation:** Siri-native path for the MVP,
+   one-tap-to-refine in the intent receipt toast.
+
+---
+
+## References
+
+- Package README: `synap-app/packages/core/native-os/README.md`
+- Implementation guide: `docs-internal/NATIVE-OS-GUIDE.md`
+- Ship plan: `docs-internal/NEXT-GEN-SHIP-PLAN.md`
+- iOS deep dive: `docs-internal/NEXT-GEN-IOS-PLAN.md`
+- Android deep dive: `docs-internal/NEXT-GEN-ANDROID-PLAN.md`
+- Voice roadmap: `docs-internal/RELAY-NEXT-GEN-CAPABILITIES.md`
+- Bridge consumer reference: `relay-app/src/providers/NativeOSBridge.tsx`

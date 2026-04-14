@@ -1,0 +1,14 @@
+---
+title: Feed Freshness
+description: Layer 1 cache hygiene, Layer 2 smart polling (trpc.events.since), Layer 3 WebSocket plan.
+---
+
+# Feed Freshness
+
+Feed freshness uses a layered update strategy:
+
+- **Layer 1:** cache hygiene and invalidation discipline
+- **Layer 2:** smart polling via `trpc.events.since`
+- **Layer 3:** realtime push via WebSocket for low-latency updates
+
+The model balances reliability first, then progressively tighter latency.

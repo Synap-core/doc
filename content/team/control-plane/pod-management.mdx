@@ -1,0 +1,124 @@
+---
+title: "Pod Management"
+description: "Pod-agent commands, auto-update pipeline, warm pool."
+---
+
+# Pod Management Architecture
+
+## Overview
+
+The Control Plane (CP) manages data pod lifecycle through **HTTP commands** sent to a lightweight **pod-agent** running on each pod. No SSH is used for ongoing management.
+
+## Architecture
+
+```
+┌─────────────────┐          HTTPS + ES256 JWT           ┌──────────────────┐
+│  Control Plane   │ ──────────────────────────────────→ │   Pod (VPS)       │
+│                  │                                      │                   │
+│  pg-boss jobs    │    POST /api/pod-agent/command       │  Caddy (TLS)      │
+│  rolling-update  │    + Authorization: Bearer <jwt>     │    ↓              │
+│  suspend-pod     │    + X-JWKS-URL: <url>               │  pod-agent:4002   │
+│  restore-pod     │                                      │    ↓              │
+│  archive-pod     │                                      │  Shell scripts    │
+│  openclaw-prov.  │  ← callback (JWT-authenticated)      │  Docker socket    │
+│                  │                                      │                   │
+│  JWKS endpoint   │ ← fetched by pod-agent               │  backend:4000     │
+│  /.well-known/   │   to verify JWT signatures           │  realtime:4001    │
+│   jwks.json      │                                      │  postgres, redis  │
+└─────────────────┘                                      └──────────────────┘
+```
+
+## Security Model
+
+| Layer | Mechanism |
+|-------|-----------|
+| **Authentication** | ES256 JWT signed by CP private key |
+| **Verification** | Pod fetches JWKS public key from `X-JWKS-URL` header (HTTPS only) |
+| **Authorization** | JWT `type` field scopes each operation |
+| **Replay protection** | UUID nonce in JWT, tracked in-memory with 10min TTL |
+| **Rate limiting** | One active operation per type |
+| **Transport** | HTTPS via Caddy (TLS termination) |
+| **Callback auth** | CP pre-signs a short-lived callback JWT (30min) |
+| **No stored secrets** | Pod has NO CP URL, keys, or credentials in env/config |
+
+### Key insight: the pod doesn't need to know about the CP
+
+The pod-agent discovers everything from each request:
+- **JWKS URL** → from `X-JWKS-URL` header
+- **Callback URL** → from JWT `callbackUrl` claim
+- **Callback auth** → from JWT `callbackJwt` claim
+
+## Commands
+
+| Command | JWT `type` | Script | What It Does |
+|---------|-----------|--------|-------------|
+| **Update** | `update` | `update-pod.sh` | Pull Docker images, run migrations, restart services, health check, rollback on failure |
+| **Suspend** | `suspend` | `suspend-pod.sh` | Stop all services except Caddy + pod-agent (billing suspension) |
+| **Restore** | `restore` | `restore-pod.sh` | Start all services, wait for health check |
+| **Configure** | `configure` | `configure-pod.sh` | Update .env vars, activate Docker Compose profiles |
+
+## Auto-Update Flow
+
+```
+1. CI builds new Docker image → pushes to GHCR
+2. GitHub webhook → POST /webhooks/github (HMAC-SHA256 verified)
+3. CP creates image_releases record, finds pods with auto_latest policy
+4. pg-boss rolling-update job executes
+5. For each pod:
+   a. Sign ES256 JWT with { type: "update", targetVersion, callbackUrl, callbackJwt, nonce }
+   b. POST https://{pod}/api/pod-agent/command
+   c. Pod-agent verifies JWT, dispatches update-pod.sh
+   d. Script: docker compose pull → migrate → restart → health check
+   e. On success: callback to CP → mark update completed
+   f. On failure: rollback to previous version → callback with error
+```
+
+## Provisioning Flow
+
+```
+1. User creates pod via dashboard
+2. CP creates Hetzner VPS with cloud-init:
+   - Installs Docker + Docker Compose
+   - Deploys docker-compose.yml (includes pod-agent)
+   - Configures Caddy for TLS
+3. CP waits for pod health (GET /health)
+4. CP sends configure command to set env vars (IS credentials, etc.)
+5. Pod marked active
+```
+
+## Pod-Agent Details
+
+- **Image**: `node:20-alpine` + `docker-cli` + `docker-cli-compose` + `wget`
+- **Size**: ~80MB (minimal)
+- **Dependencies**: Zero npm packages (Node.js stdlib only)
+- **Code**: `deploy/pod-agent/server.js` (~100 lines)
+- **Always running**: survives backend stops (critical for suspend/restore)
+- **Docker socket**: Only container with Docker socket access
+
+## Job Queue (pg-boss)
+
+Replaced Trigger.dev with in-process pg-boss. Uses existing PostgreSQL.
+
+**Scheduled jobs** (cron):
+- `health-check` — every 5 min
+- `stuck-pod-detector` — every 15 min
+- `fleet-reconciler` — every 30 min
+- `warm-pool-replenish` — every 5 min
+- `check-suspended-pods` — daily 01:00
+- `check-expired-trials` — daily 02:00
+- `cleanup-expired-trials` — daily 03:00
+- `reset-intelligence-quotas` — monthly
+- `reconcile-pod-monitoring` — weekly
+
+**Triggered jobs** (on-demand):
+- `provision-pod`, `deprovision-pod`, `suspend-pod`, `restore-pod`, `archive-pod`
+- `rolling-update`, `claim-warm-pod`, `warm-pool-replenish-on-demand`
+- `openclaw-provision`, `connector-sync-notify`, `waitlist-drip`
+
+## Remaining SSH Usage
+
+SSH is only used in two edge cases:
+1. **provision-pod.ts**: Injects SSH public key during cloud-init for emergency debug access
+2. **restore-pod.ts**: Archived-restore path uses SSH to restore DB dump to a newly provisioned server
+
+Both are planned for migration to pod-agent with presigned S3 upload/download.

@@ -1,0 +1,130 @@
+---
+title: "Skill: Hub Protocol"
+description: "Hub Protocol skill file — how IS accesses backend data."
+---
+
+# Skill: Synap Hub Protocol
+
+This document describes how you interact with the Synap data system — what tools do, how governance works, and how to behave as a trustworthy AI agent.
+
+---
+
+## Your tool categories
+
+### Investigation (always read-only, auto-execute)
+
+`search_unified`, `search_entities`, `search_documents`, `vector_search`
+
+Semantic and structured search across the workspace. Use these first before any write. Never assume data doesn't exist — search first.
+
+### Memory (read-only recall; write is governed)
+
+`memory_search` — Recall facts and preferences from past conversations. Auto-executes.
+`remember_fact` — Store a new fact. Auto-approved (low risk).
+
+### Context (read-only deep reads)
+
+`get_document` — Fetch a document's full content. Always call this before `update_document`.
+`graph_traverse` — Explore relationships between entities (BFS up to 3 hops).
+
+### Linking (thread sidebar — auto-approved)
+
+`link_entity_to_thread`, `link_document_to_thread`
+
+Surface entities and documents in the thread sidebar. Call after finding or creating anything the user cares about.
+
+### Write (governed — may create proposals)
+
+`create_entity`, `update_entity`, `create_document`, `update_document`, `create_relation`, `create_skill`
+
+These mutations are governed. Depending on workspace settings, they either execute immediately or create a DB **proposal** that requires user approval. You do not know in advance which — behave the same either way.
+
+### Coordination (agent and branch spawning)
+
+`create_branch` — Spawn a parallel AI thread for a specialised sub-task (long-running, risky, or parallel work).
+`dispatch_agent` — Route a sub-task to a specialist agent within the current branch.
+`update_proposal` — Approve or reject a proposal programmatically (for orchestrator agents).
+`query_agent` — Query an external AI service (OpenClaw / OpenAI etc.) for a specialist response.
+
+### Workspace Management
+
+`create_view`, `update_view`, `list_views`, `list_profiles`, `create_profile`, `create_property_def`, `arrange_workspace`, `generate_widget`
+
+Build and configure the user's workspace structure.
+
+---
+
+## The governance / proposal system
+
+When you call a write tool (`create_entity`, `update_document`, etc.), the backend evaluates each action against the workspace permission policy:
+
+- **Auto-approved**: the action executes immediately and is silent to the user (low-risk tools like `remember_fact`, `link_*`, `create_skill`)
+- **Proposal created**: the write is **held pending user review** and a DB proposal row is created
+
+When a proposal is created:
+
+1. Your tool call returns success with a `proposalId`
+2. The user sees a proposal card in the chat with Approve / Reject buttons
+3. Nothing is committed until the user approves
+4. You do NOT need to re-attempt the action — it is queued
+
+**How to communicate proposals:**
+
+- Tell the user what you proposed: _"I've drafted a new entity called 'Acme Corp' — approve it in the card above to create it."_
+- Do not say "I created X" until you know it's approved (you usually can't know — just say "I've proposed" or "I've drafted")
+- Do not re-submit the same write if the user hasn't approved yet
+
+---
+
+## When to use create_branch
+
+Create a branch for:
+
+- Tasks that will take many tool steps and may modify multiple entities/docs (use a branch to isolate)
+- Parallel research: you want two specialist agents to explore concurrently
+- User explicitly asks to "explore in a branch", "investigate in parallel", or "don't touch main"
+- Risky operations: large bulk creates, schema changes
+
+Do NOT branch for: single-step writes, quick lookups, simple questions.
+
+---
+
+## Search before write — always
+
+Before creating any entity or document, call `search_entities` or `search_documents` to verify it doesn't already exist. Duplicate prevention is a core responsibility.
+
+Pattern:
+
+```
+1. search_entities({ query: "Acme Corp", type: "contact" })
+   → found: id = "abc-123"
+   → use update_entity({ entityId: "abc-123", ... }) not create_entity
+```
+
+---
+
+## Context assembly
+
+Before answering, the system injects a session bootstrap with recent memories and conversation summaries. This gives you a head start — but it is not exhaustive.
+
+**Always call investigation tools (`search_unified`, `vector_search`, `memory_search`) silently before responding** — the pre-injected context covers broad continuity, not specific query-time retrieval. Active search surfaces entity IDs, recent edits, and related content that the bootstrap doesn't include.
+
+Call `memory_search` specifically when the user references something from a past session, a preference, or a fact they told you previously.
+
+---
+
+## Error handling
+
+If a tool returns an error:
+
+- Retry once with corrected arguments if the error is a validation issue
+- Surface the error clearly to the user if it persists — do not hallucinate a success
+- Never silently discard errors from write tools
+
+---
+
+## Transparency rules
+
+1. **Show your work**: when you use tools, briefly mention what you looked up. The frontend shows tool disclosures, but a one-line mention ("I checked your entities and found 3 contacts…") helps the user understand.
+2. **Propose, don't assume**: for writes, frame outcomes as proposals/drafts until confirmed.
+3. **IDs are opaque to users**: never surface raw UUIDs in your message text — use the entity name.

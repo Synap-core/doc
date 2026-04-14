@@ -1,0 +1,239 @@
+---
+title: "IS Roadmap"
+description: "Intelligence Service roadmap and upcoming features."
+---
+
+# Intelligence Hub — Feature Roadmap
+
+> **Last updated**: 2026-02-18
+> See [INTELLIGENCE_HUB.md](./INTELLIGENCE_HUB.md) for current capabilities.
+
+---
+
+## Status Legend
+
+| Symbol | Meaning                               |
+| ------ | ------------------------------------- |
+|      | Done                                  |
+| 🔨     | In progress                           |
+|      | Planned (Tier 1 — foundation)         |
+| 🔮     | Planned (Tier 2 — agent capabilities) |
+|      | Planned (Tier 3 — scale & quality)    |
+| ⏸      | Deferred (pending discussion)         |
+
+---
+
+##  Done
+
+- Multi-turn chat with thread history
+- MVP Chat agent + Orchestrator agent
+- Full-text search (Typesense, 5 collections)
+- Semantic/vector search (pgvector + text-embedding-3-small)
+- Proposal system (entity create/update, document edit with diff)
+- Skills: create, list, get (event-sourced)
+- Thread context: messages + linked entities + linked documents
+- User context: recent entities + threads
+- Embeddings API (single + batch)
+- SSE streaming for chat and orchestrate
+- Agent branching (create child thread with specialist agent)
+- API key auth (hub-protocol scopes)
+- `thread_entities` + `thread_documents` schema + migration
+
+---
+
+## Tier 1 — Foundation
+
+###  F1: Proposal Self-Update (AI revises pending proposal)
+
+**Problem**: AI creates a proposal (e.g. "update document X"). The user hasn't approved yet. The AI gets new information (conflicting data, better approach). Currently no way to revise the pending proposal — it would need to be rejected and re-created.
+
+**Solution**: Add `PATCH /api/hub/proposals/:id` endpoint. AI calls `update_proposal` tool to revise the `data` field of a `pending` proposal. Direct DB update (no event pipeline re-run needed).
+
+**Files to modify**:
+
+- `packages/api/src/routers/hub-protocol/proposals.ts` (new file)
+- `packages/api/src/routers/hub-protocol/index.ts` (register)
+- `packages/api/src/routers/hub-protocol-rest.ts` (add REST endpoint)
+- `apps/intelligence-hub/src/tools/actions/update-proposal.ts` (new tool)
+- `apps/intelligence-hub/src/tools/registry.ts` (register tool)
+
+**Impact**: Low complexity. Unblocks orchestrator from being stuck on stale proposals.
+
+---
+
+###  F2: Thread ↔ Entity/Document Linking Tools
+
+**Problem**: The orchestrator finds a relevant entity (e.g. "Q4 Budget Review") and mentions it, but doesn't formally link it to the thread. The `thread_entities` table and linking backend procedures exist but aren't exposed as agent tools.
+
+**Solution**: Add `link_entity_to_thread` and `link_document_to_thread` tools. Add them to Orchestrator and MVP Chat tool sets. When an agent references an entity/document, it can formally link it.
+
+**Files to modify**:
+
+- `apps/intelligence-hub/src/tools/actions/link-context.ts` (new)
+- `apps/intelligence-hub/src/tools/registry.ts`
+- `apps/intelligence-hub/src/agents/orchestrator/orchestrator-agent.ts` (add tools)
+- `apps/intelligence-hub/src/agents/mvp-chat-agent.ts` (add tools)
+- `packages/api/src/routers/hub-protocol-rest.ts` (expose linking endpoints)
+
+**UX impact**: Entities/documents mentioned in chat appear in the thread sidebar. Future messages in the thread get that context automatically.
+
+---
+
+### ⏸ F3: Memory — Hybrid Architecture (deferred — pending discussion)
+
+**Approach decided**: Two-layer memory:
+
+1. **Entity-based** (structured, user-visible): store learned preferences/facts as `memory` entity type — searchable, visible in UI, user-editable
+2. **Mem0** (unstructured, episodic): self-hosted alongside hub, uses backend's Postgres as vector store
+
+**Blocked on**: Where to host Mem0 (backend vs. intelligence hub container) — discuss with team.
+
+---
+
+## Tier 2 — Agent Capabilities
+
+### 🔮 F4: Agent-Calling-Agent (Orchestrator delegates to sub-agent)
+
+**User story**: "Do this research task, report back when done, then I'll tell the user."
+
+**Pattern**:
+
+1. Orchestrator calls `dispatch_agent` tool with `{ agentType, task, waitForCompletion: true }`
+2. A child branch thread is created, assigned the specialist agent
+3. Specialist runs independently (searches, reads, thinks)
+4. Specialist marks branch `status: "completed"` with a `contextSummary`
+5. Orchestrator polls until complete (max 60s), reads summary
+6. Orchestrator synthesizes and responds to user
+
+**Files to create/modify**:
+
+- `apps/intelligence-hub/src/tools/actions/dispatch-agent.ts` (new)
+- `apps/intelligence-hub/src/tools/registry.ts`
+- `apps/intelligence-hub/src/agents/orchestrator/orchestrator-agent.ts`
+- `apps/intelligence-hub/src/routes/chat-stream.ts` (branch status polling)
+- `packages/api/src/routers/hub-protocol/branches.ts` (add `getStatus`, `complete`)
+
+**Data model**: No new tables. Uses `chatThreads.status` + `chatThreads.contextSummary`.
+
+---
+
+### 🔮 F5: AI-to-AI Channel (Configurable 2-agent exchange)
+
+**User story**: "Have two AI personas debate this topic and give me a synthesis."
+
+**Configurable personas** (selected at request time):
+
+- Devil's advocate (A argues for, B challenges)
+- Research + Critique (A investigates, B validates)
+- Product + Engineering (domain specialist pair)
+- Any custom persona pair
+
+**Pattern**:
+
+1. `POST /api/ai-channel/start` — topic + agentA config + agentB config + maxRounds
+2. Creates a shared thread, turn-based loop: A posts → B reads + responds → repeat
+3. Convergence detection: stop when B adds no new information
+4. Final synthesis pass: third agent summarizes the exchange
+5. Returns `{ messages, synthesis, insights }` + SSE streaming
+
+**Files to create**:
+
+- `apps/intelligence-hub/src/routes/ai-channel.ts`
+- `apps/intelligence-hub/src/agents/ai-channel-agent.ts`
+- `apps/intelligence-hub/src/index.ts` (mount route)
+
+**Data model**: Reuses `chatThreads` with `agentType: "ai-channel"`.
+
+---
+
+### 🔮 F6: Cross-Thread Notification (Parallel chats informed of updates)
+
+**User story**: "I'm in chat A talking about the Q4 Budget document. In chat B, the AI updates it. Chat A should know."
+
+**Pattern**:
+
+1. New Inngest function `cross-thread-notifier` listens to `entity.update.completed` + `document.update.completed`
+2. Queries `thread_entities` / `thread_documents` for all threads using the updated item
+3. For each affected thread: appends a system message
+   - " Document 'Q4 Budget' was updated in another conversation"
+   - " Entity 'Task: Finalize Report' was modified"
+4. Frontend SSE stream picks up the new message in real time
+
+**Files to create/modify**:
+
+- `packages/jobs/src/executors/cross-thread-notifier.ts` (new)
+- `packages/jobs/src/functions/index.ts` (register function)
+- `packages/database/src/schema/conversation-messages.ts` (add `messageType: "system" | "user" | "assistant"` if not present)
+
+---
+
+## Tier 3 — Scale & Quality
+
+###  F7: Conversation Summarization + Compressed Memory
+
+Auto-summarize long threads and store in `chatThreads.contextSummary`. Use summary as compressed context for future messages (instead of sending all 50 messages every time).
+
+**Trigger**: Thread reaches 20+ messages → background job summarizes last 15 → updates contextSummary.
+
+---
+
+###  F8: Skill Versioning + Rollback
+
+Add `skill_versions` table to store previous skill code on update. Allow user/AI to rollback to a previous version.
+
+```sql
+CREATE TABLE skill_versions (
+  id uuid PRIMARY KEY,
+  skill_id uuid REFERENCES skills(id),
+  version integer,
+  code text,
+  created_at timestamp
+);
+```
+
+---
+
+###  F9: Persist Event Watermark
+
+**Problem**: Event processor resets watermark to epoch on every restart → 14k+ old events replay.
+
+**Fix**: Store watermark in Redis (`SET synap:event-watermark &lt;timestamp>`), load on startup.
+
+**File**: `packages/api/src/event-handlers/index.ts` (~5 line change)
+
+---
+
+###  F10: Workspace-Scoped Search
+
+Typesense queries currently filter by `userId` but not always by `workspaceId`. Add workspace filter to prevent cross-workspace data leakage in multi-tenant scenarios.
+
+**File**: `packages/search/src/services/search-service.ts`
+
+---
+
+###  F11: Reduce Event Processor Poll Interval
+
+Current: 5 seconds between polls. For responsive UX (entity creation visible quickly), reduce to 1 second.
+
+```typescript
+// packages/api/src/event-handlers/index.ts
+setTimeout(poll, 1000); // was 5000
+```
+
+---
+
+## Implementation Order
+
+```
+F1 (proposal self-update)       ← Low complexity, unblocks F4/F5
+F2 (linking tools)              ← Low-medium, completes existing infra
+F4 (agent-calling-agent)        ← Builds on F2 (linked context), needs branches
+F5 (AI-to-AI channel)           ← Independent, medium complexity
+F6 (cross-thread notification)  ← Independent, medium complexity
+F9 (watermark)                  ← Quick win, 5 lines
+F10 (workspace search)          ← Quick win, 2 lines
+F11 (poll interval)             ← Quick win, 1 line
+F7 (summarization)              ← After F4/F5 stable
+F8 (skill versioning)           ← Low priority, no UX urgency
+F3 (memory)                     ← Discuss hosting strategy first
+```

@@ -1,0 +1,135 @@
+---
+title: Browser
+description: Electron desktop app — primary Synap client, onboarding, built-in web, capture, and shipping
+---
+
+Team docs for the **`browser/`** repo: **Electron** shell — our **primary desktop surface** (fluid web app is deprecated for end users). Long-form PRD/architecture/security notes that used to live under `browser/doc/` and `browser/docs/` are summarized here; **edit this page** as the product evolves.
+
+---
+
+## Why this application exists
+
+1. **Workspace shell** — Synap apps (Home, Library, Chat, Canvas, etc.) run inside a **trusted** embedded view with session access to the user’s pod — same graph, AI, and governance as the backend, without asking users to live in a generic browser tab.  
+2. **Built-in web** — Tabs + address bar for **arbitrary sites** in **sandboxed** webviews, separate from the trusted Synap UI. Enables research → **Save to Pod** (URL, metadata, optional screenshot/readability/clip) as first-class entities and events.  
+3. **Sovereign capture story** — “Web → graph” with **provenance** (who, when, which URL, which action). AI-assisted extraction stays **proposal-based** where writes are involved.  
+4. **OS integration** — Deep links from **[synap.live](https://synap.live)** (auth, billing, invites, verify-email), downloads, notifications, optional in-app **[documentation](/docs)**.  
+5. **Shared UI stack** — Tamagui, hooks, stores, and many packages aligned with **`synap-app`**; see **[Synap App](/team/synap-app)** for package boundaries.
+
+**Non-goals for the MVP-class scope:** full browser replacement (extension store, full sync), unconstrained background scraping, or a separate “signup app” — account flows stay on the **marketing / account web** (see **[Landing audit](/team/home/landing-audit)**).
+
+---
+
+## Who it is for
+
+| Audience | Notes |
+|----------|--------|
+| **End users** | Default Synap on macOS / Windows / Linux. |
+| **Power users / researchers** | Capture, multi-tab web, optional split views. |
+| **Team** | Release channels, signing, auto-update, crash analytics. |
+| **Contributors** | `electron/main` vs `renderer`, IPC contracts, `apps/manifest.ts`. |
+
+---
+
+## User journeys
+
+### Connect or create a pod (signed-in path)
+
+1. Launch app → onboarding (**`OnboardingFlow`**, `onboarding.completed` gate).  
+2. **Connect my Data Pod** → Control Plane sign-in and/or pod URL (self-host).  
+3. Persist **`podBaseUrl`**, tokens (secure storage), **`workspaceId`** → land in **AppShell** with real pod data.
+
+**Success target:** time-to-first productive workspace on the order of minutes, not hours.
+
+### Explore first (anonymous / local-first path)
+
+Single **`OnboardingFlow`**: welcome → **Connect** vs **Explore first**. Explore path skips pod setup, enters **anonymous mode**, may show **WorkspaceCreationPopup** and **anonymous onboarding chat** (CP anonymous token → IS → **WorkspaceProposal** JSON, stored locally e.g. IndexedDB, **no pod writes** until the user connects a pod). Budget UX drives **Connect a pod** when limits are low.
+
+**Principle:** one flow, multiple outcomes; IS can author workspace **proposals** before a pod exists.
+
+### Day-to-day: Synap + web
+
+- Sidebar **apps** (manifest-driven) for product surfaces.  
+- **Browser** app: navigate, then **Save to Pod** / clip / (later) AI extract → proposals.  
+- **Workspace / pod gates** — clear blocking UI when the pod is offline or workspace not selected (`PodGate`, `WorkspaceGate`).
+
+### Updates
+
+**`electron-updater`** checks GitHub Releases when not in dev; **`electron-builder.yml`** `publish` must match the repo that publishes artifacts. See **Operations** below.
+
+---
+
+## Architecture (trust boundaries)
+
+```text
+Main process (Node)     — windows, auto-update, secure storage, IPC router, capture orchestration
+     ↑ typed IPC
+Renderer (React/Tamagui) — Synap shell + browser chrome + modals
+     ↑ postMessage (strict)
+Webviews (untrusted)     — real internet; sandbox, no Node, minimal preload (selection/metadata only)
+```
+
+**Rules:** `contextIsolation`, no Node in webviews, **allowlisted IPC** with validated payloads; prefer **pod calls from main** so tokens never touch untrusted web content. Multi-pod: **no cache bleed** across pods.
+
+Embedded **Synap-app** workspace view may use a **trusted-origin** configuration (e.g. session/cookies) — document any `sandbox: false` trade-off in release/security notes.
+
+---
+
+## Security (summary)
+
+Align with Electron hardening: CSP where feasible, block dangerous schemes (`file://`, `javascript:`), gate permissions, redact logs, signed updates. Full checklist-style content lives in team docs here; **release gates** before broad distribution: webview sandbox verified, IPC allowlist + schema validation, HTTPS + manifest checks for pod URL, secrets only in OS secure store.
+
+Future **wallet** posture (if ever): keys never in webviews; dedicated signing UI; capability-style grants — see historical **Document 3/3** security notes merged into this section conceptually.
+
+---
+
+## Features (product / epic map)
+
+High-level alignment with shipped or planned capability:
+
+| Theme | Examples |
+|--------|-----------|
+| **Shell** | Auto-update, session restore, multi-panel layout, error boundaries |
+| **Identity & pod** | OAuth-friendly flows, pod switcher, connection health |
+| **Browser core** | Tabs, address bar, navigation, session partitions |
+| **Capture** | Save URL → entity, tags/projects, dedupe rules; screenshot + readability + clip → documents + citations |
+| **Pinned web apps** | WebApp-style shortcuts, optional isolated sessions |
+| **Ops / expert** | Pod status / latency surfacing (lightweight) |
+
+Exact shipped status: track in **Issues** / release notes; keep this table honest when marketing.
+
+---
+
+## Operations (release, signing, CI)
+
+**Canonical repo files:**
+
+- **`browser/electron-builder.yml`** — `appId`, targets, `publish` (`owner` / `repo` for updater).  
+- **`browser/package.json`** — `dist`, `dist:mac`, `dist:win`, `dist:linux`, `dist:all`.  
+- **`.github/workflows/browser-release.yml`** (repo root) — tag `v*` → build Linux/macOS/Windows → `electron-builder --publish always`.  
+- **`browser/INSTALL.md`** — download URLs for end users.  
+- **`browser/build/`** — `icon.icns`, `icon.ico`, `icon.png` (required for packaging).
+
+**Checklist highlights:** icons present; **code signing** (Apple Developer ID + notarization; Windows Authenticode); **GITHUB_TOKEN** / PAT for CI publishing; confirm updater **owner/repo** matches where Releases live.
+
+---
+
+## Data flows
+
+- **tRPC / REST / realtime** — Renderer ↔ user’s pod (and CP where applicable) per **[Platform](/team/platform)**.  
+- **Local** — Preferences, onboarding flags, anonymous/local proposal payloads until migration to pod.  
+- **IPC** — Only documented channels; never pass refresh tokens to renderer.
+
+---
+
+## Guidelines
+
+- **Voice & strategy:** **[Home & vision](/team/home)**.  
+- **Agents:** **[Intelligence](/team/intelligence)**.  
+- **Chrome extension** (cold start, tabs): **`synap-app`** `EXTENSION.md` — complementary to desktop, not duplicate.  
+- **Public “Clients” page:** optional; **[Product index](/team/home/synap-products)** lists surfaces.
+
+---
+
+## Where the old files went
+
+Historical **PRD / epics / architecture diagrams / security checklist / onboarding audits / release guide** lived under `browser/doc/`, `browser/docs/`, and `browser/electron/renderer/docs/`. They were **removed from the repo** after consolidation into this page (and into **[DevOps](/team/devops)** where cross-cutting). If you need a line-level audit trail, use **git history**.

@@ -1,0 +1,471 @@
+---
+title: "Android Plan"
+description: "Next-gen Android implementation plan."
+---
+
+# Relay — Next-Gen Android Capabilities Plan
+
+**Date:** 2026-04-10
+**Target:** Expo SDK 54, React Native 0.81.5, Android 14 (API 34) minimum, compileSdk 35 (Android 15)
+**Scope:** Android equivalents for the six priority system integrations. Companion: `NEXT-GEN-IOS-PLAN.md`. Action sequencing: `NEXT-GEN-SHIP-PLAN.md`.
+
+Android's version of "feel native in 2026" is different from iOS. iOS wins on App Intents + Live Activities; Android wins on Intents + Share Targets (which are simpler and more powerful than iOS shares) and on-device ML Kit (which is the best free mobile OCR stack). The overall pattern: **Android gives you 70% of the native integration for 40% of the native code** because Intents + Content Providers already do most of the cross-app plumbing.
+
+---
+
+## 0. Shared prerequisites
+
+1. **Stable entity URIs** — Relay needs a canonical `content://com.synap.relay/entity/&lt;id>` or a robust `https://relay.synap.com/e/&lt;id>` app-link scheme. Android Share Targets, App Actions, and AppSearch all route on these. The existing `relay://` deep-link scheme works for App Links via `autoVerify="true"` in the manifest.
+2. **Android 14 target** — already set. Android 14's Live Updates + Predictive Back gestures assume this.
+3. **Minimum API 28 (Android 9)** for safety — Glance widgets require API 23+ but some niceties require 31+. Relay's install base is modern; setting `minSdkVersion = 28` is fine.
+
+---
+
+## 1. App Actions (Google Assistant) + Quick Settings Tile
+
+### What it is
+**App Actions** — Google Assistant's typed action system. You declare **capabilities** in `res/xml/shortcuts.xml` mapping user intents (BIIs — Built-in Intents like `actions.intent.CREATE_NOTE`) to deep-link URIs or `Activity` targets. Assistant parses "Hey Google, make a Relay note about Alice" and fires your capability with parameters.
+
+The old `actions.xml` format is deprecated — 2026 API is **`shortcuts.xml` + capabilities**.
+
+Min SDK: API 21 (Lollipop) for basic App Shortcuts, API 25+ for dynamic/pinned shortcuts, API 26+ for capabilities.
+
+### Why Relay needs it on Android
+Same user story as iOS App Intents: "Hey Google, capture a thought in Relay" works with the screen off. Google Assistant is less fashionable than Siri in 2026 but it still drives a large share of Android voice input, especially on Pixel devices where Gemini Assistant routes voice commands through the same App Actions surface.
+
+Second value: shortcuts.xml also powers **App Shortcuts** (long-press the app icon → list of actions) and **Dynamic Shortcuts** (push recent actions to the launcher). Both are free once the static shortcuts.xml is in place.
+
+### First-party Expo support
+**Limited — Expo doesn't ship a config plugin for shortcuts.xml.** Options:
+
+| Package | State | Notes |
+|---|---|---|
+| `expo-quick-actions` (EvanBacon) | Active | Covers long-press app shortcuts on both iOS and Android. Doesn't handle Assistant capabilities, but the shortcut declarations are the same file. |
+| Custom Expo config plugin | — | A ~100-line plugin that merges shortcuts.xml into the generated AndroidManifest. Shippable in a day. |
+| Raw `android/app/src/main/res/xml/shortcuts.xml` | — | After `expo prebuild`, edit directly. Not CNG-safe but works. |
+
+Recommendation: write a **local Expo config plugin `relay-android-shortcuts`** in `modules/relay-android-shortcuts/` that merges our shortcuts XML at prebuild time. Reusable, CNG-safe, trivially small.
+
+### Implementation plan
+
+```
+relay-app/
+  android-plugin/
+    shortcuts.xml              # source of truth
+    plugin.ts                  # withAndroidManifest + withDangerousMod to copy XML
+
+android/app/src/main/
+  res/xml/shortcuts.xml        # generated
+  java/com/synap/relay/
+    CreateNoteActivity.kt      # handles actions.intent.CREATE_NOTE
+    CreateTaskActivity.kt      # handles actions.intent.CREATE_TASK_LIST_ITEM
+    OpenAppFeatureActivity.kt  # handles actions.intent.OPEN_APP_FEATURE (space switcher)
+```
+
+Sample capability:
+```xml
+<shortcuts>
+  <capability android:name="actions.intent.CREATE_NOTE">
+    <intent
+      android:action="android.intent.action.VIEW"
+      android:targetPackage="com.synap.relay"
+      android:targetClass="com.synap.relay.CreateNoteActivity">
+      <parameter android:name="note.text" android:key="text" />
+      <parameter android:name="note.creator.name" android:key="spaceName" />
+    </intent>
+  </capability>
+</shortcuts>
+```
+
+JS bridge: the Activity unpacks the Intent extras, writes a pending-capture JSON to `SharedPreferences` (the Android equivalent of iOS App Groups, but trivially simpler — SharedPreferences is process-shared), fires a broadcast the JS listens on via `DeviceEventEmitter`, and finishes. Cold-start path: JS reads `SharedPreferences` on boot.
+
+**Effort:** 2 days for capability wiring + 3 BIIs. **Priority: P0.**
+
+### Google best practices
+- **Only use BIIs that match your domain.** Don't declare a `PLAY_MUSIC` capability you don't support.
+- **Param resolution** — Google's Assistant console has a testing tool (`app-actions-test-tool`) that speaks queries and shows which capability fires. Use it before shipping.
+- **Localization** — capability labels must be localized. Hindi + Spanish alone cover a huge chunk of Google Assistant's user base.
+- **Don't block the main thread in the Activity** — users expect sub-second response. Hand off to a WorkManager job.
+- **Play Store review** — App Actions don't require separate review but they must not ship broken. A broken capability leads to "Google doesn't know how to do that" and degrades the app's Assistant rating.
+- **Deprecation note** — Google has been slowly sunsetting some BIIs as Assistant transitions to Gemini; check the current BII reference before finalizing. `CREATE_NOTE`, `CREATE_REMINDER`, `OPEN_APP_FEATURE` are stable in 2026.
+
+### Real-world example
+**Google Keep** — ~8 App Action capabilities declared. "Hey Google, make a note" fires instantly and the Assistant reads back confirmation. **Todoist** on Android does task creation via `CREATE_TASK_LIST_ITEM` with full parameter resolution (list name, due date). Both treat App Actions as a shipping requirement, not a nice-to-have.
+
+### Mapping to iOS
+| iOS | Android |
+|---|---|
+| `AppIntent` | `Capability` in `shortcuts.xml` + `Activity` |
+| `AppEntity` | Implicit — parameters are typed by BII spec |
+| `AppShortcutsProvider` | Static shortcuts in `shortcuts.xml` |
+| Donation via `INInteraction` | `ShortcutManagerCompat.pushDynamicShortcut()` |
+| Parameter resolution in Swift | BII parameter slots, auto-parsed by Assistant |
+
+---
+
+## 2. AppSearch (Android's Spotlight equivalent)
+
+### What it is
+Google's **AppSearch** (Jetpack library, GA since late 2022). An on-device full-text index your app writes into, scoped to the app but optionally shared with the system via `PlatformStorage`. System-wide `GlobalSearchSession` exposes your documents to Google's Search app and to Pixel Search. Android 14+ added tighter integration with the system launcher.
+
+Related but weaker surface: **Slices** (now mostly deprecated for user-facing search).
+
+Min SDK for Jetpack AppSearch: API 21; for cross-app `PlatformStorage`: API 31.
+
+### Why Relay needs it on Android
+Same story as iOS Spotlight — searchable Relay content from the system search bar. The Pixel Launcher's search bar, the Samsung One UI global search, and the Android TV global search all pull from AppSearch when apps opt in. Less universally surfaced than iOS Spotlight but the mechanism is identical from our side.
+
+### First-party Expo support
+**None — no community package yet.** AppSearch is a pure Jetpack library, not a third-party API. This is a gap in the React Native ecosystem.
+
+Options:
+1. **Custom Expo module wrapping androidx.appsearch** — ~2-3 days of Kotlin. Not hard; the API is clean.
+2. **Fallback: App Shortcuts as a poor-man's search index.** Dynamic shortcuts surface in launcher search on Pixel and many OEM launchers. Not true full-text, but zero new code.
+3. **Use the existing backend search.** Ship a simple URL-based search deep link and let Android system search fall back to web — gives up the on-device win but is free.
+
+Recommendation: **custom Expo module** (`modules/relay-appsearch`). ~300 lines of Kotlin, minimal JS. Reuse the same `indexEntity` / `removeEntity` / `reindexAll` JS interface as the iOS Spotlight module so the JS layer has one API.
+
+### Implementation plan
+
+```
+modules/relay-appsearch/
+  android/src/main/java/com/synap/relayappsearch/
+    RelayAppSearchModule.kt
+    RelayDocument.kt             # @Document annotated schema: Note, Person, Task
+    RelayIndexer.kt              # wraps AppSearchSession + batch upsert
+  src/index.ts                   # shared API with iOS spotlight module
+```
+
+Shared JS interface (already declared in the iOS plan):
+```ts
+export type IndexableEntity =
+  | { kind: 'note'; id: string; title: string; body: string; space: string; updatedAt: number }
+  | { kind: 'person'; id: string; name: string; email?: string; company?: string }
+  | { kind: 'task'; id: string; title: string; due?: number; status: string };
+
+export function indexEntity(entity: IndexableEntity): Promise<void>;
+export function removeEntity(kind: string, id: string): Promise<void>;
+export function reindexAll(entities: IndexableEntity[]): Promise<void>;
+export function clearAll(): Promise<void>;
+```
+
+**Effort:** 3 days (Kotlin module + testing on Pixel + Samsung). **Priority: P1** (vs P0 on iOS — Android's global search is less universally-used than iOS Spotlight).
+
+### Google best practices
+- **Use `PlatformStorage`** (vs `LocalStorage`) if you want cross-app visibility. Requires API 31.
+- **Respect `GlobalSearchSession` quotas** — ~10k documents per app-space without degradation.
+- **Clear on logout** — same rule as iOS. AppSearch sessions are per-user, so call `session.remove(...)` on sign-out.
+- **Document TTLs** — set `setTtlMillis()` on ephemeral content so the index self-cleans.
+- **Privacy** — `setVisibilityForPackage()` must be explicit. Default is private-to-your-app.
+
+### Real-world example
+**Gmail** uses AppSearch to index messages for on-device search (Pixel search bar → type a sender name → matching Gmail thread). **Google Keep** indexes notes the same way. Both demonstrate the incremental-indexing pattern: write on mutation, never full-reindex except on first run.
+
+### Mapping to iOS
+| iOS | Android |
+|---|---|
+| `CSSearchableItem` | `GenericDocument` / `@Document` class |
+| `CoreSpotlight.default.index()` | `AppSearchSession.put()` |
+| `CSSearchableItemActivityIdentifier` → deep link | `GenericDocument.getId()` → App Link |
+| iOS 18 semantic search (Apple Intelligence) | No direct equivalent; Google Assistant handles semantic via its own stack |
+
+---
+
+## 3. Share Target (Android intent filters)
+
+### What it is
+Android's share system is **radically simpler than iOS's**. You declare an `intent-filter` on an Activity for `android.intent.action.SEND` with MIME types (`text/plain`, `image/*`, `application/pdf`, etc.), and your app automatically appears in every share sheet system-wide. No separate process, no extension target, no memory cap.
+
+Further, **Direct Share / Sharing Shortcuts** (API 23+, rewritten in API 29) let you publish specific "targets" (like "Share to Alice") as dynamic shortcuts that appear directly in the Android share sheet.
+
+### Why Relay needs it on Android
+Same as iOS: "Share to Relay" from Chrome, Gmail, Samsung Notes, etc. On Android it's essentially free — 15 lines of AndroidManifest + a handler in the JS app.
+
+### First-party Expo support
+**Near-zero work needed.**
+
+| Package | State | Notes |
+|---|---|---|
+| `expo-share-intent` | Active, cross-platform | Handles both iOS and Android. Intent filter is auto-declared via config plugin. Payload arrives in the main app via a listener. This is the fast path. |
+| Manual AndroidManifest edit | Works, CNG-unsafe | For the MVP don't bother; `expo-share-intent` covers it. |
+| Direct Share targets | Custom | Requires `ShortcutManagerCompat.pushDynamicShortcut()` with category `android.shortcut.conversation` or custom. Manual Kotlin. |
+
+Recommendation: **`expo-share-intent`** (same package as iOS share). One config plugin, both platforms. Direct Share targets for "frequent spaces" are a Sprint 2 follow-up.
+
+### Implementation plan
+
+```
+app.json plugins:
+  ["expo-share-intent", {
+    "iosActivationRules": { ... },
+    "androidIntentFilters": [
+      { "action": "SEND", "data": [{ "mimeType": "text/*" }], "category": ["DEFAULT"] },
+      { "action": "SEND", "data": [{ "mimeType": "image/*" }], "category": ["DEFAULT"] },
+      { "action": "SEND_MULTIPLE", "data": [{ "mimeType": "image/*" }], "category": ["DEFAULT"] }
+    ]
+  }]
+
+src/hooks/useShareIntentHandler.ts  # same hook as iOS, routes to CaptureModal
+```
+
+**Effort:** 0.5 days on Android (on top of the iOS share work). **Priority: P0.**
+
+**Direct Share upgrade (Sprint 2, +1 day):**
+```
+android/app/src/main/java/com/synap/relay/ShareTargetService.kt
+  - reads active spaces from SharedPreferences
+  - publishes 3 dynamic shortcuts (Relay / Knowledge / Studio) as sharing targets
+  - user sees "Share to Relay — Studio" directly in the sheet
+```
+
+### Google best practices
+- **Don't over-claim MIME types.** Relay is about text, URLs, images, and PDFs. Don't add `video/*` until we actually handle it.
+- **Respond to intent quickly** — the share sheet expects the target to open within 500ms. Show a placeholder while structuring.
+- **Android 12 splash screen** — Android shows your app icon by default; ensure the splash matches the Relay brand (already done).
+- **Test on Samsung** — Samsung's share sheet is customized; "pinned targets" behavior differs. Test early.
+- **Photo Picker (API 33+)** — if the user shares a photo, accept it via Photo Picker; we don't need READ_MEDIA_IMAGES permission.
+
+### Real-world example
+**Notion** on Android — rich share handler with space picker and inline tag entry. **Pocket** — instant one-tap save that shows a toast confirmation; the full capture happens in background. Copy Pocket's pattern: the share should feel instant, AI structuring happens after.
+
+### Mapping to iOS
+| iOS | Android |
+|---|---|
+| Separate process (`*.appex`) | Same process, just an `intent-filter` |
+| 256 MB memory cap | No cap |
+| `NSItemProvider` | `Intent.getStringExtra(Intent.EXTRA_TEXT)` etc. |
+| Custom SwiftUI sheet | Normal RN screen hosted in the main app |
+| Keychain access group | SharedPreferences (already shared) |
+
+Android wins this one clearly.
+
+---
+
+## 4. Glance Widgets (Jetpack Compose) + Home Screen Shortcuts
+
+### What it is
+**Jetpack Glance** (stable 2024) — a declarative widget framework built on Compose. Write `GlanceAppWidget` classes with Composable content that runs in a restricted widget runtime. Replaces the legacy `RemoteViews` API. Android 12+ improved widgets with rounded corners, dynamic color (Material You), and interactive elements.
+
+Min SDK for Glance: API 23. For dynamic color / Material You: API 31.
+
+### Why Relay needs it on Android
+Mirror of iOS widgets:
+- Quick-capture widget that opens CaptureModal.
+- Today's captures glance.
+- Space switcher.
+- Voice capture button (Android has no Live Activities but can start a foreground service that posts an ongoing notification — see section 5).
+
+### First-party Expo support
+**Limited — this is the weakest ecosystem slot.**
+
+| Package | State | Notes |
+|---|---|---|
+| `@bittingz/expo-widgets` | Config plugin for iOS + Android widgets | Handles Android via AppWidgetProvider + layout XML. Pre-Glance; uses classic `RemoteViews` + XML layouts. Works, uglier code. |
+| `callstackincubator/voltra` | Newer | iOS-focused; Android support is "planned" last I checked. |
+| **Custom Expo module + Glance** | — | Best result. Write Glance widgets in Kotlin, config plugin registers them in AndroidManifest. ~2-3 days. |
+| `@expo/ui/jetpack-compose` | First-party Expo UI | Gives Compose-in-RN for the main app but NOT for widgets (which need `GlanceAppWidget`). Not applicable here. |
+
+Recommendation: **custom Glance widgets in Kotlin + a thin Expo config plugin**. Skip `@bittingz/expo-widgets` for Android because the Glance API is dramatically cleaner and Material You is table stakes in 2026. Keep the same widget *concepts* as iOS but accept the two implementations will not share code.
+
+### Implementation plan
+
+```
+android/app/src/main/java/com/synap/relay/widgets/
+  QuickCaptureWidget.kt          # GlanceAppWidget, systemSmall equivalent
+  TodaysCapturesWidget.kt
+  SpaceSwitcherWidget.kt
+  VoiceCaptureWidget.kt
+  WidgetState.kt                 # reads from SharedPreferences
+  WidgetReceiver.kt              # GlanceAppWidgetReceiver, handles update events
+
+android/app/src/main/res/xml/
+  quick_capture_widget_info.xml  # AppWidgetProviderInfo
+  todays_captures_widget_info.xml
+  ...
+
+android-plugin/widgets.ts        # Expo config plugin: copies Kotlin, registers receivers in AndroidManifest
+```
+
+Data flow: JS app writes widget state (recent captures, active space, streak) to `SharedPreferences` via a small Expo module (`modules/relay-shared-prefs`). Glance widget reads on next `updateAll()` call triggered by `WidgetCenter`-equivalent `GlanceAppWidgetManager.updateAll()`.
+
+**Effort:** 3-4 days (1 day scaffold + plugin, 1 day per 2 widgets, 1 day testing across Pixel/Samsung/OnePlus). **Priority: P1.**
+
+### Google best practices
+- **Use Material You colors** — `GlanceTheme.colors.primary` etc. Users expect widgets to tint with their wallpaper on Pixel.
+- **Handle configuration changes** — widgets rebuild on dark mode, font scale, locale. Glance mostly handles it; test.
+- **`android:resizeMode="horizontal|vertical"`** in the provider info XML — letting users resize is expected.
+- **Interactive widgets** — Glance supports `actionStartActivity`, `actionRunCallback`, and `actionSendBroadcast`. For the voice capture button, `actionRunCallback` fires a Kotlin class that starts a foreground service.
+- **Widget preview image** — Android 15 supports generated previews. Include a high-quality PNG for older versions.
+- **Refresh policy** — minimum 30 min between full refreshes. Use `updateAll()` from the main app for event-driven updates.
+
+### Real-world example
+**Google Keep** widgets — quick-add note button, "pinned note" mode. **Todoist** has a full set of Glance widgets: today, inbox, project. They're the reference for what a productivity-app Android widget should look like in 2026. **Samsung Notes** has a brilliant "quick handwrite" widget — start stylus input directly from the widget; doesn't apply to Relay but the pattern is the same.
+
+### Mapping to iOS
+| iOS | Android |
+|---|---|
+| WidgetKit SwiftUI | Glance Compose |
+| `ActivityConfiguration` (live) | Foreground service + ongoing notification (see 5) |
+| `TimelineProvider` | `GlanceAppWidget.provideGlance` + WorkManager scheduled updates |
+| Interactive buttons = `AppIntent` | Interactive buttons = `actionRunCallback` / `actionStartActivity` with BroadcastReceiver |
+| `WidgetCenter.shared.reloadAllTimelines` | `GlanceAppWidgetManager(context).updateAll(QuickCaptureWidget::class.java)` |
+
+---
+
+## 5. Live Updates + Ongoing Notifications + Notification Bubbles
+
+### What it is
+Android has no exact `Live Activity` equivalent. The closest stack:
+
+1. **Android 14+ Live Updates** — new in API 34. Ongoing notifications can request promotion to a "status bar chip" via `NotificationCompat.Builder.setRequestPromotedOngoing(true)`. Appears as a persistent pill in the status bar, similar spirit to Dynamic Island. Requires `FOREGROUND_SERVICE` permission and an active foreground service.
+2. **Ongoing notifications with progress** — the fallback for Android 13 and below. Standard notification with `setProgress()` + `setOngoing(true)` + a foreground service backing it.
+3. **Notification Bubbles** (API 29+) — conversation-style floating chat heads. Not appropriate for Relay's use case.
+4. **MediaStyle notifications** — for audio/voice. Can host waveform + stop button for the voice recording state.
+
+### Why Relay needs it on Android
+Same use cases as iOS Live Activities:
+1. Voice capture recording → foreground service + MediaStyle notification. Android 14+ shows it as a status bar chip.
+2. AI structuring → ongoing notification with indeterminate progress, auto-dismissed on completion.
+3. Background imports → standard progress notification, already half-supported.
+
+The "Dynamic Island" aesthetic doesn't map — Android instead pushes toward persistent chips, notification shade, and lock screen cards. Different vibe, similar function.
+
+### First-party Expo support
+**Mixed — the foundational pieces exist but no one package covers everything.**
+
+| Package | State | What |
+|---|---|---|
+| `expo-notifications` | First-party, stable | Handles basic notifications including progress. Does NOT support Live Updates promotion flag (yet). Does NOT start foreground services. |
+| `expo-background-fetch` / `expo-task-manager` | First-party | Backing for long-running work but not the notification UI itself. |
+| **`software-mansion-labs/expo-live-activity`** | **iOS only** (despite the name). Their iOS-focused repo. | Would be a natural place for Android Live Updates support but it's not there yet. |
+| Custom Expo module wrapping `ForegroundService` + `NotificationCompat.Builder.setRequestPromotedOngoing` | — | Needed for proper Android 14+ Live Updates. ~2 days Kotlin. |
+| `@notifee/react-native` | Active community lib | Best-in-class notification library for RN. Supports foreground services, rich progress, actions, channels. Doesn't yet expose `setRequestPromotedOngoing` but is the right base. |
+
+Recommendation: use **`@notifee/react-native`** for the main notification UI + a **thin custom Expo module** that exposes `setRequestPromotedOngoing(true)` and manages the `Service.startForeground()` lifecycle for Android 14+. Fall back to normal ongoing notification on Android 13 and earlier.
+
+### Implementation plan
+
+```
+modules/relay-live-updates/
+  android/src/main/java/com/synap/relay/liveupdates/
+    LiveUpdatesModule.kt
+    RelayForegroundService.kt      # Service class, started on live update begin
+    NotificationBuilder.kt         # helper to build promoted ongoing notification
+  ios/                             # re-exports expo-live-activity
+  src/index.ts                     # shared API for iOS + Android
+
+src/hooks/useRecordingActivity.ts  # same hook as iOS, but calls the Android path on Android
+```
+
+Data contract (shared with iOS):
+```ts
+export type LiveUpdateState =
+  | { kind: 'recording'; elapsedSec: number; amplitude: number }
+  | { kind: 'structuring'; label: string; progress: number | null }
+  | { kind: 'importing'; source: string; done: number; total: number };
+
+export function start(state: LiveUpdateState): Promise<string>;  // returns activityId
+export function update(activityId: string, state: LiveUpdateState): Promise<void>;
+export function end(activityId: string): Promise<void>;
+```
+
+**Effort:** 2 days for recording + structuring updates, assuming `@notifee/react-native` covers the base. **Priority: P1.**
+
+### Google best practices
+- **Foreground service types** — Android 14 enforces `foregroundServiceType` declaration in the manifest (`microphone`, `dataSync`, `shortService`). Voice recording needs `microphone`; structuring needs `shortService` (new in Android 14, for &lt;3 min work).
+- **Runtime permission** — `POST_NOTIFICATIONS` must be granted (Android 13+). Already handled in Relay but confirm.
+- **Battery optimization** — don't hold foreground service longer than needed; it's the #1 source of Play Store "battery drain" reviews.
+- **setRequestPromotedOngoing is a request, not a guarantee** — the system decides whether to promote. Don't rely on the chip appearing; the notification must stand on its own.
+- **Actions** — include a "Stop recording" action on voice notifications so the user can end from the shade without returning to the app.
+
+### Real-world example
+**Google Recorder** — reference for voice capture foreground service. Persistent notification with waveform, stop button, elapsed time. Copy this exactly for Relay's voice recording state. **Strava** — reference for long-running activity tracking; their ongoing notification is promoted on Android 14+ and shows in the status bar chip.
+
+### Mapping to iOS
+| iOS | Android |
+|---|---|
+| Live Activity (`ActivityKit`) | Foreground service + ongoing notification + `setRequestPromotedOngoing` |
+| Dynamic Island compact/expanded/minimal | Notification collapsed/expanded + status bar chip (A14+) |
+| `.update(using:)` | `NotificationManager.notify(id, builder.build())` |
+| 8-hour cap | No hard cap, but battery policy punishes long holds |
+| APNs push update | FCM data message triggering service update |
+| Interactive via `AppIntent` | Interactive via `PendingIntent` + BroadcastReceiver |
+
+---
+
+## 6. ML Kit Text Recognition v2
+
+### What it is
+Google's **ML Kit** — free, on-device ML SDK. The `text-recognition-v2` module (stable since 2022) covers Latin, Chinese, Japanese, Korean, and Devanagari scripts. Runs on-device via bundled TensorFlow Lite models. Accuracy matches or exceeds Apple Vision for most languages. Free, no quota, no network.
+
+Min SDK: API 21. Models are either bundled (adds ~20 MB APK) or downloaded on first use via Google Play Services (0 MB APK overhead).
+
+### Why Relay needs it on Android
+Same capture stories as iOS: whiteboards, business cards, book quotes, receipts. ML Kit is arguably a better stack than iOS Vision because it's trivially cross-platform and has no "LiDAR required" modes.
+
+### First-party Expo support
+**Strong — this is the best-supported of the six on Android.**
+
+| Package | State | Notes |
+|---|---|---|
+| `react-native-vision-camera` + `react-native-vision-camera-ocr-plus` | Active, v4+ | Frame processor plugin. Real-time text recognition on the camera preview. Works on both platforms. **Use this as the substrate.** |
+| `@react-native-ml-kit/text-recognition` | Active | Still image OCR only. Simpler API if you don't need live overlay. |
+| `infinitered/react-native-mlkit` | Active | Umbrella package covering text recognition, face detection, object detection, custom models. Fully Expo-compatible. |
+| `rn-mlkit-ocr` | Active | Lightweight alternative with Expo config plugin baked in. |
+
+Recommendation: ship **`react-native-vision-camera` + `react-native-vision-camera-ocr-plus`** as the primary OCR stack. Same JS interface on both platforms; the iOS `RelayVisionModule` (using `DataScannerViewController`) is a parallel implementation for best-in-class Apple Live Text UX, but the Vision Camera + ML Kit path is the unified fallback.
+
+### Implementation plan
+
+```
+modules/relay-vision/
+  ios/RelayVisionModule.swift                # DataScannerViewController path
+  android/src/main/java/com/synap/relay/vision/
+    RelayVisionModule.kt                     # wraps vision-camera OCR plugin
+  src/index.ts                               # shared API
+  src/RelayScannerScreen.tsx                 # React screen — hosts VisionCamera + frame processor
+```
+
+The scanner screen renders `<Camera frameProcessor={textRecognitionProcessor}>` with a `worklet` frame processor that calls `scanText()` on each frame, returning bounding boxes + text. Tap-to-select overlay on each detected region. On confirm, result returns to `useCapture()`.
+
+**Effort:** 2 days (most of which is the overlay UX; the OCR itself is ~20 lines). **Priority: P1.**
+
+### Google best practices
+- **Latin-script bundled model is 3 MB** — bundle it for instant first use. Non-Latin models are download-on-demand.
+- **Frame processor worklets** — use `react-native-worklets-core` to run OCR off the JS thread; required for smooth preview.
+- **Don't OCR every frame** — throttle to 4-8 fps to save battery. Humans can't read the overlay faster than that anyway.
+- **Camera permission** — already granted.
+- **Play Store review** — ML Kit is bundled Google code; no extra review. APK size increase (from bundling the Latin model) must be disclosed if you hit the 150 MB app bundle ceiling; we're nowhere near.
+
+### Real-world example
+**Google Lens** is the reference. **Microsoft Office Lens** on Android uses ML Kit under the hood (or did before their switch to Azure cognitive services). **Obsidian mobile** uses the same vision-camera OCR frame processor for its in-note OCR feature — proof it works well in an Expo-style React Native stack.
+
+### Mapping to iOS
+| iOS | Android |
+|---|---|
+| `VNRecognizeTextRequest` | ML Kit `TextRecognition.getClient()` |
+| `DataScannerViewController` (live overlay) | VisionCamera frame processor + custom overlay |
+| `VNDocumentCameraViewController` | No direct equivalent — build with VisionCamera + edge detection |
+| iOS 18 handwriting | ML Kit handwriting recognition (separate model, not text-recognition-v2) |
+| Apple languages | Google languages — broader Indic/CJK support |
+
+---
+
+## Cross-capability summary (Android)
+
+| # | Capability | Expo plugin? | Custom native? | Effort | Priority | Notes vs iOS |
+|---|---|---|---|---|---|---|
+| 1 | App Actions | No | Yes (local plugin + Kotlin) | 2d | **P0** | BII set smaller than iOS AppIntent freedom |
+| 2 | AppSearch | No | Yes (~300 LOC Kotlin) | 3d | **P1** | Less system-wide visibility than iOS Spotlight |
+| 3 | Share Target | `expo-share-intent` | Optional Direct Share | 0.5-1d | **P0** | Much easier than iOS |
+| 4 | Glance Widgets | Partial (`@bittingz`) | Yes for modern Glance | 3-4d | **P1** | Two separate implementations vs iOS WidgetKit |
+| 5 | Live Updates | `@notifee/react-native` + custom | Yes for A14+ promoted chip | 2d | **P1** | Less premium feel than Dynamic Island |
+| 6 | ML Kit Text Recognition | `react-native-vision-camera-ocr-plus` | No | 2d | **P1** | **Best-supported ecosystem slot** |
+
+**Total Android effort: ~12-15 engineer-days.** Lower than iOS because Share Target is free, ML Kit has a ready-made RN plugin, and Glance is simpler than WidgetKit for comparable output. The custom native work is concentrated in App Actions routing, AppSearch, and Live Updates promotion — all Kotlin, all small.
+
+**Parity gaps to acknowledge upfront:**
+- iOS Live Activities feel dramatically more premium than Android Live Updates; don't try to match one-to-one.
+- iOS App Intents have flexible parameter resolution; Android is locked to BII parameter slots.
+- Android Share Target is simpler and more capable than iOS Share Extension.
+- ML Kit beats Vision framework for non-English languages; Vision beats ML Kit for English + Apple Notes parity.

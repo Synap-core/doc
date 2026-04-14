@@ -1,0 +1,269 @@
+---
+title: "Platform Review: Entity Profiles"
+description: "Entity profile system completeness and gaps."
+---
+
+# 02 — Entity Profile Extensibility
+
+> **Status 2026-03-25**: Profile packs Phase 1 complete. CP serves `profile-pack` packages; browser fetches + installs with local fallback; installed packs tracked in workspace settings; `composesFrom` dependency merging wired. Phase 2 (automation-driven behaviors) and Phase 3 (property enhancements) are next.
+
+## Current State
+
+### System Profiles — 14 built-in types
+
+Defined in `synap-backend/packages/database/src/utils/ensure-system-profiles.ts`. Created automatically on first workspace creation (idempotent).
+
+| Slug | Parent | Properties |
+|------|--------|------------|
+| `note` | — | content, tags |
+| `task` | — | status, priority, dueDate |
+| `project` | — | status, tags |
+| `event` | — | startDate, endDate, location, isAllDay, attendees |
+| `person` | — | email, phone |
+| `contact` | person | + role (inherits) |
+| `company` | — | website, industry, employees, location |
+| `deal` | — | stage, value, closeDate |
+| `bookmark` | — | url, domain, source |
+| `website` | bookmark | + favicon |
+| `article` | bookmark | + author, publishedAt, readTime |
+| `capture` | bookmark | Quick capture |
+| `file` | — | fileName, mimeType, fileSize |
+| `anchor` | — | channelId, messageId, messageRole |
+
+### Workspace Profiles — Template-defined types
+
+Defined in `WorkspaceProposal.profiles[]` when creating a workspace from template. Examples from `synap-dev-dashboard`:
+
+| Slug | Properties | Used in |
+|------|------------|---------|
+| `service` | service-type, service-url, github-url, health-endpoint, health-status, tech-stack, port, environment | DevOps workspace |
+| `vendor` | vendor-type, vendor-url, admin-url, pricing-model, monthly-cost, vendor-status | DevOps workspace |
+| `repository` | repo-url, main-branch, ci-status, language, package-manager, monorepo | DevOps workspace |
+
+### Profile Creation Paths
+
+1. **System profiles** — `ensure-system-profiles.ts` on workspace init (backend job)
+2. **Template profiles** — `createFromDefinition` API, creates profiles from `WorkspaceProposal`
+3. **AI-created profiles** — `propose_workspace` tool or `profile.create` via Hub Protocol
+4. **User-created profiles** — Profiles app in browser (manual creation)
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| System profile definitions | `synap-backend/packages/database/src/utils/ensure-system-profiles.ts` |
+| Profile DB schema | `synap-backend/packages/database/src/schema/profiles.ts` |
+| Profile tRPC router | `synap-backend/packages/api/src/routers/profiles.ts` |
+| Workspace creation | `synap-backend/packages/api/src/routers/workspaces.ts` (createFromDefinition) |
+| Template types | `synap-app/packages/features/onboarding/src/templates/types.ts` |
+| Template guide | `synap-app/packages/features/onboarding/src/templates/TEMPLATE_GUIDE.md` |
+| Dev dashboard profiles | `synap-dev-dashboard/src/template/services.ts` |
+| Dev dashboard template JSON | `synap-control-plane-api/templates/Synap Dev Dashboard.json` |
+| Profile scope enum | `synap-backend/packages/database/src/schema/enums.ts` (SYSTEM/WORKSPACE/USER) |
+| Property renderer | `synap-app/packages/core/property-renderer/src/` (~30 components) |
+| Entity creation form | `synap-app/packages/features/entity-views/src/components/EntityCreationForm.tsx` |
+| Capture form | `synap-app/packages/features/capture/src/components/CaptureForm.tsx` |
+
+## Limitations
+
+### 1. Profile Discovery is Poor
+- No marketplace or gallery of profile types
+- Users don't know what profiles are available or what they can create
+- No "profile pack" concept — you either get system profiles or define them in a template
+- No way to import a single profile type from another workspace or template
+
+### 2. Profile Properties Are Flat
+- Properties are key-value JSONB — no nested objects, no computed fields, no formulas
+- No property inheritance (parent profiles share slug namespace but not properties in practice)
+- No property validation beyond basic types (no regex, no range, no conditional required)
+- Property `constraints` field exists in schema but is not enforced in the UI
+
+### 3. No Profile Behaviors
+- Profiles define data shape but not behavior
+- No "when task status changes to done, set completedAt" triggers
+- No default views per profile type
+- No profile-specific AI skills (e.g., "when creating a book entity, ask for author and genre")
+
+### 4. No Profile Composition
+- Can't say "a book IS a note WITH extra properties (author, genre, rating)"
+- Parent profile inheritance exists in schema but is limited in practice
+- No mixin concept — can't add "taggable" or "rateable" to any profile
+
+### 5. No Profile Marketplace
+- Control plane marketplace exists for workspace templates but not individual profiles
+- No way to share a "book" profile type across users
+- No versioning of profile definitions
+
+### 6. Property Rendering Gaps
+- Property renderer handles ~20 value types but some are basic
+- No custom renderer per property (e.g., star rating for "rating" field)
+- No conditional visibility (show field X only if field Y = value)
+
+## What Needs to Change
+
+### Near-term: Profile Packs
+Instead of monolithic workspace templates, support composable pieces:
+
+```typescript
+interface ProfilePack {
+  id: string;
+  name: string;              // "Knowledge Management"
+  description: string;
+  profiles: ProfileDefinition[];
+  views?: ViewDefinition[];  // Optional suggested views
+  relations?: RelationDefinition[]; // Optional suggested relations
+  displayTemplates?: DisplayTemplate[];
+}
+```
+
+A workspace template becomes a composition of profile packs:
+```typescript
+const knowledgeWorkspace = compose(
+  systemProfiles,           // note, task, project (always included)
+  profilePack('books'),     // book, author, genre
+  profilePack('music'),     // album, artist, playlist, dj-session
+  profilePack('learning'),  // course, lesson, flashcard
+);
+```
+
+### Near-term: Profile Behaviors (via Automation Triggers)
+Connect profiles to the automation system:
+
+```typescript
+// When entity of profile "book" is created, trigger skill "book-reflection"
+{
+  trigger: { type: 'entity.created', profileSlug: 'book' },
+  action: { type: 'skill.execute', skillId: 'book-reflection' }
+}
+```
+
+This bridges to the **event-triggered skills** gap (Bridge #1).
+
+### Medium-term: Profile Property Enhancements
+- Computed fields: `fullName = firstName + ' ' + lastName`
+- Conditional required: `if status === 'closed' then closedAt is required`
+- Custom renderers: `rating` property → star rating component
+- Property groups: organize properties into sections in the entity detail view
+
+### Long-term: Profile Marketplace
+- Share profile packs on control plane marketplace
+- Version profiles (migration when schema changes)
+- Community-contributed profile packs
+
+## Action Items
+
+### Phase 1: Profile Packs Architecture — **DONE (2026-03-25)**
+- [x] Define `ProfilePack` type — CP `PackageDefinition` with `category: "profile-pack"` serves this role
+- [x] `createFromDefinition` already accepted packs alongside templates (existing `workspaceId` path); no change needed
+- [x] Created reusable packs: CRM, PM, Knowledge Base, HR (10 JSON files in `synap-control-plane-api/templates/packs/`)
+- [x] "Install Pack" button in Data Structure toolbar → `ProfilePackBrowserCell` side panel
+- [x] CP serves packs at `GET /api/packages?category=profile-pack`; browser fetches with local fallback
+- [x] Installed packs tracked in `workspace.settings.installedPacks` JSONB array
+- [x] `composesFrom` dependency merging implemented in `ProfilePackBrowserCell.handleInstall`
+
+### Phase 2: Automation-Driven Profile Behaviors
+- [ ] Connect automation triggers to profile events (entity.created, entity.updated)
+- [ ] Define profile-specific AI skills that auto-attach when profile is added
+- [ ] Create "profile setup wizard" — AI asks questions to configure properties
+
+### Phase 3: Property Enhancements
+- [ ] Enforce `constraints` field in UI (currently ignored)
+- [ ] Add computed field support
+- [ ] Add conditional visibility for properties
+- [ ] Custom property renderers (star rating, color picker, progress bar)
+
+### Research Questions
+- [ ] How does Notion handle custom property types? (relation, rollup, formula)
+- [ ] How does Airtable handle field types and computed fields?
+- [ ] How does Linear handle custom fields vs built-in fields?
+- [ ] Should profile inheritance be reworked? (current parent system is underused)
+- [ ] How to handle profile schema migrations when a pack is updated?
+
+## Example Profile Packs
+
+### Knowledge Management Pack
+```json
+{
+  "name": "Knowledge Management",
+  "profiles": [
+    {
+      "slug": "book",
+      "displayName": "Book",
+      "icon": "book-open",
+      "color": "#8B5CF6",
+      "properties": [
+        { "slug": "author", "label": "Author", "valueType": "string" },
+        { "slug": "genre", "label": "Genre", "valueType": "string", "inputType": "select",
+          "enumValues": ["fiction", "non-fiction", "sci-fi", "biography", "self-help", "technical", "philosophy"] },
+        { "slug": "rating", "label": "Rating", "valueType": "number",
+          "constraints": { "min": 0, "max": 5 } },
+        { "slug": "read-date", "label": "Date Read", "valueType": "date" },
+        { "slug": "status", "label": "Status", "valueType": "string", "inputType": "select",
+          "enumValues": ["want-to-read", "reading", "finished", "abandoned"] },
+        { "slug": "key-takeaways", "label": "Key Takeaways", "valueType": "array" },
+        { "slug": "favorite-quotes", "label": "Favorite Quotes", "valueType": "array" }
+      ]
+    },
+    {
+      "slug": "reading-note",
+      "displayName": "Reading Note",
+      "icon": "sticky-note",
+      "color": "#F59E0B",
+      "properties": [
+        { "slug": "chapter", "label": "Chapter", "valueType": "string" },
+        { "slug": "page", "label": "Page", "valueType": "number" },
+        { "slug": "note-type", "label": "Type", "valueType": "string", "inputType": "select",
+          "enumValues": ["insight", "question", "disagreement", "connection", "action-item"] }
+      ]
+    }
+  ],
+  "relations": [
+    { "sourceProfileSlug": "reading-note", "targetProfileSlug": "book", "type": "belongs_to" }
+  ],
+  "views": [
+    { "name": "Library", "type": "grid", "scopeProfileSlug": "book" },
+    { "name": "Reading List", "type": "kanban", "scopeProfileSlug": "book",
+      "config": { "groupByField": "status" } }
+  ]
+}
+```
+
+### DevOps Pack
+Already exists in `synap-dev-dashboard/src/template/services.ts` — needs to be extracted into the profile pack format.
+
+### Content Creation Pack
+```json
+{
+  "name": "Content Creation",
+  "profiles": [
+    {
+      "slug": "content-idea",
+      "displayName": "Content Idea",
+      "icon": "lightbulb",
+      "color": "#F59E0B",
+      "properties": [
+        { "slug": "platform", "label": "Platform", "valueType": "string", "inputType": "select",
+          "enumValues": ["twitter", "linkedin", "blog", "youtube", "newsletter", "podcast"] },
+        { "slug": "status", "label": "Status", "valueType": "string", "inputType": "select",
+          "enumValues": ["idea", "researching", "drafting", "editing", "scheduled", "published"] },
+        { "slug": "topic", "label": "Topic", "valueType": "string" },
+        { "slug": "target-audience", "label": "Target Audience", "valueType": "string" },
+        { "slug": "hook", "label": "Hook/Angle", "valueType": "string" },
+        { "slug": "publish-date", "label": "Publish Date", "valueType": "date" },
+        { "slug": "tags", "label": "Tags", "valueType": "array" }
+      ]
+    },
+    {
+      "slug": "content-guideline",
+      "displayName": "Content Guideline",
+      "icon": "scroll-text",
+      "color": "#6366F1",
+      "properties": [
+        { "slug": "guideline-type", "label": "Type", "valueType": "string", "inputType": "select",
+          "enumValues": ["voice", "formatting", "topic-rules", "platform-specific", "audience"] },
+        { "slug": "applies-to", "label": "Applies To", "valueType": "array" }
+      ]
+    }
+  ]
+}
+```

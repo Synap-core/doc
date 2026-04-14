@@ -1,0 +1,344 @@
+---
+title: "Ship Plan"
+description: "Ship plan for mobile apps — App Store, Play Store."
+---
+
+# Relay — Next-Gen Capabilities Ship Plan
+
+**Date:** 2026-04-10
+**Horizon:** 3 sprints over ~6 weeks, then stabilization. Targets iOS 18 + Android 14.
+**Companion docs:** `NEXT-GEN-IOS-PLAN.md`, `NEXT-GEN-ANDROID-PLAN.md`, `RELAY-NEXT-GEN-CAPABILITIES.md`.
+
+This is the ordered execution plan for the six next-gen capabilities, organized into three sprints plus a foundations sprint. Each capability is sized on both platforms with effort, files, dependencies, minimum viable shape, power shape, and architectural prerequisites.
+
+---
+
+## Overall shape
+
+```
+Sprint 0 (3 days)    — Foundations: App Group, entity IDs, shared storage module
+Sprint 1 (2 weeks)   — App Intents / App Actions + Spotlight / AppSearch + Share
+Sprint 2 (2 weeks)   — Widgets + Live Activities / Live Updates
+Sprint 3 (2 weeks)   — Vision / Live Text / ML Kit + polish + power-mode upgrades
+```
+
+Total engineering budget: **6 weeks × 1 engineer, or 3 weeks × 2 engineers** (one per platform with one week for cross-platform glue + JS).
+
+---
+
+## Sprint 0 — Foundations (3 days, blocking everything else)
+
+Not a product feature. Pure architectural prerequisite work.
+
+### Tasks
+
+| Task | Effort | Owner | Files |
+|---|---|---|---|
+| App Group entitlement `group.com.synap.relay` | 0.5d | iOS | `app.json` `ios.entitlements`, Apple Dev Portal |
+| Shared Keychain access group for auth token | 0.5d | iOS | `src/lib/auth.ts`, Keychain access group config |
+| `canonicalRelayUrl(entity)` helper + route table | 0.5d | Both | `src/lib/deep-links.ts` |
+| `modules/relay-shared-storage` Expo module (iOS App Group UserDefaults, Android SharedPreferences) | 1d | Both | `modules/relay-shared-storage/{ios,android,src}` |
+| `modules/relay-vision`, `modules/relay-intents`, `modules/relay-appsearch`, `modules/relay-live-updates` scaffolds | 0.5d | Both | `modules/` skeletons via `npx create-expo-module --local` |
+
+### Why this sprint is non-negotiable
+Every capability in Sprint 1-3 writes or reads cross-process state. Without the shared storage module, Widgets can't see feed data, Share Extension can't persist captures before the main app reads them, Live Activities can't be updated from the Share Extension, and App Intents can't pass parameters to the JS app. This is the single load-bearing piece.
+
+### Shipped artifacts
+- App builds on iOS and Android with new entitlements
+- `sharedStorage.getString/setString/getJSON/setJSON` works from both main app and future extension targets
+- Every entity has a stable `relay://{kind}/{id}` URL
+
+---
+
+## Sprint 1 — Zero-UI capture + searchable content (2 weeks)
+
+**Theme:** make Relay capture-able and findable without opening the app.
+
+Three capabilities in parallel: App Intents + App Actions (voice-driven capture), Spotlight + AppSearch (searchable content), Share Extension + Share Target (share-driven capture). All three ship together because they share the same `AppEntity` / `IndexedEntity` declarations on iOS and the same `canonicalRelayUrl` routing on both platforms.
+
+### 1A. App Intents (iOS) + App Actions (Android)
+
+| | iOS | Android |
+|---|---|---|
+| **Effort** | 3 days | 2 days |
+| **Files** | `targets/RelayIntents/*.swift`, `modules/relay-intents/` | `android-plugin/shortcuts.xml`, `android/app/.../CreateNoteActivity.kt` + 2 more Activities |
+| **Dependencies** | Sprint 0 (App Group, stable IDs, shared storage) | Sprint 0 |
+| **Expo plugin?** | None — custom via `@bacons/apple-targets` + local module | None — custom local config plugin |
+| **JS API** | `subscribeIntents(cb)` + `donate(kind, params)` | Same interface on Android via DeviceEventEmitter |
+| **Unlocks** | Siri voice capture, Shortcut automations, Spotlight Actions, iOS 18 AppShortcuts, widget button targets | Google Assistant + Gemini Assistant voice, long-press launcher shortcuts, Dynamic Shortcuts |
+
+**Minimum viable:** one intent — `CreateNoteIntent(title: String)` — that writes to shared storage + posts a Darwin/broadcast notification. "Hey Siri, new Relay note about X" creates the note on next app open. Shipped on both platforms = 2 days.
+
+**Power version:** four intents (Note / Task / Person / Capture), parameter resolution against existing entities (`EntityQuery` on iOS / BII slot filling on Android), donation on every in-app capture, AppShortcutsProvider with localized phrases, `openAppWhenRun = false` so capture is fully silent. **This is the sprint deliverable**.
+
+**Architectural prerequisite:** stable entity ID scheme + canonical URL (done in Sprint 0).
+
+---
+
+### 1B. Spotlight (iOS) + AppSearch (Android)
+
+| | iOS | Android |
+|---|---|---|
+| **Effort** | 2 days | 3 days |
+| **Files** | `src/lib/spotlight.ts`, `modules/relay-spotlight/` (or use `expo-spotlight`) | `modules/relay-appsearch/{android,src}` |
+| **Dependencies** | Sprint 0, shared `IndexableEntity` types | Sprint 0 |
+| **Expo plugin?** | `expo-spotlight` (community, Expo-native) | None — custom Kotlin module |
+| **JS API** | `indexEntity / removeEntity / clearAll / reindexAll / onTap` | Same shape on both |
+| **Unlocks** | Spotlight search, iOS 18 semantic search eligibility, deep-link from system search | Pixel Launcher search, Samsung global search, launcher-triggered deep links |
+
+**Minimum viable:** index Notes on create/update, handle tap → deep link back into the right screen. 1 day iOS + 2 days Android.
+
+**Power version:** index all 4 entity kinds (Note, Person, Task, Space) with thumbnails + semantic search attribute set on iOS. Incremental sync via `useSpotlightSync` hook watching the feed mutations. `reindexAll` on login and space switch. Vault entities excluded by policy. **Sprint deliverable.**
+
+**Architectural prerequisite:** unified `IndexableEntity` type in `@synap-core/types` (one day of plumbing — see cross-cutting work below).
+
+---
+
+### 1C. Share Extension (iOS) + Share Target (Android)
+
+| | iOS | Android |
+|---|---|---|
+| **Effort** | 1-3 days | 0.5-1 day |
+| **Files (MVP)** | `app.json` plugin config, `src/hooks/useShareIntentHandler.ts` | Same |
+| **Files (Power)** | `targets/RelayShare/*.swift` | `ShareTargetService.kt` for Direct Share |
+| **Dependencies** | Sprint 0 (shared storage queue) | Sprint 0 |
+| **Expo plugin?** | **`expo-share-intent` (MVP) / `expo-share-extension` (power)** | `expo-share-intent` (same plugin handles both) |
+| **JS API** | `useShareIntentHandler()` → feeds `useCapture()` | Same |
+| **Unlocks** | "Share to Relay" from Safari, Mail, Photos | "Share to Relay" from Chrome, Gmail, Samsung Notes |
+
+**Minimum viable:** `expo-share-intent` config plugin, activation rules for URL + text + image, payload routed to CaptureModal via deep link. Cross-platform, 1 day total. **Ship in Sprint 1**.
+
+**Power version (Sprint 3 follow-up):** custom SwiftUI share sheet on iOS via `expo-share-extension` — in-sheet space picker, AI tag preview, instant save without app foregrounding. On Android, Direct Share targets for frequent spaces.
+
+**Architectural prerequisite:** capture pipeline must accept a queued payload from cold start (already handled by `useShareIntentHandler` pattern — minimal changes).
+
+---
+
+### Cross-cutting Sprint 1 work
+
+| Task | Effort | Files |
+|---|---|---|
+| Unify `IndexableEntity` type in `@synap-core/types` | 0.5d | `packages/types/src/indexable.ts` |
+| Add `useSpotlightSync` hook subscribing to feed mutations | 0.5d | `src/hooks/useSpotlightSync.ts` |
+| Auth token in Keychain access group (confirm share extension can read) | 0.5d | `src/lib/auth.ts`, Keychain config |
+| Shared `canonicalRelayUrl` helper | Already Sprint 0 | — |
+
+### Sprint 1 exit criteria
+- "Hey Siri, new Relay note about Alice" creates the note
+- "Hey Google, make a note in Relay" creates the note
+- Searching "Alice" in iOS Spotlight shows the note
+- Sharing a URL from Chrome or Safari lands in Relay CaptureModal
+- Zero regressions in existing capture flows
+
+**Total Sprint 1 effort:** iOS 6 days + Android 5.5 days + 1.5 days shared = **~13 engineer-days** over 10 working days → one engineer can't quite do it alone in 2 weeks; two engineers split by platform finish with buffer.
+
+---
+
+## Sprint 2 — Ambient state + glanceable surfaces (2 weeks)
+
+**Theme:** make Relay visible at a glance, and make async AI visible while it's working.
+
+### 2A. Widgets (iOS WidgetKit) + Glance (Android)
+
+| | iOS | Android |
+|---|---|---|
+| **Effort** | 3-4 days | 3-4 days |
+| **Files** | `targets/RelayWidgets/*.swift` (Quick Capture, Today's Captures, Space Switcher, Voice Capture) | `android/.../widgets/*.kt` same four widgets |
+| **Dependencies** | App Intents (Sprint 1) — widget buttons ARE intents | Sprint 1 Activities + local config plugin |
+| **Expo plugin?** | `@bacons/apple-targets` generates target scaffold; SwiftUI by hand | Custom plugin — `@bittingz/expo-widgets` is pre-Glance, not worth it |
+| **JS API** | `sharedStorage.setJSON('widget-state', state)` + `WidgetCenter.reload` via native side-effect | Same + `GlanceAppWidgetManager.updateAll` |
+| **Unlocks** | Home screen quick capture, Today's feed at a glance, Space switching without app, voice capture entry point | Same |
+
+**Minimum viable:** Quick Capture widget only. One tap → CaptureModal opens. 1.5 days each platform.
+
+**Power version:** four widgets per platform. Today's Captures shows last 3 entities with thumbnails and tap-to-open. Space Switcher is a 3-button medium widget backed by shared storage. Voice Capture button starts a Live Activity (iOS) or foreground service (Android). Material You tinting on Android. Lock Screen widgets on iOS. **Sprint deliverable.**
+
+**Architectural prerequisite:** `widget-state.json` written by JS on feed mutation via shared storage module. Without it, widgets are stuck on the 15-minute timeline budget.
+
+---
+
+### 2B. Live Activities (iOS) + Live Updates (Android)
+
+| | iOS | Android |
+|---|---|---|
+| **Effort** | 2-3 days | 2 days |
+| **Files** | `targets/RelayActivity/*.swift`, `src/lib/live-activity.ts`, `src/hooks/useRecordingActivity.ts` | `modules/relay-live-updates/android/*.kt`, foreground service, `@notifee/react-native` integration |
+| **Dependencies** | Widgets (2A) share the shared-state pattern; voice capture hook wires in | `@notifee/react-native` install, A14 foreground service type declaration |
+| **Expo plugin?** | `software-mansion-labs/expo-live-activity` — Swift UI written by hand, JS API via module | No dedicated plugin; `@notifee/react-native` + custom promoted-ongoing wrapper |
+| **JS API** | `startActivity(state)` / `updateActivity(id, state)` / `endActivity(id)` — same on both platforms | Same |
+| **Unlocks** | Dynamic Island pill during voice recording, lock screen progress during AI structuring, import progress | Status bar chip on A14+, foreground notification on older Android, media-style voice control |
+
+**Minimum viable:** recording pill only. Start on `voice.start()`, end on `voice.stop()`, show elapsed time. Cross-platform, 2 days total. **Sprint deliverable.**
+
+**Power version (moved partially to Sprint 3):** structuring progress on lock screen, import progress for multi-hundred-contact imports, interactive Stop button via AppIntent / PendingIntent.
+
+**Architectural prerequisite:** voice recording code in `useVoiceTranscription` must expose `amplitude` and `elapsed` as observable values. It already does most of this — confirm.
+
+### Sprint 2 exit criteria
+- Quick Capture widget works on both platforms
+- Today's Captures widget updates within 1 second of a new capture (via reload, not timeline)
+- Voice recording shows a Dynamic Island pill on iOS and a persistent status bar chip on Android 14+
+- Stop button in the activity actually stops recording
+
+**Total Sprint 2 effort:** iOS 6 days + Android 6 days + 1 day glue = **~13 engineer-days.** Two engineers in parallel = 1 week each, plus 1 week testing across device matrix.
+
+---
+
+## Sprint 3 — Camera intelligence + polish (2 weeks)
+
+**Theme:** point-camera-at-anything capture. Finish remaining power-version upgrades.
+
+### 3A. Vision / Live Text (iOS) + ML Kit Text Recognition (Android)
+
+| | iOS | Android |
+|---|---|---|
+| **Effort** | 2-4 days | 2 days |
+| **Files** | `modules/relay-vision/ios/RelayVisionModule.swift` (DataScannerViewController), `src/RelayScannerScreen.tsx` | `modules/relay-vision/android/*.kt` (delegates to vision-camera OCR plugin) |
+| **Dependencies** | Camera permission (already granted), capture pipeline integration | `react-native-vision-camera` + `react-native-vision-camera-ocr-plus` install |
+| **Expo plugin?** | Custom module; `expo-camera` v16 is close but not sufficient for Live Text overlay | `react-native-vision-camera-ocr-plus` with official config plugin |
+| **JS API** | `scanText(opts) → {text, boxes, lang}` / `scanDocument() → {pages, pdfPath}` | Same interface |
+| **Unlocks** | Whiteboard / business card / book quote capture, "Hey Siri scan this" via `ScanTextIntent` | Same on Android |
+
+**Minimum viable:** still image OCR only. Tap "Scan" in CaptureModal → camera opens → snap → text extracted → goes into capture. 1.5 days each platform.
+
+**Power version:** live overlay with tap-to-select regions (iOS uses `DataScannerViewController`, Android uses VisionCamera frame processor with custom React overlay). Multi-page document scanning on iOS via `VNDocumentCameraViewController`. Auto-detect business cards and create Person entities directly. **Sprint deliverable partially — live overlay on iOS, still-image OCR on Android.**
+
+**Architectural prerequisite:** capture pipeline accepts `source: 'vision'` and passes OCR text as the primary content (already does via `useCapture`).
+
+---
+
+### 3B. Power-mode upgrades
+
+Carried from Sprint 1 and 2.
+
+| Task | Platform | Effort |
+|---|---|---|
+| Upgrade Share to `expo-share-extension` custom SwiftUI sheet | iOS | 2d |
+| Direct Share targets for frequent spaces | Android | 1d |
+| Structuring progress Live Activity / Live Update | Both | 1d |
+| Import progress Live Activity for LinkedIn / Contacts import | Both | 1d |
+| Localized AppShortcuts phrases (FR + ES minimum) | iOS | 0.5d |
+| Interactive widget button → Live Activity start | Both | 1d |
+| Widget gallery previews (Android 15 generated previews + iOS Widget Preview intent) | Both | 0.5d |
+
+**Total Sprint 3 effort:** iOS 6-8 days + Android 4-5 days + 1 day glue = **~12-14 engineer-days.**
+
+### Sprint 3 exit criteria
+- Point camera at whiteboard → tap text → it's in a note
+- Business card scan creates a Person entity with email + phone pre-filled
+- Share Extension on iOS shows a custom sheet matching Relay brand
+- All six capabilities shipped on both platforms at the power level
+
+---
+
+## Cross-platform shape
+
+**JS can be shared:** capture hooks, shared storage API, deep-link routing, indexable entity types, recording state hooks, widget data contract, OCR result types.
+
+**JS cannot be shared:** any code that touches a native target (Swift in `targets/`, Kotlin in `android/.../widgets/`). This is expected — extensions are native-only processes.
+
+Roughly **80% of the JS-level code is shared; 0% of the native target code is shared**. Surface area is small (maybe 2000 lines of shared JS) because most of the value is in the native targets.
+
+### Package reuse
+- `@synap-core/types` — add `IndexableEntity` and `LiveUpdateState` types once, both platforms consume
+- `@synap-core/capture-pipeline` — already handles most of the capture logic; extensions feed into it
+- `modules/relay-*` Expo local modules — the bridge layer
+
+### Ecosystem strength by capability
+From strongest Expo plugin support to weakest:
+
+1. **Share / Share Target** — `expo-share-intent` + `expo-share-extension` are production-ready.
+2. **Vision / Text Recognition** — `react-native-vision-camera-ocr-plus` is the substrate everyone uses.
+3. **Spotlight (iOS)** — `expo-spotlight` is an Expo-native module, works today.
+4. **Widgets (iOS)** — `@bacons/apple-targets` is battle-tested but you still write SwiftUI by hand.
+5. **Live Activities (iOS)** — `expo-live-activity` is Software Mansion-backed but new.
+6. **App Intents (iOS)** — `@bacons/apple-targets` gets you the target; Swift code is still yours.
+7. **Glance Widgets (Android)** — no good Expo plugin; custom local plugin required.
+8. **AppSearch (Android)** — no plugin at all; custom Kotlin module required.
+9. **App Actions (Android)** — no plugin; custom local plugin for `shortcuts.xml`.
+10. **Live Updates (Android)** — `@notifee/react-native` is the closest; still need custom code for A14 chip promotion.
+
+**Surprising finding:** Android is the *weaker* ecosystem slot for 3 of the 6 capabilities despite Android's generally simpler native model. The React Native + Expo community has invested more in iOS extensions because iOS extensions are harder to build manually, so the demand for abstractions is higher. On Android, devs just drop into Kotlin.
+
+---
+
+## Prioritized one-line summary
+
+| Capability | iOS priority | Android priority | Combined recommendation |
+|---|---|---|---|
+| App Intents / App Actions | **P0** | **P0** | **Sprint 1 — foundational for everything else on iOS** |
+| Spotlight / AppSearch | **P0** | P1 | **Sprint 1 — shares code with App Intents** |
+| Share Extension / Share Target | **P0** | **P0** | **Sprint 1 — cheapest, highest daily-frequency value** |
+| Widgets / Glance | P1 | P1 | Sprint 2 — depends on App Intents already landing |
+| Live Activities / Live Updates | P1 | P1 | Sprint 2 — premium feel for voice capture |
+| Vision / ML Kit | P1 | P1 | Sprint 3 — standalone; can slip without blocking anything |
+
+**If we can only ship three:** App Intents + Spotlight + Share on both platforms. These are the foundation for Siri/Assistant discovery, system-wide search, and the highest-frequency daily capture path. Widgets without App Intents is an island; Live Activities without Widgets is a gadget; Vision without the rest is a side feature. Start with the base.
+
+---
+
+## Risks and blockers
+
+1. **Apple Developer Portal access** for App Group + access group entitlement — if we don't have admin on the team account, Sprint 0 slips.
+2. **`expo-spotlight` maturity** — if the package doesn't support iOS 18 semantic search attributes, we fork. Add half a day to Sprint 1.
+3. **Android 14 foreground service types** — Play Store now rejects apps that use `foregroundServiceType` without a declared user-visible reason. The `microphone` type is fine; the `shortService` path for AI structuring needs a fallback for users on Android 13.
+4. **`@bacons/apple-targets` is still marked experimental** — API could change across updates. Pin to an exact version, don't auto-upgrade.
+5. **New Architecture (Fabric + TurboModules)** — Relay has `newArchEnabled: true`. Most community packages listed above support it but confirm before install; the riskiest is `react-native-vision-camera-ocr-plus` which depends on `react-native-worklets-core`.
+6. **Shared code vs shared types** — JS types should live in `@synap-core/types`; native targets cannot import TS types. Manually keep the contracts in sync via codegen or comments.
+
+---
+
+## Appendix — file map (final state after Sprint 3)
+
+```
+relay-app/
+  app.json                         # updated plugins + entitlements
+  targets/                         # new, all iOS-only
+    RelayIntents/                  # Sprint 1
+    RelayShare/                    # Sprint 1 (power: Sprint 3)
+    RelayWidgets/                  # Sprint 2
+    RelayActivity/                 # Sprint 2
+  android/                         # existing, expanded
+    app/src/main/
+      res/xml/shortcuts.xml        # Sprint 1
+      java/com/synap/relay/
+        CreateNoteActivity.kt      # Sprint 1
+        CreateTaskActivity.kt      # Sprint 1
+        ShareTargetService.kt      # Sprint 3 power
+        widgets/                   # Sprint 2
+          QuickCaptureWidget.kt
+          TodaysCapturesWidget.kt
+          SpaceSwitcherWidget.kt
+          VoiceCaptureWidget.kt
+  modules/                         # new, Expo local modules
+    relay-shared-storage/          # Sprint 0 — iOS App Group + Android SharedPrefs
+    relay-intents/                 # Sprint 1 — iOS App Intents bridge
+    relay-spotlight/               # Sprint 1 — iOS Core Spotlight (or use expo-spotlight)
+    relay-appsearch/               # Sprint 1 — Android AppSearch
+    relay-live-updates/            # Sprint 2 — iOS Live Activity + Android promoted ongoing
+    relay-vision/                  # Sprint 3 — iOS DataScanner + Android VisionCamera wrapper
+  android-plugin/
+    shortcuts.ts                   # Sprint 1 — local Expo config plugin for shortcuts.xml
+    widgets.ts                     # Sprint 2 — local plugin for Glance widgets
+  src/
+    hooks/
+      useShareIntentHandler.ts     # Sprint 1
+      useSpotlightSync.ts          # Sprint 1
+      useRecordingActivity.ts      # Sprint 2
+      useStructuringActivity.ts    # Sprint 3
+    lib/
+      deep-links.ts                # Sprint 0 — canonicalRelayUrl
+      live-activity.ts             # Sprint 2 — thin wrapper
+      spotlight.ts                 # Sprint 1 — cross-platform facade
+```
+
+---
+
+## Out of scope (deliberately)
+
+- **Focus Filters** (iOS) — listed in `RELAY-NEXT-GEN-CAPABILITIES.md` but not in this plan. Ship after Sprint 3.
+- **Handoff / Universal Clipboard** — only meaningful when macOS client ships.
+- **StoreKit 2** — tracked separately in the payments workstream.
+- **Whisper.cpp on-device STT** — Phase 2 of the voice roadmap, tracked in `RELAY-NEXT-GEN-CAPABILITIES.md` Part 2.
+- **Apple Foundation Models** — Phase 3 of the voice roadmap, 6+ months out.
+- **Nearby Interaction / SharePlay / MultipeerConnectivity** — not a 2026 priority.

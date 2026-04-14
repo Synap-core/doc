@@ -1,0 +1,377 @@
+---
+title: "Visual Assets"
+description: "Visual asset guidelines and requirements."
+---
+
+# Synap — Visual Assets Brief
+
+> Motion design / animation / 3D assets needed across product pages.
+> Each asset is described with concept, suggested style, where it appears, and what it should communicate.
+
+---
+
+## Design Language
+
+**Overall aesthetic:** Dark UI, deep blacks/grays, emerald (#10B981) as primary accent, purple (#8B5CF6) for intelligence, blue (#3B82F6) for interface, amber (#F59E0B) for packages. Clean lines, subtle glow effects, particles for data flow. Think: terminal meets cosmos — technical precision with organic motion.
+
+**Format preferences:** Lottie/Rive for web-embeddable animations, MP4/WebM for heavier pieces. All assets should work on dark backgrounds (transparent or #050505 base). Loop-friendly where possible.
+
+---
+
+## 1. THE POD — Sovereign Infrastructure
+
+### 1A. Pod Architecture Exploder
+**Concept:** A 3D isometric or exploded view of a Data Pod showing its internal components — PostgreSQL, MinIO, Typesense, Ory, Caddy, Synap Backend — as distinct glowing modules inside a container/server shape. Each module lights up sequentially with a label.
+
+**Style:** Isometric 3D, dark with neon edge lighting. Each service is a distinct geometric shape (database = cylinder, storage = cube, search = magnifying lens, etc.). Subtle particle connections between modules.
+
+**Motion:** Camera slowly orbits the pod. Services fade in one by one with a subtle pulse. Data particles flow between them. Final state shows all services running together as a unified system.
+
+**Duration:** 8-12 seconds loop
+
+**Where it goes:** `/product/pods` hero area, potentially `/product` page
+
+**What it communicates:** A pod isn't abstract — it's a real, complete infrastructure stack with known components.
+
+---
+
+### 1B. Deployment Flow
+**Concept:** Split-screen animation showing two paths: "Managed" (left) and "Self-Hosted" (right). Managed shows: click button → server spins up in a data center → pod deploys → URL appears. Self-hosted shows: terminal command → Docker Compose pulls → services start → same pod running.
+
+**Style:** Flat/2.5D with clean lines. The managed side has a cloud/data-center backdrop. The self-hosted side has a terminal aesthetic. Both converge to the same pod shape at the end.
+
+**Motion:** Both paths animate simultaneously, showing different journeys to the same destination. Ends with both pods pulsing identically.
+
+**Duration:** 10-15 seconds
+
+**Where it goes:** `/product/pods` deployment section
+
+**What it communicates:** Two paths, same sovereignty. Choice without compromise.
+
+---
+
+### 1C. Sovereignty Lock Animation
+**Concept:** A data pod with a shield/lock motif. The animation shows: company logo fades out (Synap disappears) → the pod keeps running, pulsing with life. Text: "If we disappear, your pod keeps running."
+
+**Style:** Minimal, symbolic. Dark background, the pod as a glowing sphere/cube. The company name dissolves into particles that scatter, but the pod remains solid and luminous.
+
+**Motion:** Dissolve + persistence. Emotionally reassuring.
+
+**Duration:** 5-8 seconds
+
+**Where it goes:** `/product/pods` sovereignty section, `/manifesto`
+
+**What it communicates:** Architectural independence. Not a marketing promise — a technical reality.
+
+---
+
+## 2. INTELLIGENCE — AI That Proposes
+
+### 2A. The Proposal Flow
+**Concept:** The core animation of Synap's AI model. Three phases visualized as a flow:
+
+1. **AI Thinks** — A brain/neural network shape processes, with search rays extending into a knowledge graph (nodes and edges lighting up as context is gathered)
+2. **Proposal Created** — The thinking coalesces into a structured card/document showing a diff (green additions, reasoning text)
+3. **Human Reviews** — A human cursor/hand arrives, reviews, and clicks "Approve" — the change flows into the data
+
+**Style:** Abstract but recognizable. The AI side uses purple (#8B5CF6) tones. The human side uses warm whites/greens. The transition from AI → proposal → human should feel like a handoff, not a wall.
+
+**Motion:** Left-to-right flow. Thinking has organic, neural movement. Proposal crystallizes (chaos → structure). Approval is a decisive, satisfying click.
+
+**Duration:** 12-18 seconds
+
+**Where it goes:** `/product/intelligence` hero/proposal section — this is the signature animation for the entire intelligence concept
+
+**What it communicates:** AI doesn't act alone. There's a clear, visible moment where control returns to the human.
+
+---
+
+### 2B. Hub Protocol Handshake
+**Concept:** Visualizes the connection between an AI service and a Data Pod via the Hub Protocol. Shows: AI sends a scoped request (labeled tokens like "read:notes", "search:entities") → Pod validates permissions → Secure channel established → Data flows through the channel with visible scope boundaries.
+
+**Style:** Network/connection aesthetic. Two nodes (AI and Pod) with a protocol bridge between them. Permission tokens float as labeled badges. The channel has a shield/lock overlay.
+
+**Motion:** The handshake sequence: request → verify → connect. Data particles flow only within the approved scope lanes. Unauthorized requests bounce off.
+
+**Duration:** 8-12 seconds
+
+**Where it goes:** `/product/intelligence` Hub Protocol section, `/lightpaper`
+
+**What it communicates:** AI access is explicit, scoped, and auditable. Not a backdoor.
+
+---
+
+### 2C. Multi-Agent Dispatch
+**Concept:** An orchestrator node at the center receives a complex request. It decomposes the request into sub-tasks and dispatches them to specialized agents (Chat, Research, Code, Writing, Knowledge, Action) — each represented as a distinct node with its own icon and color. Results flow back to the orchestrator, which assembles the final response.
+
+**Style:** Constellation/network. Central orchestrator as a larger node. Specialized agents as satellite nodes, each with their accent color. Task assignments as directed light beams. Results as return streams.
+
+**Motion:** Request enters center → branches out to 3-4 agents simultaneously → agents process (each with subtle unique animation) → results stream back → orchestrator compiles.
+
+**Duration:** 10-15 seconds
+
+**Where it goes:** `/product/intelligence` agents section
+
+**What it communicates:** Complex requests aren't handled by a single monolithic model. Specialization + coordination.
+
+---
+
+### 2D. AI as First-Class User
+**Concept:** Side-by-side comparison in an activity feed. A human user creates a note (avatar, name, action, timestamp). An AI agent creates a task (avatar, name, action, timestamp, + reasoning trace). Both entries look structurally identical — same format, same audit trail — but the AI entry has an additional "reasoning" attachment.
+
+**Style:** UI-like mockup with subtle animation. Clean, readable. The point is the structural equality.
+
+**Motion:** Human entry slides in → AI entry slides in below with identical formatting → reasoning trace unfolds from the AI entry.
+
+**Duration:** 6-10 seconds
+
+**Where it goes:** `/product/intelligence` AI-as-user section
+
+**What it communicates:** AI has the same identity model as humans. Governance comes for free.
+
+---
+
+## 3. INTERFACE — Workspace as Lens
+
+### 3A. The Nine Views Morph
+**Concept:** The signature interface animation. A single dataset (e.g., a set of tasks with titles, statuses, dates, assignees) morphs through all nine view types: List → Grid → Table → Kanban → Graph → Calendar → Flow → Timeline → Whiteboard. The data is visually the same — the container/layout changes.
+
+**Style:** Clean UI frames, each view type recognizable at a glance. Dark backgrounds. Data elements have subtle color coding. The morphing transition should feel fluid — elements rearrange, resize, reconnect rather than cut.
+
+**Motion:** Continuous morph. Each view holds for ~2 seconds before flowing into the next. Elements should visibly travel from one position to another (not fade/cut). The message is: same data, different lens.
+
+**Duration:** 20-25 seconds (loop)
+
+**Where it goes:** `/product/workspace` nine views section — the hero visual for the interface concept
+
+**What it communicates:** Views are perspectives, not containers. Your data is never locked into one shape.
+
+---
+
+### 3B. Workspace-as-Lens Concept
+**Concept:** A central pool of entities (glowing nodes of different types — notes, tasks, contacts, files) viewed through different "lenses" (like camera filters or portals). Lens 1: "Product" workspace shows tasks on a kanban. Lens 2: "Research" workspace shows the same tasks as knowledge graph nodes. Lens 3: "Personal" workspace shows a filtered subset in a list.
+
+**Style:** The central data pool is abstract (floating nodes). Each lens is a distinct frame/portal that the camera looks through, rendering the same data differently. Like looking at the same landscape through different windows.
+
+**Motion:** Camera pans from one lens to another, or lenses rotate around the data pool. The data pool stays constant — the rendering inside each lens changes.
+
+**Duration:** 12-15 seconds
+
+**Where it goes:** `/product/workspace` workspace-as-lens section, `/product` overview
+
+**What it communicates:** The paradigm shift — workspace is a perspective, not a folder.
+
+---
+
+### 3C. Entity System — Everything Is Connected
+**Concept:** A single entity (e.g., a "Project") shown as a node. Properties attach to it dynamically — title, status, priority, due date — each as a floating label/badge that snaps into place. Then: related entities connect — tasks, notes, contacts — forming a mini knowledge graph. A profile overlay changes the visible properties (some appear, some hide).
+
+**Style:** Node-and-edge graph with property badges. Dynamic, organic movement. Each property type has a subtle icon (text = T, date = calendar, etc.).
+
+**Motion:** Entity appears → properties snap on one by one → related entities appear and connect with edges → profile switches and visible properties change.
+
+**Duration:** 10-12 seconds
+
+**Where it goes:** `/product/workspace` entity section, `/lightpaper`
+
+**What it communicates:** Entities are universal and configurable. Not hardcoded types — dynamic profiles.
+
+---
+
+### 3D. The Browser (Desktop App Showcase)
+**Concept:** A 3D perspective render of the Synap desktop browser showing its key features: tabs across the top, sidebar navigation, a workspace view in the main area, a quick-capture popup appearing via hotkey, the integrated terminal sliding up from the bottom, and a widget panel on the side.
+
+**Style:** 3D device frame (MacBook or standalone window) with realistic UI inside. Each feature highlights with a subtle glow/zoom as it's called out. Dark theme throughout.
+
+**Motion:** The browser window rotates slightly in 3D space. Features highlight sequentially: tabs → sidebar → main content → capture popup → terminal → widgets. Each highlight has a label that fades in.
+
+**Duration:** 15-20 seconds
+
+**Where it goes:** `/product/workspace` browser section, homepage
+
+**What it communicates:** This isn't a web app in a browser tab. It's a purpose-built environment.
+
+---
+
+## 4. DATA FLOW & EVENT CHAIN
+
+### 4A. Event Sourcing Timeline
+**Concept:** A horizontal timeline showing events being recorded. A user action (create note, edit task, move item) generates an event that drops onto the chain as an immutable block. Each block has: actor, action, timestamp, payload preview. The chain grows. Then: time-travel — a cursor scrubs backward through the chain, and the workspace state rewinds visually.
+
+**Style:** Blockchain-inspired but cleaner. Events as connected blocks on a horizontal strip. The time-travel scrubbing is the dramatic moment — the workspace in the background visually reverses changes.
+
+**Motion:** Events drop onto the chain with a satisfying click. The chain extends rightward. Time-travel scrub is smooth and continuous — workspace morphs backward.
+
+**Duration:** 12-15 seconds
+
+**Where it goes:** `/product` page, `/lightpaper`, possibly homepage
+
+**What it communicates:** Every change is recorded. History is navigable. Nothing is lost.
+
+---
+
+### 4B. Three-Phase Event Flow
+**Concept:** Visualizes the event lifecycle: Requested → Approved → Validated. An action (e.g., AI proposes a change) enters as a "requested" event. It passes through an approval gate (human review). Once approved, it's validated and applied to the data — the event is now immutable on the chain.
+
+**Style:** Pipeline/funnel. Three distinct stages with gates between them. Each stage has a color: requested (amber), approved (blue), validated (green). The approval gate has a human presence (cursor/avatar).
+
+**Motion:** Event enters → pauses at approval gate → human approves → event passes through → lands on the immutable chain.
+
+**Duration:** 8-10 seconds
+
+**Where it goes:** `/product/intelligence`, `/lightpaper` event section
+
+**What it communicates:** Not all events are equal. There's governance in the data flow.
+
+---
+
+### 4C. Data Flow: Pod ↔ Intelligence ↔ Interface
+**Concept:** The three-layer architecture as a flowing system. Data flows up from the Pod (infrastructure) through the Intelligence layer (where it's enriched/analyzed) to the Interface (where it's rendered). The reverse flow: user actions in the interface create events that flow down through intelligence (proposals) to the pod (persistence).
+
+**Style:** Vertical three-tier diagram with animated data particles flowing between layers. Each layer has its accent color (green/purple/blue). The flow is bidirectional — particles go up and down simultaneously.
+
+**Motion:** Continuous flow. Up-flowing particles carry data labels (entities, properties). Down-flowing particles carry action labels (events, proposals). The intelligence layer visibly processes — particles enter, get enriched, exit.
+
+**Duration:** 12-15 seconds (loop)
+
+**Where it goes:** `/product` "how layers connect" section, `/lightpaper` architecture section
+
+**What it communicates:** The three layers aren't isolated — they're a living, flowing system.
+
+---
+
+## 5. PACKAGES & ECOSYSTEM
+
+### 5A. Package Install Flow
+**Concept:** A package card (e.g., "CRM") is selected from a registry grid. It opens to reveal its contents: entity profiles (Contact, Deal, Company), properties (pipeline stage, deal value), views (kanban, table). The user clicks "Install" — the contents fly out and land into a workspace, creating new entity types and views. The workspace transforms.
+
+**Style:** UI mockup with abstract elements. The package is a contained card that "explodes" open. The installation is a satisfying deployment — elements fly into position in the workspace.
+
+**Motion:** Select → reveal contents → install click → elements deploy into workspace → workspace is now transformed with new capabilities.
+
+**Duration:** 10-12 seconds
+
+**Where it goes:** `/product/packages` hero section
+
+**What it communicates:** One click transforms your workspace. Packages aren't apps — they're capability injections.
+
+---
+
+### 5B. SaaS Replacement Visualization
+**Concept:** A grid of SaaS logos/icons (Notion, Linear, Salesforce, Google Drive, Slack, etc.) each in their own box with a price tag. The boxes collapse/dissolve into a single pod with packages installed. One subscription. One data model.
+
+**Style:** The SaaS grid is cluttered, expensive, fragmented. The pod result is clean, unified, sovereign. Strong before/after contrast.
+
+**Motion:** Grid → collapse → single pod. Price tags combine into one. Logos transform into package icons inside the pod.
+
+**Duration:** 8-12 seconds
+
+**Where it goes:** `/product/packages` SaaS section, `/one-pager`
+
+**What it communicates:** Stop subscribing to ten tools. Install ten packages on one pod.
+
+---
+
+## 6. NETWORK & CONNECTIONS
+
+### 6A. Connection Architecture
+**Concept:** A pod at the center with multiple connections radiating outward: the Synap browser, a mobile app, an n8n automation, a CLI tool, a third-party app, an AI agent. Each connection uses the pod's API (tRPC/REST/WebSocket) — shown as labeled channels. The pod is the hub; everything else is a spoke.
+
+**Style:** Hub-and-spoke network diagram. The pod glows at the center. Connections are animated lines with data flowing through them. Each spoke has an icon representing the client type.
+
+**Motion:** Pod appears → connections extend outward one by one → data flows through all channels simultaneously. Some connections are bidirectional (browser), some are primarily read (mobile), some are event-driven (automation).
+
+**Duration:** 10-15 seconds
+
+**Where it goes:** `/product` or `/product/workspace`, `/lightpaper`
+
+**What it communicates:** Your pod is an open platform. Anything can connect.
+
+---
+
+### 6B. Knowledge Graph Exploration
+**Concept:** A living knowledge graph — entities as nodes, relations as edges. The camera zooms into a node (a note), revealing its connections: linked tasks, related contacts, referenced documents, semantic neighbors (via vector similarity). As the user explores, new connections light up. The graph breathes — it's organic, not static.
+
+**Style:** Dark space with luminous nodes. Different entity types have different colors/shapes. Edges pulse with activity. Semantic connections (AI-discovered) are shown as dotted/ethereal lines vs. explicit connections as solid lines.
+
+**Motion:** Zoom in → connections reveal → click a neighbor → new neighborhood loads → graph expands organically.
+
+**Duration:** 12-18 seconds
+
+**Where it goes:** `/product/workspace`, homepage, PKM use case page
+
+**What it communicates:** Your data isn't siloed in pages. It's a connected, living graph.
+
+---
+
+## 7. MANIFESTO & VISION
+
+### 7A. The Sovereign Web Transition
+**Concept:** A visual essay in three acts. Act 1 (Web 1.0): static pages, individual servers, fragmented. Act 2 (Web 2.0): centralized platforms, siloed data, corporate control — data flowing INTO big platform logos. Act 3 (Sovereign Web): data flowing BACK to personal pods, distributed but connected.
+
+**Style:** Abstract/symbolic. Each era has a distinct visual tone. Web 1.0 is pixelated/retro. Web 2.0 is sleek but claustrophobic (data trapped in walled gardens). Sovereign Web is open, luminous, breathing.
+
+**Motion:** Timeline progression. Data particles change direction — from flowing into platforms to flowing back to personal pods.
+
+**Duration:** 15-20 seconds
+
+**Where it goes:** `/manifesto`, homepage
+
+**What it communicates:** The historical arc. We're not going backward — we're taking the best of centralization and giving ownership back.
+
+---
+
+### 7B. The Architecture Diagram (Animated)
+**Concept:** A polished, animated version of the ASCII architecture diagram from the lightpaper. Three stacked layers with clear labels, flowing data between them. Professional enough to use in presentations, pitch decks, documentation.
+
+**Style:** Clean technical diagram with subtle animation. Not a schematic — more like an architectural blueprint with life. Each layer has depth (subtle 3D or layered shadow).
+
+**Motion:** Layers build from bottom up (Infrastructure → Intelligence → Interface). Once built, data particles flow between layers continuously.
+
+**Duration:** 10-12 seconds build, then loop
+
+**Where it goes:** `/lightpaper`, `/product`, presentations
+
+**What it communicates:** The clean, layered architecture. Three independent layers, one sovereign platform.
+
+---
+
+## ASSET SUMMARY TABLE
+
+| # | Asset Name | Duration | Primary Page | Style | Priority |
+|---|-----------|----------|-------------|-------|----------|
+| 1A | Pod Architecture Exploder | 8-12s | /product/pods | 3D isometric | HIGH |
+| 1B | Deployment Flow | 10-15s | /product/pods | 2.5D split | MEDIUM |
+| 1C | Sovereignty Lock | 5-8s | /product/pods, /manifesto | Minimal symbolic | MEDIUM |
+| 2A | Proposal Flow | 12-18s | /product/intelligence | Abstract + UI | **CRITICAL** |
+| 2B | Hub Protocol Handshake | 8-12s | /product/intelligence | Network | HIGH |
+| 2C | Multi-Agent Dispatch | 10-15s | /product/intelligence | Constellation | HIGH |
+| 2D | AI as First-Class User | 6-10s | /product/intelligence | UI mockup | MEDIUM |
+| 3A | Nine Views Morph | 20-25s | /product/workspace | UI morph | **CRITICAL** |
+| 3B | Workspace-as-Lens | 12-15s | /product/workspace | Portal/lens | HIGH |
+| 3C | Entity System | 10-12s | /product/workspace | Node graph | MEDIUM |
+| 3D | Browser Showcase | 15-20s | /product/workspace | 3D device | HIGH |
+| 4A | Event Sourcing Timeline | 12-15s | /product, /lightpaper | Timeline blocks | HIGH |
+| 4B | Three-Phase Event Flow | 8-10s | /product/intelligence | Pipeline | MEDIUM |
+| 4C | Three-Layer Data Flow | 12-15s | /product, /lightpaper | Vertical flow | HIGH |
+| 5A | Package Install Flow | 10-12s | /product/packages | UI + abstract | HIGH |
+| 5B | SaaS Replacement | 8-12s | /product/packages | Before/after | MEDIUM |
+| 6A | Connection Architecture | 10-15s | /product | Hub-and-spoke | MEDIUM |
+| 6B | Knowledge Graph | 12-18s | /product/workspace | Living graph | HIGH |
+| 7A | Sovereign Web Transition | 15-20s | /manifesto | Visual essay | MEDIUM |
+| 7B | Architecture Diagram | 10-12s | /lightpaper | Technical | HIGH |
+
+**Critical (must-have):** 2A Proposal Flow, 3A Nine Views Morph
+**High priority (10 assets):** 1A, 2B, 2C, 3B, 3D, 4A, 4C, 5A, 6B, 7B
+**Medium priority (8 assets):** 1B, 1C, 2D, 3C, 4B, 5B, 6A, 7A
+
+---
+
+## DELIVERY FORMAT
+
+- **Web-embeddable:** Lottie JSON or Rive (.riv) preferred for interactive/loopable
+- **Fallback:** MP4/WebM for complex 3D pieces (with poster frame)
+- **Resolution:** 2x for retina, max-width 1200px
+- **Aspect ratios:** 16:9 for hero/wide placements, 4:3 or 1:1 for inline
+- **Color space:** sRGB, designed for dark backgrounds (#050505)
+- **File size target:** < 500KB for Lottie, < 5MB for video

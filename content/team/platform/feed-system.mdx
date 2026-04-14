@@ -1,0 +1,287 @@
+---
+title: "Feed System"
+description: "3-surface feed model: personal chat, proactive feed, notifications."
+---
+
+# Feed System — Architecture, Rationale & Roadmap
+
+**Status:** Production-ready (2026-04-07)  
+**Scope:** Backend channel architecture + Relay mobile feed
+
+---
+
+## Why We Did This
+
+The original design had one AI channel per user (`isPersonal: true`). Automations, cron workers, and IS chat responses all wrote into it. This created three compounding problems:
+
+1. **AI context pollution.** When the IS reads history to answer a question, it sees morning briefings, reconnection nudges, and system messages mixed with real conversation. Every response has noise in its context window.
+2. **UX confusion.** The Chat tab should show a clean back-and-forth. Proactive AI cards appearing in the middle of a conversation breaks the mental model.
+3. **Rate limiting interference.** The proactive rate limit (3/hr, 10/day) was tracking ALL messages in the personal channel, including user chat messages — misfire risks.
+
+The fix is a strict 3-surface model. One rule: **every write goes to exactly one surface.**
+
+---
+
+## The 3-Surface Model
+
+```
+┌─────────────────────────────┬────────────────────────────────────────────────────────────┐
+│           Surface           │                       Rules                                │
+├─────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Personal chat               │ User types → AI responds. Nothing automated touches this.  │
+│ (isPersonal: true)          │ Context window stays clean. IS reads only real conversation.│
+├─────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Proactive feed              │ AI posts, user reads. Substantive content only: briefings, │
+│ (isProactiveFeed: true)     │ summaries, event prep. Tap any item to open a new chat.    │
+├─────────────────────────────┼────────────────────────────────────────────────────────────┤
+│ Notifications               │ Ephemeral one-way nudges. No AI content. No reply.        │
+│ (notifications table)       │ "Reconnect with John." Bell icon only. Deep-link on tap.  │
+└─────────────────────────────┴────────────────────────────────────────────────────────────┘
+```
+
+Both channels are `ai_thread` type, pod-wide (no `workspaceId`), created lazily on workspace join.
+
+---
+
+## Channel Schema
+
+```
+channels table (both channels share this)
+├── channelType: 'ai_thread'
+├── userId: (owner)
+├── workspaceId: NULL  (pod-wide — shared across all workspaces)
+├── status: 'active'
+└── metadata: JSONB
+    ├── isPersonal: true/false
+    └── isProactiveFeed: true/false
+
+Personal chat:   agentId="personal",  agentType="personal", metadata.isPersonal=true
+Proactive feed:  agentId="proactive", agentType="personal", metadata.isProactiveFeed=true
+```
+
+### Why pod-wide?
+
+Personal identity doesn't change between workspaces. A reconnection nudge is relevant to you regardless of which workspace you're looking at. If scoped to workspace, users would get duplicate channels (one per workspace), and feed content would fragment.
+
+---
+
+## Write Paths (Who Writes Where)
+
+### Personal chat channel
+
+| Writer | Code path | Notes |
+|--------|-----------|-------|
+| IS chat response | `channels.ts:778` → `ensurePersonalChannel()` | Standard AI message routing |
+| Telegram bot | `telegram-bot-forward.ts:146` | Forwards to personal channel, IS responds |
+| External API | `external/chat.ts:184` | `/v1/chat` endpoint for OpenClaw |
+| OpenAI-compat | `external/openai-compat.ts:194` | `/v1/chat/completions` |
+| IS `ensurePersonal` Hub | `hub-protocol/channels.ts:603` | IS skill triggers resolving where to reply |
+
+**What NEVER writes here:** automations, cron workers, Hub `/proactive/post`
+
+### Proactive feed channel
+
+| Writer | Code path | Notes |
+|--------|-----------|-------|
+| Cron: morning briefing | `proactive-morning-briefing.ts` → `postProactiveMessage()` | Daily at 7:45am |
+| Cron: weekly digest | `proactive-weekly-digest.ts` → `postProactiveMessage()` | Weekly on Monday |
+| Cron: health check | `proactive-health-check.ts` → `postProactiveMessage()` | Configurable frequency |
+| Hub POST /proactive/post | `hub-protocol-rest.ts:3553` | IS-initiated insights. Rate-limited: 3/hr, 10/day |
+| Automation: event prep | `automation-executor.ts` channelType='proactive' | Automation 4 in Relay |
+| Any automation output node | `channel_message` with `channelType: 'proactive'` | Custom automations |
+
+**Message metadata set on every proactive write:**
+```json
+{ "proactiveAi": true, "proactiveType": "morning-briefing" | "weekly-digest" | "event-prep-briefing" | "insight" | ... }
+```
+
+### Notifications table
+
+| Writer | Code path | Notes |
+|--------|-----------|-------|
+| Automation: reconnection nudge | `automation-executor.ts` outputType='notification' | Automation 3 in Relay |
+| Any automation output node | `notification` output type | Generic automation notifications |
+| NotificationService.create() | `NotificationService.ts` | Any backend code |
+| Proactive post utility (side-effect) | `proactive-channel-post.ts:204` | Creates a notification row alongside every proactive message |
+
+---
+
+## Read Paths (Who Reads What)
+
+### Relay mobile app (`useFeed.ts`)
+
+```
+Feed = [
+  Source 1: entities.list { profileSlug: 'person' }    → encounters (paginated)
+  Source 2: chat.listChannels → find isProactiveFeed=true
+            → chat.getMessages(proactiveFeedChannelId)  → proactive cards
+  Source 3: notifCenter.list { status: 'all' }          → notification cards
+  Source 4: entities.list { profileSlug: 'campaign' }   → campaign activity
+  Source 5: chat.listChannels → entity-linked channels  → recent interactions
+]
+```
+
+**Router note:** `trpc.notifCenter.*` is the automation notifications table. `trpc.notifications.*` is the legacy inbox (N8N external items — emails, calendar). The feed uses `notifCenter`.
+
+### Browser (Electron)
+
+- Chat tab → personal chat channel only
+- No proactive feed UI yet (planned: Feed widget in bento dashboard using proactive feed channel)
+- Notification bell → `notifCenter.unreadCount` + `notifCenter.list`
+
+---
+
+## Provisioning
+
+Channels are created lazily:
+
+```typescript
+// workspaces.ts — on workspace join (addMember)
+ensurePersonalChannel(userId, workspaceId)       // fires and forgets
+ensureProactiveFeedChannel(userId, workspaceId)  // fires and forgets
+```
+
+Both functions are SELECT-or-INSERT (idempotent). Safe to call multiple times.
+
+If a channel doesn't exist when an automation tries to write to it, the automation executor creates it inline (same idempotent logic).
+
+---
+
+## Automation Output Node Reference
+
+```typescript
+// Posts a message to the proactive feed (substantive AI content)
+{
+  outputType: 'channel_message',
+  config: {
+    channelType: 'proactive',           // → proactive feed channel
+    content: 'Your briefing...',
+    metadata: {
+      proactiveType: 'event-prep-briefing',
+      entityId: '{{loop.item.id}}',     // optional — for deep linking
+    }
+  }
+}
+
+// Posts a message to the personal chat channel (rare — prefer the IS responding naturally)
+{
+  outputType: 'channel_message',
+  config: {
+    channelType: 'personal',            // → personal chat channel
+    content: 'AI follow-up...',
+  }
+}
+
+// Creates a notification (ephemeral nudge, no AI content)
+{
+  outputType: 'notification',
+  config: {
+    title: 'Reconnect with {{loop.item.title}}',
+    body: "You haven't been in touch lately.",
+    category: 'ai',                     // 'governance'|'data'|'ai'|'system'|'inbox'
+    priority: 'normal',                 // 'low'|'normal'|'high'|'urgent'
+    entityId: '{{loop.item.id}}',       // stored as sourceId → frontend deep-links
+    groupKey: 'reconnection-{{loop.item.id}}',  // collapses duplicate nudges
+  }
+}
+```
+
+---
+
+## The 5 Relay Automations and Their Surfaces
+
+| # | Name | Trigger | Surface | Rationale |
+|---|------|---------|---------|-----------|
+| 1 | New Contact Enrichment | entity.create (person/contact) | entity_update only | Silent enrichment, no user-facing output |
+| 2 | Strength Score Computation | entity.update (person) | entity_update only | Background metric, no notification needed |
+| 3 | Daily Reconnection Nudges | cron 9am | **notification** | Ephemeral nudge — "Reconnect with John." No AI content. |
+| 4 | Event Prep Briefing | cron 8am | **proactive feed** | Substantive AI content — user wants to read this |
+| 5 | Interaction Summary | message.create in entity channel | entity_update only | Keeps `aiSummary` fresh, no user-facing output |
+
+---
+
+## Rate Limits
+
+### Proactive feed
+- 3 messages per user+workspace per hour
+- 10 messages per user+workspace per 24h
+- Enforced in: `hub-protocol-rest.ts` `/proactive/post` (Hub endpoint)
+- Deduplication: 1 message per `proactiveType` per day (`proactive-channel-post.ts` + `proactive-post.ts`)
+- The cron workers independently enforce their own schedules (daily/weekly frequency)
+
+### Notifications
+- No platform-level rate limit (automations control their own groupKey for deduplication)
+- `groupKey` prevents duplicate nudges for the same entity on the same day
+
+---
+
+## Future-Proofing
+
+### What this design enables
+
+**Multi-workspace feed.** Both personal channels are pod-wide — a single proactive feed aggregates intelligence across all workspaces. When a user has multiple workspaces (startup, personal, client), their morning briefing covers everything.
+
+**"Continue in chat."** Every proactive feed item has an `entityId` in metadata. The UI can offer a button: "Ask AI about this." Tapping it opens a new `ai_thread` in the personal chat channel pre-seeded with context about that entity. This is a clean interaction pattern: feed is read-only, chat is conversational.
+
+**AI-composable feed.** Because every message has `proactiveType` in metadata, the IS can query the proactive feed channel and reason about patterns. "You've been getting event prep briefings but no follow-up on ETHGlobal — want me to surface who you met?" This is the IS reading *its own past outputs* to generate new insights.
+
+**Notification actions.** The `notifications` schema has an `actions` JSONB field (array of `NotificationAction`). Future: notification for reconnection nudge can have inline actions ("Message on Telegram", "Add note") that resolve without opening the full app.
+
+**Relay → Browser bridging.** The proactive feed channel exists on the pod. The Browser can render it as a widget in any bento dashboard. One channel, multiple consumers.
+
+### What deliberately stays limited
+
+**Personal chat is sacred.** The rule "nothing automated goes to personal chat" is a hard guarantee, not a soft preference. Any developer adding automation output should default to `channel_message channelType:'proactive'` or `notification`, never `channelType:'personal'`. The chat channel's value is its purity.
+
+**Feed is not a CRM activity log.** Every interaction between user and contact is NOT a feed item. The feed should surface *non-obvious* value: what the user would miss without it. Routine interactions (sent Telegram, replied to email) are stored in the entity timeline, not surfaced in the feed by default.
+
+---
+
+## Event Chain Relationship
+
+The feed surfaces (personal chat, proactive feed, notifications) sit at the delivery end of the event chain. See `EVENT-CHAIN.md` for the full picture.
+
+Current event chain coverage for feed writes:
+
+| Surface | Messages in event log? | Emits to automation trigger? | Sync-replicable? |
+|---------|------------------------|------------------------------|-----------------|
+| Personal chat | YES (messageRepository) | YES (channel_message.created) | YES |
+| Proactive feed | YES (messageRepository) | NO — `proactive.posted` not emitted | NO — not in event log as proactive signal |
+| Notifications | NO | NO | NO |
+
+Planned fix: see `EVENT-CHAIN.md` Phase 1-C (proactive.posted) and Phase 2-C (notification events).
+
+---
+
+## Known Gaps (as of 2026-04-10)
+
+| Gap | Impact | Fix |
+|-----|--------|-----|
+| Person timeline disabled | Person detail has no interaction history tab | Add `chat.getMessagesForEntity(entityId)` tRPC endpoint, re-enable in `usePersonDetail.ts:97` |
+| Notes not synced | Notes in person detail only persist to device | On save, call `entities.update({ properties: { notes } })` |
+| No "continue in chat" button | Feed items can't spawn conversations | Frontend: add CTA on proactive feed items that opens personal chat pre-filled |
+| Notification deep-link | `sourceId` set, but frontend doesn't navigate on tap | Relay feed item tap should use `sourceId` to navigate to entity detail |
+| No App Store submission | Relay not on iOS/Android yet | Manual: icon, splash, privacy policy, app submission |
+| Browser has no proactive feed widget | Feed only in Relay | Create a `proactive-feed` bento cell that reads from `isProactiveFeed` channel |
+
+---
+
+## Key Files
+
+```
+Backend
+├── packages/api/src/utils/personal-channel.ts          ensurePersonalChannel(), ensureProactiveFeedChannel()
+├── packages/api/src/utils/proactive-channel-post.ts    postProactiveMessage() — posts to proactive feed
+├── packages/jobs/src/utils/proactive-post.ts           jobs-package version (no circular dep)
+├── packages/jobs/src/workers/automation-executor.ts    channel_message + notification output nodes
+├── packages/jobs/src/workers/proactive-*.ts            3 cron workers
+├── packages/api/src/routers/hub-protocol-rest.ts       POST /proactive/post, GET /channels/personal
+├── packages/api/src/routers/channels.ts                listChannels (includes pod-wide filter)
+├── packages/api/src/routers/notif-center.ts            notifCenter.list — reads notifications table
+├── packages/database/src/repositories/channel-repository.ts  ChannelRepository methods
+
+Relay mobile
+├── relay-app/src/hooks/useFeed.ts                      Feed aggregator (5 sources)
+├── relay-app/src/lib/relay-automations.ts              5 automation templates
+├── relay-app/app/(tabs)/feed.tsx                       Feed screen
+```

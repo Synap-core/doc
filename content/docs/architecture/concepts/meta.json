@@ -1,0 +1,25 @@
+{
+  "title": "System concepts",
+  "description": "How the pod, graph, events, and agents fit together",
+  "pages": [
+    "index",
+    "architecture",
+    "building-blocks",
+    "entities",
+    "entity-connections",
+    "event-sourcing-explained",
+    "why-events",
+    "hub-and-spoke",
+    "composable-architecture",
+    "channels",
+    "views",
+    "profile-schemas",
+    "knowledge-graph",
+    "multi-agent-system",
+    "branching-conversations",
+    "artificial-intelligence",
+    "data-sovereignty",
+    "workspace-as-a-service",
+    "contagious-layers"
+  ]
+}

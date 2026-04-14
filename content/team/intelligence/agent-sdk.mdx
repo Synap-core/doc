@@ -1,0 +1,494 @@
+---
+title: "Agent Service SDK"
+description: "SDK for building and registering custom AI agents."
+---
+
+# Building a Synap Agent Service
+
+This guide explains how to create an external **agent service** (Intelligence Service / IS) that connects to the Synap platform. Any HTTP server implementing the IS contract can be registered as an agent in a workspace.
+
+## Mental Model
+
+```
+User sends a message
+  → Synap Data Pod resolves the workspace's active IS
+  → POST {your-agent-url}/api/chat/stream
+    → Your service processes the request
+    → Reads workspace context via Hub Protocol (pod ← your service)
+    → Streams response back via SSE
+    → Optionally writes data (entities, documents) via Hub Protocol
+```
+
+The platform separates **which agent** (your service) from **what specialisation** (code, writing, etc.). Your service advertises its specialisations via `GET /api/specialisations`. The orchestrator within your service decides how to route internally.
+
+---
+
+## Prerequisites
+
+- Node.js 20+ or Bun
+- A publicly reachable URL for your service (or use ngrok/cloudflare tunnel in dev)
+- A Synap Data Pod URL and Hub Protocol API key
+
+---
+
+## Quick Start with `@synap/agent-sdk`
+
+The SDK handles all HTTP boilerplate. Install it:
+
+```bash
+pnpm add @synap/agent-sdk hono @hono/node-server
+```
+
+### Minimal example
+
+```typescript
+import { createAgentServer } from "@synap/agent-sdk/server";
+import { PodClient } from "@synap/agent-sdk/pod";
+import { registerAgent } from "@synap/agent-sdk/register";
+import { serve } from "@hono/node-server";
+
+// 1. Create the HTTP server
+const server = createAgentServer({
+  serviceId: "my-agent",
+  apiKey: process.env.SYNAP_API_KEY!, // backend uses this to auth requests to you
+
+  specialisations: [
+    {
+      id: "default",
+      label: "My Agent",
+      isDefault: true,
+      description: "General-purpose assistant",
+    },
+    {
+      id: "code",
+      label: "Code Mode",
+      description: "Focused on programming tasks",
+    },
+  ],
+
+  async onChatStream(req, send) {
+    const pod = new PodClient(req.dataPodUrl!, req.dataPodApiKey!);
+
+    // Read recent messages + linked entities
+    const context = await pod.getContext({
+      channelId: req.threadId,
+      userId: req.userId,
+      workspaceId: req.workspaceId,
+    });
+
+    // Stream your response
+    await send.content("Thinking...");
+
+    // ... call your LLM, run your logic ...
+    const answer = "Here is what I found.";
+
+    await send.complete({
+      content: answer,
+      aiSteps: [],
+      proposedActions: [],
+      branchDecision: null,
+    });
+  },
+});
+
+// 2. Register with the pod (idempotent — safe to call every startup)
+await registerAgent({
+  podUrl: process.env.POD_URL!,
+  podApiKey: process.env.POD_HUB_API_KEY!,
+  serviceId: "my-agent",
+  name: "My Agent",
+  webhookUrl: process.env.WEBHOOK_URL!, // publicly reachable URL for your service
+  apiKey: process.env.SYNAP_API_KEY!,
+  capabilities: ["chat"],
+  description: "A custom AI agent",
+  version: "1.0.0",
+});
+
+// 3. Start the server
+serve({ fetch: server.app.fetch, port: 3000 });
+console.log("Agent service running on :3000");
+```
+
+---
+
+## Environment Variables
+
+| Variable          | Required | Description                                                                |
+| ----------------- | -------- | -------------------------------------------------------------------------- |
+| `SYNAP_API_KEY`   | Yes      | Secret the pod sends in `X-API-Key`; you choose the value                  |
+| `POD_URL`         | Yes      | Data Pod URL, e.g. `http://localhost:3001` or `https://pod.example.com`    |
+| `POD_HUB_API_KEY` | Yes      | Hub Protocol API key — get this from `intelligenceRegistry.provisionAgent` |
+| `WEBHOOK_URL`     | Yes      | Publicly reachable base URL for your service                               |
+
+---
+
+## HTTP Contract Reference
+
+The Synap backend expects these endpoints on your service:
+
+### `GET /health`
+
+Returns `{ status: "ok" }`. Used for health monitoring.
+
+### `GET /api/specialisations`
+
+Returns the specialisations your service supports:
+
+```json
+{
+  "specialisations": [
+    {
+      "id": "default",
+      "label": "My Agent",
+      "description": "General-purpose assistant",
+      "isDefault": true,
+      "isInternal": false,
+      "toolCount": 5
+    }
+  ]
+}
+```
+
+**id** — internal routing key (becomes `agentType` on channels).
+**isDefault** — shown as "Auto" in the branch picker.
+**isInternal** — hidden from user-facing pickers (e.g. `personal`, `prompting`).
+
+### `POST /api/chat/stream`
+
+Primary endpoint. Receives an `AgentChatRequest` and returns an SSE stream.
+
+**Request body:**
+
+```typescript
+{
+  query:         string;           // user message
+  threadId:      string;           // channel/thread ID
+  userId:        string;           // authenticated user
+  workspaceId?:  string;
+  agentUserId?:  string;           // agent user ID — use for writes
+  agentType?:    string;           // routing hint ("code", "writing", etc.)
+  dataPodUrl?:   string;           // for Hub Protocol calls
+  dataPodApiKey?: string;          // for Hub Protocol auth
+  mcpServers?:   McpServerConfig[];
+  sourceMessageId?: string;        // link proposals to this message
+}
+```
+
+**Authentication:** `X-API-Key: {your SYNAP_API_KEY}`
+
+**Response:** SSE stream. Each event is a JSON line:
+
+```
+data: {"type":"content","content":"Hello!"}\n\n
+data: {"type":"step","step":{...}}\n\n
+data: {"type":"complete","data":{...}}\n\n
+```
+
+**SSE event types:**
+
+| Event             | When to emit                                           |
+| ----------------- | ------------------------------------------------------ |
+| `content`         | Each text chunk (streaming the response)               |
+| `step`            | Tool calls, thinking steps, decisions                  |
+| `proposal`        | Actions requiring user approval (entity creates, etc.) |
+| `branch_decision` | When you decide to spawn a sub-agent                   |
+| `complete`        | Final event — always required, terminates the stream   |
+| `error`           | On failure — terminates the stream                     |
+
+### `POST /api/expertise/request`
+
+Non-streaming endpoint for background intelligence tasks.
+
+**Request body:** `AgentExpertiseRequest` (similar to chat stream)
+
+**Response:** `{ requestId, status: "completed"|"failed", content?, error? }`
+
+---
+
+## Hub Protocol — Reading and Writing Data
+
+The **Hub Protocol** is the IS→backend data API. Use `PodClient` to interact with it.
+
+```typescript
+import { PodClient } from "@synap/agent-sdk/pod";
+
+async function onChatStream(req, send) {
+  const pod = new PodClient(req.dataPodUrl!, req.dataPodApiKey!);
+
+  // ── READ ────────────────────────────────────────────────────────────────────
+
+  // Get thread context (messages + linked entities)
+  const ctx = await pod.getContext({
+    channelId: req.threadId,
+    userId: req.userId,
+  });
+
+  // Search workspace entities
+  const results = await pod.searchEntities({
+    query: "pending tasks",
+    workspaceId: req.workspaceId!,
+  });
+
+  // Read a specific entity
+  const entity = await pod.getEntity("entity-id");
+
+  // Recall agent memory
+  const memories = await pod.recallMemory({
+    query: req.query,
+    userId: req.userId,
+  });
+
+  // ── WRITE ───────────────────────────────────────────────────────────────────
+
+  // Create an entity (may auto-create a proposal for user approval)
+  const { id, proposalId } = await pod.createEntity({
+    workspaceId: req.workspaceId!,
+    agentUserId: req.agentUserId!, // always use agentUserId, never userId
+    type: "task",
+    name: "Follow up with Alice",
+    metadata: { priority: "high", dueDate: "2026-03-10" },
+    sourceMessageId: req.sourceMessageId,
+  });
+
+  // Store a memory fact
+  await pod.rememberFact({
+    content: "User prefers TypeScript over JavaScript",
+    userId: req.userId,
+    agentUserId: req.agentUserId,
+  });
+
+  // Post a message to any channel
+  await pod.postMessage({
+    channelId: req.threadId,
+    content: "I found 3 relevant tasks.",
+    agentUserId: req.agentUserId,
+  });
+}
+```
+
+### Write governance
+
+All writes go through Synap's **proposal system**. By default, an agent user's writes require user approval (the user sees the proposal in their inbox). The agent can be granted auto-approve permissions for specific tool categories.
+
+If `createEntity` returns `{ proposalId }` without an `id`, the entity will be created once the user approves. Include `sourceMessageId` from the request so the proposal is linked to the right message in the UI.
+
+---
+
+## Streaming SSE — Step Anatomy
+
+The `step` event carries AI reasoning steps that appear in the message UI:
+
+```typescript
+await send.step({
+  id: crypto.randomUUID(),
+  type: "tool_call", // "thinking" | "tool_call" | "tool_result" | "decision"
+  content: "Searching for tasks", // shown in the step bubble
+  toolName: "search_entities",
+  toolInput: { query: "tasks due this week" },
+  timestamp: new Date().toISOString(),
+  status: "running", // "pending" | "running" | "done" | "error"
+});
+
+// After the tool completes:
+await send.step({
+  id: crypto.randomUUID(),
+  type: "tool_result",
+  content: "Found 4 tasks",
+  toolOutput: { count: 4 },
+  timestamp: new Date().toISOString(),
+  status: "done",
+});
+```
+
+---
+
+## Specialisations
+
+Specialisations are modes/personalities within your service. The orchestrator within your service routes to the right specialisation based on the `agentType` field in the request.
+
+```typescript
+const server = createAgentServer({
+  specialisations: [
+    // Default — shown as "Auto" in the UI
+    { id: "default", label: "My Agent", isDefault: true },
+    // User-selectable specialisations
+    { id: "code", label: "Code", description: "Code generation and review" },
+    {
+      id: "research",
+      label: "Research",
+      description: "Web search and synthesis",
+    },
+    // Internal — never shown in the branch picker
+    { id: "personal", label: "Personal", isInternal: true },
+  ],
+
+  async onChatStream(req, send) {
+    // Route based on agentType from the request
+    switch (req.agentType) {
+      case "code":
+        return handleCode(req, send);
+      case "research":
+        return handleResearch(req, send);
+      default:
+        return handleDefault(req, send);
+    }
+  },
+});
+```
+
+---
+
+## Provisioning Flow (Production)
+
+In production, workspace owners provision your service via the Synap UI:
+
+1. User goes to **Workspace Settings > Agents > Connections**
+2. Clicks "Connect" on your service
+3. Backend calls `intelligenceRegistry.provisionAgent({ serviceType: "my-agent" })`
+4. Backend creates an agent user + Hub Protocol API key
+5. Returns `{ apiKey }` — the workspace owner stores this as `POD_HUB_API_KEY` in your container
+6. Your service starts, reads config, calls `registerAgent()` on startup
+
+For self-hosted / manual setups, the workspace admin provides the pod URL and Hub Protocol API key directly.
+
+---
+
+## Without the SDK (raw HTTP)
+
+If you prefer not to use the SDK, implement these endpoints directly:
+
+### Health check
+
+```
+GET /health → 200 { "status": "ok" }
+```
+
+### Specialisations
+
+```
+GET /api/specialisations → 200 { "specialisations": [...] }
+```
+
+### Chat stream (SSE)
+
+```
+POST /api/chat/stream
+X-API-Key: {your-api-key}
+Content-Type: application/json
+
+{ "query": "...", "threadId": "...", "userId": "...", ... }
+
+→ 200 text/event-stream
+data: {"type":"content","content":"Hello"}\n\n
+data: {"type":"complete","data":{...}}\n\n
+```
+
+### Hub Protocol calls
+
+```
+POST {dataPodUrl}/api/hub-protocol/search
+Authorization: Bearer {dataPodApiKey}
+Content-Type: application/json
+
+{ "query": "tasks", "workspaceId": "...", "userId": "..." }
+```
+
+### Registration
+
+```
+POST {podUrl}/trpc/intelligenceRegistry.register
+Authorization: Bearer {podHubApiKey}
+Content-Type: application/json
+
+{
+  "json": {
+    "serviceId":    "my-agent",
+    "name":         "My Agent",
+    "webhookUrl":   "https://my-agent.example.com",
+    "apiKey":       "your-secret-key",
+    "capabilities": ["chat"],
+    "description":  "...",
+    "version":      "1.0.0"
+  }
+}
+```
+
+---
+
+## Example: Claude-powered agent
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+import { createAgentServer } from "@synap/agent-sdk/server";
+import { PodClient } from "@synap/agent-sdk/pod";
+import { registerAgent } from "@synap/agent-sdk/register";
+import { serve } from "@hono/node-server";
+
+const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const server = createAgentServer({
+  serviceId: "claude-agent",
+  apiKey: process.env.SYNAP_API_KEY!,
+  specialisations: [
+    { id: "default", label: "Claude", isDefault: true },
+    { id: "code", label: "Claude Code", description: "Focused on code" },
+  ],
+
+  async onChatStream(req, send) {
+    const pod = new PodClient(req.dataPodUrl!, req.dataPodApiKey!);
+
+    // Get recent conversation + context
+    const ctx = await pod.getContext({
+      channelId: req.threadId,
+      userId: req.userId,
+      workspaceId: req.workspaceId,
+    });
+
+    const history = ctx.messages
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }))
+      .filter((m) => m.role !== "system");
+
+    const collectedContent: string[] = [];
+    const allSteps = [];
+
+    // Stream from Claude
+    const stream = claude.messages.stream({
+      model: "claude-opus-4-6",
+      max_tokens: 8096,
+      messages: [...history, { role: "user", content: req.query }],
+    });
+
+    for await (const event of stream) {
+      if (
+        event.type === "content_block_delta" &&
+        event.delta.type === "text_delta"
+      ) {
+        await send.content(event.delta.text);
+        collectedContent.push(event.delta.text);
+      }
+    }
+
+    await send.complete({
+      content: collectedContent.join(""),
+      aiSteps: allSteps,
+      proposedActions: [],
+      branchDecision: null,
+    });
+  },
+});
+
+await registerAgent({
+  podUrl: process.env.POD_URL!,
+  podApiKey: process.env.POD_HUB_API_KEY!,
+  serviceId: "claude-agent",
+  name: "Claude",
+  webhookUrl: process.env.WEBHOOK_URL!,
+  apiKey: process.env.SYNAP_API_KEY!,
+  capabilities: ["chat", "code", "analysis"],
+});
+
+serve({ fetch: server.app.fetch, port: 3000 });
+```

@@ -1,0 +1,100 @@
+---
+title: "OpenClaw Integration State"
+description: "Current OpenClaw integration status and next steps."
+---
+
+# OpenClaw Integration — Final State
+
+**Date:** 2026-04-04
+**Status:** Shipped. Ready for testing and ClawHub publication.
+
+---
+
+## What Was Built
+
+### 1. Unified Skill (`synap`)
+```bash
+openclaw skill install synap
+```
+One skill covering knowledge graph, message relay, A2AI, and governance. Hub Protocol REST only (`/api/hub/*`). No MCP, no tRPC.
+
+**Location:** `synap-backend/skills/synap/SKILL.md`
+
+### 2. CLI (`@synap/cli`)
+```bash
+npx @synap/cli init
+```
+Three-path flow:
+- **Path A:** Existing OpenClaw → detect, harden, pod, skill, seed
+- **Path B:** Fresh server → resource check, bundle install, connect
+- **Path C:** Laptop → managed/VPS/existing pod
+
+Commands: `init`, `connect`, `security-audit`, `status`, `update`
+
+**Location:** `synap-cli/` (separate repo: `synap-core/synap-cli`)
+
+### 3. OpenAI-Compatible Endpoint
+```
+POST /v1/chat/completions
+```
+IS as AI provider for OpenClaw. Four-tier routing (90% cheap, 10% Claude). Model aliases: `synap/auto`, `synap/free`, `synap/balanced`, `synap/advanced`, `synap/complex`.
+
+**Location:** `synap-backend/packages/api/src/routers/external/openai-compat.ts`
+
+### 4. Pricing Update
+- Pod: €15/mo (solo tier)
+- Pod + AI: €30/mo (pro tier, save €5)
+- Custom: contact sales
+- OpenClaw addon: free (same server)
+- Self-hosted: free forever
+
+### 5. Telegram Deactivated
+Feature flag: `TELEGRAM_BOT_ENABLED` (default OFF). OpenClaw handles external channels.
+
+### 6. Dashboard Context
+CP Dashboard shows per-user: tier, servers, OpenClaw status, spend, intelligence access.
+
+---
+
+## Repos Changed
+
+| Repo | Commits | Key Changes |
+|------|---------|-------------|
+| synap-backend | 8 | Skill, OpenAI-compat, MCP tools, setup, install.sh, Telegram off, docs |
+| synap-cli | 3 | New repo — CLI with 3-path init, security audit, seed |
+| synap-control-plane-api | 2 | Pricing model, intelligence skip for solo |
+| synap-app | 2 | Billing UI, OpenClaw self-hosted path |
+| synap-landing | 1 | Pricing page rewrite |
+| synap-control-plane-dashboard | 1 | Tier badges, services section, user billing |
+| browser | 1 | Tier label fix |
+
+---
+
+## Next Steps (Phase 2)
+
+| Item | What | When |
+|------|------|------|
+| Test end-to-end | Run `synap init` on a real server with OpenClaw | Now |
+| ClawHub publish | `clawhub publish skills/synap/` | After test |
+| CP auth in CLI | Browser login → token → managed pod creation | After 20 installs |
+| `synap pod migrate` | Export self-hosted → managed | After CP auth |
+| Blog post | "How to set up OpenClaw properly in 2026" | After ClawHub |
+| Stripe Pro product | Create Pod+AI product, set env vars | Before managed launch |
+
+---
+
+## Architecture
+
+```
+User's Machine                    Synap Infrastructure
+┌─────────────────┐              ┌──────────────────────┐
+│ npx @synap/cli  │              │ Synap Pod (€15/mo)   │
+│   init          │──── HTTPS ──►│ /api/hub/* (REST)    │
+│                 │              │ /v1/* (OpenAI compat) │
+│ OpenClaw        │              │ PostgreSQL + Typesense│
+│  + synap skill  │              │ + pgvector + MinIO    │
+└─────────────────┘              └──────────────────────┘
+```
+
+Self-hosted: both on same server, free.
+Managed: pod in cloud, OpenClaw anywhere.

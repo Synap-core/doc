@@ -1,0 +1,1073 @@
+---
+title: "Signal Feed AI Classification"
+description: "AI-powered feed item classification and enrichment."
+---
+
+# Signal Feed AI Classification & Memory Integration
+
+## Overview
+
+The Signal Feed uses the pod's Intelligence Service for AI classification and integrates with the existing memory system for personalization. This document covers how AI classification works, how memory is used, and how signals integrate with proactive intelligence.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Intelligence Service (Pod)                   │
+│                                                         │
+│  ┌─────────────────┐    ┌─────────────────┐           │
+│  │   Memory System │◄──►│   Signal Feed   │           │
+│  │   (Session +    │    │   Classifier    │           │
+│  │    Persistent)  │    │                 │           │
+│  └─────────────────┘    └─────────────────┘           │
+│           │                         │                   │
+│           ▼                         ▼                   │
+│  ┌─────────────────┐    ┌─────────────────┐           │
+│  │   Orchestrator  │    │   DeepSeek LLM │           │
+│  │   Agent        │    │   (Classification)│          │
+│  └─────────────────┘    └─────────────────┘           │
+└─────────────────────────────────────────────────────────┘
+```
+
+## AI Classification Pipeline
+
+### 1. Topic Extraction
+
+```typescript
+async function extractTopics(
+  item: RssHubItem,
+  context: ClassificationContext
+): Promise<Topic[]> {
+  const prompt = `
+You are a topic classifier for external content.
+
+Item Title: ${item.title}
+Item Description: ${item.description || 'N/A'}
+Item Content: ${item.content || 'N/A'}
+
+User's Current Context:
+${context.currentFocus ? `
+- Active Tasks: ${context.currentFocus.activeTasks?.join(', ') || 'None'}
+- Recent Searches: ${context.currentFocus.recentSearches?.join(', ') || 'None'}
+- Discussed People: ${context.currentFocus.discussedPeople?.join(', ') || 'None'}
+` : 'No context available'}
+
+Available Topics:
+- ai: Artificial intelligence, machine learning, LLMs, neural networks
+- programming: Software development, coding, frameworks, tools
+- startups: Tech startups, entrepreneurship, venture capital
+- design: UI/UX, product design, graphics, typography
+- marketing: Growth, content marketing, social media
+- technology: General tech news and trends
+- business: Business strategy, management, finance
+- science: Scientific discoveries, research papers
+- health: Health, wellness, medical advances
+- entertainment: Movies, TV, music, gaming
+
+Task:
+1. Extract 1-3 topics from the available list that match this item
+2. Rate confidence (0-1) for each topic
+3. If item mentions specific people, companies, or products, extract them too
+
+Return as JSON:
+{
+  "topics": [
+    {"name": "topic_name", "confidence": 0.0-1.0, "source": "explicit"|"inferred"}
+  ],
+  "entities": [
+    {"type": "person"|"company"|"product", "name": "name", "confidence": 0.0-1.0}
+  ]
+}
+`;
+
+  const response = await llm.chat(prompt, {
+    model: 'deepseek-chat',
+    temperature: 0.3, // Lower temp for classification
+  });
+
+  return JSON.parse(response.content);
+}
+```
+
+### 2. Relevance Scoring
+
+```typescript
+function computeRelevanceScore(
+  item: ClassifiedItem,
+  memory: SignalMemory,
+  context: ClassificationContext
+): number {
+  let score = 0;
+  let totalWeight = 0;
+
+  // 1. Explicit subscriptions (40% weight)
+  const subscriptionWeight = 0.4;
+  for (const sub of memory.subscriptions) {
+    const match = item.topics.find(t => t.name === sub.topic);
+    if (match) {
+      score += match.confidence * sub.confidence * subscriptionWeight;
+      totalWeight += subscriptionWeight;
+    }
+  }
+
+  // 2. Implicit classifications (30% weight)
+  const classificationWeight = 0.3;
+  for (const cls of memory.classifications) {
+    const match = item.topics.find(t => t.name === cls.topic);
+    if (match) {
+      // Apply time decay
+      const daysSinceUpdate = daysBetween(cls.lastUpdated, new Date());
+      const decayedConfidence = cls.confidence * Math.pow(0.95, daysSinceUpdate);
+
+      score += match.confidence * decayedConfidence * classificationWeight;
+      totalWeight += classificationWeight;
+    }
+  }
+
+  // 3. Current focus match (20% weight)
+  const focusWeight = 0.2;
+  if (context.currentFocus) {
+    const focusMatches = countFocusMatches(item, context.currentFocus);
+    if (focusMatches > 0) {
+      score += (focusMatches / 3) * focusWeight; // Max 3 focus areas
+      totalWeight += focusWeight;
+    }
+  }
+
+  // 4. Recency boost (10% weight)
+  const recencyWeight = 0.1;
+  const hoursOld = hoursBetween(new Date(item.publishedAt), new Date());
+  const recencyBoost = Math.max(0.5, 1 - (hoursOld / 168)); // 1 week decay
+  score += recencyBoost * recencyWeight;
+  totalWeight += recencyWeight;
+
+  // Normalize to 0-1
+  return totalWeight > 0 ? Math.min(1, score / (totalWeight * 0.8)) : 0.1;
+}
+
+function countFocusMatches(item: ClassifiedItem, focus: CurrentFocus): number {
+  let matches = 0;
+
+  // Check active tasks (extract keywords)
+  if (focus.activeTasks) {
+    const taskText = focus.activeTasks.join(' ').toLowerCase();
+    for (const topic of item.topics) {
+      if (taskText.includes(topic.name)) matches++;
+    }
+  }
+
+  // Check recent searches
+  if (focus.recentSearches) {
+    const searchText = focus.recentSearches.join(' ').toLowerCase();
+    for (const topic of item.topics) {
+      if (searchText.includes(topic.name)) matches++;
+    }
+  }
+
+  // Check discussed people
+  if (focus.discussedPeople && item.entities) {
+    for (const entity of item.entities) {
+      if (entity.type === 'person' && focus.discussedPeople.includes(entity.name)) {
+        matches++;
+      }
+    }
+  }
+
+  return matches;
+}
+```
+
+### 3. Summary Generation
+
+```typescript
+async function generateSummary(
+  item: RssHubItem,
+  topics: Topic[],
+  context: ClassificationContext
+): Promise<string> {
+  const prompt = `
+You are an AI assistant summarizing external content for a user's personal knowledge base.
+
+Item Details:
+- Title: ${item.title}
+- Source: ${item.sourcePlatform}
+- Author: ${item.authorDisplayName || 'Unknown'}
+- Published: ${item.publishedAt}
+- Description: ${item.description || 'N/A'}
+- Content: ${item.content?.substring(0, 2000) || 'N/A'}
+
+Extracted Topics: ${topics.map(t => `${t.name} (${Math.round(t.confidence * 100)}%)`).join(', ')}
+
+User's Work Context:
+${context.currentFocus ? `
+- Working on: ${context.currentFocus.activeTasks?.join(', ') || 'Various tasks'}
+- Recent interests: ${context.recentSearches?.join(', ') || 'General'}
+` : 'New user, no specific context yet'}
+
+Task:
+1. Write a 2-3 sentence summary of this item
+2. Explain why it might be relevant to the user's work
+3. Mention any key people, companies, or products discussed
+
+Keep the summary concise and actionable. Write as if you're briefing a colleague.
+`;
+
+  const response = await llm.chat(prompt, {
+    model: 'deepseek-chat',
+    temperature: 0.7,
+    maxTokens: 200,
+  });
+
+  return response.content;
+}
+```
+
+## Memory Integration
+
+### Memory Types
+
+#### 1. Signal Subscriptions (Explicit)
+```typescript
+interface SignalSubscription {
+  // What user explicitly follows
+  topic: string;
+  sourcePlatform?: string;
+  confidence: number;      // User-set importance (0-1)
+
+  // Metadata
+  createdAt: Date;
+  updatedAt: Date;
+  lastFetchedAt?: Date;
+  notificationPreference: 'none' | 'digest' | 'immediate';
+}
+```
+
+#### 2. Signal Classifications (Implicit)
+```typescript
+interface SignalClassification {
+  // What AI infers from behavior
+  topic: string;
+  confidence: number;      // AI-computed (0-1)
+  sourceType: 'capture' | 'view' | 'dwell' | 'search' | 'ai_inferred';
+
+  // Tracking
+  occurrenceCount: number;
+  totalWeight: number;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+  decayRate: number;       // Per-day decay (default 0.95)
+
+  // Source tracking
+  sourceEntityId?: string;
+  sourceSignalId?: string;
+}
+```
+
+#### 3. Session Memory (Short-term)
+```typescript
+interface SignalSessionMemory {
+  // Current session context
+  currentTopics: string[];      // Topics in current conversation
+  viewedSignals: string[];      // Signal IDs viewed this session
+  discussedSignals: string[];   // Signals user has acted on
+
+  // Temporal patterns
+  activeHours: number[];        // 0-23 hours user is active
+  peakDays: string[];           // Days of week
+
+  // Preferences
+  preferredPlatforms: string[];
+  preferredCardVariant: 'compact' | 'detailed' | 'editorial';
+}
+```
+
+#### 4. Entity Affinities (Relationship)
+```typescript
+interface EntityAffinity {
+  // User's affinity for entities based on signal engagement
+  entityId: string;
+  entityType: 'person' | 'company' | 'product';
+  entityName: string;
+
+  // Metrics
+  affinity: number;              // 0-1 computed affinity
+  interactionCount: number;     // How many signals mentioned this
+  lastInteractionAt: Date;
+
+  // Derived
+  signalCountByTopic: Record<string, number>;
+  averageRelevanceScore: number;
+}
+```
+
+### Memory Operations
+
+#### Update Classifications on Capture
+```typescript
+async function updateClassificationsOnCapture(
+  userId: string,
+  workspaceId: string,
+  signalId: string,
+  topics: string[],
+  entityId: string
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    for (const topic of topics) {
+      // Increment or create classification
+      await tx.query(`
+        INSERT INTO signal_classifications
+          (id, user_id, workspace_id, topic, confidence, source_type,
+           source_signal_id, occurrence_count, total_weight, first_seen_at, last_seen_at)
+        VALUES
+          (gen_random_uuid(), $1, $2, $3, 0.1, 'capture', $4, 1, 1.0, NOW(), NOW())
+        ON CONFLICT (user_id, workspace_id, topic)
+        DO UPDATE SET
+          confidence = LEAST(signal_classifications.confidence + 0.1, 1.0),
+          occurrence_count = signal_classifications.occurrence_count + 1,
+          total_weight = signal_classifications.total_weight + 1.0,
+          last_seen_at = NOW(),
+          source_signal_id = $4
+      `, [userId, workspaceId, topic, entityId]);
+    }
+  });
+}
+```
+
+#### Apply Time Decay
+```typescript
+async function applyClassificationDecay(
+  userId: string,
+  workspaceId: string
+): Promise<void> {
+  // Run daily cron
+  await db.query(`
+    UPDATE signal_classifications
+    SET
+      confidence = confidence * decay_rate,
+      last_decay_at = NOW()
+    WHERE
+      user_id = $1
+      AND workspace_id = $2
+      AND last_decay_at < NOW() - INTERVAL '1 day'
+  `, [userId, workspaceId]);
+
+  // Remove stale classifications
+  await db.query(`
+    DELETE FROM signal_classifications
+    WHERE
+      user_id = $1
+      AND workspace_id = $2
+      AND confidence < 0.05
+  `, [userId, workspaceId]);
+}
+```
+
+#### Get Personalized Memory
+```typescript
+async function getSignalMemory(
+  userId: string,
+  workspaceId: string
+): Promise<SignalMemory> {
+  const [subscriptions, classifications] = await Promise.all([
+    db.query(`
+      SELECT * FROM signal_subscriptions
+      WHERE user_id = $1 AND workspace_id = $2 AND is_active = true
+    `, [userId, workspaceId]),
+
+    db.query(`
+      SELECT * FROM signal_classifications
+      WHERE user_id = $1 AND workspace_id = $2
+      AND confidence > 0.05
+      ORDER BY confidence DESC
+      LIMIT 50
+    `, [userId, workspaceId]),
+  ]);
+
+  return {
+    subscriptions: subscriptions.rows,
+    classifications: classifications.rows.map(c => ({
+      ...c,
+      confidence: c.confidence * Math.pow(c.decay_rate,
+        daysBetween(new Date(c.last_decay_at), new Date())),
+    })),
+  };
+}
+```
+
+## Proactive Intelligence
+
+### Morning Briefing Integration
+
+```typescript
+// In IS: morning-briefing worker
+async function generateMorningBriefing(
+  userId: string,
+  workspaceId: string
+): Promise<BriefingContent> {
+  // 1. Get user's current context
+  const context = await getClassificationContext(userId, workspaceId);
+  const memory = await getSignalMemory(userId, workspaceId);
+
+  // 2. Fetch relevant signals
+  const topTopics = memory.classifications.slice(0, 3).map(c => c.topic);
+  const signals = await fetchSignalsForTopics(topTopics, { limit: 10 });
+
+  // 3. Classify and select best
+  const classified = await classifySignals(signals, {
+    workspaceId,
+    userId,
+    userPreferences: memory,
+    currentFocus: context.currentFocus,
+  });
+
+  const relevantSignals = classified
+    .filter(s => s.relevanceScore > 0.5)
+    .slice(0, 5);
+
+  // 4. Generate briefing
+  const briefing = await generateBriefingText(relevantSignals, context);
+
+  return {
+    title: `Morning Briefing - ${formatDate(new Date())}`,
+    content: briefing,
+    signals: relevantSignals,
+    topics: topTopics,
+  };
+}
+
+async function generateBriefingText(
+  signals: ClassifiedSignalItem[],
+  context: ClassificationContext
+): Promise<string> {
+  const prompt = `
+You are generating a morning briefing for a knowledge worker.
+
+Today's Date: ${formatDate(new Date())}
+User's Current Projects: ${context.currentFocus?.activeTasks?.join(', ') || 'General work'}
+
+Top Signals for Today:
+${signals.map((s, i) => `
+${i + 1}. [${s.originalItem.sourcePlatform}] ${s.originalItem.title}
+   Summary: ${s.aiSummary || s.originalItem.description?.substring(0, 100)}
+   Topics: ${s.topics.map(t => t.name).join(', ')}
+   Relevance: ${Math.round(s.relevanceScore * 100)}%
+`).join('\n')}
+
+Task:
+Write a concise morning briefing (3-5 sentences) that:
+1. Highlights the most important signals
+2. Connects them to the user's current work
+3. Suggests one action they might want to take
+
+Format as plain text, no markdown.
+`;
+
+  const response = await llm.chat(prompt, {
+    model: 'deepseek-chat',
+    temperature: 0.7,
+    maxTokens: 300,
+  });
+
+  return response.content;
+}
+```
+
+### Signal-Based Automation Triggers
+
+```typescript
+// Automation trigger: new signal mentions a person/company
+async function checkSignalAutomationTriggers(
+  signal: ClassifiedSignalItem,
+  workspaceId: string,
+  userId: string
+): Promise<void> {
+  // 1. Get user's tracked entities
+  const trackedEntities = await getTrackedEntities(userId, workspaceId);
+
+  // 2. Check if signal mentions any tracked entities
+  const mentionedEntities = signal.entities || [];
+  const matches = mentionedEntities.filter(e =>
+    trackedEntities.some(t => t.name === e.name && t.type === e.type)
+  );
+
+  if (matches.length === 0) return;
+
+  // 3. Get active automations for these entities
+  const automations = await getAutomationsForEntities(
+    matches.map(m => m.entityId),
+    workspaceId
+  );
+
+  // 4. Execute matching automations
+  for (const automation of automations) {
+    try {
+      await executeAutomation(automation, {
+        trigger: 'signal_mention',
+        signal: signal.originalItem,
+        mentionedEntities: matches,
+        userId,
+        workspaceId,
+      });
+    } catch (error) {
+      console.error(`Automation ${automation.id} failed:`, error);
+    }
+  }
+}
+
+// Example automation: notify when AI news mentions specific company
+const automationDefinition = {
+  name: "AI Company Monitor",
+  trigger: {
+    type: "signal_mention",
+    conditions: {
+      topic: "ai",
+      entityType: "company",
+      entityNames: ["OpenAI", "Anthropic", "Google DeepMind"],
+    },
+  },
+  actions: [
+    {
+      type: "create_entity",
+      profile: "task",
+      properties: {
+        name: "Follow up on {{entity.name}} news",
+        description: "{{signal.title}} - {{signal.url}}",
+      },
+    },
+    {
+      type: "post_to_channel",
+      channelType: "feed",
+      content: "New {{entity.type}} mention: {{entity.name}} in {{signal.title}}",
+    },
+  ],
+};
+```
+
+### IS Tool: fetch_and_classify_signals
+
+```typescript
+const fetchAndClassifySignalsTool = {
+  name: "fetch_and_classify_signals",
+  description: "Fetch external signals from various platforms and classify them using AI for relevance and topics.",
+
+  parameters: {
+    type: "object",
+    properties: {
+      topics: {
+        type: "array",
+        items: { type: "string" },
+        description: "Topics to fetch signals for (e.g., ['ai', 'programming'])",
+      },
+      platforms: {
+        type: "array",
+        items: {
+          type: "string",
+          enum: ["twitter", "reddit", "github", "hackernews", "producthunt", "rss"],
+        },
+        description: "Platforms to fetch from (default: all available)",
+      },
+      limit: {
+        type: "number",
+        default: 20,
+        description: "Maximum signals to return",
+      },
+      relevanceThreshold: {
+        type: "number",
+        default: 0.3,
+        description: "Minimum relevance score (0-1)",
+      },
+      includeSummaries: {
+        type: "boolean",
+        default: false,
+        description: "Whether to generate AI summaries",
+      },
+    },
+  },
+
+  async execute(params: {
+    topics: string[];
+    platforms?: string[];
+    limit?: number;
+    relevanceThreshold?: number;
+    includeSummaries?: boolean;
+  }, context: ISContext): Promise<{
+    signals: ClassifiedSignalItem[];
+    summary: string;
+    metadata: {
+      topicsRequested: string[];
+      platformsFetched: string[];
+      totalFetched: number;
+      aboveThreshold: number;
+    };
+  }> {
+    // 1. Get user context and memory
+    const memory = await getSignalMemory(context.userId, context.workspaceId);
+    const classificationContext = await getClassificationContext(
+      context.userId,
+      context.workspaceId
+    );
+
+    // 2. Determine sources to fetch
+    const sources = determineSourcesToFetch(params.topics, params.platforms, memory);
+
+    // 3. Fetch from RSSHub via CP proxy
+    const allSignals: RssHubItem[] = [];
+    for (const source of sources) {
+      const response = await fetchSignalsFromSource(source, {
+        limit: params.limit || 20,
+      });
+      allSignals.push(...response.items);
+    }
+
+    // 4. Classify signals
+    const classified = await classifySignals(allSignals, {
+      workspaceId: context.workspaceId,
+      userId: context.userId,
+      userPreferences: memory,
+      currentFocus: classificationContext.currentFocus,
+      classification: {
+        mode: params.includeSummaries ? 'detailed' : 'quick',
+        extractTopics: true,
+        computeRelevance: true,
+        extractEntities: true,
+        generateSummary: params.includeSummaries || false,
+      },
+    });
+
+    // 5. Filter by relevance
+    const relevantSignals = classified
+      .filter(s => s.relevanceScore >= (params.relevanceThreshold || 0.3))
+      .slice(0, params.limit || 20);
+
+    // 6. Generate summary
+    const summary = `Found ${relevantSignals.length} relevant signals out of ${allSignals.length} total. ` +
+      `Top topics: ${getTopTopics(relevantSignals).join(', ')}`;
+
+    return {
+      signals: relevantSignals,
+      summary,
+      metadata: {
+        topicsRequested: params.topics,
+        platformsFetched: sources.map(s => s.platform),
+        totalFetched: allSignals.length,
+        aboveThreshold: relevantSignals.length,
+      },
+    };
+  },
+};
+```
+
+## Feed Personalization Algorithm
+
+### Ranking Formula
+
+```typescript
+function rankFeedItems(
+  items: ClassifiedSignalItem[],
+  memory: SignalMemory,
+  context: FeedContext
+): RankedItem[] {
+  const scored = items.map(item => {
+    let score = 0;
+
+    // Base relevance from classification (0-1)
+    score += item.relevanceScore * 0.4;
+
+    // Subscription match (0-1)
+    const subscriptionScore = calculateSubscriptionScore(item, memory);
+    score += subscriptionScore * 0.25;
+
+    // Classification match (0-1)
+    const classificationScore = calculateClassificationScore(item, memory);
+    score += classificationScore * 0.15;
+
+    // Recency (0-1, exponential decay)
+    const hoursOld = hoursBetween(new Date(item.originalItem.publishedAt), new Date());
+    const recencyScore = Math.exp(-hoursOld / 72); // 72h half-life
+    score += recencyScore * 0.1;
+
+    // Engagement prediction (0-1)
+    const engagementScore = predictEngagement(item, context);
+    score += engagementScore * 0.1;
+
+    return {
+      ...item,
+      finalScore: score,
+      scoreBreakdown: {
+        relevance: item.relevanceScore * 0.4,
+        subscription: subscriptionScore * 0.25,
+        classification: classificationScore * 0.15,
+        recency: recencyScore * 0.1,
+        engagement: engagementScore * 0.1,
+      },
+    };
+  });
+
+  // Apply diversification
+  const diversified = diversifyResults(scored, {
+    targetTopics: memory.subscriptions.map(s => s.topic).slice(0, 3),
+    maxFromSameSource: 3,
+    maxFromSameTopic: 5,
+  });
+
+  return diversified.sort((a, b) => b.finalScore - a.finalScore);
+}
+
+function calculateSubscriptionScore(item: ClassifiedSignalItem, memory: SignalMemory): number {
+  if (memory.subscriptions.length === 0) return 0.5;
+
+  let score = 0;
+  let matches = 0;
+
+  for (const sub of memory.subscriptions) {
+    const topicMatch = item.topics.find(t => t.name === sub.topic);
+    if (topicMatch) {
+      score += topicMatch.confidence * sub.confidence;
+      matches++;
+    }
+
+    // Platform match
+    if (item.originalItem.sourcePlatform === sub.sourcePlatform) {
+      score += 0.2 * sub.confidence;
+    }
+  }
+
+  return matches > 0 ? score / matches : 0;
+}
+
+function calculateClassificationScore(item: ClassifiedSignalItem, memory: SignalMemory): number {
+  if (memory.classifications.length === 0) return 0.5;
+
+  let score = 0;
+  let matches = 0;
+
+  for (const cls of memory.classifications) {
+    const topicMatch = item.topics.find(t => t.name === cls.topic);
+    if (topicMatch) {
+      // Apply time decay
+      const daysSinceUpdate = daysBetween(new Date(cls.lastSeenAt), new Date());
+      const decayedConfidence = cls.confidence * Math.pow(0.95, daysSinceUpdate);
+
+      score += topicMatch.confidence * decayedConfidence;
+      matches++;
+    }
+  }
+
+  return matches > 0 ? score / matches : 0;
+}
+
+function predictEngagement(item: ClassifiedSignalItem, context: FeedContext): number {
+  let score = 0.5; // Base score
+
+  // Has summary (easier to consume)
+  if (item.aiSummary) score += 0.1;
+
+  // Has image (more engaging)
+  if (item.originalItem.enclosure?.url) score += 0.1;
+
+  // From trusted platforms
+  const trustedPlatforms = ['hackernews', 'github', 'producthunt'];
+  if (trustedPlatforms.includes(item.originalItem.sourcePlatform)) {
+    score += 0.1;
+  }
+
+  // Quality signals (longer content typically higher quality)
+  const contentLength = (item.originalItem.content || '').length;
+  if (contentLength > 500) score += 0.1;
+  else if (contentLength < 100) score -= 0.1;
+
+  return Math.max(0, Math.min(1, score));
+}
+
+function diversifyResults(
+  items: RankedItem[],
+  options: {
+    targetTopics: string[];
+    maxFromSameSource: number;
+    maxFromSameTopic: number;
+  }
+): RankedItem[] {
+  const result: RankedItem[] = [];
+  const sourceCount: Record<string, number> = {};
+  const topicCount: Record<string, number> = {};
+
+  for (const item of items) {
+    const source = item.originalItem.sourcePlatform;
+    const primaryTopic = item.topics[0]?.name || 'other';
+
+    // Check limits
+    const sourceOk = (sourceCount[source] || 0) < options.maxFromSameSource;
+    const topicOk = (topicCount[primaryTopic] || 0) < options.maxFromSameTopic;
+
+    if (sourceOk && topicOk) {
+      result.push(item);
+      sourceCount[source] = (sourceCount[source] || 0) + 1;
+      topicCount[primaryTopic] = (topicCount[primaryTopic] || 0) + 1;
+    } else if (result.length < 10) {
+      // Always include top 10 regardless of diversification
+      result.push(item);
+    }
+  }
+
+  return result;
+}
+```
+
+## Context Gathering
+
+### Get Classification Context
+
+```typescript
+async function getClassificationContext(
+  userId: string,
+  workspaceId: string
+): Promise<ClassificationContext> {
+  const [
+    recentTasks,
+    recentSearches,
+    discussedPeople,
+    recentViews,
+    sessionMemory,
+  ] = await Promise.all([
+    // Recent tasks (last 7 days, active or recently updated)
+    db.query(`
+      SELECT id, name, properties
+      FROM entities
+      WHERE workspace_id = $1
+        AND profile_slug = 'task'
+        AND (properties->>'status' IN ('in-progress', 'todo')
+             OR updated_at > NOW() - INTERVAL '7 days')
+      ORDER BY updated_at DESC
+      LIMIT 5
+    `, [workspaceId]),
+
+    // Recent searches (from audit logs)
+    db.query(`
+      SELECT query
+      FROM audit_logs
+      WHERE user_id = $1
+        AND action = 'search'
+        AND created_at > NOW() - INTERVAL '7 days'
+      ORDER BY created_at DESC
+      LIMIT 10
+    `, [userId]),
+
+    // People mentioned in recent messages
+    db.query(`
+      SELECT DISTINCT e.id, e.name, e.profile_slug as type
+      FROM messages m
+      JOIN entities e ON e.name = m.content  -- Simplified
+      WHERE m.workspace_id = $1
+        AND m.created_at > NOW() - INTERVAL '3 days'
+        AND e.profile_slug IN ('person', 'contact')
+      LIMIT 10
+    `, [workspaceId]),
+
+    // Recent entity views
+    db.query(`
+      SELECT DISTINCT e.id, e.name, e.profile_slug as type
+      FROM entity_views ev
+      JOIN entities e ON e.id = ev.entity_id
+      WHERE ev.workspace_id = $1
+        AND ev.viewed_at > NOW() - INTERVAL '7 days'
+      ORDER BY ev.viewed_at DESC
+      LIMIT 20
+    `, [workspaceId]),
+
+    // Session memory from IS
+    getSessionMemory(userId),
+  ]);
+
+  return {
+    currentFocus: {
+      activeTasks: recentTasks.rows.map(t => t.name),
+      recentSearches: recentSearches.rows.map(r => r.query),
+      discussedPeople: discussedPeople.rows.map(p => ({ id: p.id, name: p.name })),
+      viewedEntities: recentViews.rows.map(v => ({ id: v.id, name: v.name, type: v.type })),
+    },
+    sessionMemory,
+  };
+}
+```
+
+## Performance Optimization
+
+### Batch Classification
+
+```typescript
+async function classifySignalsBatch(
+  items: RssHubItem[],
+  context: ClassificationContext,
+  options: {
+    batchSize?: number;      // Default: 10
+    maxConcurrency?: number; // Default: 3
+  }
+): Promise<ClassifiedSignalItem[]> {
+  const batchSize = options.batchSize || 10;
+  const maxConcurrency = options.maxConcurrency || 3;
+
+  const results: ClassifiedSignalItem[] = [];
+
+  // Process in batches
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+
+    // Process batch with concurrency limit
+    const batchResults = await Promise.all(
+      batch.slice(0, maxConcurrency).map(item =>
+        classifySingleSignal(item, context)
+      )
+    );
+
+    results.push(...batchResults);
+
+    // Small delay between batches to avoid rate limits
+    if (i + batchSize < items.length) {
+      await sleep(100);
+    }
+  }
+
+  return results;
+}
+```
+
+### Caching Strategy
+
+```typescript
+// Cache classification results for similar items
+const classificationCache = new LRUCache<string, ClassifiedSignalItem>({
+  max: 1000,
+  ttl: 3600000, // 1 hour
+});
+
+function getCacheKey(item: RssHubItem): string {
+  // Create hash of title + source + date
+  const data = `${item.title}|${item.sourcePlatform}|${item.publishedAt}`;
+  return createHash('sha256').update(data).digest('hex').substring(0, 16);
+}
+
+async function classifyWithCache(
+  item: RssHubItem,
+  context: ClassificationContext
+): Promise<ClassifiedSignalItem> {
+  const cacheKey = getCacheKey(item);
+
+  if (classificationCache.has(cacheKey)) {
+    return classificationCache.get(cacheKey)!;
+  }
+
+  const result = await classifySingleSignal(item, context);
+  classificationCache.set(cacheKey, result);
+
+  return result;
+}
+```
+
+## Monitoring & Observability
+
+### Classification Metrics
+
+```typescript
+interface ClassificationMetrics {
+  totalClassifications: number;
+  averageLatencyMs: number;
+  topicDistribution: Record<string, number>;
+  confidenceDistribution: {
+    high: number;    // > 0.7
+    medium: number;  // 0.4-0.7
+    low: number;     // < 0.4
+  };
+  entityExtractionStats: {
+    total: number;
+    people: number;
+    companies: number;
+    products: number;
+  };
+  errorRate: number;
+}
+
+// Track metrics
+async function recordClassificationMetrics(
+  result: ClassifiedSignalItem,
+  durationMs: number
+): Promise<void> {
+  await metrics.increment('signal.classification.total');
+  await metrics.histogram('signal.classification.latency', durationMs);
+
+  for (const topic of result.topics) {
+    await metrics.increment(`signal.classification.topic.${topic.name}`);
+  }
+
+  if (result.entities) {
+    await metrics.increment('signal.classification.entities.total', result.entities.length);
+    for (const entity of result.entities) {
+      await metrics.increment(`signal.classification.entity.${entity.type}`);
+    }
+  }
+}
+```
+
+## Future Enhancements
+
+### 1. Collaborative Filtering
+```typescript
+// Future: Use similar users' signals to improve recommendations
+async function getCollaborativeFilteringScores(
+  item: ClassifiedSignalItem,
+  userId: string,
+  workspaceId: string
+): Promise<number> {
+  // Find users with similar signal interests
+  const similarUsers = await findSimilarUsers(userId, workspaceId, {
+    metric: 'signal_classifications',
+    threshold: 0.7,
+    limit: 10,
+  });
+
+  // Check if similar users engaged with this item/topic
+  const engagementRate = await calculateEngagementRate(
+    similarUsers.map(u => u.id),
+    item.topics.map(t => t.name)
+  );
+
+  return engagementRate;
+}
+```
+
+### 2. Trend Detection
+```typescript
+// Future: Detect trending topics before they become obvious
+async function detectEmergingTrends(
+  workspaceId: string,
+  timeWindow: '24h' | '7d' | '30d'
+): Promise<Trend[]> {
+  // Analyze signal volume by topic over time
+  const topicVolumes = await db.query(`
+    SELECT
+      topic,
+      COUNT(*) as count,
+      DATE_TRUNC('hour', created_at) as hour
+    FROM signal_items
+    WHERE workspace_id = $1
+      AND created_at > NOW() - INTERVAL '${timeWindow}'
+    GROUP BY topic, hour
+    ORDER BY hour
+  `, [workspaceId]);
+
+  // Detect increasing trends
+  return topicVolumes.rows
+    .filter(t => isIncreasingTrend(t.hourly_counts))
+    .map(t => ({
+      topic: t.topic,
+      trend: 'increasing',
+      velocity: calculateVelocity(t.hourly_counts),
+      confidence: calculateTrendConfidence(t.hourly_counts),
+    }));
+}
+```
+
+---
+
+*Last updated: 2026-04-12*
+*Owner: Intelligence Service Team*
+*Status: Implementation Ready*

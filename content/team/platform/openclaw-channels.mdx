@@ -1,0 +1,89 @@
+---
+title: "OpenClaw Channel Interactions"
+description: "How OpenClaw agents interact through Synap channels."
+---
+
+# OpenClaw Channel Interactions — Architecture Map
+
+**Date:** 2026-04-04
+
+## Three Messaging Paths
+
+Synap has three parallel messaging systems. Understanding their boundaries is critical.
+
+### Path 1: OpenClaw External Relay (synap skill)
+
+```
+Telegram/WhatsApp/Slack → OpenClaw gateway
+  → POST /api/hub/threads/:threadId/messages (relay to Synap)
+  → Synap IS processes in channel
+  → Response relayed back via POST OpenClaw/v1/chat/completions
+  → OpenClaw sends reply to platform
+```
+
+- Channel type: `EXTERNAL_IMPORT`
+- First-time contacts require proposal approval
+- Subsequent messages auto-approved
+- OpenClaw must be registered as Intelligence Service with `channels` capability
+
+### Path 2: Synap Native Telegram Bot
+
+```
+Telegram → POST /webhooks/telegram (direct to Synap backend)
+  → User linked via /link TOKEN command
+  → Messages stored in BRANCH channel (telegramBotBranch: true)
+  → Synap IS responds directly in channel
+  → Reply sent back to Telegram via bot API
+```
+
+- Channel type: `BRANCH`
+- User must link Telegram account first
+- Proposal inline buttons (approve/reject) in Telegram
+- No OpenClaw involved
+
+### Path 3: Hub Protocol A2AI (agent-to-agent)
+
+```
+OpenClaw → POST /api/hub/threads/:threadId/messages (with autoRespond: true)
+  → Synap IS receives, processes
+  → Response written to thread
+  → OpenClaw polls GET /api/hub/threads/:threadId/messages
+```
+
+- Channel type: `AI_THREAD` or `BRANCH`
+- Async communication between OpenClaw and Synap IS
+- Used for delegation, not user-facing
+
+## Conflict: Telegram Dual Path
+
+**Problem:** Both Path 1 (OpenClaw relay) and Path 2 (Synap bot) can process Telegram messages. If both are enabled, the same message gets processed twice.
+
+**Resolution:** These are designed for different scenarios:
+- **OpenClaw relay**: User's personal Telegram ↔ their OpenClaw agent. OpenClaw is the primary AI. Synap is the memory backend.
+- **Synap bot**: Direct Synap interaction via @SynapOS_bot. No OpenClaw involved. User captures notes, manages workspace.
+
+**Rule:** Don't enable both for the same Telegram account. OpenClaw handles personal messaging channels; Synap bot handles workspace-specific capture.
+
+## Connector System (Nango) — Separate
+
+Nango connectors (Google Calendar, GitHub, Gmail) are a third system:
+- CP signals data availability → Pod pulls data via Nango
+- No message relay — pure data sync (events, contacts, repos)
+- Does NOT conflict with OpenClaw or Telegram bot
+- Could be complementary: OpenClaw captures unstructured data, Nango syncs structured data
+
+## What OpenClaw Needs from Synap
+
+| Operation | Endpoint | Skill |
+|-----------|----------|-------|
+| Store knowledge | `POST /api/hub/entities`, `/api/hub/memory` | synap-memory |
+| Search knowledge | `GET /api/hub/search` | synap-memory |
+| Relay external messages | `POST /api/hub/threads/:threadId/messages` | synap-os |
+| Create channels | `POST /api/hub/threads` | synap-os |
+| Talk to Synap IS | A2AI via threads | synap-os |
+
+## Simplification Opportunities
+
+1. **synap-memory is the primary skill** — Most OpenClaw users just want structured memory. synap-os (channels/relay) is for power users.
+2. **No wiring needed** — The Hub Protocol REST endpoints already handle everything. No new code required for the basic memory use case.
+3. **Telegram conflict is a configuration issue**, not a code issue. Document it clearly and let users choose their path.

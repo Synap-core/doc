@@ -1,0 +1,64 @@
+---
+title: Eve
+description: Entity Creation System — sovereign stack installer (CLI, organs, Docker) aligned with Synap
+---
+
+**Eve** is our **Entity Creation System**: it turns a bare machine into a coherent, self-hosted “digital entity” — **Brain** (Synap data pod + DB + cache + local AI), **Arms** (OpenClaw), **Builder** (creation/deploy tooling), **Eyes** (RSS/RSSHub intake), **Legs** (Traefik, TLS, exposure). The user-facing CLI command is **`eve`**.
+
+**Monorepo in this workspace:** `hestia-cli/` (package `packages/eve-cli`, build `pnpm run build:eve`). Product narrative and deep README also live next to the older **Project Hestia** doc tree under `hestia/` — **Eve is the current product name**; treat Hestia-named files as legacy unless updated.
+
+---
+
+## Vision
+
+- **Sovereignty:** Your server, your data, optional fully local AI — no mandatory cloud.
+- **One coherent system:** Not a bag of unrelated installers; organs are wired to the same Docker network and mental model.
+- **Synap as Brain:** The Synap backend is the knowledge graph and API core; Eve is how operators **stand up** that stack (and friends) reproducibly.
+
+---
+
+## Current state
+
+| Area | Status |
+|------|--------|
+| Architecture (organs, compose, networking) | Documented in repo `hestia-cli/README.md` and `hestia-cli/docs/*` |
+| CLI (`eve` commands: `brain`, `arms`, `birth`, `status`, …) | In active development; some flows are aspirational in README — verify against `packages/eve-cli` before promising dates |
+| Relation to **pod `synap` script** | Backend deploy CLI (`synap-backend/synap`) remains the **Synap-only** Docker lifecycle; Eve is the **broader entity** stack (Brain + optional organs) |
+| Relation to **`@synap/cli`** | Agent bridge / OpenClaw init — different job; link from **[Build & integrate](/docs/integrate)** |
+
+---
+
+## How to use (team / contributors)
+
+```bash
+cd hestia-cli
+pnpm install
+pnpm run build:eve
+# Example (see README for full flags):
+node packages/eve-cli/dist/index.js brain init --with-ai
+node packages/eve-cli/dist/index.js status
+```
+
+**Operators** (future scripted install): README describes `curl -fsSL https://eve.sh/install.sh | bash` and USB/bootstrap paths — confirm scripts exist and are published before external comms.
+
+**Further reading (in repo):**
+
+- `hestia-cli/docs/north-star.md` — principles  
+- `hestia-cli/docs/service-reference.md` — services and ports  
+- `hestia-cli/docs/architecture-decisions.md`, `technology-choices.md` — ADRs  
+
+---
+
+## Next steps
+
+1. **Align naming** — Replace remaining “Hestia-only” user-facing strings with **Eve** where the product is the entity stack; keep historical docs labeled as legacy if kept.  
+2. **Truth table** — Ensure every `eve` subcommand in README matches shipped CLI.  
+3. **Public docs** — When stable, add a short public “Self-host with Eve” page under **[Use Synap](/docs/start)** that links here for internal depth.  
+4. **Team docs** — **[DevOps](/team/devops)** for generic pod setup; **this page** for Eve-specific stack and vision.
+
+---
+
+## Guidelines
+
+- Cross-link **[Platform](/team/platform)** (pod contracts), **[Intelligence](/team/intelligence)** (OpenClaw / agents), and public **[Getting started](/docs/start/getting-started)**.  
+- Do not duplicate long service tables here — summarize and point to `hestia-cli/README.md`.

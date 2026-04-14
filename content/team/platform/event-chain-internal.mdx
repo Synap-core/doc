@@ -1,0 +1,251 @@
+---
+title: "Event Chain (Internal)"
+description: "Internal event chain spec — typed registry, delivery router."
+---
+
+# Event Chain — Architecture & Implementation State
+
+**Status:** Phases 1–3 COMPLETE (2026-04-10). Phase 4 (delivery router) is future work.  
+**Scope:** Event log, pg-boss side-effects, channels, automations, proactive, capture, connectors
+
+---
+
+## Why This Document Exists
+
+The event chain is the backbone of Synap's intelligence layer. Every mutation that matters — entity created, message sent, contact imported, capture completed — flows through a typed event system that:
+
+1. Provides a complete audit trail (who did what, when, why)
+2. Enables automations to react to any state change
+3. Powers the proactive AI based on real signals
+4. Bridges external data sources (Telegram, LinkedIn, connectors) into the same reactive graph
+5. Feeds pod-to-pod sync without bespoke replication logic
+
+---
+
+## Architecture: The Two-Tier System
+
+Every mutation does two things after the DB write succeeds:
+
+```
+DB write succeeds
+      │
+      ├─── 1. events table (audit + sync)
+      │         append-only, immutable
+      │         read by: sync-push worker (pod-to-pod replication)
+      │         hooks: SSE broadcast, Socket.IO domain events, sync
+      │
+      └─── 2. pg-boss side-effects queue
+                emitSideEffects() call, fire-and-forget
+                queues: automation-trigger-match, search-index,
+                        webhook-delivery, entity-embedding, cross-thread-notify
+                read by: automation-trigger-matcher, search workers, etc.
+```
+
+Both tiers are always written together on all new events (P1-C pattern). Legacy entity repository paths write to the event log via their own hooks and to pg-boss via `emitSideEffects()` in the tRPC routers.
+
+---
+
+## What Emits Events (Current State)
+
+### pg-boss (automation triggers)
+
+| System | Event types emitted | Code |
+|--------|--------------------|----|
+| Entity CRUD | `entities.create.completed`, `entities.update.completed`, `entities.delete.completed` | `entity-repository.ts` → `emitSideEffects()` |
+| Document CRUD | `documents.create.completed`, `documents.update.completed` | `document-repository.ts` |
+| Channel messages | `channel_message.created.completed` | `channels.ts` → `emitSideEffects()` |
+| Proposals | `proposal.created.completed`, `proposal.approved.completed`, `proposal.rejected.completed` | `permission-check.ts` |
+| Relations | `relation.create.completed`, `relation.delete.completed` | `relation-repository.ts` |
+| View mutations | `view.create.completed`, `view.update.completed` | `view-repository.ts` |
+| **Quick capture** | `capture.complete.completed` | `capture.ts` → `emitSideEffects()`  |
+| **Telegram import** | `connector_sync.complete.completed` | `telegram-bulk-import.ts` → `emitSideEffects()`  |
+| **LinkedIn import** | `connector_sync.complete.completed` | `linkedin-bulk-import.ts` → `emitSideEffects()`  |
+| **Proactive posts (api)** | `proactive.post.completed` | `proactive-channel-post.ts` → `emitSideEffects()`  |
+| **Proactive posts (cron)** | `proactive.post.completed` | `proactive-post.ts` → `emitSideEffects()`  |
+
+### Event log (audit trail + sync)
+
+| System | Event types stored | Code |
+|--------|-------------------|----|
+| Entity mutations | `.requested` + `.validated` events | entity-repository via hooks |
+| Proposal approval | `.validated` events | triggers materialization |
+| Messages | `conversationMessages.create.completed` | messageRepository |
+| Channel CRUD | `chatThreads.create.completed` etc. | channel-repository |
+| **Quick capture** | `capture.complete.completed` | `capture.ts` → `eventRepository.append()`  |
+| **Telegram/LinkedIn** | `connector_sync.complete.completed` | bulk import workers  |
+| **Proactive posts** | `proactive.post.completed` | proactive-channel-post.ts + proactive-post.ts  |
+| **Notifications** | `notification.created` | NotificationService.ts  |
+
+---
+
+## Channel Types and channelPurpose Column
+
+Personal channel variants (personal chat / proactive feed / capture thread) are now distinguished by the `channelPurpose` column instead of JSONB metadata flags:
+
+```typescript
+// Old (JSONB flags — still readable via OR fallback for migration)
+{ metadata: { "isPersonal": true } }
+{ metadata: { "isProactiveFeed": true } }
+{ metadata: { "isCaptureThread": true } }
+
+// New (indexed column — canonical going forward)
+channelPurpose = 'chat'   // bidirectional user↔AI conversation
+channelPurpose = 'feed'   // AI posts, user reads
+channelPurpose = 'audit'  // hidden capture audit trail
+```
+
+**Migration:** All new channel inserts set `channelPurpose`. All queries use `channelPurpose = X OR metadata->>'isX' = 'true'` for backward compatibility. SQL migration `0064_channel_purpose.sql` backfills existing rows.
+
+### Files updated (P3)
+- `packages/database/src/schema/channels.ts` — column + ChannelPurpose const
+- `packages/database/src/repositories/channel-repository.ts` — ensurePersonalChannel, ensureProactiveFeedChannel
+- `packages/api/src/utils/personal-channel.ts` — all 3 ensure fns
+- `packages/api/src/routers/channels.ts` — list queries + access checks
+- `packages/api/src/routers/hub-protocol-rest.ts` — podWideFilter
+- `packages/jobs/src/utils/proactive-post.ts` — ensureProactiveFeedChannel
+- `packages/jobs/src/workers/automation-executor.ts` — channel_message output step
+- `packages/jobs/src/workers/proactive-health-check.ts` — dedup check
+
+---
+
+## Event Type Registry (`@synap/events`)
+
+Event types are organized in `packages/events/src/event-types.ts`:
+
+### SystemEventTypes
+- `webhooks.deliver.requested` — webhook dispatch request
+
+### OperationalEventTypes (added P1)
+- `capture.complete.completed` — quick capture pipeline finished
+- `connector_sync.complete.completed` — bulk import worker completed
+- `proactive.post.completed` — proactive message posted to feed channel
+- `notification.created` — notification persisted to DB
+- `channel_message.created.completed` — automation output channel message
+
+### GeneratedEventTypes (table CRUD)
+Pattern: `{table}.{create|update|delete}.{requested|approved|validated}`  
+13 tables × 9 variants = 117 event types. See `packages/events/src/generator.ts`.
+
+---
+
+## Hub Protocol Events Endpoint
+
+IS agents can query the event log via:
+```
+GET /api/hub/events?userId=...&workspaceId=...&type=...&subjectType=...&fromDate=...&limit=...
+```
+Returns: `{ events: EventRecord[] }` (defaults to last 7 days, max 200 events)
+
+This enables IS tools like `query_recent_events` to surface relevant history for AI context.
+
+---
+
+## Automation System
+
+### Trigger matching (automation-trigger-matcher.ts)
+
+Supports wildcard patterns (`capture.*`, `connector_sync.*`, `proactive.*`).  
+Filter expressions reference `data` fields: `config.profileSlug`, `config.proactiveType`, etc.
+
+#### Supported trigger filters (with P1 additions)
+
+| Pattern | Extra filters | Enabled by |
+|---------|--------------|-----------|
+| `entities.*` | profileSlug, entityType | entity-repository |
+| `documents.*` | — | document-repository |
+| `channel_message.*` | channelId | channels.ts |
+| `proposal.*` | — | permission-check.ts |
+| `capture.*` | profileSlug (array match) | P1-A  |
+| `connector_sync.*` | provider (telegram/linkedin) | P1-B  |
+| `proactive.*` | proactiveType | P1-C  |
+
+### DAG executor (automation-executor.ts)
+
+Output nodes write to:
+- `channelType: 'proactive'` → proactive feed channel (uses `channelPurpose='feed'`) 
+- `channelType: 'personal'` → personal chat channel (uses `channelPurpose='chat'`) 
+- `outputType: 'notification'` → notifications table
+
+---
+
+## What This Enables (Feature Unlocked)
+
+| Feature | What it requires | How |
+|---------|----------------|-----|
+| "When Telegram imports contact → auto-enrich" | connector_sync.*  | Trigger on `connector_sync.complete.completed` (provider=telegram) → IS enrich tool |
+| "Capture person → create follow-up task" | capture.*  | Trigger on `capture.complete.completed` (profileSlug=person) → IS creates task |
+| "After morning briefing → follow up 8h later" | proactive.*  | Trigger on `proactive.post.completed` (type=morning_briefing) + delay node |
+| "Cross-pod notification sync" | notification.created  | Notification events in event log → sync-push replicates |
+| "Agent queries what happened recently" | /events endpoint  | IS tool calls GET /api/hub/events |
+
+---
+
+## Phase 4 — Delivery Router (Future Work)
+
+A routing layer that decides which surface receives a signal based on type + user preferences. Not yet implemented.
+
+**Problem it solves:** Today each producer hardwires its delivery path:
+- Cron workers → `postProactiveMessage()` → proactive feed
+- Automations → output node → channel or notification
+- IS → Hub Protocol → personal chat
+
+There is no `routeSignal()` that reads `workspace.settings.deliveryPreferences` to decide. Building this requires:
+
+1. Add `deliveryPreferences: DeliveryPreferences` to `WorkspaceSettings` schema
+2. Define `DeliveryTarget` union type (personal_chat | proactive_feed | notification | entity_update)
+3. Implement `routeSignal(eventType, payload, userId, workspaceId)` that resolves target from preferences
+4. Migrate callers progressively (cron workers first, automation executor second)
+
+This is Phase 4 work. All other phases are complete.
+
+---
+
+## Files Reference
+
+### Event system core
+```
+packages/database/src/schema/events.ts                   Event log schema
+packages/database/src/repositories/event-repository.ts   EventRepository — append, searchEvents
+packages/jobs/src/emit-side-effects.ts                   emitSideEffects() — pg-boss dispatch
+packages/events/src/event-types.ts                       SystemEventTypes + OperationalEventTypes
+packages/events/src/generator.ts                         GeneratedEventTypes (table CRUD)
+```
+
+### Automation consumption
+```
+packages/jobs/src/workers/automation-trigger-matcher.ts  Event → automation matching
+packages/jobs/src/workers/automation-executor.ts         DAG executor with output nodes
+```
+
+### Channel management
+```
+packages/api/src/utils/personal-channel.ts               3 personal channel ensure/create fns
+packages/api/src/utils/proactive-channel-post.ts          postProactiveMessage() — api package
+packages/jobs/src/utils/proactive-post.ts                 postProactiveMessage() — jobs package (cron)
+packages/api/src/routers/channels.ts                      Channel list/message/filter logic
+packages/database/src/schema/channels.ts                  ChannelType + ChannelPurpose
+packages/database/src/repositories/channel-repository.ts  ensurePersonalChannel, ensureProactiveFeedChannel
+```
+
+### Proactive workers
+```
+packages/jobs/src/workers/proactive-morning-briefing.ts
+packages/jobs/src/workers/proactive-weekly-digest.ts
+packages/jobs/src/workers/proactive-health-check.ts
+```
+
+### Connector workers
+```
+packages/jobs/src/workers/telegram-bulk-import.ts        emits connector_sync.complete.completed
+packages/jobs/src/workers/linkedin-bulk-import.ts        emits connector_sync.complete.completed
+```
+
+### Hub Protocol
+```
+packages/api/src/routers/hub-protocol-rest.ts            GET /events, GET /threads, 60+ endpoints
+```
+
+### Migration
+```
+packages/database/migrations-drizzle/0064_channel_purpose.sql  channelPurpose column + backfill
+```

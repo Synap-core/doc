@@ -1,0 +1,269 @@
+---
+title: "Design Guidelines"
+description: "UI system design guidelines: tokens, spacing, colors."
+---
+
+# Synap UI System Design Guidelines
+
+Quick reference for building consistent, theme-aware UI with `@synap/ui-system`.
+
+## 1. Theme Tokens
+
+Use these tokens for all styling. They automatically adapt to light/dark mode.
+
+### Colors (Semantic)
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|-----------|-----------|-------|
+| `$primary` | `#F4A460` (amber-400) | `#38BDF8` (cyan-400) | Primary actions, links, focus |
+| `$secondary` | `#2DD4BF` (teal-400) | `#FBBF24` (amber-400) | Secondary accents |
+| `$ai` | `#A855F7` (violet-500) | `#A855F7` (violet-500) | AI features (constant) |
+| `$success` | `#34D399` (emerald-400) | `#34D399` | Success states, complete |
+| `$error` | `#F87171` (red-400) | `#F87171` | Error, delete, danger |
+| `$warning` | `#FBBF24` (amber-400) | `#FBBF24` | Warnings, pending |
+| `$info` | `#60A5FA` (blue-400) | `#60A5FA` | Information |
+
+### Backgrounds
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|-----------|-----------|-------|
+| `$background` | `#FAFAF9` | `#020617` | Page background |
+| `$backgroundSurface` | `#F5F4F1` | `#1E293B` | Cards, panels |
+| `$backgroundHover` | `#EEECE8` | `rgba(255,255,255,0.05)` | Hover state |
+| `$backgroundPress` | `#E7E5E1` | `rgba(255,255,255,0.08)` | Press/active state |
+
+### Text
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|-----------|-----------|-------|
+| `$color` | `#1C1917` | `#F1F5F9` | Primary text |
+| `$colorSecondary` | `#57534E` | `#CBD5E1` | Secondary text |
+| `$muted` | `#78716C` | `#94A3B8` | Disabled, Placeholder |
+
+### Borders
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|-----------|-----------|-------|
+| `$borderColor` | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` | Default border |
+| `$borderColorHover` | `rgba(0,0,0,0.1)` | `rgba(255,255,255,0.12)` | Hover border |
+| `$borderColorFocus` | `#F4A460` | `#38BDF8` | Focus ring |
+
+### Semantic
+
+| Token | Light Mode | Dark Mode | Usage |
+|-------|-----------|-----------|-------|
+| `$accent` | `#F4A460` | `#38BDF8` | Accent elements |
+| `$accentLight` | `rgba(244,164,96,0.1)` | `rgba(56,189,248,0.15)` | Accent backgrounds |
+
+#### AI Features
+- Use `$ai` token (violet #A855F7) for AI-related elements
+- Use `$aiLight` for AI backgrounds
+- Use `$aiHover` for hover states on AI elements
+- Do NOT use emerald for AI - use emerald only for success states
+- The Sparkles icon should use `color="$ai"` not hardcoded colors
+
+## 2. Icon Colors
+
+Use theme tokens for icons to ensure consistency:
+
+| Icon Type | Token | When to Use |
+|----------|-------|-------------|
+| Disabled | `$muted` | Inactive, disabled, placeholder |
+| Secondary | `$colorSecondary` | Secondary content, supporting icons |
+| Primary | `$color` | Primary content, main icons |
+| Accent | `$accent` | Call-to-action, highlighted |
+| AI | `$ai` (violet) | AI-related features, intelligence |
+
+```tsx
+//  CORRECT - use theme tokens
+<Icon color="$muted" />        // disabled state
+<Icon color="$color" />      // primary content
+<Icon color="$ai" />         // AI features
+
+// ❌ WRONG - hardcoded colors
+<Icon color="#78716C" />    // Don't use hex
+<Icon color="gray" />       // Don't use CSS names
+```
+
+## 3. Button Usage
+
+**Always use variants.** They handle all interactive states (hover, press, focus).
+
+```tsx
+// Primary - Main actions
+<Button variant="primary">Save</Button>
+
+// Secondary - Cancel, secondary actions  
+<Button variant="secondary">Cancel</Button>
+
+// Ghost - Subtle actions, toolbars
+<Button variant="ghost">Delete</Button>
+
+// Outline - Less prominent
+<Button variant="outline">Edit</Button>
+
+// Danger - Destructive actions
+<Button variant="danger">Delete Account</Button>
+
+// Success - Positive confirmations
+<Button variant="success">Confirm</Button>
+```
+
+### Button Sizes
+
+```tsx
+<Button size="sm">Small</Button>  // 32px height, compact
+<Button size="md">Medium</Button> // 40px height, default
+<Button size="lg">Large</Button> // 48px height, prominent
+```
+
+### With Icons
+
+```tsx
+<Button size="md">
+  <Icon size="$4" color="$primaryButtonText" />
+  <Text>Add Item</Text>
+</Button>
+```
+
+**Don't manually add hover/press styles** — variants handle this automatically.
+
+## 4. Card Variants
+
+```tsx
+// Default - Subtle border, standard card
+<Card>Content</Card>
+
+// Bordered - More visible border
+<Card variant="bordered">Featured content</Card>
+
+// Flat - No border, transparent
+<Card variant="flat">Embedded content</Card>
+
+// AI - AI-themed card
+<Card variant="ai">AI Insight</Card>
+
+// Glass - Glassmorphism overlay
+<Card variant="glass">Floating panel</Card>
+```
+
+### Interactive Cards
+
+```tsx
+// Hoverable card (use for clickable cards)
+<Card interactive />
+```
+
+**Never add custom shadows** — use `variant="bordered"` or `variant="glass"` for elevation.
+
+## 5. Interactive States
+
+All interactive components should use theme tokens.
+
+### Hover
+
+```tsx
+//  CORRECT - theme tokens
+<Stack hoverStyle={{ backgroundColor: '$backgroundHover' }} />
+
+// ❌ WRONG - hardcoded
+<Stack hoverStyle={{ backgroundColor: '#EEECE8' }} />
+```
+
+### Press
+
+```tsx
+//  CORRECT - opacity or theme token
+<Stack pressStyle={{ opacity: 0.95 }} />
+<Stack pressStyle={{ backgroundColor: '$backgroundPress' }} />
+
+// ❌ WRONG - hardcoded colors
+<Stack pressStyle={{ backgroundColor: '#E7E5E1' }} />
+```
+
+### Focus
+
+```tsx
+//  CORRECT - outline only, theme token
+<Input focusStyle={{ outlineWidth: 2, outlineColor: '$borderColorFocus' }} />
+
+// ❌ WRONG - changing borders causes layout shift
+<Input focusStyle={{ borderColor: '$primary' }} />
+```
+
+## 6. Anti-Patterns
+
+### Never Use Hardcoded Hex Colors
+
+```tsx
+// ❌ WRONG
+<View backgroundColor="#FFFFFF" />
+<Text color="#10B981" />
+<Icon color="#38BDF8" />
+
+//  CORRECT - always use tokens
+<View backgroundColor="$background" />
+<Text color="$ai" />
+<Icon color="$accent" />
+```
+
+### Never Use rgba() for Borders
+
+```tsx
+// ❌ WRONG
+<View borderColor="rgba(0,0,0,0.1)" />
+
+//  CORRECT - use theme token
+<View borderColor="$borderColor" />
+```
+
+### Never Manually Create Hover States
+
+```tsx
+// ❌ WRONG - fighting the system
+<Button 
+  hoverStyle={{ backgroundColor: '#D97706' }}
+  pressStyle={{ opacity: 0.8 }}
+>
+  Save
+</Button>
+
+//  CORRECT - use variants
+<Button variant="primary">Save</Button>
+```
+
+### Never Add Custom Shadows
+
+```tsx
+// ❌ WRONG
+<Card shadow="0 4px 6px rgba(0,0,0,0.1)" />
+<Card shadowColor="rgba(0,0,0,0.1)" />
+
+//  CORRECT - use bordered variant
+<Card variant="bordered" />
+// or glass variant
+<Card variant="glass" />
+```
+
+## Quick Reference
+
+| What You Need | Use This |
+|--------------|----------|
+| Primary button | `<Button variant="primary">` |
+| Secondary button | `<Button variant="secondary">` |
+| Subtle button | `<Button variant="ghost">` |
+| Card with border | `<Card variant="bordered">` |
+| Floating panel | `<Card variant="glass">` |
+| Hoverable card | `<Card interactive>` |
+| Page background | `backgroundColor="$background"` |
+| Card background | `backgroundColor="$backgroundSurface"` |
+| Primary text | `color="$color"` |
+| Secondary text | `color="$colorSecondary"` |
+| Muted text | `color="$muted"` |
+| Default border | `borderColor="$borderColor"` |
+| Hover border | `borderColor="$borderColorFocus"` |
+| Hover state bg | `backgroundColor="$backgroundHover"` |
+| Press state bg | `backgroundColor="$backgroundPress"` |
+| AI elements | `color="$ai"` |
+| Success state | `color="$success"` |
+| Error state | `color="$error"` |

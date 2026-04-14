@@ -1,0 +1,328 @@
+---
+title: "Signal Layer"
+description: "RSSHub integration, feed proxy, signal processing."
+---
+
+# Synap Signal Layer
+
+External feed infrastructure for Synap that fetches, classifies, and serves signal items from external sources (RSSHub) to users.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Control Plane (Infrastructure Only)            │
+│                                                          │
+│  • RSSHub Docker (1 shared instance)                    │
+│  • Browserless Chrome (headless browser)                │
+│  • Redis cache (24h TTL for RSSHub responses)          │
+│  • Proxy API: GET /api/rsshub-proxy/*                 │
+│  • NO user data stored - infrastructure only!          │
+└────────────────────────────┬────────────────────────────┘
+                             │
+                    HTTPS / Hub Protocol
+                             │
+┌────────────────────────────▼────────────────────────────┐
+│              User's Data Pod (Sovereign)                │
+│                                                          │
+│  • Signal Feed Hub Protocol endpoints:                   │
+│    - POST /signals/fetch (fetch RSSHub via CP proxy)   │
+│    - POST /signals/classify (AI classification)        │
+│    - POST /signals/capture (create signal_item entity) │
+│    - GET /signals/feed (personalized feed)             │
+│                                                          │
+│  • Database tables (pod schema):                        │
+│    - signal_subscriptions (user preferences)             │
+│    - signal_classifications (AI-inferred interests)     │
+│    - signal_fetch_history (audit log)                  │
+│    - signal_auto_links (entity linking)                │
+│                                                          │
+│  • Intelligence Service:                                │
+│    - Topic extraction (DeepSeek)                        │
+│    - Relevance scoring                                  │
+│    - Memory integration                                 │
+│    - Morning briefing worker                           │
+└────────────────────────────┬────────────────────────────┘
+                             │
+                             ↓
+┌─────────────────────────────────────────────────────────┐
+│              Frontend (Browser/App)                     │
+│                                                          │
+│  • SignalFeedCell (bento/panel/page widget)           │
+│  • Topic/platform preferences                           │
+│  • Capture flow → creates signal_item entity           │
+│  • Works anonymously (localStorage) or with pod       │
+└─────────────────────────────────────────────────────────┘
+```
+                              ↓
+┌─────────────────────────────────────────────────────────┐
+│              Browser/App (Signed-in or Anonymous)       │
+│  • Signal Feed cell/widget                              │
+│  • "Capture to pod" button → creates entity in user's pod│
+│  • User preferences stored locally (IndexedDB)          │
+└─────────────────────────────────────────────────────────┐
+                              ↓
+┌─────────────────────────────────────────────────────────┐
+│              User's Data Pod (Only when captured)       │
+│  • Creates `signal_item` entity (inherits from bookmark)│
+│  • Links to existing entities (auto-entity-linking)     │
+│  • Becomes part of knowledge graph                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Key Principles
+
+1. **Infrastructure Only**: CP has NO user data - only provides RSSHub proxy
+2. **Data Sovereignty**: All user data (subscriptions, classifications) stays in pods
+3. **Context-Aware**: Feed personalization uses pod context (workspace, entities, memory)
+4. **AI-Native**: Intelligence Service does classification using DeepSeek
+5. **Progressive Enhancement**: Anonymous → Pod-connected → Personalized
+
+## Components
+
+### 1. RSSHub Service (CP Infrastructure)
+- **Docker**: `diygod/rsshub:latest` on port 1200
+- **Browserless**: `browserless/chrome:latest` for JavaScript-heavy sites
+- **Redis**: Caches RSSHub responses (24h TTL)
+- **No user data stored**
+
+### 2. CP Proxy API (`/api/rsshub-proxy/*`)
+- Rate-limited: 100 requests/hour per IP
+- 30s timeout
+- Proxies to RSSHub Docker
+- **Only endpoint in CP for signal feed**
+
+### 3. Pod Hub Protocol Endpoints (`/signals/*`)
+All endpoints require pod API key authentication:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/signals/fetch` | POST | Fetch RSSHub data via CP proxy |
+| `/signals/classify` | POST | AI classification (DeepSeek) |
+| `/signals/capture` | POST | Create `signal_item` entity |
+| `/signals/feed` | GET | Personalized feed |
+| `/signals/context` | GET | User preferences & memory |
+| `/signals/subscriptions` | POST | Manage subscriptions |
+| `/signals/batch` | POST | Batch operations |
+
+### 4. Intelligence Service
+- **Signal Classification Service**: Topic extraction, relevance scoring
+- **Signal Memory Service**: Classifications update on capture, time decay
+- **Morning Briefing Worker**: Proactive daily briefings
+
+### 5. Frontend
+- **SignalFeedCell**: Works in bento/panel/page
+- **Local Storage**: Preferences for anonymous users
+- **Pod Connection**: Full features when connected
+
+## Database Schema (Pod Schema)
+
+All signal tables are in the **pod database**, not CP!
+
+### `signal_subscriptions`
+User's explicit topic/platform subscriptions:
+```sql
+user_id, workspace_id, topic, source_platform, source_route,
+is_active, confidence, notification_preference, created_at, updated_at
+```
+
+### `signal_classifications`
+AI-inferred user interests (implicit learning):
+```sql
+user_id, workspace_id, topic, confidence, source_type,
+occurrence_count, total_weight, first_seen_at, last_seen_at, decay_rate
+```
+
+### `signal_fetch_history`
+Audit log for signal fetches:
+```sql
+user_id, workspace_id, source_route, source_platform, fetch_type,
+item_count, error_count, cache_hit, duration_ms, fetched_at
+```
+
+### `signal_auto_links`
+Auto-linking between signals and entities:
+```sql
+signal_entity_id, linked_entity_id, link_type, link_strength,
+link_context, source, source_model, created_at
+```
+
+## API Usage
+
+### CP Proxy (from pod to CP)
+```bash
+# Fetch RSSHub data via CP proxy
+curl -X POST "http://pod-url/api/hub/signals/fetch" \
+  -H "Authorization: Bearer $POD_API_KEY" \
+  -d '{
+    "sourceRoute": "/twitter/user/elonmusk",
+    "sourcePlatform": "twitter"
+  }'
+```
+
+### Pod Hub Protocol (frontend to pod)
+```bash
+# Get personalized feed
+curl "http://pod-url/api/hub/signals/feed?limit=20&topics=ai,programming" \
+  -H "Authorization: Bearer $POD_API_KEY"
+
+# Capture a signal item
+curl -X POST "http://pod-url/api/hub/signals/capture" \
+  -H "Authorization: Bearer $POD_API_KEY" \
+  -d '{
+    "signalData": {
+      "sourcePlatform": "twitter",
+      "sourceRoute": "/twitter/user/elonmusk",
+      "url": "https://twitter.com/elonmusk/status/123",
+      "title": "Starship Update",
+      "topics": ["space", "technology"]
+    },
+    "capture": {
+      "workspaceId": "ws_123",
+      "userId": "user_456"
+    }
+  }'
+```
+
+## Integration with Data Pods
+
+### Signal Item Entity Profile
+When a user captures a signal item, a `signal_item` entity is created in their pod:
+
+```typescript
+{
+  slug: "signal_item",
+  parentSlug: "bookmark", // Inherits URL, title, summary
+  name: "Signal Item",
+  icon: "signal",
+  color: "cyan",
+  entityScope: "workspace",
+  properties: {
+    sourcePlatform: "twitter",
+    authorUsername: "elonmusk",
+    publishedAt: "2024-01-15T08:00:00Z",
+    aiSummary: "Summary generated by AI...",
+    topics: ["ai", "technology"],
+    relevanceScore: 0.85,
+    originalJson: { /* Full RSSHub item */ }
+  }
+}
+```
+
+### Auto-Entity Linking
+The Intelligence Service can auto-link captured signal items to existing entities:
+- People mentioned in the signal
+- Companies/products discussed
+- Related topics already in the pod
+
+## AI Classification Pipeline
+
+1. **Topic extraction** (DeepSeek)
+   - Input: Raw RSSHub item
+   - Output: Extracted topics (AI, programming, startups, etc.)
+
+2. **Relevance scoring** (0-1)
+   - Based on user's past captures and views
+   - Higher score = more likely to be shown
+
+3. **Personalized ranking**
+   - Explicit subscriptions (user-chosen topics)
+   - Implicit classifications (capture behavior)
+   - Discovery (popular items)
+
+## Deployment
+
+### Docker Compose
+The RSSHub service is added to `docker-compose.yml`:
+
+```yaml
+services:
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: synap-rsshub
+  browserless:
+    image: browserless/chrome:latest
+    container_name: synap-browserless
+  redis:
+    image: redis:7-alpine
+```
+
+### Environment Variables
+```bash
+# RSSHub service URL
+RSSHUB_URL=http://rsshub:1200
+
+# Redis cache
+REDIS_URL=redis://redis:6379
+```
+
+## Frontend Integration
+
+### SignalFeedCell Component
+```typescript
+import { SignalFeedCell } from '@synap/signal-feed';
+
+function SignalFeedPage() {
+  const { items, loading, error } = useSignalFeed({
+    topics: ['ai', 'programming'],
+    platforms: ['hackernews', 'twitter'],
+    limit: 20,
+  });
+
+  return (
+    <SignalFeedCell
+      items={items}
+      loading={loading}
+      onCapture={(signalId, data) => captureSignal(signalId, data)}
+      onSelectTopic={(topic) => addTopic(topic)}
+    />
+  );
+}
+```
+
+### Browser Sidebar
+Add to `browser/electron/renderer/src/apps/manifest.ts`:
+```typescript
+{
+  id: 'signal-feed',
+  name: 'Signal Feed',
+  icon: Signal,
+  href: '/signal-feed',
+  category: 'apps',
+  navOrder: 4, // After Chat, before Library
+}
+```
+
+## Development
+
+### Running Tests
+```bash
+# Test the API endpoints
+node test-signal-api.js
+
+# Start services
+docker-compose up -d rsshub redis browserless
+
+# Run migrations
+npm run db:migrate
+
+# Start the CP API
+npm run dev
+```
+
+### Monitoring
+- **Cache hit rate**: Redis metrics
+- **Classification accuracy**: AI confidence scores
+- **User engagement**: Capture rate, topic preferences
+
+## Future Enhancements
+
+1. **Advanced personalization**: Collaborative filtering, neural ranking
+2. **Real-time signals**: WebSocket updates for new items
+3. **Cross-pod signals**: Share interesting items with team/community
+4. **Signal workflows**: Automation based on incoming signals
+
+## Related Documentation
+- [RSSHub Documentation](https://docs.rsshub.app/)
+- [Entity Card System](../../synap-app/packages/core/entity-card/README.md)
+- **[Channel system](/team/platform/channel-system)**

@@ -1,0 +1,140 @@
+---
+title: "What is Synap?"
+description: "High-level overview and philosophy of Synap"
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Shield, Cpu, GitBranch } from 'lucide-react';
+
+**Synap is a sovereign AI operating system for knowledge work.**
+
+Unlike traditional apps that each own a slice of your data (Notion for notes, Asana for tasks, Salesforce for CRM), Synap is built on a single open model that unifies all of it — tasks, contacts, notes, events, documents, ideas. Visualize it any way you need. Let AI work with it under your governance rules. Own the infrastructure.
+
+## The Triptych
+
+Everything in Synap reduces to three composable concepts:
+
+**Entities** — the data layer. Every piece of information is an entity in the same graph. Typed by profiles, related by edges, governed by permissions. One model for tasks, contacts, events, ideas, documents, and anything custom.
+
+**Views** — the visualization layer. A view is a lens on the entity graph — never a copy. Switch between Table, Kanban, Calendar, Timeline, Graph, Whiteboard, and Bento dashboard with one click. The data never moves.
+
+**Channels** — the interaction layer. Where you and AI talk about, with, and through your entities. An `ai_thread` is a conversation. A `branch` is a fork. `entity_comments` are inline notes. An `external_import` relays messages from Telegram or Slack.
+
+These three compose freely:
+
+- A channel can be anchored to a view
+- A view can be embedded in a bento block
+- An entity can become a dashboard (bento mode)
+
+## The three unusual things
+
+<Cards>
+  <Card icon={<Shield className="size-4" />} title="You own the data">
+    A pod is a dedicated private server — PostgreSQL, pgvector, Typesense, MinIO — on your infrastructure or ours. Open formats. Exportable. No lock-in.
+  </Card>
+  <Card icon={<GitBranch className="size-4" />} title="Every write is on the event chain">
+    AI mutations go through proposals. Every write is recorded in an immutable event chain: audit trail, time travel, rollback.
+  </Card>
+  <Card icon={<Cpu className="size-4" />} title="Intelligence is pluggable">
+    Swap models per workspace. Connect external agents via Hub Protocol. One integration path for tools and agents.
+  </Card>
+</Cards>
+
+## Key capabilities
+
+### 🧱 [Building blocks](../../architecture/concepts/building-blocks) — your data, your schema
+
+Profiles define entity types. PropertyDefs give each type typed, constrained fields. The field system renders properties consistently across every view. Build a CRM, a second brain, a content pipeline — from configuration, not code.
+
+### 🌳 [Branching conversations](../../architecture/concepts/branching-conversations) — Git for thought
+
+Fork a conversation at any point. Explore alternatives in parallel without polluting the main thread. Branch history is full and replayable.
+
+### 🧠 [Knowledge graph](../../architecture/concepts/knowledge-graph) — typed, bidirectional edges
+
+Entities link with typed relationships (`assigned_to`, `mentions`, `depends_on`, `parent_of`). AI can suggest connections. Query across domains: "all tasks assigned to contacts I met this quarter."
+
+### 🤖 [Multi-agent system](../../architecture/concepts/multi-agent-system) — peer network, not hierarchy
+
+A network of specialized agents (Researcher, Code Agent, Writing Agent, Action Agent) that route to each other based on intent. Any agent can invoke any other. No central orchestrator.
+
+### 🔒 [Data sovereignty](../../architecture/concepts/data-sovereignty) — you own the kernel
+
+A pod is a dedicated private server — PostgreSQL + pgvector, Typesense search, MinIO file storage, and the Synap backend — running on your infrastructure. Open formats (SQL, Markdown, S3). Self-hostable. Exportable at any time.
+
+### 📡 [Hub & spoke](../../architecture/concepts/hub-and-spoke) — pluggable intelligence
+
+Swap AI services per workspace. Connect external agents via Hub Protocol. MCP client unlocks 10,000+ community tools.
+
+## For whom?
+
+### Second brain users
+
+- Capture anything; AI organizes it.
+- Connect ideas across documents, tasks, and contacts.
+- Build personal knowledge graphs.
+
+### Teams and collaborators
+
+- Shared workspaces with permissions.
+- Real-time collaboration on documents.
+- AI-assisted workflows and automation.
+- Audit trail for changes.
+
+### AI and agent developers
+
+- Unified data layer for agents.
+- Governance for AI actions.
+- Hub Protocol for external integration.
+
+### Enterprise and sovereignty
+
+- Self-host on your infrastructure.
+- Data residency and compliance.
+- Control over models and data.
+- No vendor lock-in.
+
+## The vision
+
+> Never lose anything. Never organize anything.
+
+Synap reduces friction between capturing information and making it useful. Structure emerges from usage; the system adapts to how you work.
+
+## What you can build
+
+Because Synap is a platform with an open entity graph, the same infrastructure powers radically different use cases:
+
+**Personal**: second brain, daily journal with AI insights, personal CRM, research assistant, habit tracker
+
+**Team**: collaborative workspace, project management, knowledge base, meeting notes with summaries, team wiki
+
+**Specialized**: CRM pipeline, legal case management, academic paper organizer, investment analysis, sales pipeline with AI
+
+## How it differs
+
+| | Traditional SaaS | Synap |
+|--|-----------------|-------|
+| Data ownership | Vendor-owned | Your dedicated server (PostgreSQL + Markdown + S3) |
+| AI | Bolt-on, single model | Pluggable, governed, human in the loop |
+| View types | Fixed per app | 10+ on the same data |
+| Data model | Siloed per app | Unified graph, dynamic profiles |
+| UI | Fixed screens | Cells, composable surfaces |
+| History | Limited undo | Full event log |
+| Integration | Limited APIs | Hub Protocol, agents |
+
+## Next steps
+
+1. **[Building blocks](../../architecture/concepts/building-blocks)** — core components.
+2. **[Data sovereignty](../../architecture/concepts/data-sovereignty)** — privacy and control.
+3. **[Getting started](../getting-started)** — hosted, Docker, CLI, or source; then [Quickstart](../getting-started/quickstart) (app, agents, or SDK).
+4. **[Architecture](../../architecture/concepts)** — technical depth.
+
+**Start here:** [synap.live](https://synap.live) for the hosted app, or [Installation](../getting-started/installation) to run a pod yourself.
+
+Synap is infrastructure for thought, collaboration, and AI that respects sovereignty and adapts to you.
+
+<Callout type="info" title="Learn more on the website">
+  - [Synap homepage](https://www.synap.live) — discover the product at a glance
+  - [About Synap](https://www.synap.live/about) — the team, vision, and mission
+</Callout>

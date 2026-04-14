@@ -1,0 +1,129 @@
+---
+title: "TeamDoc Guidelines"
+description: "Canonical guidelines for Synap documentation stack, UI policy, and authoring standards."
+---
+
+This is the canonical guideline for how we build documentation at Synap.
+
+It defines:
+
+- the technology we standardize on,
+- what we allow or forbid in UI composition,
+- how public vs internal docs are organized,
+- and how new pages must be authored.
+
+## 1) Canonical Documentation Stack
+
+TeamDoc standard stack:
+
+- Next.js App Router
+- Fumadocs (`fumadocs-core`, `fumadocs-mdx`, `fumadocs-ui`)
+- Content in Markdown/MDX collections
+- Tailwind for styling primitives used by Fumadocs UI
+
+References:
+
+- [Fumadocs Quick Start](https://www.fumadocs.dev/docs)
+- [Fumadocs MDX collections](https://www.fumadocs.dev/docs/mdx)
+- [Fumadocs UI translations](https://www.fumadocs.dev/docs/ui/translations)
+
+## 2) Public vs Internal Split
+
+We keep a strict split by collection:
+
+- **`content/docs`** — public docs at `/docs/*`. Top-level journeys (see `content/docs/meta.json`): **Use Synap**, **Build & integrate**, **Contributing**, **Cloud & Intelligence**, **Architecture**. `/docs` redirects to **`/docs/start`** (Use Synap is a `root: true` folder for sidebar scope).
+- **`content/team`** — internal docs at `/team/*` (route-level auth). Includes **per-project** spaces (e.g. Synap App, Browser, Relay) plus **Platform** (data pod depth), **Intelligence**, **Control plane**, **DevOps**.
+
+There is **no** `content/developers` tree: legacy **`/developers`** URLs redirect to **`/docs/integrate`**.
+
+Rule: hiding links is UX, not security. Team routes must enforce auth on the server.
+
+### Authentication (this docs app)
+
+- **Production:** `middleware.ts` gates `/team/*` using session cookies; **`app/team/layout.tsx`** calls **`getServerSession()`** (`lib/cp-auth-server.ts`) against **`NEXT_PUBLIC_SYNAP_API_URL`** (default `https://api.synap.live`) at **`/auth/get-session`**.
+- **Development:** middleware allows `/team` without cookies; **`getServerSession()`** returns a fixed dev user so layouts render locally.
+
+Client session helpers live in **`lib/cp-auth.ts`**. Sign-in redirects target the control plane (`getServerLoginUrl`).
+
+## 3) UI Policy: Fumadocs Theme vs HeroUI/shadcnUI
+
+### Decision
+
+For docs surfaces, **Fumadocs UI is the default and primary design system**.
+
+### Can we use HeroUI or shadcnUI?
+
+Yes, technically we can. But policy is:
+
+- **Default**: use Fumadocs UI components and tokens for all docs pages/layouts.
+- **Allowed exception**: HeroUI/shadcn components only for isolated, high-value widgets not provided by Fumadocs.
+- **Not allowed**: mixing three visual systems in the same page section without a clear boundary.
+
+### Why this policy
+
+- Keeps docs UX consistent
+- Reduces styling conflicts and maintenance cost
+- Prevents token/theme drift
+- Simplifies onboarding for contributors and AI agents
+
+## 4) Authoring Rules (MD/MDX)
+
+From Fumadocs MDX model, docs should be collection-driven and frontmatter-first.
+
+Required for each page:
+
+- `title`
+- `description`
+
+Preferred:
+
+- markdown for content-heavy pages
+- MDX only when interactive components are necessary
+
+Avoid:
+
+- duplicated pages with same slug in `.md` and `.mdx` unless intentional
+- large custom JSX blocks when built-in Fumadocs components work
+
+## 5) Theming and Personalization
+
+Keep personalization inside Fumadocs-supported mechanisms first:
+
+- custom layout wrappers
+- shared reusable MDX components
+- RootProvider options (including translations)
+
+If we add localization, use `RootProvider` i18n translation strategy from Fumadocs docs:
+
+- [Fumadocs UI translations](https://www.fumadocs.dev/docs/ui/translations)
+
+## 6) Navigation and Announcements
+
+All structure must be collection/meta driven:
+
+- `meta.json` controls canonical ordering/grouping
+- top-level sections reflect architecture domains and shipping surfaces (repos/products), not one-off campaign names
+- the sidebar **space selector** must stay aligned with `lib/spaces.ts` (paths and labels)
+
+Announcements/updates should be represented by dedicated docs pages (or changelog section), not ad-hoc hero banners in random pages.
+
+## 7) Definition of Done for TeamDoc Changes
+
+A docs change is complete only when:
+
+1. page is in the correct collection (`docs` or `team`)
+2. frontmatter is complete
+3. navigation is updated in related `meta.json`
+4. UI follows Fumadocs-first policy
+5. internal pages are auth-gated at route level
+6. links are validated
+
+## 8) Contributor Workflow
+
+1. Decide audience first: **public** (`content/docs`) or **team** (`content/team`); integrator-facing content usually lives under **Build & integrate**, not a separate collection
+2. Create the page in the matching collection
+3. Add entry to `meta.json`
+4. Use Fumadocs components first
+5. Keep custom components reusable and centralized
+6. Validate build, nav, and link behavior
+

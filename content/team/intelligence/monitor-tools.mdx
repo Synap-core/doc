@@ -1,0 +1,111 @@
+---
+title: "Monitor: Tools"
+description: "Tool monitoring — registered tools, usage, errors."
+---
+
+# Tools System
+
+Tools are the **capabilities agents use** to interact with the knowledge graph, memory, and external systems. There are 17 built-in tools organized by execution category.
+
+## Categories
+
+### Context Tools — Auto-Execute
+
+Read-only operations that run immediately without user approval. Results are fed directly back into the LLM's context for the next reasoning step.
+
+| Tool | Description |
+|------|-------------|
+| `search_entities` | Full-text + semantic search across the knowledge graph |
+| `search_unified` | Unified search across all Typesense collections |
+| `search_documents` | Document-specific text search |
+| `vector_search` | pgvector semantic search by cosine distance |
+| `get_document` | Fetch complete document content |
+| `memory_search` | Semantic recall from long-term memory |
+| `graph_traverse` | BFS traversal through entity relationship graph |
+
+### Action Tools — Require Approval
+
+Write operations that modify data. Agents return **proposals** for these by default. You review and approve/deny them in the Proposals page.
+
+| Tool | Description |
+|------|-------------|
+| `create_entity` | Create a new entity (fires event pipeline) |
+| `update_entity` | Update entity fields and metadata |
+| `create_document` | Create a new document |
+| `update_document` | Update existing document content |
+| `update_proposal` | Revise a pending proposal's arguments |
+| `link_entity_to_thread` | Pin an entity to the thread sidebar |
+| `link_document_to_thread` | Pin a document to the thread sidebar |
+| `create_skill` | Generate a new skill via AI code generation |
+
+### Memory Tools — Auto-Execute
+
+Non-destructive writes treated as safe enough to auto-execute.
+
+| Tool | Description |
+|------|-------------|
+| `remember_fact` | Store a fact with embedding + confidence score |
+
+### Coordination Tools
+
+Multi-agent orchestration.
+
+| Tool | Description |
+|------|-------------|
+| `dispatch_agent` | Spawn a specialist sub-agent on a child thread |
+
+## Execution Flow
+
+```
+LLM calls tool
+    ↓
+Category = "context" or "memory"?
+  YES → Execute immediately → return result → continue loop
+  NO  → proposalMode enabled?
+    YES → Return { proposed: true, description, args }
+    NO  → Execute immediately (admin / direct mode)
+```
+
+## Defining a Tool in Code
+
+```typescript
+import { defineTool } from "./base/tool";
+import { z } from "zod";
+
+export const myTool = defineTool({
+  name: "my_tool",
+  category: "context",         // auto-executes without approval
+  description: "What this tool does — shown to the LLM to decide when to call it",
+  parameters: z.object({
+    query: z.string().describe("The search query"),
+    limit: z.number().optional().default(10),
+  }),
+  execute: async (args, context) => {
+    // context: { userId, threadId, dataPodUrl, dataPodApiKey, workspaceId }
+    const results = await myService.search(args.query, args.limit);
+    return results;
+  },
+});
+```
+
+## Adding a Tool to an Agent
+
+1. Define the tool in `tools/` directory (or create a Skill for runtime addition)
+2. Register it in `tool-registry.ts` → `TOOL_REGISTRY` map
+3. Add its name to the agent's allocation in `getToolsForAgent(agentType)`
+4. Rebuild and restart the intelligence service
+
+## Tool Context
+
+Every tool receives a `ToolContext` from the agent:
+
+```typescript
+interface ToolContext {
+  userId: string;
+  threadId: string;
+  proposalMode?: boolean;    // true → return proposals instead of executing
+  dataPodUrl?: string;       // Backend REST API URL
+  dataPodApiKey?: string;    // Backend auth header value
+  workspaceId?: string;      // Required for entity create/update operations
+}
+```

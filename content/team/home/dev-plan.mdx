@@ -1,0 +1,291 @@
+---
+title: "Development Plan"
+description: "Current development plan and sprint focus."
+---
+
+# Dev Plan — Terminal Bridge + Vault Grant Dispatch
+
+> For the human dev. Claude handles notification system concurrently.
+> Generated 2026-03-25.
+
+---
+
+## 1. Vault Grant Dispatch (~1h)
+
+**What exists:**
+- `VaultRequestCard.tsx` — dispatches `synap:navigate` (with `{ app: 'vault', proposalId, secretType, service }`) and listens for `synap:vault:granted`
+- `VaultView/index.tsx` — full vault UI, but has no knowledge of pending proposalId context, never dispatches `synap:vault:granted`
+- `AppContainer/index.tsx` — no listener for `synap:navigate`
+
+**What's missing: 3 targeted edits.**
+
+---
+
+### Edit 1 — AppContainer: listen for `synap:navigate`
+
+File: `browser/electron/renderer/src/components/layout/AppContainer/index.tsx`
+
+In the `AppContainer` component, add a `useEffect` to listen for the custom event and navigate:
+
+```typescript
+// Add to imports
+import { useAppStore } from '../../../stores/appStore';
+
+// In AppContainer body, add:
+const setActiveView = useAppStore((s) => s.setActiveView);
+const setVaultContext = useAppStore((s) => s.setVaultContext); // see Edit 3
+
+useEffect(() => {
+  const handler = (e: Event) => {
+    const { app, proposalId, secretType, service } = (e as CustomEvent).detail ?? {};
+    if (app === 'vault') {
+      setActiveView('vault');
+      if (proposalId) {
+        setVaultContext({ proposalId, secretType, service });
+      }
+    }
+  };
+  window.addEventListener('synap:navigate', handler);
+  return () => window.removeEventListener('synap:navigate', handler);
+}, [setActiveView, setVaultContext]);
+```
+
+---
+
+### Edit 2 — appStore: add vault context state
+
+File: `browser/electron/renderer/src/stores/appStore.ts`
+
+Add to the store state and actions:
+
+```typescript
+// State (add to AppState interface):
+vaultContext: { proposalId: string; secretType?: string; service?: string } | null;
+
+// Actions (add to AppActions interface):
+setVaultContext: (ctx: AppState['vaultContext']) => void;
+clearVaultContext: () => void;
+
+// Implementation:
+vaultContext: null,
+setVaultContext: (ctx) => set({ vaultContext: ctx }),
+clearVaultContext: () => set({ vaultContext: null }),
+```
+
+---
+
+### Edit 3 — VaultView: read context, show "Grant Access" mode
+
+File: `browser/electron/renderer/src/components/views/VaultView/index.tsx`
+
+```typescript
+// At top of VaultView component:
+const vaultContext = useAppStore((s) => s.vaultContext);
+const clearVaultContext = useAppStore((s) => s.clearVaultContext);
+
+// Grant handler — call when user selects a secret to grant:
+const handleGrantSecret = (secretId: string) => {
+  if (!vaultContext) return;
+  window.dispatchEvent(
+    new CustomEvent('synap:vault:granted', {
+      detail: { proposalId: vaultContext.proposalId, vaultRef: secretId },
+    })
+  );
+  clearVaultContext();
+};
+```
+
+In the secrets list, when `vaultContext` is set, show a "Grant Access" banner at the top of VaultView:
+
+```tsx
+{vaultContext && (
+  <XStack
+    padding="$3"
+    backgroundColor="$aiLight"
+    borderBottomWidth={1}
+    borderBottomColor="$borderColor"
+    gap="$2"
+    alignItems="center"
+  >
+    <Shield size={14} color="var(--color-ai)" />
+    <Text flex={1} fontSize={12} color="$ai" fontWeight="500">
+      AI is requesting access to a {vaultContext.secretType} for {vaultContext.service}.
+      Select a secret below to grant access.
+    </Text>
+    <Button size="sm" variant="ghost" onPress={clearVaultContext}>
+      Cancel
+    </Button>
+  </XStack>
+)}
+```
+
+In the `SecretItem` component (or wherever a secret is selected), when `vaultContext` is active, show a "Grant" button instead of the normal "Copy" button:
+
+```tsx
+{vaultContext ? (
+  <Button size="sm" variant="outline" color="$ai" onPress={() => handleGrantSecret(secret.id)}>
+    Grant Access
+  </Button>
+) : (
+  // existing Copy button
+)}
+```
+
+**That's it for vault. 3 file edits, ~1h.**
+
+---
+
+## 2. Terminal Bridge (~3-4 days)
+
+**Goal:** AI agent can run shell commands on the pod, gated by `checkPermissionOrPropose()`. Commands appear in a `TerminalOutputCell` bento widget.
+
+**What exists:**
+- `TerminalView.tsx` — full xterm.js UI, local PTY, multi-tab
+- `podTerminal.ts` — WebSocket client stub (not integrated), connects to `/api/cli/ws`
+- `terminal-ipc.ts` — PTY manager (local shell, not pod)
+- IS Hub Protocol: 20 sub-routers, easy to add route 21
+
+---
+
+### Backend — Hub Protocol: `POST /hub/terminal/execute`
+
+File: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts`
+
+Add a new route group after the last existing group:
+
+```typescript
+// ── Terminal execution (IS → pod) ──────────────────────────────────────────
+app.post('/hub/terminal/execute', isAuth, async (c) => {
+  const { command, cwd, workspaceId, sessionId, timeout = 30_000 } = await c.req.json();
+
+  // 1. Permission check — every command goes through proposals
+  const check = await checkPermissionOrPropose({
+    userId: c.var.userId,
+    workspaceId,
+    action: 'terminal.execute',
+    data: { command, cwd, sessionId },
+    proposalType: 'terminal_command',
+  });
+  if (check.status === 'pending') {
+    return c.json({ status: 'pending', proposalId: check.proposalId }, 202);
+  }
+
+  // 2. Execute via PTY manager (reuse existing terminal infra)
+  const result = await runCommandOnPod(command, { cwd, timeout });
+  return c.json({ status: 'completed', output: result.stdout, exitCode: result.exitCode });
+});
+
+app.get('/hub/terminal/sessions/:sessionId', isAuth, async (c) => {
+  const { sessionId } = c.req.param();
+  const session = getTerminalSession(sessionId);
+  return c.json(session ?? { error: 'not_found' }, session ? 200 : 404);
+});
+```
+
+You'll need a `runCommandOnPod(command, opts)` function that spawns a child_process and captures output. Keep it simple: `child_process.exec()` with timeout, workspace-scoped working directory.
+
+**Security rules:**
+- All commands go through `checkPermissionOrPropose()` — never bypass
+- Whitelist read-only commands in `DEFAULT_AUTO_APPROVE` (e.g. `ls`, `cat`, `git status`, `git log`)
+- Block destructive patterns server-side (regex on command string): `rm -rf`, `DROP TABLE`, `format`, `dd if=`
+- Timeout: hard 30s cap on all executions
+
+---
+
+### IS Tool: `run_command`
+
+File: `synap-intelligence-service/apps/intelligence-hub/src/tools/`
+
+Create `run-command-tool.ts`:
+
+```typescript
+export const runCommandTool = {
+  name: 'run_command',
+  description: 'Execute a shell command on the pod. Use for reading files, checking git status, running tests. Dangerous commands require user approval.',
+  inputSchema: z.object({
+    command: z.string().describe('The shell command to run'),
+    cwd: z.string().optional().describe('Working directory (relative to workspace root)'),
+    workspaceId: z.string(),
+  }),
+  execute: async ({ command, cwd, workspaceId }, { podClient }) => {
+    const result = await podClient.post('/hub/terminal/execute', {
+      command, cwd, workspaceId,
+    });
+
+    if (result.status === 'pending') {
+      return `Command queued for approval (proposalId: ${result.proposalId}). The user will be notified.`;
+    }
+
+    return `Exit code: ${result.exitCode}\n\n${result.output}`;
+  },
+};
+```
+
+Register in `tool-categories.ts` under `write` scope (requires explicit user approval for destructive ops).
+
+---
+
+### Browser UI: TerminalOutputCell
+
+This is the browser-side widget that displays command output from the AI.
+
+File: Create `synap-app/packages/views/bento/src/components/widgets/TerminalOutputWidget.tsx`
+
+```tsx
+// Props from bento block config
+interface TerminalOutputWidgetProps {
+  sessionId?: string;   // poll for output from a running session
+  command?: string;     // static: show the command that ran
+  output?: string;      // static: show captured output
+  exitCode?: number;
+}
+```
+
+Display: dark background, monospace font, scrollable output. If `sessionId` is present, poll `trpc.terminal.getSession` for live output. Show exit code badge (green ✓ / red ✗).
+
+Register as bento cell `terminal-output`, category `ai`, default size 6×4.
+
+---
+
+### IS Skill: `terminal.md`
+
+Create `synap-intelligence-service/apps/intelligence-hub/src/skills/files/terminal.md`:
+
+````markdown
+# Terminal Skill
+
+You have access to `run_command` to execute shell commands on the user's pod.
+
+## Rules
+- Always explain what you're about to run and why before running it
+- Prefer read-only commands: `ls`, `cat`, `git status`, `git log`, `npm test`
+- Never run: `rm -rf`, `git push --force`, `DROP`, `format`, destructive loops
+- If a command fails, read the error carefully before retrying
+- After running, summarize what you found — don't just dump raw output
+
+## Output
+When showing results, use the `terminal-output` bento widget kind.
+````
+
+---
+
+### Proposal Type: `terminal_command`
+
+The `checkPermissionOrPropose()` call in the Hub Protocol route creates a proposal with `proposalType: 'terminal_command'`. The existing `ProposalsView` and `VaultRequestCard` pattern already handles this — add a `TerminalCommandCard.tsx` to mirror `VaultRequestCard.tsx`:
+
+- Shows: command, cwd, estimated impact (read/write/destructive)
+- Actions: [Allow] [Deny]
+- Allow → resolves proposal → command executes
+- Deny → rejects, AI gets "User denied terminal access"
+
+---
+
+### Coordination with Claude
+
+**Backend goes first** (Hub Protocol route + `run_command` tool). Push that to the branch. Then build the browser UI on top of the live endpoints. Zero overlap.
+
+Claude will not touch: `TerminalView.tsx`, `terminal-ipc.ts`, `TerminalOutputWidget.tsx`, `TerminalCommandCard.tsx`.
+
+---
+
+*Generated 2026-03-25 — coordinate with Claude on notification system (running concurrently)*

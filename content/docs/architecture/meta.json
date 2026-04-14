@@ -1,0 +1,21 @@
+{
+  "title": "Architecture",
+  "description": "System design, event model, deployment, and deep technical reads (public)",
+  "root": true,
+  "icon": "network",
+  "pages": [
+    "index",
+    "system-patterns",
+    "core-patterns",
+    "event-flow",
+    "validation-policy",
+    "permission-model",
+    "hub-protocol-flow",
+    "ai-architecture",
+    "events",
+    "components",
+    "security",
+    "concepts",
+    "deployment"
+  ]
+}

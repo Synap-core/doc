@@ -1,0 +1,519 @@
+---
+title: "Native OS Guide"
+description: "@synap-core/native-os — 7 sub-packages implementation guide."
+---
+
+# Native OS integration guide
+
+A practical guide to using `@synap-core/native-os` in a Synap Expo app. Read
+the package README at `synap-app/packages/core/native-os/README.md` first
+for the architecture overview — this guide focuses on **consumer-side
+implementation patterns**.
+
+**Audience:** engineers wiring OS integrations into Relay, Browser mobile,
+or any future Synap Expo app.
+
+**Date:** 2026-04-11.
+
+---
+
+## Mental model
+
+The umbrella package is a **single pipe** for every OS-level entry point
+into your app. Think of it as the "everything-external" gateway:
+
+```
+  iOS / Android system                               Your app
+  ─────────────────────                              ─────────
+  Share sheet ─────────┐
+  Siri / Assistant ────┤
+  Spotlight tap ───────┼────▶  NativeOSBridge ────▶  expo-router
+  Widget button ───────┤      (relay://... URL)     (existing capture,
+  Live Activity action ┤                              entity detail, ...)
+  App Intent ──────────┘
+```
+
+Every inbound event becomes a `relay://` URL. Every `relay://` URL lands in
+the existing `expo-router` deep-link handler. Your app doesn't need any new
+"share mode" or "intent mode" — the capture flow that already exists is
+what the share sheet routes into.
+
+This is the most important architectural decision: **OS events reuse the
+deep-link pipeline, they don't fork it.** If your app can already handle
+`relay://capture?text=...`, every new OS entry point works the day you
+install the bridge.
+
+---
+
+## Setup checklist
+
+For an app that wants the full set of capabilities:
+
+### 1. Package dependencies
+
+```jsonc
+// relay-app/package.json  (or any consuming Expo app)
+{
+  "dependencies": {
+    "@synap-core/native-os": "workspace:*",
+    "@synap-core/native-os-shared-storage": "workspace:*",
+    "@synap-core/native-os-share": "workspace:*",
+    "@synap-core/native-os-spotlight": "workspace:*",
+    "@synap-core/native-os-intents": "workspace:*",
+    "@synap-core/native-os-widgets": "workspace:*",
+    "@synap-core/native-os-live-updates": "workspace:*",
+    "@synap-core/native-os-vision": "workspace:*"
+  }
+}
+```
+
+You can install only the ones you need — the umbrella's facades degrade to
+no-ops for any bridge that isn't in the workspace tree.
+
+### 2. Peer libraries (the actual native modules)
+
+Only install the ones for capabilities you want **live in this build**.
+Everything else stays stubbed.
+
+```bash
+# Share (iOS + Android) — version matters, pin to SDK-compatible line
+pnpm --filter relay-app add expo-share-intent@~5.1.1   # Expo SDK 54
+# For Expo SDK 55+, use ^6.0.0 instead (see expo-share-intent README compat table)
+
+# Spotlight (iOS only — Android stub)
+pnpm --filter relay-app add react-native-spotlight-search
+
+# Live updates (Android — Notifee)
+pnpm --filter relay-app add @notifee/react-native
+
+# Vision / OCR (iOS + Android)
+pnpm --filter relay-app add @react-native-ml-kit/text-recognition
+# expo-image-picker is already installed in relay-app
+```
+
+### 3. Expo config plugins
+
+```jsonc
+// relay-app/app.json
+{
+  "expo": {
+    "scheme": "relay",
+    "plugins": [
+      "@synap-core/native-os-share",          // wraps expo-share-intent plugin
+      ["expo-share-intent", { /* config */ }] // or use directly until the wrapper plugin is extended
+    ]
+  }
+}
+```
+
+The `native-os-share` config plugin is a passthrough that triggers
+`expo-share-intent`'s plugin. When we later swap to `expo-share-extension`
+for the custom SwiftUI sheet, only the wrapper plugin changes — `app.json`
+stays identical.
+
+### 4. Provider mount
+
+Mount the bridge at your app root:
+
+```tsx
+// app/_layout.tsx
+import { NativeOSBridge } from '../src/providers/NativeOSBridge';
+
+export default function RootLayout() {
+  return (
+    <SynapProvider>
+      <NativeOSBridge>
+        <Stack>{/* ... */}</Stack>
+      </NativeOSBridge>
+    </SynapProvider>
+  );
+}
+```
+
+See `relay-app/src/providers/NativeOSBridge.tsx` for the reference
+implementation — it handles all three inbound channels (share, app intents,
+spotlight tap) in one component with DEV-mode logging.
+
+### 5. Rebuild the dev client
+
+```bash
+cd relay-app
+npx expo prebuild --clean      # regenerates ios/ and android/ with new plugins
+npx expo run:ios               # or run:android
+```
+
+JS-only changes after the initial build don't need a rebuild — Fast Refresh
+handles them. But any new peer lib (expo-share-intent, notifee, ml-kit)
+requires a fresh build so the native modules get linked into the binary.
+
+---
+
+## Capability-by-capability cookbook
+
+### Share — the highest-ROI capability
+
+**What the user sees:** "Relay" appears as a target in any app's share
+sheet (Safari, Mail, Photos, Twitter, Chrome, Gmail, ...). Tap it → Relay
+launches with the share payload queued → capture modal opens prefilled.
+
+**Implementation:**
+
+```tsx
+// In your app-root provider (already done in NativeOSBridge.tsx)
+import { useShareIntent } from '@synap-core/native-os/react';
+import { captureUrl } from '@synap-core/native-os';
+import { Linking } from 'react-native';
+
+useShareIntent((intent) => {
+  // intent.kind: 'text' | 'url' | 'image' | 'file' | 'mixed'
+  const text = intent.text ?? intent.files?.[0]?.fileName ?? '';
+  if (text.length === 0) return;
+  const url = captureUrl({ text, source: intent.sourceApp ?? 'share' });
+  void Linking.openURL(url);
+});
+```
+
+**File payloads:** Today the facade surfaces `files[]` with `uri`, `mimeType`,
+`fileName`, `sizeBytes`. The existing capture pipeline doesn't yet accept
+files from the share path — a 2-day task to extend `@synap-core/capture-pipeline`
+to read the file and upload through the existing attachment flow. Planned
+for Sprint 1 follow-up.
+
+**Cold start:** If the user shares while Relay is closed, iOS/Android cold-
+starts the app, then the bridge flushes the queued payload on first mount.
+`useShareIntent` handles this — you don't need to worry about timing.
+
+### App Intents — Siri / Google Assistant
+
+**What the user eventually sees:** "Hey Siri, new Relay note about the
+design review" — zero UI, note appears in the feed on next app open. Also
+Spotlight actions, Shortcuts automations, iOS 18 AppShortcutsProvider.
+
+**Status:** TS scaffold only. The Swift `RelayIntents` target and Android
+`shortcuts.xml` + Activity classes aren't shipped yet. Implementation code
+below **already works** — it just doesn't fire until the native bridges
+land. This lets you write the handler once and get the feature for free.
+
+**Implementation:**
+
+```tsx
+import { useIntentHandler } from '@synap-core/native-os/react';
+
+useIntentHandler((intent) => {
+  switch (intent.kind) {
+    case 'create-note':
+    case 'create-task':
+    case 'capture': {
+      const text = typeof intent.params.text === 'string' ? intent.params.text : undefined;
+      void Linking.openURL(captureUrl({ text, source: `intent:${intent.kind}` }));
+      return;
+    }
+    case 'open-space': {
+      const slug = intent.params.slug as string | undefined;
+      if (slug) void Linking.openURL(`relay://space/${slug}`);
+      return;
+    }
+  }
+});
+```
+
+**Donations:** Call `intents.donate()` on every successful in-app capture
+so the OS starts suggesting your intents in Spotlight and Shortcuts:
+
+```ts
+import { intents } from '@synap-core/native-os';
+
+// After a successful capture
+void intents.donate({
+  kind: 'create-note',
+  params: { text: captureText.slice(0, 200) },
+});
+```
+
+### Spotlight — OS-wide search
+
+**What the user sees:** Searching "Alice" in iOS Spotlight shows a Relay
+result. Tapping it deep-links into the person detail screen. Same for notes,
+tasks, projects. Android 15+ will do the same via AppSearch (pending native
+bridge).
+
+**Implementation — incremental sync:**
+
+```tsx
+import { useSpotlightSync, useSpotlightTap } from '@synap-core/native-os/react';
+import { canonicalRelayUrl } from '@synap-core/native-os';
+
+// Your feed hook — returns the entities this user can search for
+const { entities } = useFeed();
+
+const indexable = useMemo(() =>
+  entities.map((e) => ({
+    id: e.id,
+    kind: e.profileSlug as EntityKind,
+    title: e.name,
+    subtitle: e.summary ?? e.metadata.role ?? undefined,
+    body: e.content?.slice(0, 4000),
+    keywords: e.metadata.tags as string[] | undefined,
+    updatedAt: e.updatedAt,
+    canonicalUrl: canonicalRelayUrl({ kind: e.profileSlug, id: e.id }),
+  })),
+[entities]);
+
+useSpotlightSync(indexable);
+
+useSpotlightTap((entityId) => {
+  // The tap handler only gets the entity id — not the kind. Either:
+  //   (a) encode the kind into the id prefix
+  //   (b) maintain an id→kind map in shared storage
+  //   (c) route through a generic /entity/[id] screen that looks up the kind
+  router.push(`/entity/${entityId}`);
+});
+```
+
+**Vault exclusion:** Don't index entities the user has marked private. The
+`useSpotlightSync` hook re-indexes on every input change, so filtering
+happens at the caller level — just drop vault entities from the mapped
+array.
+
+### Widgets — Home-screen surfaces
+
+**What the user eventually sees:** Four home-screen widgets:
+1. **Quick Capture** — one-tap opens the capture modal
+2. **Today's Captures** — last 3 items with thumbnails
+3. **Space Switcher** — 3-button medium widget to switch spaces
+4. **Voice Capture** — button that starts a voice recording directly
+
+**Status:** State-write side works today (backed by shared storage). Native
+widget targets ship in Sprint 2 via `@bacons/apple-targets` (iOS) + custom
+Glance plugin (Android). Start writing state now so the widgets have data
+the moment they ship.
+
+**Implementation — data pipe:**
+
+```ts
+import { widgets } from '@synap-core/native-os';
+
+// On every feed mutation, write the widget's view of the data
+useEffect(() => {
+  void widgets.setState('todays-captures', {
+    count: todaysCaptures.length,
+    latest: todaysCaptures.slice(0, 3).map((e) => ({
+      id: e.id,
+      title: e.name,
+      kind: e.profileSlug,
+      thumbnailUri: e.thumbnailUri,
+    })),
+  });
+
+  void widgets.setState('space-switcher', {
+    spaces: recentSpaces.slice(0, 3).map((s) => ({
+      slug: s.slug,
+      title: s.title,
+      color: s.color,
+    })),
+  });
+}, [todaysCaptures, recentSpaces]);
+```
+
+When the native widget extension ships, it reads the same keys from App
+Group UserDefaults (iOS) or SharedPreferences (Android) and renders. Zero
+JS changes needed at that point.
+
+### Live updates — Dynamic Island / promoted ongoing
+
+**What the user sees:** Starts voice recording from a chip in the
+CaptureGestureButton → a persistent pill appears in the Dynamic Island
+(iOS) or the status bar (Android) showing "Recording… 00:12". Lifts finger
+from the chip to enter detached mode → pill stays visible, user can leave
+the app and come back without losing the recording.
+
+**Implementation:**
+
+```tsx
+import { useLiveActivity } from '@synap-core/native-os/react';
+
+function CaptureGestureButton() {
+  const voice = useVoiceTranscription();
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!voice.isListening) return;
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [voice.isListening]);
+
+  const liveState = voice.isListening
+    ? { kind: 'voice-recording' as const, title: 'Recording…', elapsedSec: elapsed }
+    : null;
+  useLiveActivity(liveState);
+
+  // ... rest of the button
+}
+```
+
+**Status:** Android works today via Notifee (install the peer lib + rebuild
+the dev client). iOS Live Activity needs the Swift `RelayActivity` target
+— stubbed for now.
+
+### Vision — Camera OCR
+
+**What the user sees:** A "Scan" button in the capture modal (or a gesture
+button chip). Tap → camera opens → point at text (whiteboard, business
+card, book page) → tap shutter → text lands in the capture input. Sprint 3
+adds the live-overlay experience where text highlights tappably in real
+time.
+
+**Implementation:**
+
+```tsx
+import { vision } from '@synap-core/native-os';
+
+async function handleScan() {
+  const result = await vision.scanText();
+  if (result.text.length > 0) {
+    setText((prev) => prev.length > 0 ? `${prev}\n${result.text}` : result.text);
+  }
+}
+
+// In CaptureModal action bar
+<Pressable onPress={handleScan} disabled={!vision.availability.available}>
+  <Camera size={20} />
+</Pressable>
+```
+
+**Availability check:** Hide or disable the button if
+`vision.availability.available === false` — this handles the case where
+the consuming app hasn't installed the peer libs.
+
+### Shared storage — foundation
+
+You probably won't use this directly unless you're writing a widget data
+pipe or a custom intent handler. It's exposed for advanced use cases:
+
+```ts
+import { sharedStorage } from '@synap-core/native-os';
+
+sharedStorage.setString('relay:last-active-space', spaceId);
+const last = sharedStorage.getString('relay:last-active-space');
+
+sharedStorage.setJSON('relay:feed-snapshot', feed);
+const snapshot = sharedStorage.getJSON<Feed>('relay:feed-snapshot');
+```
+
+---
+
+## Graceful degradation patterns
+
+**Pattern 1 — hide the UI if the capability isn't available:**
+
+```tsx
+import { vision } from '@synap-core/native-os';
+
+function CaptureActionBar() {
+  return (
+    <XStack>
+      <MicButton />
+      {vision.availability.available && <ScanButton />}
+      <SendButton />
+    </XStack>
+  );
+}
+```
+
+**Pattern 2 — always show the UI but surface a hint on tap:**
+
+```tsx
+async function handleScan() {
+  if (!vision.availability.available) {
+    toast(`Scanning unavailable: ${vision.availability.reason ?? 'unknown'}`);
+    return;
+  }
+  const { text } = await vision.scanText();
+  // ...
+}
+```
+
+**Pattern 3 — wire up the hook unconditionally and let it no-op:**
+
+```tsx
+// This is safe even if native-os-spotlight isn't installed
+useSpotlightSync(entities);
+```
+
+The hook does nothing if the bridge isn't present. No `if` required.
+
+---
+
+## Testing checklist per capability
+
+| Capability | Test |
+|---|---|
+| Share (text) | Open Safari → share a URL → pick Relay → confirm capture modal opens with the URL prefilled |
+| Share (image) | Open Photos → share a picture → pick Relay → confirm file queued |
+| Share (cold) | Close Relay completely → share from another app → Relay should cold-start and queue |
+| App Intent | **Not testable until native bridge ships.** Use `intents._injectIntent({kind: 'create-note', params: {text: 'test'}, firedAt: Date.now()})` in the Expo dev client to simulate |
+| Spotlight index | Index a note → close Relay → search for the title in Spotlight → tap result → Relay should open the detail |
+| Spotlight remove | Delete a note → verify it no longer appears in Spotlight search |
+| Widget state | `widgets.setState('quick-capture', {...})` → `widgets.getState('quick-capture')` should round-trip |
+| Live activity (Android) | Install `@notifee/react-native` → start voice recording → confirm persistent notification appears with progress |
+| Live activity (iOS) | **Not testable until Swift target ships** |
+| Vision | Install peer libs → call `vision.scanText()` → take photo of text → verify text returned |
+| Shared storage | `sharedStorage.setJSON('k', {v: 1})` → restart app → `sharedStorage.getJSON('k')` should still return `{v: 1}` |
+
+---
+
+## Troubleshooting
+
+**"Native module 'ExpoShareIntent' not found"** — Peer lib installed but dev
+client wasn't rebuilt. Run `npx expo run:ios --device`.
+
+**Typecheck errors about missing `@synap-core/native-os/types`** — The
+sub-package needs the umbrella as a workspace devDep. All 7 sub-packages
+already have this — if you add a new one, add
+`"@synap-core/native-os": "workspace:*"` to its `devDependencies`.
+
+**Metro bundle error: "Cannot find module '@synap-core/native-os-*'"** —
+Check that the package is listed in the `switch` statement in
+`native-os/src/platform.ts`. Metro needs static string literals in
+`require()` calls; dynamic dispatch doesn't work. Every new bridge needs a
+case.
+
+**Share intents don't fire on cold start** — The cold-start race condition
+is handled by `expo-share-intent` — our bridge calls `getShareIntent()` on
+subscribe, which flushes any queued payload. If it's still not firing,
+check that `expo-share-intent` is actually installed (`pnpm ls
+expo-share-intent` in the consuming app) and that the config plugin ran
+during prebuild (`grep -r "ShareExtension" ios/` should find target
+references).
+
+**Spotlight taps don't route** — Check that `expo-linking` is handling
+`relay://` URLs. The tap handler in `NativeOSBridge.tsx` calls
+`Linking.openURL` which the router resolves. If the router doesn't have a
+matching route, add one in `app/(tabs)/` or the stack.
+
+---
+
+## Out of scope (deliberately)
+
+- **Raycast-style command palette integration** — different problem, different
+  package.
+- **macOS Handoff / Universal Clipboard** — only matters when a macOS client
+  ships.
+- **Whisper / Apple Foundation Models STT** — tracked in the voice roadmap
+  (`RELAY-NEXT-GEN-CAPABILITIES.md`), not native-os.
+- **Push notifications** — separate system, handled by `@synap-core/notifications`
+  and the notification infrastructure.
+
+---
+
+## References
+
+- Package README: `synap-app/packages/core/native-os/README.md`
+- Ship plan (sprint ordering): `docs-internal/NEXT-GEN-SHIP-PLAN.md`
+- iOS deep dive: `docs-internal/NEXT-GEN-IOS-PLAN.md`
+- Android deep dive: `docs-internal/NEXT-GEN-ANDROID-PLAN.md`
+- Voice roadmap: `docs-internal/RELAY-NEXT-GEN-CAPABILITIES.md`
+- Relay consumer: `relay-app/src/providers/NativeOSBridge.tsx`

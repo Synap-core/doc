@@ -1,0 +1,298 @@
+---
+title: "Infrastructure"
+description: "Server map, Docker services, subdomains, observability."
+---
+
+# Synap Infrastructure
+
+> Last updated: 2026-04-12
+
+## Service Map
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  INTERNET                                                                   │
+│  Cloudflare DNS + CDN (*.synap.live)                                       │
+└──────────────────────────┬──────────────────────────┬───────────────────────┘
+                           │                          │
+              ┌────────────▼────────────┐  ┌─────────▼───────────────────────┐
+              │  CP Server              │  │  IS Server                       │
+              │  46.224.228.221         │  │  46.224.230.35                   │
+              │  Hetzner CX32           │  │  Hetzner CX22 (Docker Swarm)    │
+              └────────────┬────────────┘  └─────────┬───────────────────────┘
+                           │                          │
+              ┌────────────▼────────────┐  ┌─────────▼──────────┐
+              │  Caddy (443/80)         │  │  Traefik (443/80)  │
+              │  Auto-HTTPS (Let's Enc.)│  │  IS load balancer  │
+              └──┬──┬──┬──┬────────────┘  └──┬──┬──────────────┘
+                 │  │  │  │                   │  │
+    ┌────────────┘  │  │  └──────────────┐   │  └──────────────┐
+    ▼               │  ▼                 ▼   ▼                  ▼
+api.synap.live   nango   grafana.    ai.synap.live     ai-monitoring.
+    │           .synap   synap.live       │               synap.live
+    ▼             .live      │            ▼                   │
+control-plane       │        ▼     intelligence-hub        langfuse
+:3000           nango-server  grafana   :3001             :3000
+(localhost only):3003         :3000
+                           monitor.synap.live → uptime-kuma:3001
+                           logs.synap.live    → dozzle:8080
+                           deploy.synap.live  → dokploy:3000
+                           dashboard.synap.live → Vercel (SPA)
+```
+
+## Servers
+
+### CP Server — `46.224.228.221`
+
+**Purpose:** Control plane for the SaaS platform. Manages user accounts, subscriptions, pod provisioning, billing, background jobs, monitoring.
+
+| Service | Container | Port | Description |
+|---------|-----------|------|-------------|
+| `control-plane` | synap-control-plane | 3001 (localhost) | Hono REST API |
+| `postgres` | synap-postgres | 5432 (localhost) | Primary database + pgboss schema |
+| `redis` | synap-redis | 6379 (localhost) | Rate limiting + caching |
+| `caddy` | synap-caddy | 80/443 | Reverse proxy + auto-TLS |
+| `dokploy` | synap-dokploy | — (Caddy proxy) | Container fleet management |
+| `nango-server` | nango-server | 3003 (internal) | OAuth connector server |
+| `rsshub` | synap-rsshub | 1200 (internal) | RSS/feed aggregator for Signal Feed |
+| `browserless` | synap-browserless | — (internal) | Headless browser for scraping |
+| `uptime-kuma` | synap-uptime-kuma | 3001 (internal) | Uptime monitoring |
+| `dozzle` | synap-dozzle | 8080 (internal) | Docker log viewer |
+| `prometheus` | synap-prometheus | 9090 (internal) | Metrics scraper |
+| `grafana` | synap-grafana | 3000 (internal) | Metrics dashboards |
+| `node-exporter` | synap-node-exporter | 9100 (internal) | Host OS metrics |
+| `cadvisor` | synap-cadvisor | 8080 (internal) | Container resource metrics |
+
+> **Note:** `control-plane` binds to `127.0.0.1:3001` only — Caddy is the sole entry point for external traffic.
+
+**Docker networks:**
+- `synap-network` — internal service communication
+- `synap-monitoring` — shared between CP services + monitoring stack (external network, must pre-exist)
+
+**CLI:** `./synap-cp &lt;command>`
+
+---
+
+### IS Server — `46.224.230.35`
+
+**Purpose:** AI orchestration. Runs OrchestratorAgent + PersonaAgent per user/workspace. Docker Swarm for scaling (1–4 replicas), Traefik for load balancing with sticky sessions (SSE support).
+
+| Service | Container | Port | Description |
+|---------|-----------|------|-------------|
+| `intelligence-hub` | intelligence-hub | 3001 (Traefik) | AI Hub (Hono), 1–4 replicas |
+| `intelligence-db` | intelligence-db | 5432 (internal) | IS PostgreSQL |
+| `traefik` | traefik | 80/443 | Reverse proxy + TLS + sticky sessions |
+| `langfuse` | langfuse | 3000 (internal) | LLM trace monitoring |
+| `langfuse-worker` | langfuse-worker | — | Async trace processor |
+| `langfuse-redis` | langfuse-redis | 6379 | Langfuse queue |
+| `langfuse-clickhouse` | langfuse-clickhouse | 8123 | Langfuse trace store |
+| `langfuse-minio` | langfuse-minio | 9000 | Langfuse S3 storage |
+
+**Docker Swarm autoscaler (`autoscaler.sh`):**
+- Polls IS `/health` every 15s
+- Parses `active=X queued=Y` from health check detail
+- Scales `synap_intelligence-hub` service replicas: 1–4
+- Scale-up trigger: queued > threshold; scale-down: active ≈ 0 for sustained period
+
+**Docker profiles:**
+- `standalone` — core IS + Traefik
+- `monitoring` — adds Langfuse + dependencies
+- `channels` — adds Telegram/WhatsApp gateway
+- `autoscaler` — runs `autoscaler.sh` to scale replicas
+
+**CLI:** `./synap &lt;command>`
+
+---
+
+## Service Relationships
+
+```
+dashboard.synap.live (Vercel SPA)
+  → api.synap.live/auth/*          # Better Auth
+  → api.synap.live/admin/*         # Admin REST
+
+User's browser / Electron app / Relay mobile
+  → pod.synap.live/trpc            # tRPC (data + entities + views)
+  → pod.synap.live/ws              # Socket.IO realtime
+  → pod.synap.live → IS            # AI requests (pod proxies to IS)
+
+CP API (control-plane)
+  → Hetzner API                    # provision/deprovision VPS servers
+  → Cloudflare API                 # create/delete DNS A records
+  → Stripe                         # billing + subscriptions
+  → Resend                         # transactional email
+  → Nango                          # OAuth connector signals
+  → RSSHub (internal)              # Signal Feed proxy
+  → IS /admin/*                    # push tier, register pod, provision IS access
+  → IS /internal/*                 # sync IS customer records
+  → pod-agent HTTP (ES256 JWT)     # all pod management (no SSH)
+
+IS (intelligence-hub)
+  → CP /.well-known/jwks.json      # verify CP identity on pod provision
+  → Data pod /api/hub/*            # Hub Protocol (read entities, messages, skills)
+  → OpenRouter / OpenAI / Anthropic # LLM inference
+  → Langfuse                       # LLM trace ingest
+
+Prometheus (CP server)
+  → control-plane:3000/metrics     # CP app metrics (bearer token auth)
+  → node-exporter:9100             # CP host OS metrics
+  → cadvisor:8080                  # CP container metrics
+  → ai.synap.live/metrics          # IS app metrics (bearer token auth, cross-server)
+```
+
+---
+
+## Subdomains
+
+| Subdomain | Target | Purpose |
+|-----------|--------|---------|
+| `api.synap.live` | CP → control-plane:3001 | SaaS REST API + auth |
+| `dashboard.synap.live` | Vercel | Admin dashboard SPA |
+| `deploy.synap.live` | CP → dokploy:3000 | Container fleet management (Dokploy) |
+| `nango.synap.live` | CP → nango-server:3003 | OAuth connector callbacks |
+| `monitor.synap.live` | CP → uptime-kuma:3001 | Service uptime monitoring |
+| `logs.synap.live` | CP → dozzle:8080 | Live Docker logs |
+| `grafana.synap.live` | CP → grafana:3000 | Metrics + alerting |
+| `ai.synap.live` | IS → intelligence-hub:3001 | AI agent API |
+| `ai-monitoring.synap.live` | IS → langfuse:3000 | LLM trace explorer |
+| `*.synap.live` | Cloudflare → pod servers | User data pod subdomains |
+
+---
+
+## Observability Stack
+
+### What each tool covers
+
+| Tool | Server | What it monitors |
+|------|--------|-----------------|
+| **Langfuse** | IS | LLM calls: traces, token usage, cost per model, latency, errors |
+| **Prometheus** | CP | App metrics (HTTP rate, provisioning duration, pod counts), host OS (CPU/mem/disk), container stats, IS metrics (scraped cross-server via bearer token) |
+| **Grafana** | CP | Dashboards over Prometheus data. Import: Node Exporter Full (1860), cAdvisor (14282) |
+| **Uptime Kuma** | CP | External ping checks for all public endpoints. Slack/email alerts on downtime |
+| **Dozzle** | CP | Real-time Docker container stdout/stderr. No persistence — for live debugging |
+| **Dokploy** | CP | Container fleet management, compose service status, log streaming |
+| **Sentry** | CP API + Dashboard | Error tracking. Set `SENTRY_DSN` in `.env` to activate |
+
+### IS Prometheus Metrics
+
+The IS exposes prom-client metrics at `/metrics` (bearer token required):
+- `is_chat_requests_total` — by status (success/error/quota_exceeded)
+- `is_llm_calls_total` — by model + status
+- `is_llm_duration_seconds` — P50/P95/P99 latency histograms
+- `is_llm_active` / `is_llm_queued` — live concurrency gauges (also parsed by autoscaler.sh)
+- `is_llm_cost_usd_total` — cumulative spend counter
+- `is_llm_monthly_cost_usd` — Redis-backed monthly gauge
+
+### CP Prometheus Metrics
+
+The CP exposes prom-client metrics at `/metrics` (IS_METRICS_TOKEN bearer required):
+- HTTP request rates and latencies by route
+- Pod provisioning success/failure counters
+- pg-boss job queue depths
+- Active pod count by status
+
+**Prometheus scrape auth:**
+- CP metrics: `credentials_file: /etc/prometheus/secrets/cp_metrics_token`
+- IS metrics: `credentials_file: /etc/prometheus/secrets/is_metrics_token`
+
+---
+
+## Capacity Planning
+
+### Current config
+
+| Server | Type | vCPUs | RAM | Disk |
+|--------|------|-------|-----|------|
+| CP | Hetzner CX32 | 4 | 8 GB | 80 GB |
+| IS | Hetzner CX22 | 2 | 4 GB | 40 GB |
+
+### CP Server breakdown
+
+| Service | RAM (est.) |
+|---------|-----------|
+| control-plane | ~200 MB idle |
+| postgres | ~256 MB + data |
+| redis | ~50 MB |
+| pg-boss (in-process) | no additional container |
+| nango-server | ~200 MB |
+| monitoring stack | ~600 MB total |
+| **Total headroom** | plenty at current scale |
+
+> **pg-boss replaced Trigger.dev** (2026-04-05): ~450 MB RAM saved, 4 containers eliminated.
+
+### IS Server breakdown
+
+| Service | RAM (est.) |
+|---------|-----------|
+| intelligence-hub (1 replica) | ~400 MB |
+| intelligence-db | ~256 MB |
+| traefik | ~50 MB |
+| langfuse stack | ~1.5 GB when active |
+| **Total (core only)** | ~700 MB |
+| **Total (+ monitoring)** | ~2.2 GB |
+
+### When to scale
+
+- **CP** → upgrade when `synap_pods_active` exceeds ~500 pods, or pg-boss job queue stays persistently backed up
+- **IS** → autoscaler handles concurrency (1–4 replicas). Upgrade server when 4 replicas are consistently needed OR Langfuse + IS together exceed 3.5 GB
+- **IS server** → consider adding IS servers (register in CP `user_agent_services`) when 4 replicas are insufficient
+
+---
+
+## Security Model
+
+- **TLS**: Caddy auto-TLS everywhere (Let's Encrypt). No unencrypted public traffic.
+- **Auth**: Better Auth sessions for dashboard + API. ES256 JWT for CP ↔ pod. Bearer tokens for IS ↔ CP and Prometheus scraping.
+- **Metrics**: `GET /metrics` disabled (503) if `IS_METRICS_TOKEN` unset; 401 if wrong token.
+- **Firewall**: ufw on both servers — deny all, allow SSH (rate-limited), 80, 443 only.
+- **Secrets**: `.env` files on each server, never committed. Auto-generated via CLI install.
+- **Control plane port**: `127.0.0.1:3001` — only reachable via Caddy, not directly from internet.
+- **Admin rate limiting**: 60 requests/minute per admin user on all `/admin/*` endpoints.
+
+---
+
+## Operations
+
+### CP CLI Commands
+
+```bash
+./synap-cp install              # First-time setup (interactive)
+./synap-cp update               # Zero-downtime rebuild + migrate
+./synap-cp monitoring start     # Start Prometheus + Grafana
+./synap-cp monitoring set-is-token  # Set IS metrics scraping token
+./synap-cp backup               # Manual DB snapshot
+./synap-cp status               # All service health
+./synap-cp provision-admin      # Bootstrap admin account
+./synap-cp bootstrap-dokploy    # Set up Dokploy + generate API key
+./synap-cp signal start         # Start RSSHub + Browserless (Signal Feed)
+```
+
+### IS CLI Commands
+
+```bash
+./synap install             # First-time setup
+./synap update              # Rolling update
+./synap monitoring start    # Start Langfuse
+./synap connect             # Link IS to CP (sets CONTROL_PLANE_URL)
+./synap status              # Service overview
+```
+
+### Cross-Server Wiring (done once after install)
+
+After installing IS, the install script prints:
+```
+METRICS_TOKEN=<hex>
+On the CP server run: ./synap-cp monitoring set-is-token
+```
+
+This token is written to `monitoring/secrets/is_metrics_token` on the CP server and mounted into Prometheus so it can scrape `https://ai.synap.live/metrics`.
+
+### Adding IS Server to Dokploy
+
+The CP's Dokploy instance monitors CP services automatically. To add the IS server for monitoring:
+1. In Dokploy UI (`deploy.synap.live`), go to Settings → Servers
+2. Add IS server IP (`46.224.230.35`) via SSH key
+3. Dokploy can then show IS container status, compose services, and logs
+4. IS Swarm services appear under the registered IS server node
+
+See `docs/OPERATIONS-GUIDE.md` for the full step-by-step.

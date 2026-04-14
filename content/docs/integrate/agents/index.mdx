@@ -1,0 +1,47 @@
+---
+title: Agents
+description: Built-in Synap AI, external agents, MCP, skills, and governance model.
+---
+
+# Agents
+
+Synap supports two complementary agent layers:
+
+- **Built-in intelligence** running with your pod (orchestrator + specialists).
+- **External agents** connected through open protocols.
+
+All mutations remain governed by permissions and proposal review.
+
+## Connection protocols
+
+| Protocol | Best for | Endpoint |
+|---|---|---|
+| Hub Protocol REST | Full agent workflows, CRUD, memory, channels | `/api/hub/*` |
+| MCP | Claude Desktop, IDE assistants, tool-use flows | `/mcp` |
+| OpenAI-compatible | Reuse existing LLM clients | `/v1/chat/completions` |
+
+## Built-in Synap AI
+
+- Works in channels and branches.
+- Can propose structured changes.
+- Supports proactive nudges/briefings.
+- Uses the same governance model as external agents.
+
+## External agents
+
+- OpenClaw and custom agents connect via API keys.
+- Scope-limited access per key.
+- No silent writes outside allowed policy paths.
+
+## Governance
+
+- AI writes pass permission checks.
+- Non-auto-approved operations create proposals.
+- Full audit trail remains in event history.
+
+## Related pages
+
+- [Integrations overview](/docs/integrate/integrations/overview)
+- [API keys](/docs/integrate/integrations/api-keys)
+- [Build agents](/docs/integrate/development/ai/building-agents)
+- [Team intelligence docs](/team/intelligence)

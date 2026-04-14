@@ -1,0 +1,330 @@
+---
+title: "Chat Core Extraction"
+description: "Plan to extract chat into @synap-core/chat-core package."
+---
+
+# @synap-core/chat-core extraction plan
+
+Unify Synap's chat hooks / stores across Browser (Electron), the web app,
+and Relay mobile into a single platform-agnostic package. This document
+captures the audit findings and the 1-2 hour execution path so the next
+session can ship it without re-exploring.
+
+**Date:** 2026-04-12.
+**Scope:** hooks + stores + types + client adapter. NOT UI components —
+`@synap-core/chat-interface` already handles that via separate `/native`
+and `/web` entry points.
+
+---
+
+## Why this is needed
+
+Today Relay has a **fully local** chat implementation (`src/hooks/useAIChat.ts`)
+that duplicates concepts already solved in `@synap-core/channels` and
+`@synap-core/ai-chat`:
+
+- Message lifecycle (loading, pending, sent, error)
+- Optimistic send + rollback
+- Channel selection + drafts
+- Streaming message state
+- AI "steps" rendering
+
+Every time a bug is fixed in the web app's chat flow, Relay drifts
+further from it. The only reason Relay forked is that the shared hooks
+have two blockers on React Native:
+
+1. **`typeof window !== 'undefined'` guard in `ai-chat/stores/streamingStore.ts:169`.**
+   Web-only cleanup interval. Silently doesn't run on RN → stale
+   streaming entries accumulate. Needs to be replaced with a React
+   lifecycle hook that can be explicitly mounted once per app.
+
+2. **Hardcoded tRPC singleton in `@synap-core/channels` hooks.**
+   They call into a module-level `trpc` instance that assumes the web
+   app's `TRPCProvider` setup. Relay has its own `createSynapClient()`
+   factory that produces per-session clients — the hooks can't import
+   a global.
+
+Both blockers are small. Fixing them unlocks ~400 lines of shared logic.
+
+---
+
+## Package layout
+
+```
+synap-app/packages/core/chat-core/
+├── package.json                     ← @synap-core/chat-core, source-only
+├── tsconfig.json
+├── README.md
+└── src/
+    ├── index.ts                     ← barrel
+    ├── types.ts                     ← Message, Channel, Branch, AIStep, StreamingState
+    ├── client/
+    │   └── ChatClientProvider.tsx   ← React Context accepting a tRPC client instance
+    ├── stores/
+    │   ├── channelStore.ts          ← Zustand — active channel, filter, drafts
+    │   ├── chatUIStore.ts           ← Zustand — composer open/closed, pending sends
+    │   └── streamingStore.ts        ← Zustand — streaming message state (RN-safe)
+    └── hooks/
+        ├── useChannel.ts            ← fetches a channel by id
+        ├── useMessages.ts           ← fetches message list with pagination
+        ├── useSendMessage.ts        ← optimistic send + mutation
+        ├── useBranches.ts           ← branch navigation
+        ├── useStreamingMessage.ts   ← SSE/socket subscription wrapper
+        └── useAISteps.ts            ← AI multi-step rendering state
+```
+
+**Naming:** `chat-core` (not `chat-primitives` or `chat-logic`) to match
+the pattern established by `capture-pipeline`, `view-renderer`, etc.
+
+**Dependencies:**
+- `react` (peer)
+- `zustand` (peer)
+- `@tanstack/react-query` (peer)
+- `@synap-core/types` (workspace)
+- NO `react-dom`, NO `next/*`, NO `window` refs
+
+---
+
+## The two blockers + their fixes
+
+### Blocker 1: streamingStore window guard
+
+**Current (`ai-chat/src/stores/streamingStore.ts:169`):**
+
+```ts
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    useStreamingStore.getState().gcStaleStreams();
+  }, 5 * 60 * 1000);
+}
+```
+
+**Problem:** Runs only on web. Relay never GCs stale entries → memory
+leak during long sessions + stale "still streaming" flags.
+
+**Fix:** Delete the bare `setInterval`. Export a `useStreamingStoreGC()`
+hook that mounts the interval via `useEffect` + `clearInterval` cleanup.
+Mount it once in `AppFreshness` alongside `useAppStateRefetch` and
+`useChangesPolling`. Web and RN both get the GC cycle without touching
+module-level state.
+
+```ts
+// chat-core/src/stores/streamingStore.ts
+export function useStreamingStoreGC(): void {
+  useEffect(() => {
+    const id = setInterval(
+      () => useStreamingStore.getState().gcStaleStreams(),
+      5 * 60 * 1000,
+    );
+    return () => clearInterval(id);
+  }, []);
+}
+```
+
+### Blocker 2: tRPC singleton dependency
+
+**Current (`channels/src/hooks/useMessages.ts`):**
+
+```ts
+import { trpc } from '@synap/client';           // hardcoded singleton
+
+export function useMessages(channelId: string) {
+  return trpc.messages.list.useQuery({ channelId });
+}
+```
+
+**Problem:** Relay creates its own client per session via
+`createSynapClient({podUrl, sessionToken, workspaceId})`. The singleton
+binding doesn't exist — the call would fail at runtime.
+
+**Fix:** Introduce a `ChatClientProvider` React context. Hooks read the
+client from context instead of importing a module-level singleton.
+
+```tsx
+// chat-core/src/client/ChatClientProvider.tsx
+import { createContext, useContext } from 'react';
+
+interface ChatClient {
+  messages: {
+    list: (input: { channelId: string }) => Promise<Message[]>;
+    send: (input: SendMessageInput) => Promise<Message>;
+  };
+  channels: { /* ... */ };
+  chat: { /* ... */ };
+}
+
+const ChatClientContext = createContext<ChatClient | null>(null);
+
+export function ChatClientProvider({
+  client,
+  children,
+}: {
+  client: ChatClient;
+  children: React.ReactNode;
+}) {
+  return (
+    <ChatClientContext.Provider value={client}>
+      {children}
+    </ChatClientContext.Provider>
+  );
+}
+
+export function useChatClient(): ChatClient {
+  const client = useContext(ChatClientContext);
+  if (!client) {
+    throw new Error(
+      'useChatClient must be used within a ChatClientProvider',
+    );
+  }
+  return client;
+}
+```
+
+Then each hook:
+
+```tsx
+// chat-core/src/hooks/useMessages.ts
+import { useQuery } from '@tanstack/react-query';
+import { useChatClient } from '../client/ChatClientProvider';
+
+export function useMessages(channelId: string) {
+  const client = useChatClient();
+  return useQuery({
+    queryKey: ['chat-messages', channelId],
+    queryFn: () => client.messages.list({ channelId }),
+  });
+}
+```
+
+**Adapter shape:** `ChatClient` is a structural interface. Relay
+constructs an adapter wrapping its own tRPC client; the web app passes a
+thin object pointing at its singleton. Either side can swap
+implementation (SSE, WebSocket, mock) without touching the hooks.
+
+---
+
+## Execution order (1-2 hours total)
+
+### Step 1 — Scaffold the package (15 min)
+1. `mkdir synap-app/packages/core/chat-core/src/{client,stores,hooks}`
+2. Write `package.json` matching the `capture-pipeline` pattern
+3. `tsconfig.json` copied from `capture-pipeline`
+4. Add to root `pnpm-workspace.yaml`
+5. Empty `src/index.ts`
+
+### Step 2 — Copy shared types (15 min)
+1. Copy `Message`, `Channel`, `Branch`, `AIStep`, `StreamingState` from
+   the existing `@synap-core/channels` types file into
+   `chat-core/src/types.ts`
+2. Re-export from `src/index.ts`
+3. Mark the originals in `channels` as `@deprecated` re-exports that
+   point at `chat-core` — no breaking changes to the web app yet
+
+### Step 3 — Move the stores (20 min)
+1. Copy `channelStore.ts` from `channels`
+2. Copy `chatUIStore.ts` from `ai-chat`
+3. Copy `streamingStore.ts` from `ai-chat`, **remove the `setInterval`
+   block**, add the `useStreamingStoreGC()` hook export
+4. All three stores are pure Zustand — no imports that would fail on RN
+
+### Step 4 — Build `ChatClientProvider` (15 min)
+1. Define the structural `ChatClient` interface based on which tRPC
+   methods the hooks actually call (expect: `messages.list`,
+   `messages.send`, `channels.get`, `chat.stream`, maybe `branches.list`)
+2. Write the context + hook
+3. Unit test: render a `ChatClientProvider` with a mock client, verify
+   `useChatClient` returns it
+
+### Step 5 — Port the hooks (25 min)
+1. Copy `useMessages`, `useChannel`, `useSendMessage`, `useBranches`
+   from `channels` into `chat-core/src/hooks/`
+2. Replace every `import { trpc }` with `const client = useChatClient()`
+3. Copy `useStreamingMessage`, `useAISteps` from `ai-chat`
+4. Verify no `window` / `document` refs remain
+
+### Step 6 — Wire Relay (15 min)
+1. `relay-app/package.json` → add `@synap-core/chat-core: workspace:*`
+2. Create `relay-app/src/lib/chatClientAdapter.ts` wrapping the Relay
+   tRPC client to match `ChatClient` interface
+3. Mount `<ChatClientProvider client={adapter}>` inside `SynapProvider`
+4. Mount `useStreamingStoreGC()` in `AppFreshness` alongside the other
+   freshness hooks
+5. Rewrite `relay-app/src/hooks/useAIChat.ts` as a thin wrapper around
+   the shared `useMessages` + `useSendMessage` (or delete it entirely
+   and update consumers)
+6. Keep Relay's SSE streaming path for now — adapter implements
+   `messages.stream` via the existing SSE. The web app can keep its
+   socket path. The hooks don't care.
+
+### Step 7 — Wire the web app (15 min)
+1. `synap-app/packages/features/ai-chat` and
+   `synap-app/packages/apps/chat` → swap imports from
+   `@synap-core/channels` / `@synap-core/ai-chat` to
+   `@synap-core/chat-core`
+2. Construct a `ChatClientProvider` adapter wrapping the existing
+   singleton client
+3. Typecheck both web app + Browser
+4. Run the existing chat tests
+
+### Step 8 — Deprecate the originals (10 min)
+1. `@synap-core/channels` hooks folder: replace file contents with
+   one-line re-exports from `@synap-core/chat-core` + `@deprecated`
+   JSDoc
+2. Same for `@synap-core/ai-chat` hooks
+3. Leave stores alone — they'll be deleted in a follow-up once every
+   consumer is on `chat-core`
+4. Update `MEMORY.md` with the new package
+
+**Total:** ~2 hours including verification.
+
+---
+
+## What this unlocks
+
+1. **Relay catches up to the web app's chat polish for free.** Every fix
+   we've ever shipped to `useMessages` / `useSendMessage` on web
+   immediately applies on mobile.
+
+2. **Streaming responses in Relay become tractable.** Today Relay's
+   `useAIChat` is SSE-based and custom. The shared `useStreamingMessage`
+   hook already handles token-by-token updates, error recovery, and
+   cancellation.
+
+3. **Chat becomes a strong candidate for Layer 3 real-time** (from
+   `NATIVE-OS-UX-PLAN.md`). Once the hook layer is shared, we can add
+   a socket-backed adapter variant that replaces the polling path for
+   the chat screen only — no global socket, no battery drain.
+
+4. **Third-party apps** (future Synap Expo apps, AI-assisted dev tools,
+   the OpenClaw integration) can import `chat-core` directly and get a
+   working chat surface without rebuilding anything.
+
+---
+
+## Not in scope for this extraction
+
+- **UI components.** `@synap-core/chat-interface/{native,web}` stays as
+  is. Relay already uses the `/native` exports; the web app uses
+  `/web`. Nothing changes there.
+- **Real-time socket transport.** That's Layer 3 in
+  `NATIVE-OS-UX-PLAN.md`. Do it as a follow-up against the shared
+  hooks, not as part of this extraction.
+- **Backend changes.** The pod's chat tRPC routes are already correct —
+  Relay and the web app call the same endpoints, they just use
+  different client constructors today.
+- **Deleting the old packages.** `@synap-core/channels` and
+  `@synap-core/ai-chat` keep their stores for now. Full deletion
+  happens in a cleanup pass once every consumer migrates.
+
+---
+
+## References
+
+- Audit source: agent run 2026-04-12 (in-session)
+- Companion docs:
+  - `docs-internal/NATIVE-OS-UX-PLAN.md` — Layer 3 real-time plan for chat
+  - `docs-internal/NATIVE-OS-DEFERRED.md` — what else is deferred
+  - `synap-app/packages/core/chat-interface/` — UI component package (stays)
+  - `synap-app/packages/core/channels/` — source of hooks to extract
+  - `synap-app/packages/features/ai-chat/` — source of ai-specific hooks
+  - `relay-app/src/hooks/useAIChat.ts` — what to replace

@@ -1,0 +1,90 @@
+---
+title: "Monitor: Agents"
+description: "Agent monitoring dashboard — what data is shown and why."
+---
+
+# Agent System
+
+The intelligence hub has **6 production agent types**, each with a specialized system prompt and curated tool set. All agents inherit core capabilities from `BaseAgent`.
+
+## Agent Types
+
+| Agent | Key | Best For |
+|-------|-----|----------|
+| **General** | `default` | Everyday tasks — search, create, delegate |
+| **Meta Orchestrator** | `meta` | Complex multi-part goals requiring specialists |
+| **Knowledge Search** | `knowledge-search` | Deep research across the entity graph |
+| **Code** | `code` | Code generation, analysis, and debugging |
+| **Writing** | `writing` | Documents, content, and editing |
+| **Action** | `action` | Bulk CRUD operations on knowledge graph data |
+
+## Execution Pipeline
+
+Every agent turn follows the same pipeline, implemented in `base/agent.ts`:
+
+```
+1. Assemble Context  (8s timeout — never blocks the user)
+   ├── Thread messages  (3s abort)
+   ├── Memory recall    (semantic top-10)
+   ├── Linked entities & documents
+   ├── Conversation summary  (cached in DB, refreshed after 6 exchanges)
+   └── Personality fingerprint  (cached 6h, extracted from last 8 assistant msgs)
+
+2. Build System Prompt
+   ├── Base agent prompt
+   ├── ## Your Communication Style  (personality fingerprint)
+   ├── ## Conversation History Summary
+   ├── ## Active Context  (linked entities/docs)
+   └── ## Long-Term Memory  (relevant recalled facts)
+
+3. Agentic Loop  (max 10 steps via generateText())
+   ├── LLM reasons and selects a tool
+   ├── context tools  → auto-execute → result returned to LLM
+   ├── action tools   → return proposal (requires your approval)
+   └── Loop until: no more tool calls OR max steps reached
+
+4. Extract Proposals
+   └── Filter AISteps for { proposed: true }
+
+5. Stream Response
+   └── SSE events: step → content → proposal → complete
+```
+
+## Multi-Agent Dispatch
+
+The `dispatch_agent` tool spawns **child threads** for parallel specialist work:
+
+```
+Parent thread (meta agent)
+├── Child thread A (knowledge-search) → research results
+├── Child thread B (code) → generated code snippet
+└── Child thread C (writing) → draft document
+         ↓ all results posted back to parent thread
+         ↓ meta agent synthesizes and returns final response
+```
+
+## Context Assembly
+
+Context assembly runs concurrently with an 8-second hard cap via `Promise.race()`. This ensures context enrichment never blocks the main agent even if the backend is slow.
+
+Each sub-operation has its own abort signal:
+- Thread message fetch: `AbortController` with 3s signal
+- Memory recall: included in the 8s window
+- Personality fingerprint: fire-and-forget after first response
+- Summary update: async, uses the cached result in the current turn
+
+## Streaming Events
+
+```javascript
+{ type: "step",     data: { title, content, status } }  // Thinking / tool call
+{ type: "content",  data: "partial response chunk..." }  // Text tokens
+{ type: "proposal", data: { id, toolName, description, args } }  // Action proposed
+{ type: "complete", data: { content, aiSteps, proposedActions } }  // Done
+```
+
+## Adding a New Agent
+
+1. Create `agents/&lt;type>-agent.ts` extending `BaseAgent`
+2. Override `buildSystemPrompt()` with the specialized prompt
+3. Add the type to `AgentType` in `agents/base/agent-registry.ts`
+4. Register tool allocation in `tool-registry.ts` → `getToolsForAgent()`

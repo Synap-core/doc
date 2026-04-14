@@ -1,0 +1,59 @@
+---
+title: "Internal API"
+description: "IS internal REST API — all endpoints, auth, request/response shapes."
+---
+
+# Intelligence Hub Environment Variables
+
+## Intelligence Service (.env)
+
+```bash
+# Internal API Key (for control plane communication)
+# Generate with: openssl rand -base64 32
+INTELLIGENCE_HUB_INTERNAL_KEY=your-internal-key-here
+
+# Server Configuration
+INTELLIGENCE_HUB_PORT=3001
+INTELLIGENCE_HUB_HOST=0.0.0.0
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/intelligence_hub
+
+# Your existing variables...
+```
+
+## Control Plane (.env)
+
+```bash
+# Intelligence Hub Configuration
+INTELLIGENCE_HUB_URL=http://localhost:3001
+INTELLIGENCE_HUB_INTERNAL_KEY=your-internal-key-here
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/control_plane
+
+# Your existing variables...
+```
+
+## Important Notes
+
+1. **INTELLIGENCE_HUB_INTERNAL_KEY** must be the SAME in both services
+2. Generate a strong key using: `openssl rand -base64 32`
+3. Never commit this key to version control
+4. Use different keys for staging/production
+5. Rotate keys regularly for security
+
+## Example Generation Script
+
+```bash
+#!/bin/bash
+# generate-internal-key.sh
+
+echo "Generating internal API key..."
+KEY=$(openssl rand -base64 32)
+echo ""
+echo "Add this to both .env files:"
+echo "INTELLIGENCE_HUB_INTERNAL_KEY=$KEY"
+echo ""
+echo "  Save this key securely - you'll need it in both services"
+```

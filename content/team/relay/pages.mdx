@@ -1,0 +1,475 @@
+---
+title: "Pages"
+description: "Relay screen inventory and navigation structure."
+---
+
+# Relay — Page Specifications
+
+Each page described with layout, components, states, and interactions.
+
+---
+
+## 1. Feed (Home)
+
+**Purpose:** Primary view. Living stream of network activity.
+
+### Layout
+```
+┌──────────────────────────────────┐
+│  [Relay logo]    [Search] [FAB+] │  ← Header
+├──────────────────────────────────┤
+│  ┌─ Highlights (AI-pinned) ───┐  │
+│  │ "ETHGlobal Cannes in 5d —  │  │
+│  │  7 contacts attending"     │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ┌─ Feed Card ────────────────┐  │
+│  │ [Avatar] Name · 2h ago     │  │
+│  │ "Discussed tokenomics..."  │  │
+│  │ [Telegram badge] [Topics]  │  │
+│  │ [Open] [Pin] [Archive]     │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ┌─ Feed Card ────────────────┐  │
+│  │ [+] New encounter          │  │
+│  │ "3 msgs with @alice in     │  │
+│  │  ETHGlobal group"          │  │
+│  │ [Add to contacts] [Ignore] │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ... (infinite scroll)           │
+├──────────────────────────────────┤
+│  [Feed] [People] [Events] [Q]   │  ← Tab bar
+└──────────────────────────────────┘
+```
+
+### Feed Card Types
+
+**Conversation card**
+- Avatar + person name + timestamp
+- AI summary of conversation (1-2 lines)
+- Source badge (Telegram/LinkedIn/Phone/Manual)
+- Topic pills
+- Tap → Person Detail, focused on this interaction
+
+**Social signal card**
+- Avatar + person name
+- Activity description ("posted about X on LinkedIn")
+- Preview snippet if available
+- Tap → Person Detail
+
+**New encounter card**
+- "New person detected" badge
+- Name/handle + where detected (group name)
+- Message count + timespan
+- Actions: [Add to contacts] [Ignore]
+
+**Reconnection nudge card**
+- Person avatar + "You haven't talked to X in Y months"
+- Reason: "They just posted about needing a CTO"
+- Actions: [Message] [Remind later] [Dismiss]
+
+**Cluster alert card**
+- Topic/theme icon
+- "N people in your network are working on [topic]"
+- Person avatars row
+- Tap → filtered People view
+
+**Event context card**
+- Calendar icon + event name + days until
+- "N people in your network attending"
+- Person avatars row
+- Actions: [View prep briefing] [See attendees]
+
+### States
+- **Empty:** First-time user, no data yet → "Connect Telegram to start building your network" CTA
+- **Loading:** Skeleton cards
+- **Populated:** Scrolling feed
+- **Filtered:** Active filter chips shown above feed
+
+### Filters
+- Chip bar below header: All | Conversations | Signals | Encounters | Nudges | Events
+- Long press chip → sub-filter (by person, source, topic)
+
+---
+
+## 2. People (Network)
+
+**Purpose:** Browse and explore all persons in your graph.
+
+### Layout — Grid Mode (default)
+```
+┌──────────────────────────────────┐
+│  People (247)  [Grid|List|Graph] │
+│  [Filter ▾]  [Sort ▾]  [Search] │
+├──────────────────────────────────┤
+│  ┌─────┐  ┌─────┐  ┌─────┐     │
+│  │Photo│  │Photo│  │Photo│      │
+│  │Name │  │Name │  │Name │      │
+│  │Role │  │Role │  │Role │      │
+│  │Tags │  │Tags │  │Tags │      │
+│  │2d   │  │1w   │  │3mo  │      │
+│  └─────┘  └─────┘  └─────┘     │
+│                                  │
+│  ┌─────┐  ┌─────┐  ┌─────┐     │
+│  │     │  │     │  │     │      │
+│  └─────┘  └─────┘  └─────┘     │
+│                                  │
+│  ... (infinite scroll grid)      │
+├──────────────────────────────────┤
+│  [Feed] [People] [Events] [Q]   │
+└──────────────────────────────────┘
+```
+
+### Person Card (Grid)
+- Photo (circle, 64px)
+- Name (bold, 1 line)
+- Role @ Organization (muted, 1 line)
+- Top 2-3 tag pills (skills/topics)
+- Last interaction: relative time + source icon
+- Strength indicator: subtle color ring around photo (green=strong, amber=fading, gray=cold)
+
+### Layout — List Mode
+- Compact rows: [Photo 32px] [Name] [Role] [Tags] [Last seen] [Strength dot]
+- Sortable columns: Name, Last interaction, Strength, Organization
+
+### Layout — Graph Mode
+- Full-screen force-directed graph
+- Nodes: person photos (circle), sized by interaction count
+- Edges: thickness = interaction frequency, opacity = recency
+- Clusters auto-detected by community
+- Tap node → Person Detail in bottom sheet (mobile) or side panel (desktop)
+- Pinch to zoom, pan to navigate
+- Legend: node size = interaction count, edge thickness = frequency
+- Filter panel overlays on top
+
+### Filter Panel
+- **Source:** Telegram, LinkedIn, Phone, Manual, All
+- **Skills/Tags:** Multi-select from extracted tags
+- **Events:** "Met at [event]"
+- **Recency:** Last 7d / 30d / 90d / All
+- **Organization:** Company filter
+- **Strength:** Strong / Warm / Cold
+- **AI Query:** Free text → "Who knows Solidity in Paris?"
+
+### States
+- **Empty:** "No contacts yet" → Connect Telegram CTA
+- **Searching:** Results update as you type
+- **Filtered:** Active filter count badge, clear all button
+- **Graph loading:** Progressive node rendering (show 20, then expand)
+
+---
+
+## 3. Person Detail
+
+**Purpose:** Everything about one person.
+
+### Layout (Mobile)
+```
+┌──────────────────────────────────┐
+│  [←]              [Edit] [···]   │
+├──────────────────────────────────┤
+│          [Large Photo]           │
+│        Jean-Baptiste Martin      │
+│     CTO @ LexDAO · Paris         │
+│                                  │
+│  [@telegram] [in] [] []     │  ← Identity links
+│                                  │
+│  "Solidity expert, building      │
+│   compliance tooling for DAOs,   │
+│   met at ETHGlobal Prague"       │  ← AI one-liner
+│                                  │
+│  [Solidity] [DeFi] [Compliance]  │  ← Tags
+│                                  │
+│  [Message ▾]  [Add note]  [···]  │  ← Quick actions
+├──────────────────────────────────┤
+│  [Timeline]  [Intel]  [Notes]    │  ← Tab bar
+├──────────────────────────────────┤
+│                                  │
+│  Timeline tab content:           │
+│                                  │
+│  ── March 2026 ──                │
+│  ┌─ Interaction ──────────────┐  │
+│  │  Telegram · Mar 15       │  │
+│  │ Discussed compliance regs   │  │
+│  │ for French crypto market    │  │
+│  │ [Expand full conversation]  │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ┌─ Event ────────────────────┐  │
+│  │  ETHGlobal Prague · Mar 8│  │
+│  │ Met at the DeFi track.     │  │
+│  │ Exchanged contacts.        │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  Intel tab content:              │
+│  ┌─ Current Focus ────────────┐  │
+│  │ • Building DAO compliance   │  │
+│  │ • Exploring zkProofs        │  │
+│  │ • Hiring senior Rust dev    │  │
+│  └────────────────────────────┘  │
+│  ┌─ You Could Help With ──────┐  │
+│  │ "You know 3 Rust devs —    │  │
+│  │  consider intro to Alex"   │  │
+│  └────────────────────────────┘  │
+│  ┌─ Mutual Connections ───────┐  │
+│  │ [Avatar] Samir · The Signal│  │
+│  │ [Avatar] Marie · LexDAO    │  │
+│  └────────────────────────────┘  │
+│                                  │
+└──────────────────────────────────┘
+```
+
+### Identity Section
+- Photo: largest available across sources (Telegram > LinkedIn > generated avatar)
+- Name: merged best quality
+- Identity links: tappable icons for each connected channel (opens in native app)
+- AI one-liner: auto-generated, editable
+- Tags: auto-extracted + manually added, tappable for filter
+
+### Timeline Tab
+- Chronological interactions, grouped by month
+- Each entry: source icon, date, AI summary
+- Expandable: shows full conversation or raw data
+- Entry types: Telegram message session, LinkedIn interaction, call, event attendance, manual note
+- AI period summaries between months: "In Q1 2026, you discussed X and Y across N conversations"
+
+### Intelligence Tab
+- **Current focus areas** — AI-inferred from recent activity + conversations
+- **Shared interests** — Overlap between their topics and yours
+- **You could help** / **They could help** — AI suggestions based on graph
+- **Mutual connections** — People you both know (from graph)
+- **Reconnection reason** — If applicable, why to reach out now
+- **Strength meter** — Visual indicator with breakdown (frequency, recency, depth)
+
+### Notes Tab
+- Manual notes, freeform
+- Each note timestamped
+- Rich text (markdown)
+- AI can suggest notes from conversations ("add follow-up: discuss compliance at next call?")
+
+### Actions Menu (···)
+- Edit person
+- Merge with another person
+- View in graph (switches to People graph view, centered on this person)
+- Share contact
+- Archive / Delete
+
+---
+
+## 4. Events
+
+**Purpose:** Event-centric view of your network.
+
+### Layout
+```
+┌──────────────────────────────────┐
+│  Events       [Upcoming | Past]  │
+├──────────────────────────────────┤
+│                                  │
+│  ── Upcoming ──                  │
+│  ┌─ Event Card ───────────────┐  │
+│  │ ETHGlobal Cannes            │  │
+│  │ Jun 15-17 · Cannes, FR      │  │
+│  │ 7 contacts attending        │  │
+│  │ [+3]                │  │
+│  │ [Prep Briefing]  [Details]  │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ── Past ──                      │
+│  ┌─ Event Card ───────────────┐  │
+│  │ ETHGlobal Prague            │  │
+│  │ Mar 8-10 · Prague, CZ       │  │
+│  │ 12 people met               │  │
+│  │ 3 follow-ups pending        │  │
+│  │ [Recap]  [People met]       │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  [+ Add event]                   │
+├──────────────────────────────────┤
+│  [Feed] [People] [Events] [Q]   │
+└──────────────────────────────────┘
+```
+
+### Event Detail (tap into event)
+```
+┌──────────────────────────────────┐
+│  [←] ETHGlobal Cannes           │
+├──────────────────────────────────┤
+│  Jun 15-17, 2026 · Cannes, FR   │
+│  [Calendar link] [Website]       │
+│                                  │
+│  ── Your Network There (7) ──   │
+│  [Person cards grid — people     │
+│   you know who are attending]    │
+│                                  │
+│  ── Suggested Connections (3) ── │
+│  [Person card + "2nd degree via  │
+│   Samir, works on DeFi infra"]   │
+│                                  │
+│  ── Conversation Starters ──    │
+│  "Ask Jean about compliance      │
+│   update — he posted last week"  │
+│                                  │
+│  [Generate full prep briefing]   │
+└──────────────────────────────────┘
+```
+
+### Prep Briefing (AI-generated)
+- Full-screen document/card
+- Sections: Who you know, Who to meet, Topics in common, Conversation starters, Follow-ups from previous events
+- Shareable / exportable
+- Generated on-demand via Intelligence Service
+
+### States
+- **No events:** "Add your first event or connect Google Calendar"
+- **Upcoming empty:** "No upcoming events — add one manually or sync calendar"
+- **Past with pending follow-ups:** Badge count on past events
+
+---
+
+## 5. Explore / Query
+
+**Purpose:** Natural language search across the relationship graph.
+
+### Layout
+```
+┌──────────────────────────────────┐
+│  Explore                         │
+├──────────────────────────────────┤
+│  ┌────────────────────────────┐  │
+│  │ Ask anything about your     │  │
+│  │ network...                  │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ── Suggested Queries ──        │
+│  [Who knows Solidity in Paris?]  │
+│  [People I met last month]       │
+│  [Who should I reconnect with?]  │
+│  [Strongest connections]         │
+│                                  │
+│  ── After query ──              │
+│  ┌─ Result Card ──────────────┐  │
+│  │ [Photo] Jean-Baptiste       │  │
+│  │ "Matches because: Solidity  │  │
+│  │  expert, based in Paris,    │  │
+│  │  active in DeFi compliance" │  │
+│  │ Relevance: ████████░░ 85%   │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ┌─ Result Card ──────────────┐  │
+│  │ [Photo] Alice              │  │
+│  │ "Matches because: ..."     │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  ── AI Insight ──               │
+│  "3 of these people are in the   │
+│   same Telegram group — consider │
+│   a group introduction"          │
+├──────────────────────────────────┤
+│  [Feed] [People] [Events] [Q]   │
+└──────────────────────────────────┘
+```
+
+### Query Processing
+1. User types natural language query
+2. AI parses intent → graph traversal + filters
+3. Results ranked by relevance
+4. Each result has: person card + explanation of why they match
+5. Optional AI insight at bottom (pattern detection across results)
+
+### Suggested Queries
+- Context-aware: if you have an upcoming event, suggests event-related queries
+- Recency-aware: "Who haven't you talked to recently?"
+- Based on your recent activity: "People related to [topic you just discussed]"
+
+---
+
+## 6. Quick Capture (Overlay)
+
+**Purpose:** Fast, always-accessible input for capturing encounters and interactions.
+
+### Trigger
+- **Mobile:** Floating Action Button (bottom center, above tab bar)
+- **Desktop:** Navbar button (+ icon)
+
+### Layout (Bottom Sheet on Mobile)
+```
+┌──────────────────────────────────┐
+│  ─── (drag handle) ───          │
+│                                  │
+│  Quick Capture                   │
+│                                  │
+│  ┌────────────────────────────┐  │
+│  │ I just met Sarah at        │  │
+│  │ ETHGlobal, she builds      │  │
+│  │ compliance tools at LexDAO │  │
+│  │ and knows Solidity...      │  │
+│  └────────────────────────────┘  │
+│                                  │
+│  [🎤 Voice]  [ Card]  [Send]  │
+│                                  │
+│  ── AI Preview (live) ──        │
+│  Detected:                       │
+│   Sarah (new person)           │
+│   ETHGlobal (existing event)   │
+│   LexDAO (new org)             │
+│   Solidity (skill)             │
+│   Sarah → met_at → ETHGlobal   │
+│   Sarah → affiliated → LexDAO  │
+│   Sarah → has_skill → Solidity │
+│                                  │
+│  [Confirm & Save]                │
+└──────────────────────────────────┘
+```
+
+### Behavior
+1. User types or dictates (voice → transcription)
+2. AI processes in real-time, shows extraction preview
+3. User can edit/correct extractions before confirming
+4. On confirm: creates entities + relations + interaction record
+5. Sheet dismisses, feed updates with new entry
+6. Optional: business card scan (camera → OCR → AI structures)
+
+### Input Modes
+- **Text:** Default, free text
+- **Voice:** Hold mic button, release to process
+- **Card scan:** Camera opens, snap business card, OCR → structure
+
+---
+
+## 7. Onboarding
+
+**Purpose:** Get data into the system immediately. The "wow" moment.
+
+### Flow
+```
+1. Welcome → "Relay builds your relationship graph"
+2. Connect Telegram → OAuth / bot link
+   → Immediate: import contacts, scan group memberships
+   → Background: process message history
+3. Import Phone Contacts → Permission request (mobile) or Google Contacts OAuth
+   → Immediate: create Person entities, merge with Telegram matches
+4. LinkedIn (optional) → "Paste your connections export URL" or skip
+5. First capture → Guided quick capture: "Who did you meet recently?"
+6. Done → Feed with first results appearing in real-time
+```
+
+### Key Moments
+- After Telegram connect: show counter "Found 142 contacts, processing..."
+- After contacts merge: "Matched 37 phone contacts with Telegram users"
+- After first capture: "Created 3 new contacts from your note"
+- Feed populates progressively during onboarding — user sees value immediately
+
+---
+
+## 8. Settings
+
+**Purpose:** Connector management, privacy controls, preferences.
+
+### Sections
+- **Connected accounts:** Telegram, Google Contacts, LinkedIn, Google Calendar — status, last sync, disconnect
+- **Privacy:** Per-channel opt-in/out (exclude specific Telegram chats), exclude contacts by name/number
+- **AI preferences:** Nudge density (none/low/medium/high), briefing schedule
+- **Data:** Export all data (JSON), clear all data, account deletion
+- **About:** Version, pod info, Synap link

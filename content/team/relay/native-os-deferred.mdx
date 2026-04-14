@@ -1,0 +1,333 @@
+---
+title: "Native OS Deferred"
+description: "D1-D11 deferred items and Q1-Q5 open questions."
+---
+
+# Native OS — Deferred decisions & follow-up work
+
+Everything we **chose not to build now** during the initial native-os ship.
+Each item includes enough context to pick up instantly later.
+
+**Date:** 2026-04-12.
+**Related docs:** `NATIVE-OS-GUIDE.md`, `NATIVE-OS-UX-PLAN.md`.
+
+---
+
+## Core scoping principle (decided 2026-04-12)
+
+**For every OS-level integration — share, spotlight, widgets, intents,
+live updates — data is scoped to the USER, not to the current workspace.**
+
+Workspaces in Synap are *lenses* over the same underlying data pod, not
+isolation boundaries. When the user searches from iOS Spotlight, taps a
+widget, or triggers a Siri shortcut, the OS doesn't know or care which
+workspace they're "in" — the OS deals with the user and the data pod.
+
+**Implications:**
+
+- Spotlight indexes every entity the user has access to across all their
+  workspaces. One search, one namespace.
+- Widgets display user-wide data (latest captures, active tasks, etc.),
+  not "the current workspace's latest captures".
+- Share Extension captures land in the user's inbox / default space, not
+  "the currently-active workspace". Routing-to-workspace happens later
+  via the user's in-app navigation or AI routing.
+- App Intents resolve parameters against user-wide entities. "Hey Siri,
+  open the Alice note" finds Alice regardless of which workspace she's in.
+
+**What this means for code:**
+
+- Hooks like `useSpotlightSync` consume user-wide entity lists, not
+  `useFeed({ workspaceId })` outputs.
+- The capture pipeline's default destination is the user's personal
+  inbox / default space — it must exist and be resolvable without a
+  "current workspace" context.
+- Deep links like `relay://entity/:id` resolve by entity id alone, not by
+  `(workspaceId, entityId)` pair.
+
+This is the same principle that governs every other OS-level flow in
+Synap (OpenClaw, CLI, API, connectors): **the data pod is the
+authoritative boundary; workspaces are views on top of it**.
+
+---
+
+## Open questions we'll need to answer
+
+### Q1 — Vault exclusion UX for Spotlight / App Intents
+
+**Problem:** Some entities are private (vault profile, user-marked
+private notes). These must NOT appear in OS-level search, widget data,
+or intent results.
+
+**Options:**
+- (a) Global switch in settings: "Include vault entities in system
+  search" → default off.
+- (b) Per-profile flag: each profile has a `searchable: boolean` column.
+  Profiles that default to vault (e.g. `credential`, `secret`) opt out.
+- (c) Per-entity override on top of (b): user can hide any individual
+  entity.
+
+**Recommendation on hold:** Start with (a) + hardcoded profile exclusion
+list (`secret`, `credential`, anything with `PropertyValueType.SECRET`
+properties). Add (b) + (c) when users ask.
+
+**Blockers:** None. Just a decision.
+
+---
+
+### Q2 — Entity id → kind resolver for Spotlight / Widget taps
+
+**Problem:** iOS Core Spotlight only hands us the entity id when the
+user taps a result. Same for widget buttons that deep-link to specific
+entities. But our routes are kind-specific (`/note/:id`, `/person/:id`,
+...) so we need to know the kind to route.
+
+**Options:**
+- (a) **Prefix the id** — index items with `uniqueIdentifier =
+  '${kind}:${id}'` so we can parse it back. Minimal code, but the id
+  isn't a valid UUID from the user's perspective and some Spotlight
+  features (e.g. handoff to the backend) expect raw ids.
+- (b) **Shared-storage id→kind map** — maintain a map in shared storage,
+  updated on every feed mutation. ~50KB RAM per 1000 entities, fast
+  lookup, no migration.
+- (c) **Generic resolver route** — create `app/entity/[id].tsx` that
+  reads the kind from the in-app store and redirects to the
+  kind-specific screen. One redirect hop on every tap (&lt;50ms).
+
+**Recommendation on hold:** (c) is cleanest, keeps ids stable, no new
+storage. We pay one redirect hop which is invisible. Implemented in the
+**Phase 1 ship** below — see implementation notes.
+
+---
+
+### Q3 — Intent receipt toasts
+
+**Problem:** When a Siri intent fires and Relay isn't open, the user
+gets a Siri confirmation but no visual feedback inside Relay. Should we
+show a toast on next foreground?
+
+**Options:**
+- Always show → toast fatigue for power users.
+- First 3 times only → user learns the flow, then silent.
+- Never show → user may not realize intents are working.
+
+**Recommendation on hold:** "First 3 times, then silent, toggleable in
+settings." Counter lives in shared storage.
+
+**Blocker:** No intent target ships yet, so no toasts yet. Revisit in
+Sprint 3.
+
+---
+
+### Q4 — Siri voice capture vs Relay's own voice flow
+
+**Problem:** When the user says "Hey Siri, new Relay note about …", two
+possible paths:
+
+- (a) **Siri-native transcription** — Siri hands us the already-transcribed
+  text. Low latency, no AI structuring preview, user can't edit the
+  transcript before it's committed.
+- (b) **Relay voice flow** — App Intent opens Relay's own voice capture
+  modal. Higher latency but full preview + AI structuring UX.
+
+**Recommendation on hold:** (a) for the Siri path (low friction is the
+whole point) + (b) as a "refine" button in the intent receipt toast so
+the user can tap once to edit before the note solidifies.
+
+**Blocker:** No Siri target ships yet. Revisit in Sprint 3.
+
+---
+
+### Q5 — Widget refresh cadence
+
+**Problem:** iOS widgets can't pull data — they reload on a timeline
+budget the OS decides. Today's Captures widget needs sub-second refresh
+after a new capture. This requires the main app to call
+`WidgetCenter.reloadAllTimelines()` on every feed mutation.
+
+**Options:**
+- Call reload on every mutation → may hit the OS rate limit.
+- Batch reloads (debounced 500ms) → acceptable latency.
+- Only reload on app foreground → stale while app is open but fresh
+  when user comes back.
+
+**Recommendation on hold:** Debounced 500ms batch + foreground reload.
+Tracks the same pattern we used for voice transcription updates.
+
+**Blocker:** No widget target with reload bridge yet. Revisit when the
+iOS widget target ships.
+
+---
+
+## Deferred implementation work
+
+### D1 — Android widgets (Glance)
+
+**Status:** Not built. Pending full iOS widget target shipping first so
+we have a proven pattern to port. Android Glance widgets need a custom
+Expo config plugin + Kotlin provider classes — ~3 days.
+
+**Where it goes when built:** `native-os-widgets/android/` +
+`relay-app/android/app/src/main/java/.../widgets/`.
+
+---
+
+### D2 — Android AppSearch bridge
+
+**Status:** Not built. Pending Spotlight iOS validation. Custom Kotlin
+module — ~3 days. No Expo plugin exists; Android has no equivalent to
+`react-native-spotlight-search`.
+
+**Where it goes when built:** `native-os-spotlight/android/` +
+`native-os-spotlight/plugin/` + `relay-app/android/...`.
+
+---
+
+### D3 — iOS App Intents target
+
+**Status:** Scaffold only (`native-os-intents` TS facade + shared-storage
+queue). Needs Swift `RelayIntents` target with `AppEntity` + `AppIntent`
+conformances. ~3 days.
+
+**Where it goes when built:** `native-os-intents/ios/` + `@bacons/apple-targets`
+config.
+
+---
+
+### D4 — Android App Actions
+
+**Status:** Not started. Needs `shortcuts.xml` + per-intent Activity
+classes + Expo config plugin to inject them. ~2 days.
+
+**Where it goes when built:** `native-os-intents/android/` +
+`native-os-intents/plugin/`.
+
+---
+
+### D5 — iOS Live Activity (Dynamic Island)
+
+**Status:** Stub in `native-os-live-updates/src/index.ts`. Android MVP
+works via Notifee. iOS needs a Swift `RelayActivity` target via
+`expo-live-activity` or `@bacons/apple-targets`. ~3 days.
+
+**Where it goes when built:** `native-os-live-updates/ios/`.
+
+---
+
+### D6 — Custom iOS Share Extension sheet
+
+**Status:** MVP uses `expo-share-intent` default sheet. Power upgrade:
+swap to `expo-share-extension` for a custom SwiftUI sheet with in-sheet
+space picker + AI tag preview. ~3 days.
+
+**Where it goes when built:** Upgrade `native-os-share` package
+implementation — consumer code unchanged.
+
+---
+
+### D7 — Vision live overlay
+
+**Status:** Still-image OCR works via MVP. Live-overlay (tap-to-select
+text regions in camera view) is a Sprint 3 upgrade. iOS uses
+`DataScannerViewController`, Android needs `react-native-vision-camera`
++ frame processor. ~4 days.
+
+**Where it goes when built:** Extend `native-os-vision/src/index.ts`
+with a `scanTextLive()` variant + new `app/scanner.tsx` route.
+
+---
+
+### D8 — Share file payload support in capture pipeline
+
+**Status:** Share Extension shipped end-to-end for text/URL in Phase 1
+(see below). File payloads (images, PDFs) surface through the facade but
+`@synap-core/capture-pipeline` doesn't yet accept file inputs from the
+share path. Needs a ~2 day extension to thread file URIs through the
+existing attachment upload flow.
+
+**Where it goes when built:** `@synap-core/capture-pipeline` +
+`relay-app/src/providers/NativeOSBridge.tsx` file branch.
+
+---
+
+### D9 — App Group entitlement + true cross-process shared storage
+
+**Status:** `native-os-shared-storage` uses an AsyncStorage mirror as
+the MVP — works for main-app data but won't survive the jump to a
+separate extension process (widgets, share extension). Upgrade to iOS
+App Group UserDefaults + Android SharedPreferences via a proper Expo
+native module when the first extension target ships. ~1 day.
+
+**Where it goes when built:** `native-os-shared-storage/ios/` +
+`native-os-shared-storage/android/` + Apple Dev Portal App Group
+config in `app.json`.
+
+---
+
+### D10 — Intent receipt toasts
+
+See Q3. No code yet. ~0.5 day when intent targets land.
+
+---
+
+### D11 — Settings "OS integrations" panel
+
+**Status:** Not built. Gives the user a single place to see what's
+working and what isn't (availability per capability + toggles for
+Spotlight vault exclusion, intent donation, etc.). ~1 day.
+
+**Where it goes when built:** `relay-app/app/(tabs)/settings.tsx` — new
+section at the bottom of the settings screen.
+
+---
+
+## Phase 1 — What ships now (2026-04-12)
+
+Scope explicitly limited to items that are cheap and unblock the
+largest UX wins. Everything else above is deferred with enough context
+to pick up later.
+
+### P1.1 — Share Extension end-to-end
+
+- [ ] Install `expo-share-intent` peer in relay-app
+- [ ] Register the config plugin in `app.json`
+- [ ] Source attribution badge in `CaptureModal` reading the `source`
+      query param from the deep link
+- [ ] File payload handling limited to image shares (text in the
+      capture field as "[Image: filename]")
+- [ ] User-scope verification — captures land in the user's default
+      space regardless of current workspace
+
+### P1.2 — Spotlight iOS (user-scoped)
+
+- [ ] Install `react-native-spotlight-search` peer
+- [ ] New generic `app/entity/[id].tsx` resolver route
+- [ ] `useSpotlightSync` wired in `NativeOSBridge` against user-wide
+      entity set (NOT workspace-scoped)
+- [ ] Vault exclusion: hardcoded profile list (`secret`, `credential`,
+      any profile with `entityScope === 'vault'`)
+- [ ] id→kind map written to shared storage on every feed mutation
+      (used by the resolver route)
+
+### P1.3 — iOS Quick Capture widget scaffold
+
+- [ ] `@bacons/apple-targets` config plugin added to `app.json`
+- [ ] `RelayWidgets` Swift target scaffold — single Quick Capture
+      widget that deep-links to `relay://capture`
+- [ ] App Group entitlement (blocks on user's Apple Dev Portal access)
+- [ ] Shared-storage upgrade to App Group UserDefaults (D9)
+
+Everything in D1-D11 stays deferred.
+
+---
+
+## How to pick this back up
+
+1. Read this file + `NATIVE-OS-GUIDE.md` + `NATIVE-OS-UX-PLAN.md`.
+2. Check `git log synap-app/packages/core/native-os*` for the latest
+   state of each package.
+3. Pick a deferred item (D1-D11) or answer an open question (Q1-Q5).
+4. Each deferred item has a "where it goes when built" line — start
+   there. The TS contracts in `native-os/src/types.ts` don't need to
+   change for any of the deferred work; only native code + peer
+   library installs.

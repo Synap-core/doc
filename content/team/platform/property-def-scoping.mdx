@@ -1,0 +1,262 @@
+---
+title: "Property Def Scoping"
+description: "Three-layer property scope: global, profile-base, workspace-overlay."
+---
+
+# Property Definition Scoping
+
+**Status:** Phase 2 shipped in migration `0065_property_defs_workspace_scope.sql`.
+**Audience:** backend engineers, schema debuggers, anyone wondering "why doesn't my workspace see this property?"
+
+## The problem Phase 2 solved
+
+Before Phase 2, property definitions had exactly two scopes:
+
+1. **Global** (`profile_id IS NULL`) — visible to every profile, every workspace.
+2. **Profile-scoped** (`profile_id SET`) — owned by one profile, still visible to every workspace that uses that profile.
+
+That worked fine for workspace-owned profiles (Relay's own `campaign`, PKM's own `highlight`) because the profile row itself carries a `workspace_id` — no extra scoping needed.
+
+It broke the moment a workspace wanted to **extend a profile it didn't own**: add `investmentThesis` to the pod-wide `person`, or `contentIdeas` to the pod-wide `note`. The property def would be created with `profile_id = person`, but no workspace context, so every other workspace rendering `person` would also see `investmentThesis` — leaking schema across tenants.
+
+Worse: slug collisions were global. Two workspaces both wanting to add `notesCount` to `person` would crash on the second insert. Even within a single template, defining `format` on three profiles (`content-piece`, `hook`, `script`) would fail until migration `0064` split slugs by profile.
+
+Phase 2 adds a third dimension — **workspace** — so the same profile can carry different property sets depending on which workspace is looking.
+
+## The mental model
+
+```
+                               ┌──────────────────────┐
+                               │  property_defs       │
+                               │  ───────────────     │
+profile_id = NULL              │  slug                │
+workspace_id = NULL      ─────►│  profile_id (NULL/…) │◄─────  "scope matrix"
+                               │  workspace_id (NULL/…)│
+                               └──────────────────────┘
+
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │                  scope matrix — exhaustive                          │
+   ├─────────────────┬─────────────────┬─────────────────────────────────┤
+   │ profile_id      │ workspace_id    │ meaning                         │
+   ├─────────────────┼─────────────────┼─────────────────────────────────┤
+   │ NULL            │ NULL            │ global/system def               │
+   │                 │                 │ (any profile, any workspace)    │
+   ├─────────────────┼─────────────────┼─────────────────────────────────┤
+   │ SET             │ NULL            │ profile-base def                │
+   │                 │                 │ (this profile, every workspace) │
+   ├─────────────────┼─────────────────┼─────────────────────────────────┤
+   │ SET             │ SET             │ workspace overlay def           │
+   │                 │                 │ (this profile, this workspace)  │
+   ├─────────────────┼─────────────────┼─────────────────────────────────┤
+   │ NULL            │ SET             │ ❌ invalid — normalized to NULL │
+   │                 │                 │ by PropertyDefRepository.create │
+   └─────────────────┴─────────────────┴─────────────────────────────────┘
+```
+
+**Rendering rule (single source of truth):** when a workspace W reads property defs for profile P, it gets:
+
+- All "global" defs (`profile_id IS NULL AND workspace_id IS NULL`), plus
+- All "base" defs for P (`profile_id = P AND workspace_id IS NULL`), plus
+- All W's own overlays (`profile_id = P AND workspace_id = W`)
+
+It does **not** see any other workspace's overlays.
+
+Implemented at SQL level in `PropertyDefRepository.getManyByIds(ids, workspaceId)` and `listForProfiles(ids, workspaceId)` — overlays for foreign workspaces are filtered before rows reach the service layer.
+
+## Schema
+
+```sql
+property_defs(
+  id              uuid  PK
+  slug            text
+  profile_id      uuid  → profiles(id)     NULL
+  workspace_id    uuid  → workspaces(id)   NULL   -- added in 0065
+  value_type      text
+  constraints     jsonb
+  ui_hints        jsonb
+  …
+)
+```
+
+Uniqueness is enforced by **three mutually-exclusive partial unique indexes** (migration 0065):
+
+```sql
+-- 1. Globals
+CREATE UNIQUE INDEX property_defs_global_slug_uniq
+  ON property_defs (slug)
+  WHERE profile_id IS NULL AND workspace_id IS NULL;
+
+-- 2. Profile-base
+CREATE UNIQUE INDEX property_defs_profile_base_slug_uniq
+  ON property_defs (slug, profile_id)
+  WHERE profile_id IS NOT NULL AND workspace_id IS NULL;
+
+-- 3. Workspace overlay
+CREATE UNIQUE INDEX property_defs_workspace_overlay_slug_uniq
+  ON property_defs (slug, profile_id, workspace_id)
+  WHERE profile_id IS NOT NULL AND workspace_id IS NOT NULL;
+```
+
+And a lookup index for the hot read path:
+
+```sql
+CREATE INDEX property_defs_profile_workspace_idx
+  ON property_defs (profile_id, workspace_id)
+  WHERE profile_id IS NOT NULL;
+```
+
+## Write path — how defs get tagged
+
+### During workspace provisioning (`create-workspace-from-definition.ts`)
+
+When provisioning a workspace from a template:
+
+- If the profile is **newly created by this workspace** (e.g. Relay creating `campaign`), its property defs are written with `workspace_id = NULL`. The profile row itself carries the scope via `profiles.workspace_id`, so the defs don't need to double it up.
+- If the profile is **reused from the pod** (e.g. the system `person` profile), any extra properties in the template are written with `workspace_id = <this workspace>` — they become overlays.
+
+The detection hinges on `profileIsReused`:
+
+```ts
+const overlayWorkspaceId = profileIsReused ? workspaceId : null;
+await propDefRepo.create({ ...prop, profileId, workspaceId: overlayWorkspaceId });
+```
+
+### During user-initiated schema changes
+
+The `property-defs.create` tRPC procedure currently creates "base" defs (no workspace context). This is intentionally conservative — letting arbitrary users create overlays would require richer UX. If/when we expose "add a field just for this space", thread `ctx.workspaceId` into the create call.
+
+## Read path — how defs get filtered
+
+All reads go through `ProfileResolutionService.getEffectiveProperties(profileId, workspaceId?)`. That's the single source of truth.
+
+Internal flow:
+1. Walk the profile hierarchy (parent → child).
+2. Fetch all `profile_properties` link rows for the hierarchy.
+3. Batch-fetch `property_defs` by ID, **filtered by workspace at SQL level**.
+4. Merge in inheritance order; child overrides parent on `required` / `defaultValue` / `displayOrder`.
+
+The workspace filter is applied in step 3 inside `PropertyDefRepository.getManyByIds`. Any def the workspace can't see is simply absent from the map, so step 4 skips it naturally.
+
+**Callers that already thread workspace context:**
+
+| Caller | Where | What |
+|---|---|---|
+| `profiles.get` | API router | ctx.workspaceId |
+| `profiles.getEffectiveProperties` | API router | ctx.workspaceId |
+| `profile-properties.getEffectiveProperties` | API router | ctx.workspaceId |
+| `entities.get` (with `includeProfile`) | API router | ctx.workspaceId |
+| `entities.update` → validateProperties / reindexEntity | API router → repo | ctx.workspaceId |
+| `entities.create` → validateProperties / indexEntityProperties | repo | data.workspaceId (from caller) |
+| Views filter compilation | `views.query` / `views.getDefaultColumns` | ctx.workspaceId → PropertyMergingService |
+
+**Callers that pass `null` / omit** (intentional — either pod-wide read or admin path):
+
+- `create-workspace-from-definition.ts` when listing existing slugs on a reused profile: passes the workspace being created so we only skip slugs in *our* lens.
+- `propertyDefsRouter.list` (admin listing all accessible defs — passes no workspace filter, but profile-level access control still applies).
+
+## Performance notes
+
+- **Read path cost is unchanged.** `getEffectiveProperties` still does 3 flat queries (hierarchy, profile-properties, property-defs). The workspace filter is a `WHERE workspace_id IS NULL OR workspace_id = $1` added to the `getManyByIds` query — it uses the new `(profile_id, workspace_id)` composite index for O(log n) lookups per profile.
+- **Write path cost is unchanged.** Creating a def still does one insert. The new partial unique indexes are only consulted on conflict.
+- **No N+1 regressions.** All workspace filtering is done in the same queries, not per-row.
+
+## Debug queries
+
+Paste these directly into any SQL client pointed at the pod DB.
+
+### 1. Show every def on a profile, grouped by scope
+
+```sql
+SELECT
+  pd.slug,
+  CASE
+    WHEN pd.profile_id IS NULL    AND pd.workspace_id IS NULL THEN 'global'
+    WHEN pd.profile_id IS NOT NULL AND pd.workspace_id IS NULL THEN 'profile-base'
+    ELSE                                                            'overlay'
+  END AS scope,
+  pd.workspace_id,
+  w.name AS workspace_name
+FROM property_defs pd
+LEFT JOIN workspaces w ON w.id = pd.workspace_id
+WHERE pd.profile_id = (SELECT id FROM profiles WHERE slug = 'person' LIMIT 1)
+ORDER BY pd.workspace_id NULLS FIRST, pd.slug;
+```
+
+### 2. "What will workspace X see on profile Y?"
+
+```sql
+SELECT pd.slug, pd.value_type, pd.workspace_id IS NOT NULL AS is_overlay
+FROM property_defs pd
+WHERE pd.profile_id = :profile_id
+  AND (pd.workspace_id IS NULL OR pd.workspace_id = :workspace_id)
+ORDER BY pd.slug;
+```
+
+### 3. Find orphan overlays (workspace deleted but defs survived)
+
+Shouldn't happen — `ON DELETE CASCADE` on the foreign key prevents it — but a sanity check after manual migrations:
+
+```sql
+SELECT pd.id, pd.slug, pd.workspace_id
+FROM property_defs pd
+LEFT JOIN workspaces w ON w.id = pd.workspace_id
+WHERE pd.workspace_id IS NOT NULL AND w.id IS NULL;
+```
+
+### 4. Slug collisions before running the migration
+
+(Use this on pods that still have the legacy unique constraint, before upgrading.)
+
+```sql
+SELECT slug, COUNT(*) AS n, array_agg(profile_id) AS profiles
+FROM property_defs
+GROUP BY slug
+HAVING COUNT(*) > 1;
+```
+
+## Common pitfalls
+
+1. **"I added a field in my workspace and another workspace doesn't see it — bug?"**
+   Not a bug. Overlays are intentional isolation. If both workspaces should see it, it belongs as a profile-base (workspace_id = null).
+
+2. **"My template fails at `profiles[X].properties[slug]` with a query error."**
+   First check: is migration `0064` + `0065` applied on the target pod? Run `SELECT indexname FROM pg_indexes WHERE tablename = 'property_defs'` — you should see `property_defs_global_slug_uniq`, `property_defs_profile_base_slug_uniq`, and `property_defs_workspace_overlay_slug_uniq`.
+
+3. **"I wrote a property and it silently dropped."**
+   `validateProperties` filters through the workspace lens. If you wrote to an overlay key that belongs to a different workspace, it's treated as "unknown property" — allowed, stored in the JSONB bag, but not validated or indexed. Check `entity_property_index` to confirm whether the write landed on the index.
+
+4. **"I need to list every def regardless of workspace for debugging."**
+   Call `PropertyDefRepository.list()` (unfiltered) or `getManyByIds(ids)` without passing `workspaceId`. Admin-only paths should explicitly do this; user-facing reads should never.
+
+5. **"I'm migrating existing data — will defaults work?"**
+   Yes. The `ADD COLUMN IF NOT EXISTS workspace_id uuid` defaults to NULL. All pre-existing defs become "global" or "profile-base" depending on their `profile_id` state. No behavior change for pre-Phase-2 defs.
+
+## Known gaps
+
+Six issues were flagged during the Phase 2 audit. Four are now fixed (Phase 2 follow-up pass, 2026-04-10). Two remain as intentional design choices — documented here so future changes don't accidentally "fix" them without considering the trade-off.
+
+### 1. ~~`automation-executor.entity_update` bypasses the repository~~  FIXED
+Now routes through `EntityRepository.update({ workspaceId, properties, skipEvent: true })`. Validation, `entity_property_index` reindex, and the workspace lens all run. `skipEvent` prevents double-emission; the executor still emits its own automation-context event via `emitSideEffects()`.
+
+### 2. ~~`isPropertyIndexed` re-merges per filter compile~~  FIXED
+`ViewFilterCompiler` now builds a `PropertyFilterMeta` map (`{ propertyDefIds, indexed }`) once in `buildPropertyMetaMap` — `compileFilter` reads both fields from the pre-built map, no second merge. The old `isPropertyIndexed` and `resolvePropertyDefIds` helpers on `PropertyMergingService` were removed (they were thin wrappers around the merge that caused the double work).
+
+### 3. ~~`property-defs.get(slug)` nondeterministic with overlays~~  FIXED
+The tRPC `property-defs.get` endpoint now accepts `profileId` and `workspaceScope: 'any' | 'base' | 'current'` to target a specific scope deterministically. Default `'any'` preserves legacy behaviour for existing callers.
+
+### 4. ~~No user-facing path to create workspace overlays~~  FIXED (API layer)
+`property-defs.create` (tRPC) and Hub Protocol `createPropertyDef` + `POST /api/hub/property-defs` now accept an `overlay: boolean` flag. Pass `overlay: true` with a `profileId` to create a workspace-scoped overlay field instead of a base def. The UI side is still pending — a "Add field just for this space" toggle in ProfileEditor would complete the user-facing path.
+
+### 5. `profile_properties` has no `workspace_id` column — INTENTIONAL
+The junction table storing (profile, property_def) links has no workspace dimension — the filter lives entirely on `property_defs.workspace_id`. Every read joins through `property_defs` to apply the filter; you can't shortcut the join.
+
+**Why we keep it this way:** adding `workspace_id` to both tables would be redundant. The property def already carries the authoritative scope, and joining to it on every read is cheap with the composite `(profile_id, workspace_id)` index. Duplicating the column would create two sources of truth that could drift.
+
+### 6. Silent overlay drop on write — INTENTIONAL
+`validateProperties` filters through the workspace lens, so writing to a key that belongs to another workspace's overlay is treated as "unknown property" — it's allowed through and stored in the JSONB bag, but not validated or indexed.
+
+**Why we keep it this way:** the alternative is to reject the write with an error message that reveals the existence of another workspace's schema field, which leaks tenant information. Silent acceptance keeps tenancy clean at the cost of debugging clarity. The pitfall is documented in pitfall #3 of this doc and there are debug queries to diagnose it.
+
+## Phase 3 (not shipped)
+
+The next layer — entity navigation UX across workspaces, lens badges, "open in other workspace" — is pure frontend and doesn't touch this schema. The primitives it needs (one entity, multiple lenses) are now in place.

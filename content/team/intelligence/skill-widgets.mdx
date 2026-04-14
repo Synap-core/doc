@@ -1,0 +1,159 @@
+---
+title: "Skill: Native Widgets"
+description: "AI widget creation and composition skill."
+---
+
+# Native Widget Creation
+
+When creating widgets with `rendererType: "native"` (the default), write a React component that uses Synap's UI system. The component is compiled server-side and loaded at runtime — it runs in the same React tree as the host app with full access to theme, data, and navigation.
+
+## Available Imports
+
+```tsx
+// UI Components (Tamagui-based — theme-aware, cross-platform)
+import {
+  YStack,
+  XStack,
+  Text,
+  Button,
+  Badge,
+  Card,
+  Input,
+  Separator,
+  ScrollView,
+} from "@synap-core/ui-system";
+
+// Cell Runtime — context and navigation
+import {
+  useCellContext,
+  useCellRuntime,
+  type CellProps,
+} from "@synap/cell-runtime";
+
+// Data Access — tRPC hooks with workspace scoping
+import { trpc } from "@synap/client";
+
+// Icons (Lucide)
+import {
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
+  BarChart3,
+} from "lucide-react";
+
+// State Management
+import { create } from "zustand";
+```
+
+## Component Pattern
+
+Every native widget must default-export a React function component:
+
+```tsx
+export default function MyWidget({ config }: CellProps) {
+  const ctx = useCellContext(); // workspaceId, entityId, displayMode
+  const runtime = useCellRuntime(); // navigate, openPanel, toast
+
+  // Fetch data via tRPC (auto-scoped to workspace via headers)
+  const { data, isLoading } = trpc.entities.list.useQuery({
+    profileSlug: (config?.profileSlug as string) ?? "task",
+  });
+
+  if (isLoading) return <Text color="$muted">Loading...</Text>;
+
+  return (
+    <YStack gap="$3" padding="$4" flex={1}>
+      <Text fontFamily="$heading" fontSize="$5">
+        My Widget
+      </Text>
+      {data?.entities?.map((item) => (
+        <XStack
+          key={item.id}
+          gap="$2"
+          alignItems="center"
+          hoverStyle={{ backgroundColor: "$backgroundHover" }}
+          padding="$2"
+          borderRadius="$2"
+          cursor="pointer"
+          onPress={() =>
+            runtime.openPanel?.("entity-detail", { entityId: item.id })
+          }
+        >
+          <Text color="$color">{item.name}</Text>
+        </XStack>
+      ))}
+    </YStack>
+  );
+}
+```
+
+## Optional: Export metadata alongside the component
+
+You can export additional registration metadata. If omitted, the tool's name/icon/category parameters are used instead.
+
+```tsx
+export const meta = {
+  name: "Task Summary",
+  icon: "check-square",
+  category: "productivity",
+  displayModes: ["compact", "medium", "full"],
+  defaultSize: { w: 4, h: 3 },
+};
+
+export const defaultProps = { profileSlug: "task" };
+```
+
+## Rules
+
+### Styling
+
+- Use theme tokens (`$primary`, `$color`, `$muted`, `$background`, `$borderColor`) — never hardcoded hex colors
+- Use space tokens (`$1` through `$12`) for padding, margin, gap — never raw pixel values
+- Use `fontFamily="$heading"` for titles, `"$body"` for content text
+- Use `borderRadius="$2"` (8px) for cards, `"$3"` (12px) for larger elements
+- NO shadows — use subtle borders (`borderWidth={1} borderColor="$borderColor"`) for depth
+- AI features use `$ai` / `$aiLight` tokens (emerald)
+
+### Interaction
+
+- Use `hoverStyle`/`pressStyle` props for hover and press states — never onMouseEnter/onMouseLeave
+- Use `pressStyle={{ opacity: 0.8 }}` or `pressStyle={{ scale: 0.98 }}` for press feedback
+- Call `runtime.openPanel?.('entity-detail', { entityId })` for navigation — never window.location
+- Call `runtime.toast?.('message', 'success')` for notifications
+
+### Data
+
+- Always use `trpc.*.useQuery()` for data fetching — never `fetch()` or `XMLHttpRequest`
+- Use `useCellContext()` to get `workspaceId`, `entityId`, `displayMode`
+- Handle loading states: show `<Text color="$muted">Loading...</Text>` or a spinner
+- Handle empty states: show a helpful message, not nothing
+
+### Component Structure
+
+- Do NOT import React explicitly — the JSX transform handles it
+- Do NOT use `useState` from a manual import — use `React.useState` if needed (React is available via jsx-runtime)
+- If you need React hooks, import them: `import { useState, useEffect, useMemo } from 'react'`
+- Keep the component self-contained — all logic in one file
+- Use `flex={1}` on the root container to fill available space
+
+### Common tRPC Queries
+
+```tsx
+// List entities by profile
+trpc.entities.list.useQuery({ profileSlug: "task" });
+
+// Get a single entity
+trpc.entities.get.useQuery({ id: entityId });
+
+// List views
+trpc.views.list.useQuery({});
+
+// Search
+trpc.search.search.useQuery({ query: "search term" });
+```
+
+## When to Use Native vs Iframe
+
+- **Native** (default): Data displays, entity lists, stat cards, activity feeds, anything that needs theme integration or data access
+- **Iframe**: Quick HTML/CSS/JS prototypes, external embeds, widgets that intentionally need isolation

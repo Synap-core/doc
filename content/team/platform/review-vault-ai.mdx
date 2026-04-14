@@ -1,0 +1,211 @@
+---
+title: "Platform Review: Vault & AI"
+description: "Vault and AI integration review."
+---
+
+# 07 — Vault Integration for AI
+
+## Current State
+
+### Vault System — Production-Ready, Enterprise-Grade
+
+**Architecture:** Zero-knowledge encryption with two modes:
+- **Client-encrypted:** AES-256-GCM with user's master password. Plaintext never sent to server. AI cannot access these.
+- **Server-encrypted:** Backend VAULT_SERVER_KEY. Used for agent credentials, automation configs. AI can access via `vault://` refs.
+
+**What It Stores:**
+Passwords, API keys, credentials, notes, payment cards, identity info, SSH keys, certificates, environment variables, database connection strings, OAuth tokens.
+
+**Secret Types:** `password`, `api-key`, `credential`, `note`, `card`, `identity`, `ssh-key`, `certificate`, `env-variable`, `connection-string`, `oauth-token`
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| DB schema | `synap-backend/packages/database/src/schema/secrets-vault.ts` |
+| Repository | `synap-backend/packages/database/src/repositories/secrets-vault-repository.ts` |
+| tRPC router | `synap-backend/packages/api/src/routers/secrets-vault.ts` |
+| Vault resolver | `synap-backend/packages/api/src/utils/vault-resolver.ts` |
+| Frontend vault ref util | `synap-app/packages/core/property-renderer/src/utils/vaultRef.ts` |
+| Vault UI (Browser) | `browser/electron/renderer/src/components/views/VaultView/` |
+
+**Vault Resolver (for AI/automation):**
+```typescript
+// vault-resolver.ts resolves vault:// references in configs
+// Used by: automation execution, MCP server env injection, webhook configs
+//
+// Example: { GITHUB_TOKEN: "vault://secret-uuid" }
+// → Resolves to: { GITHUB_TOKEN: "ghp_actual_token_value" }
+//
+// Only resolves server-encrypted secrets (client-encrypted requires user password)
+```
+
+**Vault UI Features:**
+- Master password setup with strength indicator
+- Type-filtered sidebar (passwords, API keys, cards, notes)
+- Create/edit/delete/share secrets
+- Audit log viewer
+- Security stats (compromised count, weak passwords, old passwords)
+- Zero-knowledge encryption explainer
+
+### AI Access — Server-Encrypted Only
+
+Currently AI agents can access vault secrets indirectly:
+1. Automation configs reference `vault://secret-id`
+2. `vault-resolver.ts` resolves at execution time
+3. MCP server environment variables can use `vault://` refs
+4. Webhook output configs can use `vault://` refs
+
+**AI CANNOT:**
+- Browse the vault
+- Request access to a specific secret
+- Create vault entries
+- Ask the user to provide a credential
+
+## Limitations
+
+### 1. No AI → Vault Request Flow
+There's no way for AI to say "I need a GitHub API key" and have the user:
+1. See a notification/card saying "AI needs GitHub API key"
+2. Open vault or create a new secret
+3. Authorize AI to use it
+4. AI gets the `vault://` reference back
+
+### 2. No Dynamic Secret Resolution for Widgets
+Iframe widgets can't access vault secrets. If a widget needs an API key:
+- Widget can't call `vault://` refs
+- Host can't safely pass secrets to iframe (security risk)
+- No "widget secret" concept
+
+### 3. No Per-Secret AI Permissions
+All server-encrypted secrets are equally accessible to vault resolver. No way to:
+- Grant AI access to "GitHub token" but not "Stripe key"
+- Time-limit access (AI can use this key for 1 hour)
+- Scope access (AI can only use this key for read operations)
+
+### 4. No Secret Request Proposal
+`vault.read` and `vault.write` are NOT in `DEFAULT_AUTO_APPROVE`, meaning AI attempting vault access creates a generic proposal. But:
+- The proposal doesn't link to vault UI
+- No way for user to create-and-authorize in one flow
+- No "vault request" notification type (uses generic proposal)
+
+## Proposed Architecture
+
+### AI Secret Request Flow
+
+```
+AI Agent needs GitHub API key
+  → Calls request_secret tool:
+    { type: 'api-key', service: 'github', purpose: 'Check repository status' }
+  → Hub Protocol → checkPermissionOrPropose()
+  → Creates proposal of type 'vault.request'
+  → Notification sent to browser:
+
+  ┌──────────────────────────────────────────┐
+  │  AI Secret Request                     │
+  │                                          │
+  │ AI needs: GitHub API Key                 │
+  │ Purpose: Check repository status         │
+  │ Access: Read-only, expires in 1 hour     │
+  │                                          │
+  │ [Open Vault]  [Deny]  [Grant Existing]   │
+  └──────────────────────────────────────────┘
+
+  → User clicks "Open Vault":
+    - Vault opens with pre-filled secret type (api-key)
+    - User creates or selects existing secret
+    - Clicks "Authorize for AI"
+  → vault:// reference returned to AI
+  → AI proceeds with the secret
+```
+
+### Tool: `request_secret`
+
+```typescript
+{
+  name: 'request_secret',
+  description: 'Request access to a secret from the user\'s vault. Creates a proposal that the user must approve.',
+  parameters: {
+    secretType: { type: 'string', enum: ['api-key', 'credential', 'ssh-key', 'oauth-token', 'env-variable'] },
+    service: { type: 'string', description: 'Service name (e.g., "github", "openrouter")' },
+    purpose: { type: 'string', description: 'Why this secret is needed' },
+    accessLevel: { type: 'string', enum: ['read', 'write'], default: 'read' },
+    ttl: { type: 'number', description: 'Time-to-live in minutes (0 = session only)', default: 60 },
+  },
+}
+```
+
+### Per-Secret AI Access Control
+
+Add to secret metadata:
+
+```typescript
+interface SecretAIAccess {
+  allowed: boolean;           // AI can access this secret
+  agentTypes?: string[];      // Only these agent types (or all)
+  accessLevel: 'read' | 'write';
+  ttl?: number;               // Auto-revoke after N minutes
+  auditRequired: boolean;     // Log every access
+}
+```
+
+### Widget Secret Bridge
+
+For enhanced iframe widgets that need API access:
+
+```javascript
+// Widget requests a secret (goes through approval)
+const token = await SynapWidget.requestSecret({
+  type: 'api-key',
+  service: 'github',
+  purpose: 'Display repository stats'
+});
+
+// Host validates: widget has permission for this secret
+// Host resolves vault:// ref
+// Host passes the VALUE to widget via postMessage (one-time, not stored)
+```
+
+**Security:** Widget never sees the vault:// ref. Host resolves and passes the raw value. Value is not persisted in widget state.
+
+## Action Items
+
+### Phase 1: AI Secret Request Tool
+- [ ] Create `request_secret` tool in intelligence service
+- [ ] Hub Protocol endpoint for vault requests
+- [ ] Proposal type: `vault.request` with structured metadata
+- [ ] Return `vault://` ref to AI after user approval
+
+### Phase 2: Vault Request Notification Card
+- [ ] Create dedicated notification card for vault requests (see 05-notifications.md)
+- [ ] "Open Vault" action → opens vault with pre-filled secret type
+- [ ] "Grant Existing" action → shows matching secrets for quick selection
+- [ ] "Deny" action → rejects proposal, AI gets denial message
+
+### Phase 3: Per-Secret AI Permissions
+- [ ] Add `aiAccess` field to secret metadata
+- [ ] UI in vault: toggle "Allow AI access" per secret
+- [ ] TTL support: auto-revoke after time limit
+- [ ] Audit log: track every AI access to secrets
+
+### Phase 4: Widget Secret Bridge
+- [ ] Implement `SynapWidget.requestSecret()` in iframe SDK
+- [ ] Host-side resolution and permission check
+- [ ] One-time value passing (not stored in widget)
+- [ ] Rate limiting per widget per secret
+
+### Research Questions
+- [ ] How does 1Password handle API access to secrets?
+- [ ] How does HashiCorp Vault handle dynamic secrets and TTL?
+- [ ] How do browser password managers handle autofill requests?
+- [ ] Should server-encrypted secrets have separate ACLs per agent?
+- [ ] How to handle secret rotation? (secret changes → AI gets new value automatically)
+- [ ] Should there be a "sandbox vault" for testing? (AI plays with fake secrets)
+
+## Relationship to Other Features
+
+- **Terminal Bridge (04)** — Commands may need vault secrets as env vars
+- **Notifications (05)** — Vault request needs dedicated notification card
+- **AI Skills (06)** — Skills that access external APIs need vault flow
+- **Widget System (01)** — Enhanced widgets may need API keys
+- **Templates (03)** — DevOps template needs vault refs for service credentials

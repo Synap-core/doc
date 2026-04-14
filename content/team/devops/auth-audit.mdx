@@ -1,0 +1,183 @@
+---
+title: "Auth Consolidation Audit"
+description: "Auth system audit across all surfaces."
+---
+
+# Auth & Provisioning Consolidation Audit
+
+**Date:** 2026-04-07
+**Status:** All 3 phases IMPLEMENTED and shipped
+
+---
+
+## The Problem
+
+We have **25+ auth mechanisms** across CP and pods. Several do overlapping things with different security models. This creates confusion (as we just saw — the CLI tried `activate-addon` when `setup/agent` was the right call), maintenance burden, and potential security gaps.
+
+---
+
+## The 6 Auth Patterns (Grouped)
+
+### Pattern 1: CP-Signed JWTs (ES256)
+**The good stuff.** Asymmetric crypto, JWKS distribution, short-lived, podId-bound.
+
+| JWT Type | TTL | Used For | Used By |
+|----------|-----|----------|---------|
+| `provision` | 10m | Pod setup, tier update, credential management | 7+ provisioning jobs |
+| `tier_update` | 5m | Lightweight tier push | `pushTierToPods()` |
+| `handshake` | 5m | Browser → Pod session | Browser, Relay |
+| `addon_activate` | 30m | OpenClaw addon setup | `openclaw-provision.ts` |
+| `archive`/`restore`/`update` | 10m | Pod agent commands | Pod lifecycle jobs |
+
+**Verdict:** Solid. Keep as-is. This is the right security model.
+
+### Pattern 2: PROVISIONING_TOKEN (Shared Secret)
+**The self-hosted escape hatch.** Plain text in `.env`, compared directly.
+
+| Where | What | Stored |
+|-------|------|--------|
+| Pod `.env` | Auth for `/api/hub/setup/agent` | Plain text on pod |
+| CP `provisioning_tokens` table | Same token, stored in CP DB | Plain text in DB |
+
+**Verdict:** Necessary for self-hosted (no CP). But the CP storing it too creates a second path that bypasses JWT verification. We just used this as a workaround because `activate-addon` didn't work.
+
+### Pattern 3: Hub Protocol API Keys (Scoped, Hashed)
+**The long-lived service credentials.** Bcrypt hashed, scoped, rate-limited.
+
+| Key Type | Created By | Scopes | Used By |
+|----------|-----------|--------|---------|
+| Hub API Key | `/api/hub/setup/agent` or `apiKeys.create` tRPC | `hub-protocol.read/write` | OpenClaw, external agents |
+| Intelligence API Key | `provision-pod.ts` job | Pod-wide | IS → Pod communication |
+| Pod API Key | CP stores, pod uses | CP relay operations | `hub-key.ts` calls |
+
+**Verdict:** Too many key types doing similar things. `intelligenceApiKey`, `podApiKey`, and `hubApiKey` are three names for what should be one concept: "a scoped API key for service-to-pod communication."
+
+### Pattern 4: Session Tokens (Better Auth)
+**User authentication.** Cookie + Bearer fallback.
+
+| Mechanism | Used By | Storage |
+|-----------|---------|---------|
+| Cookie session | Browser → CP | Better Auth sessions table |
+| Bearer session token | CLI → CP | Same sessions table, exposed via callback |
+
+**Verdict:** Clean. The Bearer fallback we added for the CLI is correct.
+
+### Pattern 5: Internal Shared Secrets
+**Service-to-service auth.** Plain text env vars.
+
+| Secret | Who → Who | Purpose |
+|--------|-----------|---------|
+| `INTELLIGENCE_HUB_INTERNAL_KEY` | IS → CP | Usage reporting, entitlement checks |
+| `CP_WEBHOOK_SECRET` | IS → CP | Webhook auth |
+
+**Verdict:** Fine for internal services. Should eventually become mTLS or JWT-based, but not urgent.
+
+### Pattern 6: Anonymous Tokens
+**Free-tier access.** UUID tokens with token budgets.
+
+| Mechanism | Purpose |
+|-----------|---------|
+| Anonymous session token | Unauthenticated AI access (15K token budget) |
+
+**Verdict:** Clean, separate concern.
+
+---
+
+## What's Wrong
+
+### 1. Three Ways to Create Agent Credentials on a Pod
+
+| Method | Auth | Endpoint | Works For |
+|--------|------|----------|-----------|
+| A: PROVISIONING_TOKEN | Shared secret | `/api/hub/setup/agent` | Self-hosted |
+| B: CP JWT (addon_activate) | ES256 JWT | `/api/provision/activate-addon` | Only pods with `registeredPodId` |
+| C: CP relay (new) | CP looks up PROVISIONING_TOKEN | CP → `/api/hub/setup/agent` | Managed pods via CLI |
+
+**This is a mess.** Method B failed for us because the pod didn't have `registeredPodId`. Method C works but is a workaround (CP uses the stored PROVISIONING_TOKEN to pretend to be a local setup script).
+
+**What it should be:** ONE endpoint on the pod that accepts EITHER:
+- A PROVISIONING_TOKEN (self-hosted, no CP)
+- OR a valid CP JWT (managed, CP-signed)
+
+### 2. Three Key Types That Are Really One
+
+- `intelligenceApiKey` — created during pod provisioning, stored encrypted in CP DB
+- `podApiKey` — referenced in CP code as the pod's key for Hub Protocol
+- `hubApiKey` — created by `/setup/agent` or `apiKeys.create`
+
+These are all "a scoped API key for a service to call Hub Protocol on the pod." The naming is confusing and leads to bugs.
+
+### 3. `activate-addon` vs `setup/agent` — Duplicate Endpoints
+
+Both create an agent user + API key on the pod. But:
+- `activate-addon` requires CP JWT + `registeredPodId` + specific addon flow
+- `setup/agent` requires PROVISIONING_TOKEN + is simpler
+
+They do the same thing with different auth. One should go.
+
+---
+
+## Recommended Consolidation
+
+### Phase 1: Unify Agent Setup (Now)
+
+Merge `setup/agent` to accept BOTH auth methods:
+
+```
+POST /api/hub/setup/agent
+Authorization: Bearer <PROVISIONING_TOKEN>  ← self-hosted
+  OR
+Authorization: Bearer <CP-JWT>             ← managed (verified via JWKS)
+```
+
+The endpoint tries JWT verification first (via JWKS). If valid, proceeds. If not, falls back to PROVISIONING_TOKEN comparison. One endpoint, two auth paths, same result.
+
+**Then deprecate `activate-addon` for agent setup.** Keep it only for the full OpenClaw provisioning flow (which does more than just create a key).
+
+### Phase 2: Unify Key Naming (Soon)
+
+Rename everywhere:
+- `intelligenceApiKey` → `podServiceKey` (or just `apiKey`)
+- `podApiKey` → same
+- `hubApiKey` → same
+
+One name. One concept. One table.
+
+### Phase 3: Remove PROVISIONING_TOKEN from CP DB (Later)
+
+Once `setup/agent` accepts CP JWTs, the CP doesn't need to store the PROVISIONING_TOKEN anymore. The JWT path is strictly better (short-lived, signed, auditable). The PROVISIONING_TOKEN stays only in the pod's `.env` for self-hosted users who don't have a CP.
+
+---
+
+## Files to Change
+
+### Phase 1 (unify setup/agent auth):
+
+| File | Change |
+|------|--------|
+| `synap-backend/.../hub-protocol-rest.ts` | Accept CP JWT OR PROVISIONING_TOKEN |
+| `synap-control-plane-api/.../pods.ts` | Change `setup-agent` to sign JWT instead of relay PROVISIONING_TOKEN |
+| `synap-backend/.../provision.ts` | Deprecate `activate-addon` for agent-only use cases |
+
+### Phase 2 (naming):
+
+| File | Change |
+|------|--------|
+| Multiple CP and backend files | Rename `intelligenceApiKey` → `podServiceKey` |
+| Documentation | Update all references |
+
+---
+
+## Security Assessment
+
+| Risk | Severity | Status |
+|------|----------|--------|
+| PROVISIONING_TOKEN in CP DB (plain text) | Medium | Stored unencrypted — should be encrypted or removed |
+| CP stores long-lived pod secrets | Medium | If CP DB is compromised, all pod tokens leak |
+| `activate-addon` bypasses when no `registeredPodId` | Low | We just relaxed this check — acceptable but document |
+| Multiple code paths for same operation | Medium | Bug magnet (as we just experienced) |
+| JWT TTLs are appropriate | Good | 5-10min for operations, 5min for handshake |
+| JWKS caching prevents CP dependency | Good | 24h cache, pods work without CP |
+| Bcrypt cost 12 for API keys | Good | Balance of security vs performance |
+
+**Overall:** The security primitives are solid (ES256, JWKS, bcrypt, scoped keys). The problem is architectural — too many paths doing the same thing, creating confusion and maintenance burden.

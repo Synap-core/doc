@@ -1,0 +1,10 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "start",
+    "integrate",
+    "contributing",
+    "cloud",
+    "architecture"
+  ]
+}

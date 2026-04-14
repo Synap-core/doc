@@ -1,0 +1,350 @@
+---
+title: "IS Contract"
+description: "CP ↔ IS contract: provisioning, entitlement, sync endpoints."
+---
+
+# IS Contract — Intelligence Service Capabilities Reference
+
+This document defines what the Synap backend requires from any connected Intelligence Service (IS), what the official `@synap/agent-sdk` provides out of the box, and what only the first-party `synap-agent-hub` implements internally. External IS builders use this as their definitive reference.
+
+---
+
+## Section 1 — The Universal Contract (All IS Must Implement)
+
+Every IS — first-party or third-party — must expose these endpoints:
+
+### Required Endpoints
+
+| Endpoint               | Method | Description                                    |
+| ---------------------- | ------ | ---------------------------------------------- |
+| `/api/chat/stream`     | POST   | Accept `AgentChatRequest`, stream SSE response |
+| `/api/specialisations` | GET    | Return `SpecialisationsResponse`               |
+| `/health`              | GET    | Return `{ ok: true }`                          |
+
+### `POST /api/chat/stream` — Request Shape
+
+```typescript
+interface AgentChatRequest {
+  threadId: string; // Channel/thread ID for this conversation
+  query: string; // Latest user message content
+  userId: string; // Authenticated user ID
+  workspaceId?: string; // Workspace context (omitted for personal channels)
+  agentUserId?: string; // Agent's user identity in the pod (for write permission)
+  agentType?: string; // Which agent type to activate (e.g. "meta", "cto", "research")
+  dataPodUrl?: string; // Base URL of the data pod — use with PodClient
+  dataPodApiKey?: string; // Bearer token for Hub Protocol requests
+  mcpServers?: Array<{
+    // User-configured MCP servers (IS must wire transport itself)
+    id: string;
+    name: string;
+    transport: "stdio" | "http";
+    command?: string;
+    args?: string[];
+    url?: string;
+  }>;
+}
+```
+
+### SSE Event Protocol
+
+The IS streams newline-delimited `data: &lt;json>\n\n` events. Required event types:
+
+| Event type        | When to emit                           | Required fields                                         |
+| ----------------- | -------------------------------------- | ------------------------------------------------------- |
+| `content`         | Each text chunk                        | `{ type: "content", content: string }`                  |
+| `step`            | AI tool call / result                  | `{ type: "step", step: AIStep }`                        |
+| `proposal`        | Write op needing user approval         | `{ type: "proposal", proposal: { ... } }`               |
+| `branch_decision` | Orchestrator auto-dispatches sub-agent | `{ type: "branch_decision", decision: BranchDecision }` |
+| `complete`        | End of turn                            | `{ type: "complete", ...CompletePayload }`              |
+| `error`           | Unrecoverable failure                  | `{ type: "error", error: string }`                      |
+
+#### `CompletePayload`
+
+```typescript
+interface CompletePayload {
+  content: string; // Final assistant message text
+  aiSteps?: AIStep[]; // All tool calls / results from this turn
+  proposedActions?: ProposedAction[]; // Actions queued for user approval (inline cards)
+  createdProposals?: Array<{
+    // DB proposals created (pending approval)
+    proposalId: string;
+    toolName: string;
+    description: string;
+  }>;
+  autoApprovedActions?: string[]; // Tool names auto-approved (no user action needed)
+  branchDecision?: BranchDecision | null;
+}
+```
+
+### `GET /api/specialisations` — Response Shape
+
+```typescript
+interface SpecialisationsResponse {
+  specialisations: Array<{
+    id: string; // Maps to agentType routing
+    label: string;
+    description?: string;
+    isDefault?: boolean;
+    capabilities?: string[]; // e.g. ["chat", "analysis", "code"]
+  }>;
+}
+```
+
+### `agentType` Routing Contract
+
+The backend passes `agentType` in every request. The IS is responsible for routing this to the correct internal agent/persona. An IS **must** handle any `agentType` it declares in specialisations. Unknown `agentType` values should fall back to the IS's default handler.
+
+### Hub Protocol Access
+
+`dataPodUrl` + `dataPodApiKey` arrive in every request. These are the IS's credentials for reading and writing workspace data. **All writes go through the Hub Protocol governance layer** — the backend enforces RBAC and may auto-create proposals for operations requiring user approval.
+
+---
+
+## Section 2 — What `@synap/agent-sdk` Provides
+
+Install: `pnpm add @synap/agent-sdk hono @hono/node-server`
+
+| Feature                                  | What you get                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| `createAgentServer()`                    | Hono server with `/api/chat/stream`, `/api/specialisations`, `/health` wired         |
+| `registerAgent()` / `tryRegisterAgent()` | Self-registration with a Synap pod on startup                                        |
+| `PodClient`                              | Typed Hub Protocol HTTP client (see below)                                           |
+| TypeScript types                         | `AgentChatRequest`, `AIStep`, `BranchDecision`, `SseSender`, `CompletePayload`, etc. |
+
+### `PodClient` Methods
+
+```typescript
+const pod = new PodClient(req.dataPodUrl!, req.dataPodApiKey!);
+
+// ── Messages ────────────────────────────────────────────────────────
+pod.getMessages(channelId, limit?)          // → PodMessage[]
+pod.postMessage({ channelId, content, role?, agentUserId?, metadata? }) // → { id }
+
+// ── Context ─────────────────────────────────────────────────────────
+pod.getContext({ channelId, userId, workspaceId? })
+// → { messages, linkedEntities, linkedDocuments, contextSummary? }
+
+// ── Search ──────────────────────────────────────────────────────────
+pod.searchEntities({ query, workspaceId, userId?, limit?, entityTypes? }) // → PodEntity[]
+
+// ── Entities ────────────────────────────────────────────────────────
+pod.getEntity(entityId)                     // → PodEntity | null
+pod.createEntity({ workspaceId, agentUserId, type, name, metadata?, ... })
+// → { id?, proposalId?, status }
+
+// ── Documents ───────────────────────────────────────────────────────
+pod.getDocument(documentId)                 // → { id, title, content? } | null
+
+// ── Memory ──────────────────────────────────────────────────────────
+pod.recallMemory({ query, userId, workspaceId?, limit? }) // → [{ content, confidence, createdAt }]
+pod.rememberFact({ content, userId, workspaceId?, confidence?, agentUserId? }) // → { id }
+
+// ── Branches ────────────────────────────────────────────────────────
+pod.getActiveBranches(threadId)             // → [{ channelId, branchPurpose, status }]
+pod.createBranch({ userId, parentChannelId, branchPurpose, agentType?, agentUserId?, reasoning? })
+// → { status: "proposed" | "created", channelId?, proposalId? }
+
+// ── User Skills ─────────────────────────────────────────────────────
+pod.getUserSkills(workspaceId)              // → [{ id, name, description, code }]
+
+// ── Health ──────────────────────────────────────────────────────────
+pod.healthCheck()                           // → boolean
+```
+
+**Read methods** return safe defaults (`null`, `[]`) on error — safe for context assembly.
+**Write methods** throw on failure — handle explicitly.
+
+---
+
+## Section 3 — What Only the First-Party Hub Provides
+
+Third-party IS builders must implement the following themselves **or** use the workarounds listed in Section 4.
+
+### 3.1 — Built-in Tool Library (45+ tools)
+
+The `synap-agent-hub` ships these tools. A third-party IS gets **none of them** — you implement whatever your agent needs.
+
+| Category  | Tools                                                                    |
+| --------- | ------------------------------------------------------------------------ |
+| Search    | `search_unified`, `vector_search`, `graph_traverse`, `search_people`     |
+| Entities  | `create_entity`, `update_entity`, `create_relationship`, `list_entities` |
+| Documents | `create_document`, `update_document`, `read_document`                    |
+| Views     | `create_view`, `arrange_workspace`, `update_view_config`                 |
+| Memory    | `remember_fact`, `recall_memory`                                         |
+| Branching | `create_branch`, `query_agent`, `dispatch_agent`                         |
+| Skills    | `call_skill`                                                             |
+| Profiles  | `update_profile`, `link_to_profile`                                      |
+| MCP proxy | Auto-generated `mcp_*` wrappers for user-configured MCP servers          |
+
+### 3.2 — System Skills (Prompt Convention Library)
+
+The hub loads 10 bundled markdown skill files at startup that teach the AI how to use Synap conventions. The most critical one for third-party IS builders is `inline-references.md`:
+
+**The `[[entity:ID:Name]]` inline reference convention:**
+
+AI messages in Synap can include inline entity references using the format `[[entity:UUID:Display Name]]`. These render as clickable chips in the frontend that open the entity in a side panel.
+
+If your IS does **not** include this convention in its system prompt, the AI will produce plain text entity mentions that don't link.
+
+**Minimal excerpt to add to your system prompt:**
+
+```
+When mentioning specific entities, people, documents, or views from the workspace,
+use the inline reference format: [[entity:UUID:Display Name]]
+
+Examples:
+- A person: [[entity:user-abc-123:Alice Johnson]]
+- A document: [[doc:doc-xyz-456:Q3 Report]]
+- A view: [[view:view-789:Pipeline Dashboard]]
+
+Always use the actual UUID from the workspace data, not a placeholder.
+Prefer inline references over plain text for any named workspace object.
+```
+
+Include this in your initial system prompt so the AI learns the convention.
+
+### 3.3 — Agent Registry and Multi-Persona Routing
+
+The hub maintains a registry of 15+ agent types (OrchestratorAgent, CTO, Marketing, PM, Sales, Research, etc.) each with its own tool category, persona prompt, and optional model/temperature overrides.
+
+A third-party IS has a single handler. You must implement your own routing if you support multiple `agentType` values.
+
+### 3.4 — Session-Scoped Memory + Compaction Engine
+
+The hub implements:
+
+- **Session manager**: tracks conversation sessions, auto-creates new ones per turn
+- **Compaction engine**: summarises old messages into a compact state when context exceeds budget
+- **Bootstrap assembler**: reconstructs context from compacted state + recent messages (5 blocks ≈ 3,000 tokens)
+
+A third-party IS calling `pod.getMessages()` gets **raw messages** — no compaction, no summary injection. You are responsible for your own context window management. For long conversations, implement a summarisation strategy or use `pod.getContext()` which returns the assembled context with any server-side summary applied.
+
+### 3.5 — MCP Server Transport
+
+The request includes `mcpServers[]` config but the IS must wire its own transport. The hub uses `StdioClientTransport` for `"stdio"` type and `StreamableHTTPClientTransport` for `"http"` type, with 30s TTL caching per workspace.
+
+A third-party IS must implement MCP transport itself using the `@modelcontextprotocol/sdk` package if it wants to support user-configured MCP tools.
+
+### 3.6 — User-Defined Skills
+
+Users can register JavaScript skills in their workspace (stored as entities in the DB). The hub loads these via `hubProtocol.skills.listSkills()` and injects them as `call_skill` invocations.
+
+Third-party IS can access user skills via `pod.getUserSkills(workspaceId)` and invoke them manually.
+
+### 3.7 — Langfuse Telemetry
+
+The hub sends every LLM call to Langfuse for tracing, token counting, and cost tracking. Third-party IS receives no telemetry integration — implement your own if needed.
+
+### 3.8 — Agent State Registry
+
+The hub reports per-agent activity status (idle/thinking/streaming) to the backend via the Hub Protocol `sessions` router. This powers the "agent is thinking" indicator in the frontend. Third-party IS does not send activity updates — the frontend will not show a thinking indicator for your IS.
+
+---
+
+## Section 4 — Limitations & Workarounds
+
+| Limitation                               | Workaround                                                                                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| No `getDocument()` in early SDK versions | Use `pod.getContext()` — includes linked docs in `linkedDocuments`. Alternatively use `pod.getDocument(documentId)` (added in SDK v0.3+)      |
+| No user skill access                     | Use `pod.getUserSkills(workspaceId)` (added in SDK v0.3+)                                                                                     |
+| No system skill injection                | Copy the `[[entity:ID:Name]]` convention from Section 3.2 into your system prompt                                                             |
+| No built-in `create_branch` tool         | Call `pod.createBranch()` directly in your handler; surface `proposalId` via `createdProposals` in complete event                             |
+| Proposal semantics on writes             | All write ops may return `{ status: "proposed" }`. Always check result status and include `createdProposals` in your `complete` event payload |
+| No session compaction                    | Use `pod.getContext()` for assembled context; implement own summarisation for very long threads                                               |
+| No activity indicator                    | Not currently addressable via SDK                                                                                                             |
+| No MCP transport                         | Use `@modelcontextprotocol/sdk` directly; request contains `mcpServers[]` config                                                              |
+
+---
+
+## Section 5 — Third-Party IS Quick-Start Checklist
+
+Follow these steps to build a fully functional third-party IS:
+
+### Step 1 — Bootstrap the server
+
+```bash
+pnpm add @synap/agent-sdk hono @hono/node-server
+```
+
+```typescript
+import { createAgentServer } from "@synap/agent-sdk/server";
+import { PodClient } from "@synap/agent-sdk/pod";
+
+const server = createAgentServer({
+  serviceId: "my-is",
+  apiKey: process.env.SYNAP_API_KEY!,
+  specialisations: [{ id: "default", label: "My IS", isDefault: true }],
+  async onChatStream(req, send) {
+    const pod = new PodClient(req.dataPodUrl!, req.dataPodApiKey!);
+    const context = await pod.getContext({
+      channelId: req.threadId,
+      userId: req.userId,
+    });
+    // ... your AI logic ...
+    await send.complete({ content: "Done", aiSteps: [], proposedActions: [] });
+  },
+});
+```
+
+### Step 2 — Register on startup
+
+```typescript
+import { tryRegisterAgent } from "@synap/agent-sdk/register";
+
+await tryRegisterAgent({
+  podUrl: process.env.POD_URL!,
+  podApiKey: process.env.POD_HUB_API_KEY!,
+  serviceId: "my-is",
+  name: "My IS",
+  webhookUrl: process.env.WEBHOOK_URL!,
+  apiKey: process.env.SYNAP_API_KEY!,
+  capabilities: ["chat"],
+});
+```
+
+### Step 3 — Add inline reference convention to your system prompt
+
+See Section 3.2. Without this, AI output won't include clickable entity chips.
+
+### Step 4 — Handle proposal responses on writes
+
+Every write op (`createEntity`, `createBranch`, etc.) may return `{ status: "proposed" }`. Always check:
+
+```typescript
+const result = await pod.createEntity({ ... });
+// Surface pending proposals in the complete event
+await send.complete({
+  content: "...",
+  createdProposals: result.proposalId
+    ? [{ proposalId: result.proposalId, toolName: "create_entity", description: "Create entity" }]
+    : [],
+  // ...
+});
+```
+
+### Step 5 — Implement context window management
+
+For threads with many messages, `pod.getContext()` returns a server-assembled context with any available summary. For very long threads without compaction, truncate or summarise messages before sending to your LLM.
+
+### Step 6 — (Optional) Load user skills
+
+```typescript
+const skills = await pod.getUserSkills(req.workspaceId!);
+// Inject as available tools or call them directly
+```
+
+### Step 7 — (Optional) Load MCP tools
+
+Use `@modelcontextprotocol/sdk` with the `mcpServers` config from `req.mcpServers`. The hub uses stdio/http transports — you must implement transport wiring yourself.
+
+### Step 8 — Deploy and test
+
+```bash
+# Health check
+curl https://your-is.example.com/health
+
+# Specialisations
+curl https://your-is.example.com/api/specialisations
+```
+
+Register via the Agent OS settings panel in the Synap web app or directly via `POST /trpc/intelligenceRegistry.register`.

@@ -1,0 +1,7 @@
+{
+  "title": "Synap App",
+  "description": "Web app (synap-app) — product context, flows, and guidelines",
+  "root": true,
+  "icon": "monitor",
+  "pages": ["index", "frontend-intelligence-integration"]
+}

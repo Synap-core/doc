@@ -1,0 +1,275 @@
+---
+title: "OpenClaw Ecosystem Research"
+description: "Research into the OpenClaw ecosystem and integration opportunities."
+---
+
+# OpenClaw Ecosystem Research — What It Means for Synap CLI
+
+**Date:** 2026-04-04
+**Sources:** OpenClaw docs, CVE trackers, community blogs, GitHub issues, ClawHub
+
+---
+
+## 1. Security: The #1 Pain Point
+
+### The Situation
+
+OpenClaw has had a brutal security track record in 2026:
+- [9 CVEs in 4 days](https://openclawai.io/blog/openclaw-cve-flood-nine-vulnerabilities-four-days-march-2026) (March 2026) — one scored 9.9/10 CVSS
+- [63% of deployments vulnerable](https://adversa.ai/blog/openclaw-security-101-vulnerabilities-hardening-2026/) — 12,812 exposed instances with RCE
+- Command injection ([CVE-2026-24763](https://github.com/jgamblin/OpenClawCVEs/)), SSRF ([CVE-2026-26322](https://github.com/jgamblin/OpenClawCVEs/)), path traversal ([CVE-2026-26329](https://github.com/jgamblin/OpenClawCVEs/))
+- [1-click account takeover to RCE](https://vallettasoftware.com/blog/post/openclaw-security-2026-best-practices-risks-hardening-guide) from a single unvalidated URL parameter
+- [ClawHavoc incident](https://blog.cyberdesserts.com/openclaw-malicious-skills-security/) — malicious skills on ClawHub performing data exfiltration
+
+### What users must do (and most don't)
+
+Per [OpenClaw's official security docs](https://docs.openclaw.ai/gateway/security):
+1. Bind gateway to `loopback` (default but often changed)
+2. Enable token auth on the gateway
+3. Set `gateway.bind: "loopback"` explicitly
+4. Restrict file permissions on state/config/credentials
+5. Only load explicitly trusted plugins/extensions
+6. Prefer instruction-hardened models
+7. Firewall gateway port if on LAN
+8. Run `openclaw security audit` regularly
+9. Stay on v2026.3.12+ (patches the 9.9 CVSS)
+
+### What this means for us
+
+**`synap.sh security-audit` is the single highest-value CLI command we can build.** Most users don't harden their OpenClaw. We auto-check everything and fix what we can. This is the trust signal that makes Synap the "responsible" way to run OpenClaw.
+
+Checklist our CLI should verify:
+- [ ] Gateway bound to loopback (not 0.0.0.0)
+- [ ] Token auth enabled
+- [ ] OpenClaw version >= 2026.3.12 (pre-9.9 patch = critical)
+- [ ] No plaintext credentials in config
+- [ ] File permissions on `~/.openclaw/` (not world-readable)
+- [ ] WebSocket origin validation enabled
+- [ ] Dangerous skill scanner enabled
+- [ ] Workspace-only filesystem access
+- [ ] No exposed ports (check listening interfaces)
+
+Output a score: A (all clear) → D (critical issues). Show what to fix.
+
+---
+
+## 2. Memory: The #2 Pain Point
+
+### The Situation
+
+OpenClaw's memory is the most-complained-about feature:
+
+- ["OpenClaw's Memory Is Broken"](https://blog.dailydoseofds.com/p/openclaws-memory-is-broken-heres) — top blog post
+- [Complete loss of conversation memory](https://github.com/openclaw/openclaw/issues/50894) with local models
+- [Session resets destroy context silently](https://github.com/openclaw/openclaw/issues/41216) — `/new` and `/restart` kill unsaved work
+- ["Your OpenClaw Forgot Everything Again"](https://augmentedmind.substack.com/p/your-openclaw-forgot-everything-again) — recurring community frustration
+- [Agent loses history between sessions](https://github.com/openclaw/openclaw/issues/55343) — fundamental architecture issue
+
+### Why it's broken
+
+OpenClaw's memory is flat Markdown files:
+- `MEMORY.md` — persistent facts (but only what the agent explicitly writes)
+- Daily notes — ephemeral scratch pads
+- Context compaction — when context window fills, old messages are summarized and detail is lost
+
+The core problem: **the agent can't connect relationships across conversations**. Knowing "Alice manages auth team" (Monday) and answering "who handles auth?" (Wednesday) requires relationship reasoning that flat file search can't do.
+
+### What the ecosystem is building
+
+Everyone is trying to fix this:
+- [Graphiti plugin](https://github.com/RobertoGongora/openclaw-graphiti-plugin) — Neo4j knowledge graph (requires separate database)
+- [Graph-Memory](https://github.com/adoresever/graph-memory) — compresses context 75% via structured triples
+- [ByteRover Memory](https://www.byterover.dev/blog/native-structured-long-term-memory-plugin-openclaw) — LLM-curated Context Tree (>92% accuracy on benchmarks)
+- [ClawMem](https://github.com/yoloshii/ClawMem) — on-device hybrid RAG
+- [OpenClaw ContextEngine](https://openclaws.io/blog/openclaw-contextengine-deep-dive) (v2026.3.7) — made context management pluggable (DAG-based)
+
+### What this means for us
+
+**Synap is the best answer to this problem.** None of the community plugins offer:
+- PostgreSQL + pgvector + Typesense (production-grade, not embedded DBs)
+- Typed entity graph with relationships (not just flat triples)
+- Full-text + semantic search (not just vector similarity)
+- AI governance (proposals, audit trail)
+- Visual dashboard (entities, views, bento grids)
+
+Our `synap` skill + Hub Protocol replaces MEMORY.md with a real knowledge graph. The CLI should highlight this in the setup flow:
+
+```
+Your OpenClaw memory: MEMORY.md (flat file, ~50 facts, no relationships)
+With Synap:          PostgreSQL knowledge graph (unlimited entities, typed
+                     relationships, full-text + semantic search, audit trail)
+
+Upgrade now? [Y/n]
+```
+
+---
+
+## 3. Cost: The #3 Pain Point
+
+### The Situation
+
+- [Anthropic killed subscription credits for third-party tools](https://docs.openclaw.ai) — OpenClaw users now pay full API prices
+- ["Stop Overpaying for OpenClaw"](https://velvetshark.com/openclaw-multi-model-routing) — multi-model routing saves 50-80%
+- [Light user example](https://medium.com/@Wangkexue/stop-overpaying-for-openclaw-a-practical-guide-to-smart-model-routing-13e81e1769b6): $200/mo → $70/mo with smart routing (65% savings)
+- Heartbeat checks using Opus ($75/M output tokens) instead of free/cheap models
+- Most users don't configure multi-provider — they use one model for everything
+
+### What this means for us
+
+**Our IS + OpenAI-compat endpoint is the solution.** We already have four-tier routing. We just built the `/v1/chat/completions` endpoint. The CLI should offer to set this up:
+
+```
+Current setup: Claude Sonnet via Anthropic API
+  Estimated cost: ~$150-300/month
+
+With Synap IS: 90% on free/cheap models, 10% on Claude
+  Estimated cost: ~$30-50/month
+  Same quality for agent tasks.
+
+Enable Synap IS? [Y/n]
+```
+
+---
+
+## 4. Skills Ecosystem: What to Know
+
+### ClawHub State
+
+- [5,400+ skills](https://github.com/VoltAgent/awesome-openclaw-skills) catalogued by VoltAgent
+- Publishing requires [GitHub account ≥1 week old](https://github.com/openclaw/clawhub)
+- All skills pass [VirusTotal scanning](https://www.digitalapplied.com/blog/clawhub-skills-marketplace-developer-guide-2026)
+- Post-ClawHavoc: [identity verification required](https://blog.cyberdesserts.com/openclaw-malicious-skills-security/) for publishers
+- Skills install to `~/.openclaw/skills/`
+- Native CLI: `openclaw skills install &lt;name>` or `clawhub install &lt;name>`
+
+### Skill UX
+
+- [`openclaw onboard --install-daemon`](https://wayin.ai/blog/openclaw-setup-guide/) — guided setup (gateway, model, workspace, channels)
+- [UI install preferred for beginners](https://openclawskill.cc/blog/how-to-install-openclaw-skills) — required fields visible
+- [`openclaw skills list --eligible`](https://docs.openclaw.ai/tools/skills) — check what can run
+- Security scanner runs before executing installer metadata
+
+### What this means for us
+
+Our `synap` skill should be on ClawHub. The CLI should handle installation automatically:
+
+```
+Installing Synap skill...
+  ✓ synap — knowledge graph + message relay + governance
+  ✓ Agent OS template applied (5 entity types, 15 views)
+```
+
+---
+
+## 5. What Our CLI Should Do
+
+Based on all research, here's the definitive command set for `synap.sh`:
+
+### `synap.sh init` — The Entry Point
+
+The "Homebrew strategy" — one command that does everything right:
+
+```bash
+synap.sh init
+```
+
+Steps:
+1. **Detect environment**: OpenClaw version, Node.js, Docker, existing config
+2. **Security audit**: Auto-check and fix the 9-point hardening checklist
+3. **Choose pod**: Self-hosted (docker-compose) / Managed ($15/mo) / Existing (URL)
+4. **Install skill**: `synap` skill → knowledge graph replaces MEMORY.md
+5. **Apply Agent OS template**: 5 entity types, 15 views (optional)
+6. **Configure IS** (optional): Set Synap as OpenAI-compatible provider → cost savings
+7. **Summary**: Score, savings estimate, next steps
+
+### `synap.sh connect` — Quick Connection
+
+For users who already have both running:
+
+```bash
+synap.sh connect --pod-url https://pod.synap.live --api-key hub_xxxx
+```
+
+### `synap.sh security-audit` — Trust Signal
+
+The single most valuable command. Checks OpenClaw's config against known CVEs:
+
+```bash
+synap.sh security-audit
+```
+
+Output:
+```
+Security Audit (9 checks):
+  ✓ Gateway bound to loopback
+  ✓ Token auth enabled
+  ✗ OpenClaw version 2026.2.x — CRITICAL (9.9 CVSS, upgrade to 2026.3.12+)
+  ✓ No plaintext credentials
+  ✗ ~/.openclaw world-readable — fix: chmod 700 ~/.openclaw
+  ✓ WebSocket origin validation
+  ✓ Dangerous skill scanner
+  ✓ Workspace filesystem access
+  ✓ No exposed ports
+
+Score: B (2 issues found, 1 critical)
+Auto-fix available for 1 issue. Run: synap.sh security-audit --fix
+```
+
+### `synap.sh status` — Health Dashboard
+
+```bash
+synap.sh status
+```
+
+Shows: pod health, OpenClaw health, IS connection, entity count, memory facts, last sync.
+
+### `synap.sh update` — Keep Everything Current
+
+```bash
+synap.sh update
+```
+
+Updates: synap skill, pod images, CLI itself.
+
+---
+
+## 6. What NOT to Build in the CLI
+
+- **No TUI chat** — the IS `@synap/cli` already does this
+- **No skill authoring** — `clawhub publish` already handles this
+- **No OpenClaw management** — `openclaw` CLI already handles its own config
+- **No web UI** — the Browser app is the visual interface
+
+The CLI is a **bridge tool**: it connects OpenClaw to Synap, hardens security, and keeps things updated. It's not a replacement for either product's native tooling.
+
+---
+
+## 7. Competitive Positioning
+
+### Our advantages over every other memory solution
+
+| Feature | MEMORY.md | Graphiti | Graph-Memory | ClawMem | **Synap** |
+|---------|-----------|---------|-------------|---------|-----------|
+| Storage | Flat file | Neo4j | In-memory | SQLite | **PostgreSQL** |
+| Search | grep | Cypher | Embedding | Hybrid RAG | **Full-text + semantic** |
+| Relationships | None | Triples | Triples | None | **Typed entity graph** |
+| Governance | None | None | None | None | **Proposal system** |
+| Visual UI | None | None | None | None | **Desktop app + bento** |
+| Self-hosted | ✓ | Complex | ✓ | ✓ | **✓ (docker-compose)** |
+| Managed option | — | — | — | — | **€15/mo** |
+| AI routing | — | — | — | — | **4-tier (save 50-80%)** |
+
+**Tagline for ClawHub listing:**
+> "Your agent's memory shouldn't be a text file. Synap gives OpenClaw a PostgreSQL knowledge graph with typed entities, semantic search, and AI governance. Self-hosted free, or managed for €15/mo."
+
+---
+
+## 8. Implementation Priority for CLI
+
+| # | Command | Effort | Value | Reason |
+|---|---------|--------|-------|--------|
+| 1 | `security-audit` | 1d | HUGE | Trust signal. Every security blog post = marketing. Addresses #1 pain point. |
+| 2 | `init` | 2d | HUGE | The distribution weapon. Combines hardening + pod + skill + IS. |
+| 3 | `status` | 0.5d | HIGH | Users need to see what's connected and healthy. |
+| 4 | `connect` | 0.5d | HIGH | Quick path for existing setups. |
+| 5 | `update` | 0.5d | MEDIUM | Keep things current. |

@@ -1,0 +1,117 @@
+---
+title: "Pre-Launch Checklist"
+description: "Ordered launch sequence across all tracks."
+---
+
+# Pre-Launch Checklist
+
+**Web surface:** `synap-landing/` → `synap.live` (or `app.synap.live`)
+*Note: actual code lives in `synap-landing/`, NOT `other/synap-control-plane/` as previously documented.*
+
+---
+
+## Track 1 — Web App (`synap-landing/`)
+
+###  DONE
+- [x] `/auth/verify-email` — real implementation, delegates to Better Auth
+- [x] `/auth/reset-password` — real form, validates password, calls CP API
+- [x] `/auth/callback` — OAuth return → `synap://` deep link with download fallback
+- [x] `/billing/success` — polls subscription status, deep links to app
+- [x] `/billing/cancel` — static page
+- [x] Secrets gitignored — `.env*` in `.gitignore`, no secrets committed
+- [x] Pricing config — real TypeScript via `@synap-core/pricing` (not static JSON)
+
+### 🔴 Still missing (block launch)
+- [ ] **`/invite/[token]`** — frontend page exists but CP API endpoints are missing:
+      - `GET /pods/invites/preview?token=` (shows workspace name + inviter)
+      - `POST /pods/invites/accept` (accepts and returns deep link)
+      Both need to be added to `synap-control-plane-api/src/routes/pods.ts`
+- [ ] **Invite email sending** — no code sends invite emails with the `/invite/[token]` link.
+      Likely needs a Resend call in the "add workspace member" flow on the pod or CP API.
+- [ ] **`.env.example` in `synap-landing/`** — env vars not documented for deployment
+
+### 🟡 Content / polish
+- [ ] Update landing copy to reflect current product positioning
+- [ ] Update pricing section to match actual tiers (pulls from `@synap-core/pricing`)
+- [ ] Add download CTA pointing to `/install` or `/download/latest?platform=mac`
+- [ ] Update screenshots to show actual Browser UI
+
+---
+
+## Track 2 — Browser (`Synap-core/browser-exec`)
+
+###  DONE
+- [x] Release workflow exists (`.github/workflows/browser-release.yml`) — Linux + Windows CI, macOS local
+- [x] `dist:mac`, `dist:linux`, `dist:win` scripts in `browser/package.json`
+- [x] Download routes in CP API (`/download/latest`, `/install`) — real, wired
+
+### 🔴 Still missing
+- [ ] **`BROWSER_RELEASE_TOKEN` secret** — PAT must be added to GitHub repo settings for the workflow to publish releases
+- [ ] **First release (v0.5.0)** — never been published; run `pnpm release all` locally with `GH_TOKEN` set
+
+### 🟡 Signing (for Gatekeeper-free installs)
+- [ ] Apple Developer ID certificate → signed + notarized macOS build
+- [ ] Self-hosted macOS runner for fully automated CI
+
+---
+
+## Track 3 — CP API (`synap-control-plane-api`)
+
+###  DONE
+- [x] Billing redirects — proper 302 to `${FRONTEND_URL}/billing/success` (not raw HTML)
+- [x] Admin middleware — real role check (`user.isAdmin`), 403 on failure
+- [x] Download routes (`/download/latest`, `/install`) — real implementation, wired
+- [x] `FRONTEND_URL` env var used for all redirect URLs
+
+### 🔴 Still missing
+- [ ] **`/pods/invites/preview`** — `GET ?token=` → returns workspace name + inviter info
+- [ ] **`/pods/invites/accept`** — `POST` → accepts invite, returns pod deep link
+
+### 🟡 Config
+- [ ] Set `GITHUB_TOKEN` secret on CP API deploy (higher GitHub release API rate limit)
+- [ ] Confirm `FRONTEND_URL=https://synap.live` in production env
+
+---
+
+## Track 4 — Connectors (code complete, not deployed)
+
+- [ ] Run `pnpm drizzle-kit generate` + migrate for connector tables
+- [ ] Deploy self-hosted Nango instance
+- [ ] Create OAuth apps (Google Calendar, Google Contacts, GitHub)
+- [ ] Set webhook URL in Nango → CP API
+- [ ] Test end-to-end sync: connect provider → data appears in pod
+
+---
+
+## Track 5 — Telegram Mini App
+
+- [ ] Verify Phase 1-3 still works against current CP API + pod
+- [ ] Update bot webhook URL if CP API domain changed
+- [ ] Test: Telegram message → entity in pod
+
+---
+
+## Domain Architecture (production)
+
+```
+synap.live (or app.synap.live)  → synap-landing/ (Next.js, Vercel)
+api.synap.live                  → synap-control-plane-api (Hono, Docker)
+telegram.synap.live             → Telegram Mini App (Next.js, Vercel)
+docs.synap.live                 → users-docs/ (Docusaurus, Vercel)
+{id}.synap.live                 → user data pods (Hetzner VMs)
+```
+
+---
+
+## Launch Sequence (revised)
+
+1. **Add 2 invite endpoints to CP API** — `preview` + `accept` (~2h)
+2. **Wire invite email via Resend** — send link on workspace member add (~1h)
+3. **Add `BROWSER_RELEASE_TOKEN` secret + publish v0.5.0** (~15min)
+4. **Add `synap-landing/.env.example`** (~15min)
+5. **Smoke test**: signup → provision pod → open Browser → invite teammate → accept via email link
+6. **Confirm `FRONTEND_URL` env on CP API deploy** (~5min)
+7. **Update landing copy + screenshots** (~1d)
+8. Soft launch
+
+**Estimated: ~1 day of engineering to unblock hard launch.**

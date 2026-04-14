@@ -1,0 +1,140 @@
+---
+title: "Monitor: Execution Cycles"
+description: "Execution cycle tracking and visualization."
+---
+
+# Execution Cycles
+
+Each agent follows a **deterministic execution cycle** implemented in `BaseAgent`. Understanding this cycle helps you reason about latency, token usage, and when proposals appear.
+
+## The Core Loop
+
+Implemented in `apps/intelligence-hub/src/agents/base/agent.ts`.
+
+```
+┌─────────────────────────────┐
+│        User Message         │
+└──────────────┬──────────────┘
+               │
+    ┌──────────▼──────────┐
+    │   assembleContext   │  ← 8s hard timeout (Promise.race)
+    │  memory + summary   │    Never blocks the main loop
+    │  + linked items     │
+    │  + personality      │
+    └──────────┬──────────┘
+               │
+    ┌──────────▼──────────┐
+    │  buildSystemPrompt  │  ← Injects all context sections
+    └──────────┬──────────┘
+               │
+    ┌──────────▼──────────┐
+    │   generateText()    │  ← Vercel AI SDK, max 10 steps
+    │  ┌─────────────┐    │
+    │  │ LLM reasons │    │
+    │  └──────┬──────┘    │
+    │         │ tool call  │
+    │  ┌──────▼────────┐  │
+    │  │ execute tool  │  │  context/memory → auto-run
+    │  │  or propose   │  │  action tools  → return proposal
+    │  └──────┬────────┘  │
+    │         │ result     │
+    │  ┌──────▼────────┐  │
+    │  │ LLM observes  │──┼──→ loop (up to 10 steps)
+    │  └───────────────┘  │
+    └──────────┬──────────┘
+               │ done
+    ┌──────────▼──────────┐
+    │  extractProposals   │  ← Filter aiSteps for { proposed: true }
+    └──────────┬──────────┘
+               │
+    ┌──────────▼──────────┐
+    │   Stream Response   │  ← SSE events to client
+    └─────────────────────┘
+```
+
+## Per-Agent Variations
+
+### Meta Orchestrator
+Adds a **parallel dispatch phase**. After its first reasoning step:
+```
+Think → Identify sub-tasks
+      → dispatch_agent × N  (spawn parallel child threads)
+      → Wait for all results (posted back via POST /threads/:id/messages)
+      → Aggregate → Final response
+```
+
+### Knowledge Search
+Runs a **multi-angle search loop** (typically 4–8 tool calls):
+```
+Search (angle 1) → Traverse graph → Search (angle 2) → Memory recall
+→ Cross-reference connections → Synthesize findings
+```
+
+### Code Agent
+Follows a **document-centric** pattern:
+```
+Search for related code/docs → Get document content
+→ Analyze → Generate code → Explain reasoning → Respond
+```
+
+### Action Agent
+Always **searches before writing** to avoid duplicates:
+```
+Search (check existing) → Validate intent → Create/Update
+→ Confirm with entity IDs → Summary of changes
+```
+
+## Context Assembly Detail
+
+`assembleContext()` runs sub-operations concurrently with a hard 8-second window:
+
+```typescript
+// From base/agent.ts
+const context = await Promise.race([
+  assembleContextInner(userId, message, threadId),
+  timeout(8000),  // Returns partial context if exceeded
+]);
+```
+
+Sub-operation timeouts:
+- **Thread message fetch**: 3s via `AbortController`
+- **Memory recall**: included in 8s window
+- **Personality fingerprint**: fire-and-forget (cached result used)
+- **Summary generation**: async update (cached result used in current turn)
+
+## Proposal Flow
+
+Action tools return a proposal object instead of executing:
+
+```typescript
+// Inside a tool's execute() when proposalMode is true:
+return {
+  proposed: true,
+  action: "create_entity",
+  description: "Create project 'Q1 Roadmap' of type project",
+  args: { type: "project", title: "Q1 Roadmap", description: "..." }
+};
+```
+
+The proposal surfaces in the Proposals page for your approval. On approval, the action executes immediately via the event pipeline.
+
+## Customizing a Cycle
+
+To change an agent's execution pattern:
+
+1. **Change available tools** — modify `getToolsForAgent()` in `tool-registry.ts`
+2. **Change reasoning** — update the agent's `buildSystemPrompt()`
+3. **Change loop depth** — adjust `maxSteps` in the `generateText()` call (default: 10)
+4. **Custom pre/post steps** — override `execute()` in the agent class
+
+For a fully structured cycle (DAG-style, predetermined tool order), extend `BaseAgent` with a custom loop that calls specific tools before handing off to the LLM for final synthesis.
+
+## Token Budget Estimate
+
+| Phase | Approximate Tokens |
+|-------|-------------------|
+| System prompt (with context) | 2,000–8,000 |
+| Conversation history | 1,000–20,000 |
+| Each tool call + result | 200–2,000 |
+| Final response | 200–2,000 |
+| **Total per turn (typical)** | **5,000–15,000** |

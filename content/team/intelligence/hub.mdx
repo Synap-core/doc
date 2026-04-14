@@ -1,0 +1,658 @@
+---
+title: "Intelligence Hub"
+description: "Hub design, routing, agent dispatch, session management."
+---
+
+# Intelligence Hub — Developer Reference
+
+> **Version**: 1.0 | **Last updated**: 2026-02-18
+> **Status**: Production-ready (see [ROADMAP.md](./ROADMAP.md) for planned features)
+
+---
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Architecture](#2-architecture)
+3. [Key Data Models](#3-key-data-models)
+4. [Core Flows](#4-core-flows)
+5. [Agents Reference](#5-agents-reference)
+6. [Tool Registry](#6-tool-registry)
+7. [Hub-Protocol API](#7-hub-protocol-api)
+8. [UX & User Stories](#8-ux--user-stories)
+9. [Environment Variables](#9-environment-variables)
+10. [Known Limitations](#10-known-limitations)
+
+---
+
+## 1. Overview
+
+The **Intelligence Hub** is the AI layer of the Synap platform. It is a stateless service that:
+
+- Receives user messages from the frontend
+- Orchestrates AI agents (searches, reasons, proposes actions)
+- Calls the **Synap Backend** (data pod) for all read/write operations
+- Returns streamed responses with thinking steps, content, and proposals
+
+**Design principle**: The hub holds no persistent state. The Synap Backend is the single source of truth for all user data. The hub is a pure intelligence layer.
+
+```
+Frontend
+   │
+   ▼
+Intelligence Hub (port 3001)
+   ├── Agents (Orchestrator, MVP Chat, Research, Code, Writing...)
+   ├── Tools (search, create/update entity/document, memory...)
+   └── Hub-Protocol Client
+           │
+           ▼
+   Synap Backend (port 4000)
+   ├── Entities, Documents, Threads, Skills, Proposals
+   ├── Typesense (full-text search)
+   ├── pgvector (semantic search)
+   ├── Event Store (Inngest)
+   └── PostgreSQL
+```
+
+---
+
+## 2. Architecture
+
+### Request Lifecycle
+
+```
+POST /api/chat/stream
+        │
+[1] Authenticate (API key → Bearer token)
+        │
+[2] Load thread context
+    → getThreadContext(threadId)
+    → Returns: messages[], linkedEntities[], linkedDocuments[]
+        │
+[3] Assemble context
+    → Inject linked items into system prompt
+    → Load relevant memories (Mem0 / memory_search)
+        │
+[4] Run agent (Vercel AI SDK generateText/streamText)
+    → Tools intercept calls (search, create, update...)
+    → Action tools → proposal mode (no side effects until approved)
+    → Context tools → execute immediately (read-only)
+        │
+[5] Collect results
+    → Content (text response)
+    → aiSteps (tool calls + results)
+    → proposals (pending approvals)
+        │
+[6] Return / Stream
+    → Non-stream: JSON { content, aiSteps, proposals }
+    → Stream: SSE events { type: "thinking" | "content" | "complete" }
+```
+
+### Service Communication
+
+The hub calls the backend via two paths:
+
+| Path                       | Used For                                                           |
+| -------------------------- | ------------------------------------------------------------------ |
+| `REST /api/hub/*`          | All hub-initiated calls (search, get entities, create skill, etc.) |
+| `REST /api/hub-protocol/*` | Same endpoints, alternate prefix for compatibility                 |
+
+Authentication: `Authorization: Bearer &lt;HUB_PROTOCOL_API_KEY>`
+
+---
+
+## 3. Key Data Models
+
+All data lives in the **Synap Backend** PostgreSQL database.
+
+### Entities
+
+The core knowledge graph node. Anything in the user's workspace: tasks, notes, contacts, events, projects, etc.
+
+```typescript
+{
+  id: uuid,
+  userId: string,
+  workspaceId: uuid,
+  type: string,           // "task", "note", "contact", "event", ...
+  title: string,
+  preview: string,        // Short summary for search results
+  documentId: uuid,       // Optional: linked document for rich content
+  properties: jsonb,      // Validated against entity profile schema
+  version: integer,       // Optimistic locking
+  createdAt, updatedAt
+}
+```
+
+### Documents
+
+Rich content storage (markdown, code, PDF, etc.).
+
+```typescript
+{
+  id: uuid,
+  userId, workspaceId,
+  title: string,
+  type: "text" | "markdown" | "code" | "pdf" | "docx",
+  storageUrl: string,     // MinIO/R2 blob URL
+  storageKey: string,
+  currentVersion: integer,
+  workingState: text,     // Yjs CRDT binary (live collaborative editing)
+  entityId: uuid,         // Optional: linked entity
+  createdAt, updatedAt
+}
+```
+
+### Chat Threads
+
+Conversation sessions. Support branching (Git-like parallel reasoning).
+
+```typescript
+{
+  id: uuid,
+  userId, workspaceId,
+  title: string,
+  threadType: "main" | "branch",
+  parentThreadId: uuid,         // For branch threads
+  branchedFromMessageId: uuid,  // Message that triggered branch
+  branchPurpose: string,        // "Research competitors"
+  agentId: string,              // "orchestrator" | "mvp-chat" | custom
+  agentType: "default" | "meta" | "prompting" | "knowledge-search" | "code" | "writing" | "action",
+  agentConfig: jsonb,           // Custom system prompt + tool overrides
+  status: "active" | "merged" | "archived",
+  contextSummary: text,         // Compressed summary after branch merge
+  createdAt, updatedAt, mergedAt
+}
+```
+
+### Thread Entities & Thread Documents
+
+Links between a thread and the entities/documents it uses. Enables context inheritance.
+
+```typescript
+// thread_entities (same shape for thread_documents with documentId)
+{
+  id: uuid,
+  threadId: uuid,
+  entityId: uuid,
+  relationshipType: "used_as_context" | "created" | "updated" | "referenced" | "inherited_from_parent",
+  conflictStatus: "none" | "pending" | "resolved",
+  sourceMessageId: uuid,   // Which message caused this link
+  userId, workspaceId,
+  createdAt
+}
+```
+
+### Proposals
+
+Pending AI actions awaiting user approval.
+
+```typescript
+{
+  id: uuid,
+  workspaceId: string,
+  targetType: "document" | "entity" | "whiteboard" | "view",
+  targetId: string,
+  proposalType: "edit" | "comment" | "review_request",
+  data: jsonb,           // { oldValue, newValue, diff, action, args }
+  status: "pending" | "approved" | "rejected",
+  reviewedBy: string,
+  reviewedAt: timestamp,
+  rejectionReason: string,
+  createdAt, updatedAt
+}
+```
+
+### Skills
+
+User-created or AI-generated tools that extend agent capabilities.
+
+```typescript
+{
+  id: uuid,
+  userId, workspaceId,
+  name: string,
+  description: string,
+  code: string,            // JavaScript/TypeScript function
+  parameters: jsonb,       // Zod schema for inputs
+  category: "action" | "context" | "utility" | "custom",
+  executionMode: "sync" | "async",
+  timeoutSeconds: integer,
+  status: "active" | "inactive" | "error",
+  createdAt, updatedAt
+}
+```
+
+### Agents
+
+Stored configurations for AI agents (including user-created custom agents).
+
+```typescript
+{
+  id: string,              // "orchestrator", "mvp-chat", or custom UUID
+  name, description,
+  createdBy: "system" | userId,
+  llmProvider: "claude" | "openai" | "openrouter",
+  llmModel: string,
+  capabilities: string[],
+  systemPrompt: string,
+  toolsConfig: jsonb,
+  executionMode: "simple" | "react" | "langgraph",
+  maxIterations: integer,
+  active: boolean
+}
+```
+
+---
+
+## 4. Core Flows
+
+### Flow A: Simple Q&A (no actions)
+
+```
+User: "What tasks do I have this week?"
+        │
+Agent calls search_unified("tasks this week")
+        │
+Backend returns: [{ type:"task", title:"Buy groceries", ... }, ...]
+        │
+Agent generates: "I found 3 tasks: Buy groceries, Finalize report, Meeting with Sarah"
+        │
+Returns: { content: "...", aiSteps: [search_unified call], proposals: [] }
+```
+
+### Flow B: AI Creates an Entity (with approval)
+
+```
+User: "Create a task: Call the dentist on Friday"
+        │
+Agent calls create_entity({ type:"task", title:"Call the dentist", ... })
+        │
+Tool is in PROPOSAL MODE → returns { proposed: true, action, args }
+        │
+Agent response: "I'll create that task for you."
+        │
+Frontend receives: { proposals: [{ toolName:"create_entity", args, status:"pending" }] }
+        │
+User clicks "Approve" → POST /trpc/proposals.approve
+        │
+Backend emits: entity.create.validated
+        │
+Inngest EntitiesExecutor inserts entity into DB
+        │
+Emits: entity.create.completed → frontend refreshes
+```
+
+### Flow C: AI Updates a Document (diff proposal)
+
+```
+User: "Add a section about Q3 goals to the roadmap"
+        │
+Agent calls get_document(docId) → reads current content
+        │
+Agent calls update_document({ docId, operations: [{type:"insert", ...}] })
+        │
+Backend creates proposal in `proposals` table with diff
+        │
+Frontend shows: diff view (old vs. new) → user accepts/rejects
+        │
+On accept: proposal.approve() → document content updated in storage
+```
+
+### Flow D: Branching (Parallel Investigation)
+
+```
+User: "Research how our competitors handle onboarding"
+        │
+Orchestrator decides: this needs a branch
+        │
+create_branch({ type:"research", topic:"Competitor onboarding", ... })
+        │
+New child thread created with Research agent assigned
+        │
+Research agent investigates (multiple search calls, document reads)
+        │
+Branch completes → parent thread reads contextSummary
+        │
+Orchestrator synthesizes and responds to user
+```
+
+### Flow E: Event Sourcing (Entity Creation Pipeline)
+
+```
+API: emitRequestEvent({ subjectType:"entity", action:"create", ... })
+        │
+DB: events table ← "entity.create.requested" written
+        │
+Event Processor: polls DB every 5s, forwards to Inngest
+        │
+Inngest: globalValidator receives "entity.create.requested"
+  → checks user exists + has permission
+  → emits "entity.create.validated" directly to Inngest
+        │
+Inngest: EntitiesExecutor receives "entity.create.validated"
+  → inserts entity into entities table
+  → BaseRepository auto-emits "entity.create.completed" to DB
+        │
+Event Processor: polls DB, forwards "entity.create.completed" to Inngest
+        │
+Downstream jobs: entity embedding worker, search indexer, etc.
+```
+
+---
+
+## 5. Agents Reference
+
+### MVP Chat Agent (`agentType: "default"`)
+
+The primary agent for user-facing chat. Straightforward, helpful, focused.
+
+| Property      | Value                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------- |
+| Tools         | search_unified, get_document, create_entity, update_entity, create_document, update_document, memory_search |
+| Max steps     | 10                                                                                                          |
+| Proposal mode | Yes (action tools)                                                                                          |
+| Context       | Thread history + linked entities/documents injected into system prompt                                      |
+
+**When to use**: Standard user conversations, task management, document editing.
+
+---
+
+### Orchestrator Agent (`agentType: "meta"`)
+
+The proactive "co-founder" agent. Investigates before answering, challenges assumptions, finds conflicts and opportunities.
+
+| Property       | Value                                                                                                                                                      |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tools          | search_unified, vector_search, memory_search, get_document, search_entities, search_documents, create_entity, create_document, create_branch, create_skill |
+| Max steps      | 10                                                                                                                                                         |
+| Operating mode | 4-layer: Investigate → Think → Respond → Propose                                                                                                           |
+
+**4-layer response model:**
+
+1. **Investigate** (silent): Auto-runs search_unified, vector_search, memory_search before responding
+2. **Think**: Identifies conflicts, opportunities, patterns from search results
+3. **Respond in layers**: Direct answer → Insights ("I noticed...") → Challenges ("Have you considered...?") → Proposals
+4. **Link proactively**: Links related entities/documents to the thread
+
+**When to use**: Complex tasks, strategic decisions, research, anything that benefits from proactive analysis.
+
+---
+
+### Research Agent (`agentType: "research"`)
+
+Deep investigator. Focuses on gathering and synthesizing information.
+
+**Tools**: search_unified, vector_search, memory_search, get_document, search_entities, search_documents
+
+**When to use**: Deep dives, competitive research, knowledge gathering.
+
+---
+
+### Code Agent (`agentType: "code"`)
+
+Code-focused. Reads and writes code documents.
+
+**Tools**: search_unified, search_documents, get_document, create_document, update_document
+
+---
+
+### Writing Agent (`agentType: "writing"`)
+
+Document-focused. Creates and edits rich content.
+
+**Tools**: search_unified, search_documents, get_document, create_document, update_document
+
+---
+
+### Prompting Agent (`agentType: "prompting"`)
+
+Prompt optimization and refinement.
+
+**Tools**: search_unified, vector_search, search_entities, search_documents, get_document
+
+---
+
+### Knowledge Search Agent (`agentType: "knowledge-search"`)
+
+Knowledge graph queries and retrieval.
+
+**Tools**: search_unified, vector_search, search_documents, search_entities, get_document, memory_search
+
+---
+
+## 6. Tool Registry
+
+### Context Tools (auto-execute, no approval needed)
+
+| Tool               | Description                                                                                                             | Backend call                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `search_unified`   | Full-text search across all collections (entities, documents, views, threads, agents). Typo-tolerant, relevance-ranked. | `GET /api/hub/search`                                |
+| `vector_search`    | Semantic similarity search using text embeddings. Finds conceptually related content.                                   | `GET /api/hub/vector-search`                         |
+| `memory_search`    | Long-term memory: user preferences, facts, patterns (Mem0).                                                             | Mem0 service                                         |
+| `get_document`     | Fetch full document content by ID.                                                                                      | `GET /api/hub/document/:id`                          |
+| `search_entities`  | Entity-specific search with type filter.                                                                                | `GET /api/hub/search/collection?collection=entities` |
+| `search_documents` | Document-specific search.                                                                                               | `GET /api/hub/search/documents`                      |
+
+### Action Tools (proposal mode — require user approval)
+
+| Tool              | Description                                                                                   | What it creates                    |
+| ----------------- | --------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `create_entity`   | Create a new entity (task, note, contact, event, project).                                    | Entity in DB (via event pipeline)  |
+| `update_entity`   | Modify an entity's title, preview, or properties.                                             | Entity update (via event pipeline) |
+| `create_document` | Create a new document with title + markdown content.                                          | Document in storage + DB           |
+| `update_document` | Edit document content. Shows diff for user approval.                                          | Proposal in `proposals` table      |
+| `create_branch`   | Start a parallel conversation branch with a specialized agent.                                | New child thread                   |
+| `create_skill`    | AI generates a skill (JavaScript function + parameters). Validated and proposed for approval. | Skill in DB (via event pipeline)   |
+
+### Proposal Mode
+
+Action tools behave differently depending on `context.proposalMode`:
+
+- **`proposalMode: true`** (default for user-facing calls): Returns `{ proposed: true, action, description, args }`. No side effects. Frontend shows approval UI.
+- **`proposalMode: false`** (for auto-approved flows): Executes immediately.
+
+---
+
+## 7. Hub-Protocol API
+
+All endpoints require: `Authorization: Bearer &lt;HUB_PROTOCOL_API_KEY>`
+
+### Health
+
+```
+GET /health
+→ { status: "ok", service: "intelligence-hub" }
+```
+
+### Embeddings
+
+```
+POST /api/embeddings
+Body: { text: string }
+→ { embedding: number[], dimensions: number, model: string }
+
+POST /api/embeddings/batch
+Body: { texts: string[] }
+→ { embeddings: number[][], count: number, dimensions: number }
+```
+
+### Orchestrate
+
+```
+POST /api/orchestrate
+Body: { userId, message, threadId?, history?, workspaceId? }
+→ { success, data: { content, aiSteps, proposals, branchDecision } }
+
+POST /api/orchestrate/stream
+Body: same as above
+→ SSE stream: { type: "thinking"|"content"|"proposal"|"complete", data }
+
+POST /api/orchestrate/approve
+Body: { userId, actions: [{ action, args }] }
+→ { success, data: { executedActions } }
+```
+
+### Chat
+
+```
+POST /api/chat/stream
+Body: { query, threadId, userId, workspaceId?, agentType?, stream? }
+→ If stream=false: { content, aiSteps, requiresApproval }
+→ If stream=true: SSE stream
+```
+
+### Backend Hub-Protocol Endpoints
+
+```
+GET  /api/hub/search?userId&query&workspaceId&collections&limit
+GET  /api/hub/search/collection?userId&collection&query&workspaceId&limit
+GET  /api/hub/search/documents?userId&query&workspaceId&limit
+GET  /api/hub/vector-search?userId&query&types&limit
+
+GET  /api/hub/users/:userId/entities?workspaceId&type&limit
+GET  /api/hub/users/:userId/context
+GET  /api/hub/threads/:threadId/context
+
+GET  /api/hub/skills/getSkills?userId&workspaceId&status
+GET  /api/hub/skills/getSkill?userId&skillId
+POST /api/hub/skills/createSkill    Body: { userId, workspaceId, name, description, code, ... }
+
+POST /api/hub/linking/linkEntity    Body: { userId, threadId, entityId, relationshipType }
+POST /api/hub/linking/linkDocument  Body: { userId, threadId, documentId, relationshipType }
+```
+
+---
+
+## 8. UX & User Stories
+
+### Story 1: "I want to ask a question about my data"
+
+**Flow**: User types in chat → MVP Chat agent searches → answers with citations
+
+**What the user sees**:
+
+- AI response with inline references ("I found task X" or "Document Y says...")
+- Thinking steps visible in the UI (search calls, document reads)
+- No approval needed (read-only)
+
+---
+
+### Story 2: "I want the AI to create a task for me"
+
+**Flow**: User asks → AI calls create_entity → Proposal shown → User approves → Task created
+
+**What the user sees**:
+
+- AI response: "I'll create that task for you."
+- Approval card: "Create task: Call the dentist" [Approve] [Reject]
+- On approve: Task appears in their entity list
+
+---
+
+### Story 3: "I want the AI to edit my document"
+
+**Flow**: AI reads document → generates diff → Proposal with diff view → User accepts
+
+**What the user sees**:
+
+- Side-by-side diff (old vs. new content)
+- Ability to accept changes section by section, or reject all
+
+---
+
+### Story 4: "I want the AI to research something complex"
+
+**Flow**: Orchestrator spawns a research branch → Research agent investigates → Parent thread synthesizes
+
+**What the user sees**:
+
+- "Starting research branch on: [topic]"
+- Progressive updates as research runs
+- Final synthesis: "Based on my research, here's what I found..."
+
+---
+
+### Story 5: "I want to build a custom tool for my workflow"
+
+**Flow**: User/AI describes the tool → AI generates skill code → Proposal shown → On approve: skill active
+
+**What the user sees**:
+
+- AI: "I've created a skill called 'Calculate ROI' that takes amount and currency as inputs."
+- Code review card (view + approve/reject)
+- Once approved: "Calculate ROI" available in future conversations
+
+---
+
+### Story 6: "The AI mentioned an entity — I want it linked to this conversation"
+
+**Flow**: Orchestrator references an entity → automatically calls linkEntity → entity appears as "linked" in thread
+
+**What the user sees**:
+
+- "Linked: Task 'Q4 Budget Review'" in thread sidebar
+- Future messages in this thread auto-use the linked entity for context
+
+---
+
+## 9. Environment Variables
+
+### Intelligence Hub
+
+```bash
+# AI Provider (OpenRouter preferred for flexibility)
+OPENROUTER_API_KEY=sk-or-...
+OPENAI_API_KEY=sk-...            # Fallback for embeddings
+
+# Backend connection
+DATA_POD_URL=http://backend:4000             # Internal Docker hostname
+HUB_PROTOCOL_API_KEY=synap_hub_live_...      # Must match backend key
+
+# Memory (Mem0 — optional, gracefully degrades)
+MEM0_API_URL=http://mem0-service:8000
+MEM0_API_KEY=...
+
+# Server
+PORT=3001
+NODE_ENV=development
+```
+
+### Backend (hub-relevant vars)
+
+```bash
+HUB_PROTOCOL_API_KEY=synap_hub_live_...      # Must match hub key
+INTELLIGENCE_HUB_URL=http://intelligence-service:3001
+
+# Typesense
+TYPESENSE_HOST=typesense
+TYPESENSE_PORT=8108
+TYPESENSE_API_KEY=<admin-key>                # Use admin key, not search-only
+
+# Inngest (background jobs)
+INNGEST_BASE_URL=http://inngest:8288         # Self-hosted dev server
+INNGEST_SERVE_HOST=http://backend:4000       # Must be internal Docker hostname
+```
+
+---
+
+## 10. Known Limitations
+
+| Issue                                      | Impact                                                                  | Workaround                                    |
+| ------------------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------- |
+| Mem0 ECONNREFUSED                          | Memory search returns empty                                             | System still works; memories just not loaded  |
+| Event watermark resets on restart          | Old events replay once after restart                                    | Harmless; executors guard against wrong phase |
+| `document_sessions.chat_thread_id` missing | Document sessions can't link to threads                                 | Migration needed                              |
+| Skills are async (event-sourced)           | `getSkill` after `createSkill` may return "not found" for a few seconds | Wait ~5s after creation                       |
+| Entity embedding worker errors             | Some old entities missing `workspaceId`                                 | Only affects specific stale records           |
+| Typesense search returns 0 results         | Dev environment has no indexed content                                  | Index entities after creating them            |
+| Search results are Typesense-indexed only  | Entities not yet indexed won't appear                                   | Embeddings job runs async                     |
+
+---
+
+## See Also
+
+- [ROADMAP.md](./ROADMAP.md) — Planned features and improvements
+- [tests/integration/](./tests/integration/) — Integration test suite
+- `/opt/synap-backend/packages/api/src/routers/hub-protocol/` — Backend tRPC procedures
+- `/opt/synap-backend/packages/jobs/src/executors/` — Inngest event executors

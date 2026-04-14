@@ -1,0 +1,561 @@
+---
+title: "IS Operations"
+description: "Day-to-day operations: update, scale, logs, alerts."
+---
+
+# Synap Operations Guide
+
+> Infrastructure, deployment, monitoring, and developer experience for the Synap Intelligence Service at scale.
+
+---
+
+## How It Works — Architecture Mental Model
+
+Before touching anything, understand this: **the IS is stateless replicas, not a spawner**.
+
+```
+User sends message
+       │
+  Traefik (load balancer)
+       │  picks any healthy IS replica
+       ▼
+  IS replica #1  ──or──  IS replica #2  ──or──  IS replica #3
+       │                      │                      │
+       └──────────────────────┴──────────────────────┘
+                              │
+                 All replicas share:
+                   • Valkey  — rate limits, quota slots, caches
+                   • PgBouncer → PostgreSQL  — all persistent state
+                   • Backend API  — session memory, entities, proposals
+                   • OpenRouter  — LLM calls (rate-limited by semaphore)
+```
+
+**IS replicas do not spawn child instances.** Each replica is identical — same code, same tools, same capabilities. When a user sends a message, Traefik routes it to any available replica. If one crashes, Swarm restarts it and Traefik stops sending traffic to it in the interim. You scale by adding replicas (`make scale-is N=5`), not by having a "master" spawn workers.
+
+**The IS is the AI brain; the backend is the memory.** Every session, every proposal, every knowledge fact, every entity lives in the backend's PostgreSQL database. The IS can restart or crash with zero data loss — on the next request it re-assembles context from the database and continues. This is why horizontal scaling works: there is no local state to synchronize.
+
+### What Each Component Does
+
+| Component        | Role                                                                           | State                               |
+| ---------------- | ------------------------------------------------------------------------------ | ----------------------------------- |
+| **Traefik**      | Load balancer, SSL, rate limiting, health routing                              | Stateless (config in files)         |
+| **IS × N**       | LLM execution, tool calling, streaming, agent logic                            | **Stateless** — restartable anytime |
+| **Backend × N**  | tRPC API, Socket.IO realtime, permission checks, job queue                     | Stateless code, stateful DB         |
+| **Valkey**       | Shared rate limits, per-customer in-flight quota slots                         | In-memory + persistence             |
+| **PgBouncer**    | PostgreSQL connection pooler — multiplexes N services → 25 DB connections      | Stateless                           |
+| **PostgreSQL**   | All persistent data: sessions, entities, proposals, messages, compacted states | **The source of truth**             |
+| **Prometheus**   | Metrics scraping every 15s                                                     | Time-series data on disk            |
+| **Grafana**      | Dashboards + alerting                                                          | Config persisted in volume          |
+| **Loki**         | Log aggregation, 30-day retention                                              | Log data on disk                    |
+| **Tempo**        | Distributed traces, 14-day retention                                           | Trace data on disk                  |
+| **Promtail**     | Collects Docker container logs (one per Swarm node)                            | Stateless                           |
+| **Alertmanager** | Routes alerts to Slack/PagerDuty                                               | Stateless                           |
+| **Uptime Kuma**  | /health endpoint monitoring, status page                                       | Config persisted in volume          |
+| **Sentry**       | Error aggregation, release tracking                                            | Cloud (or self-hosted)              |
+
+### Request Lifecycle — Single Chat Message
+
+```
+1. User sends message
+2. Backend (channels.ts) receives via tRPC/Socket.IO
+3. Backend inserts user message → PostgreSQL (with sessionId)
+4. Backend calls IS: POST https://is.synap.so/api/chat/stream
+   └─ with: userId, threadId, workspaceId, agentType, apiKey
+5. Traefik receives → routes to IS replica #2 (sticky cookie if existing stream)
+6. IS multiTenantAuth validates API key → loads customer context from DB
+7. IS acquires in-flight slot (Redis INCR hub:in_flight:{customerId})
+8. IS acquires LLM semaphore slot (in-process, max 20 concurrent)
+9. IS fetches thread history from backend (5s timeout)
+10. IS assembles context: memories + entities + compacted state (parallel hub calls)
+11. IS calls OpenRouter → streams response tokens
+12. IS sends SSE chunks back to backend
+13. Backend accumulates chunks → saves assistant message → emits Socket.IO event
+14. Frontend receives real-time update via Socket.IO
+15. IS releases LLM semaphore + in-flight slot
+16. IS updates session usage (fire-and-forget)
+17. Langfuse records trace
+```
+
+---
+
+## Developer Experience
+
+### Local Development (Single Instance)
+
+For local development, you don't need Docker Swarm. Run services directly:
+
+```bash
+# Terminal 1: Backend
+cd synap-backend && pnpm dev
+
+# Terminal 2: Intelligence Service
+cd synap-intelligence-service && pnpm dev
+
+# OR: use the deployment CLI
+./synap.sh deploy          # Docker Compose (single instance)
+```
+
+Everything works without Redis or PgBouncer locally. The IS rate limiter falls back to in-memory, the quota guard falls back to allow-all. This is intentional — you shouldn't need Redis to develop features.
+
+Required local env vars (IS):
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-...
+DATABASE_URL=postgresql://...
+# REDIS_URL is optional locally
+```
+
+### Multi-Instance (Staging / Production)
+
+Run on Docker Swarm. Use `./synap.sh swarm-*` commands (see [Deployment](#deployment)).
+
+Required additions for multi-instance:
+
+```bash
+REDIS_URL=redis://:password@valkey:6379   # enables shared rate limit + quota
+OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317  # trace collection
+SENTRY_DSN=https://...                    # error tracking
+```
+
+### Environment Variables Reference
+
+| Variable                        | Required    | Default            | Description                                                             |
+| ------------------------------- | ----------- | ------------------ | ----------------------------------------------------------------------- |
+| `OPENROUTER_API_KEY`            |           | —                  | LLM provider API key                                                    |
+| `DATABASE_URL`                  |           | —                  | PostgreSQL connection string (point to PgBouncer in production)         |
+| `REDIS_URL`                     | Production  | —                  | Valkey/Redis URL. Without it: in-memory fallback (single-instance only) |
+| `INTELLIGENCE_HUB_INTERNAL_KEY` | Recommended | —                  | Internal route auth key                                                 |
+| `OPENROUTER_CONCURRENCY`        | No          | `20`               | Max simultaneous LLM calls per IS instance                              |
+| `RATE_LIMIT_RPM`                | No          | `300`              | Requests/min per customer (Redis-backed in production)                  |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`   | Production  | —                  | Tempo OTLP endpoint for distributed traces                              |
+| `OTEL_SERVICE_NAME`             | No          | `intelligence-hub` | Service name in traces                                                  |
+| `SENTRY_DSN`                    | Production  | —                  | Sentry error tracking DSN                                               |
+| `SENTRY_TRACES_SAMPLE_RATE`     | No          | `0.05`             | 5% of traces sent to Sentry (cost control)                              |
+| `LANGFUSE_PUBLIC_KEY`           | No          | —                  | LLM call tracing in Langfuse                                            |
+| `LANGFUSE_SECRET_KEY`           | No          | —                  | Langfuse secret key                                                     |
+| `LLM_MAX_PER_CUSTOMER`          | No          | `4`                | Max concurrent LLM calls per customer (fair semaphore)                  |
+| `LLM_ACQUIRE_TIMEOUT_MS`        | No          | `45000`            | Max wait time (ms) to acquire an LLM semaphore slot before rejecting    |
+
+---
+
+## Deployment
+
+### Prerequisites
+
+```bash
+# On the Swarm manager node:
+docker swarm init                          # if not already in a swarm
+./synap.sh swarm-setup                     # creates networks, secrets, env file
+```
+
+### First Deployment
+
+```bash
+# 1. Interactive setup wizard (generates secrets, collects config)
+./synap.sh swarm-setup
+
+# 2. Deploy main stack: IS×3, backend×2, Traefik, Valkey, PgBouncer
+./synap.sh swarm-deploy
+
+# 3. Deploy observability: Grafana, Prometheus, Loki, Tempo, Uptime Kuma
+./synap.sh swarm-deploy --obs
+
+# 4. Check health
+./synap.sh swarm-status
+```
+
+Or using Make directly:
+
+```bash
+make setup       # create networks
+make secrets     # interactively create Docker Secrets
+# edit deploy/.env.swarm with your values
+make deploy      # main stack
+make deploy-obs  # observability stack
+```
+
+### Scaling
+
+```bash
+# Scale IS to 5 replicas (rolling, zero-downtime)
+./synap.sh swarm-scale intelligence-hub 5
+
+# Scale backend to 3 replicas
+./synap.sh swarm-scale backend 3
+
+# Or via Make:
+make scale-is N=5
+make scale-backend N=3
+```
+
+When to scale:
+
+- IS: when `is_llm_queued` metric > 5 consistently, or `is_llm_duration_seconds{p99}` > 20s
+- Backend: when `http_request_duration_seconds{p99}` > 500ms, or CPU > 80%
+
+### Rolling Updates (Zero-Downtime)
+
+```bash
+# Update IS to a new image version
+./synap.sh swarm-update intelligence-hub registry.synap.so/intelligence-hub:v2.1.0
+
+# Update backend
+./synap.sh swarm-update backend registry.synap.so/backend:v1.5.0
+
+# Rollback if something went wrong
+./synap.sh swarm-rollback intelligence-hub
+```
+
+Traefik is configured with `order: start-first` — the new container starts and passes health checks before the old one stops. Your users see zero downtime.
+
+### Node Labels
+
+Pin services to specific nodes with labels:
+
+```bash
+# Label a dedicated node for databases
+docker node update --label-add role=db <node-id>
+
+# Label a node for monitoring
+docker node update --label-add role=monitoring <node-id>
+
+# IS + backend can run on any node (no label constraint)
+```
+
+---
+
+## Monitoring
+
+### The Stack
+
+Access all monitoring at:
+
+| Service               | URL                               | Credentials                           |
+| --------------------- | --------------------------------- | ------------------------------------- |
+| **Grafana**           | `https://grafana.your-domain.com` | admin / `$GRAFANA_ADMIN_PASSWORD`     |
+| **Uptime Kuma**       | `https://status.your-domain.com`  | (set on first login)                  |
+| **Traefik Dashboard** | `https://traefik.your-domain.com` | BasicAuth (`$TRAEFIK_DASHBOARD_USER`) |
+
+### Key Dashboards (Grafana)
+
+All datasources are auto-provisioned. Import these dashboard IDs from grafana.com:
+
+| Dashboard          | ID          | What it shows                                         |
+| ------------------ | ----------- | ----------------------------------------------------- |
+| Node Exporter      | 1860        | Server CPU, memory, disk, network                     |
+| Traefik            | 17346       | Request rate, error rate, latency by service          |
+| Redis / Valkey     | 763         | Memory, ops/sec, connected clients                    |
+| PgBouncer          | 9572        | Pool utilization, wait time, client count             |
+| Custom: IS metrics | (see below) | LLM calls, queue depth, active streams, chat requests |
+
+**Custom IS dashboard queries (add to Grafana):**
+
+```promql
+# Active LLM calls across all replicas
+sum(is_llm_active)
+
+# Queued requests waiting for LLM slot
+sum(is_llm_queued)
+
+# Chat request rate (per minute)
+sum(rate(is_chat_requests_total[1m])) * 60
+
+# LLM error rate (%)
+sum(rate(is_llm_calls_total{status="error"}[5m])) /
+sum(rate(is_llm_calls_total[5m])) * 100
+
+# p95 LLM latency
+histogram_quantile(0.95, sum(rate(is_llm_duration_seconds_bucket[5m])) by (le))
+
+# IS replica count (healthy)
+count(up{job="intelligence-hub"} == 1)
+```
+
+### Alerts That Matter
+
+Configured in `deploy/prometheus/rules/alerts.yml`:
+
+| Alert                    | Meaning                 | Action                                                   |
+| ------------------------ | ----------------------- | -------------------------------------------------------- |
+| `HighLlmErrorRate`       | > 10% LLM calls failing | Check OpenRouter status, IS logs                         |
+| `LlmQueueSaturated`      | > 10 requests queued    | Scale IS: `./synap.sh swarm-scale intelligence-hub 5`    |
+| `IntelligenceHubDown`    | IS replica unreachable  | Check `./synap.sh swarm-logs intelligence-hub`           |
+| `SlowChatResponses`      | p99 > 30s               | Check OpenRouter latency, IS resources                   |
+| `PgBouncerPoolNearLimit` | > 85% pool used         | Lower `default_pool_size` in pgbouncer.ini or scale DB   |
+| `ValkeyHighMemory`       | > 80% memory            | Valkey LRU is evicting — add memory or separate instance |
+
+### Logs
+
+All container logs flow to Loki via Promtail and are searchable in Grafana → Explore.
+
+```bash
+# Stream logs from all IS replicas (CLI)
+./synap.sh swarm-logs intelligence-hub
+
+# Stream backend logs
+./synap.sh swarm-logs backend
+
+# Search in Grafana Loki:
+{job="synap_intelligence-hub"} |= "error"
+{job="synap_intelligence-hub"} | json | level="error" | userId="user-123"
+{job="synap_intelligence-hub"} | json | module="base-agent" | json err
+```
+
+### Distributed Traces
+
+Every IS request generates an OTel trace sent to Tempo. View in Grafana → Explore → Tempo.
+
+Filter by:
+
+- `service.name = intelligence-hub`
+- `userId = "user-123"` (custom attribute)
+- `threadId = "thread-456"`
+
+Traces show the full request timeline: auth → context assembly → LLM call → tool calls → response. Latency breakdown is visible at each step.
+
+### API Key Management
+
+```bash
+# Generate a new customer API key
+./synap.sh key-generate --customer-id <id>
+
+# List API keys for a customer
+./synap.sh key-list --customer-id <id>
+
+# Revoke a key
+./synap.sh key-revoke --key-id <id>
+```
+
+---
+
+## Production Hardening (2026-03)
+
+This section documents the reliability and cost-efficiency features added in March 2026. Together they prevent tenant starvation, protect against provider outages, reduce LLM spend, eliminate unbounded memory growth, and enforce category-appropriate tool timeouts.
+
+### LLM Concurrency — Fair Semaphore
+
+**File:** `lib/llm-concurrency.ts`
+
+The IS uses a two-level semaphore to control LLM call concurrency:
+
+1. **Global cap** (`OPENROUTER_CONCURRENCY`, default 20) — maximum simultaneous LLM calls per IS instance. This prevents a single replica from overwhelming the provider.
+2. **Per-customer cap** (`LLM_MAX_PER_CUSTOMER`, default 4) — maximum simultaneous LLM calls for any single customer. Without this, one customer running many sub-agents could monopolize all 20 slots and starve everyone else.
+
+Requests that cannot immediately acquire a slot enter a **two-tier priority queue**:
+
+| Priority      | When used                                                 |
+| ------------- | --------------------------------------------------------- |
+| `interactive` | User is actively waiting for a response (chat, streaming) |
+| `background`  | Sub-agent calls, background tasks, scheduled jobs         |
+
+Interactive requests are always dequeued before background requests, regardless of arrival order.
+
+If a request waits longer than `LLM_ACQUIRE_TIMEOUT_MS` (default 45 000 ms) without acquiring a slot, it is rejected with a timeout error rather than queuing indefinitely. This prevents request pile-up during sustained load.
+
+| Env Var                  | Default | Description                                   |
+| ------------------------ | ------- | --------------------------------------------- |
+| `OPENROUTER_CONCURRENCY` | `20`    | Global LLM concurrency cap per IS instance    |
+| `LLM_MAX_PER_CUSTOMER`   | `4`     | Per-customer concurrent LLM call limit        |
+| `LLM_ACQUIRE_TIMEOUT_MS` | `45000` | Max wait time (ms) before rejecting a request |
+
+### Circuit Breaker
+
+**File:** `lib/llm-circuit-breaker.ts`
+
+A three-state circuit breaker sits between the IS and the LLM provider:
+
+```
+closed  ──(5 consecutive failures)──>  open  ──(30s cooldown)──>  half_open
+  ^                                                                    │
+  └──────────────────(probe succeeds)──────────────────────────────────┘
+```
+
+- **Closed** (normal): all requests pass through. A failure counter tracks consecutive errors (HTTP 429, 5xx, or network timeout).
+- **Open**: after 5 consecutive failures, the breaker trips open. All subsequent LLM calls receive an immediate `LLMCircuitOpenError` with a `retryAfterSeconds` field. Callers get a fast fail instead of queuing behind a dead or rate-limited provider.
+- **Half-open**: after a 30-second cooldown, the breaker allows a single probe request. If the probe succeeds, the breaker resets to closed. If it fails, the breaker returns to open for another 30-second window.
+
+The circuit breaker auto-resets on success in any state. No manual intervention is required.
+
+### Dynamic Complexity Routing
+
+**File:** `config/models.ts`
+
+Not every user message needs the most expensive model. `classifyComplexity()` analyzes the user message and routes it to an appropriate model tier:
+
+| Complexity | Criteria                                                   | Model tier                            | Relative cost |
+| ---------- | ---------------------------------------------------------- | ------------------------------------- | ------------- |
+| `simple`   | Short factual queries, greetings, yes/no questions         | Free or cheap model                   | 1x            |
+| `normal`   | Typical conversational messages                            | Cost-optimized default (DeepSeek V3)  | 10-20x        |
+| `complex`  | Architecture, multi-step analysis, debugging, long prompts | Powerful model (GPT-4o / Claude Opus) | 50-100x       |
+
+Classification uses regex-based pattern matching and message length heuristics. Short factual queries (e.g., "What time is it in Tokyo?") are routed to the cheapest tier, saving 10-50x on those calls. Complex messages containing architecture keywords, debugging context, or exceeding length thresholds are routed to the most capable model.
+
+### Bounded Caches — TTLCache
+
+**File:** `lib/ttl-cache.ts`
+
+Four internal caches previously used plain `Map` objects with no size limit or expiry. Under sustained load these maps grew without bound, eventually causing out-of-memory crashes.
+
+`TTLCache&lt;K, V>` is a generic bounded cache with time-based expiry that replaced all four:
+
+| Usage                     | Max entries | TTL     | Previously      |
+| ------------------------- | ----------- | ------- | --------------- |
+| Entitlement check cache   | 2 000       | default | Unbounded `Map` |
+| Rate-limit fallback cache | 5 000       | default | Unbounded `Map` |
+| Agent state registry      | 2 000       | 15 min  | Unbounded `Map` |
+| Agent definition service  | 2 000       | 5 min   | Unbounded `Map` |
+
+Expired entries are garbage-collected automatically on access and via a periodic sweep. Maximum memory consumption is now predictable and bounded.
+
+### Per-Category Tool Timeouts
+
+**File:** `agents/base/tool-wrapper.ts`
+
+Previously all tool calls shared a flat 20-second timeout. This was too generous for read-only context tools (masking slow failures) and too tight for coordination tools that legitimately need more time.
+
+Timeouts are now assigned by tool category:
+
+| Category       | Timeout | Rationale                                      |
+| -------------- | ------- | ---------------------------------------------- |
+| `context`      | 8s      | Read-only lookups; should be fast or fail fast |
+| `action`       | 12s     | Mutations (create entity, update proposal)     |
+| `coordination` | 20s     | Cross-agent calls, workflow orchestration      |
+| `mcp`          | 15s     | External MCP servers with variable latency     |
+
+If a tool call exceeds its category timeout, it is aborted and the agent receives a timeout error it can react to (retry, skip, or report to the user).
+
+---
+
+## Error Handling
+
+### Where Errors Go
+
+| Error Type               | Captured By                                   | Find It                                                             |
+| ------------------------ | --------------------------------------------- | ------------------------------------------------------------------- | ---------------------- |
+| Unhandled exceptions     | Sentry + Loki                                 | Sentry dashboard or `{job="synap_intelligence-hub"}                 | = "uncaughtException"` |
+| Route errors (5xx)       | Sentry + Loki + Traefik metrics               | `is_chat_requests_total{status="error"}`                            |
+| LLM API failures         | Sentry + `is_llm_calls_total{status="error"}` | Grafana LLM error rate panel                                        |
+| Tool call failures       | Loki                                          | `{job="synap_intelligence-hub"}                                     | = "tool error"`        |
+| Background task failures | Loki + DB error log                           | `{job="synap_intelligence-hub", module="background-task-executor"}` |
+| DB connection failures   | Sentry + PgBouncer metrics                    | `pgbouncer_pools_pool_size` near limit                              |
+
+### Common Issues & Fixes
+
+**IS replicas keep restarting**
+
+```bash
+docker service logs synap_intelligence-hub --tail 50
+# Look for: OOM (memory limit), missing env vars, DB connection failure
+# Fix: increase memory limit in docker-stack.yml or fix env vars
+```
+
+**Chat requests timing out**
+
+```bash
+# Check LLM queue depth
+curl http://prometheus:9090/api/v1/query?query=sum(is_llm_queued)
+# If > 5: scale IS up
+./synap.sh swarm-scale intelligence-hub 5
+# If queue is empty but still slow: OpenRouter is slow, check their status page
+```
+
+**"Rate limit exceeded" errors**
+
+```bash
+# Check Valkey
+docker exec $(docker ps -q -f name=synap_valkey) valkey-cli -a $VALKEY_PASSWORD info stats
+# Look for: keyspace_hits vs keyspace_misses, total_commands_processed
+# High miss rate = customers hitting limit legitimately
+# Set RATE_LIMIT_RPM higher if needed, or upgrade customer quota
+```
+
+**PgBouncer pool exhausted**
+
+```bash
+docker exec $(docker ps -q -f name=synap_pgbouncer) psql -h localhost -U pgbouncer pgbouncer -c "SHOW POOLS;"
+# Increase PGBOUNCER_DEFAULT_POOL_SIZE (but stay < postgres max_connections/2)
+```
+
+**IS can't reach backend (hub protocol failures)**
+
+```bash
+# Check overlay network connectivity
+docker exec $(docker ps -q -f name=synap_intelligence-hub | head -1) wget -qO- http://backend:3000/health
+# If unreachable: check both services are on synap_internal network
+```
+
+---
+
+## Uptime Kuma Setup
+
+After deploying the observability stack, configure Uptime Kuma at `https://status.your-domain.com`.
+
+> **Shortcut:** `synap infra monitors` prints the exact table below pre-filled with your domain and Valkey password.
+
+**Add these monitors (Uptime Kuma → uptime-kuma service is on `synap_internal` overlay, so internal DNS works):**
+
+| Name           | URL                                     | Type            | Keyword                        | Interval |
+| -------------- | --------------------------------------- | --------------- | ------------------------------ | -------- |
+| IS — Liveness  | `http://intelligence-hub:3001/health`   | HTTP(s) keyword | `"status":"ok"`                | 30s      |
+| IS — Readiness | `http://intelligence-hub:3001/ready`    | HTTP(s) keyword | `"ready":true`                 | 30s      |
+| IS — Public    | `https://is.your-domain.com/health`     | HTTP(s) keyword | `"status":"ok"`                | 60s      |
+| Backend Health | `http://backend:3000/health`            | HTTP(s) keyword | `"status":"ok"`                | 30s      |
+| Traefik Ping   | `https://traefik.your-domain.com/ping`  | HTTP(s)         | —                              | 60s      |
+| Grafana        | `http://grafana:3000`                   | HTTP(s)         | —                              | 60s      |
+| Prometheus     | `http://prometheus:9090/-/healthy`      | HTTP(s) keyword | `Prometheus Server is Healthy` | 60s      |
+| Loki           | `http://loki:3100/ready`                | HTTP(s)         | —                              | 60s      |
+| Tempo          | `http://tempo:3200/ready`               | HTTP(s)         | —                              | 60s      |
+| Valkey         | `redis://:$VALKEY_PASSWORD@valkey:6379` | Redis           | —                              | 30s      |
+
+**IS probes explained:**
+
+- `/health` — liveness probe: is the process responsive and API key configured? Returns 503 if degraded.
+- `/ready` — readiness probe: includes a live DB round-trip (`SELECT 1`). Use this to confirm the IS is truly ready to handle requests. Traefik also uses `/ready` to gate traffic routing.
+
+Create a public status page at `/status` and share the URL with your users.
+
+---
+
+## Capacity Planning
+
+### Single IS Instance
+
+- Can handle ~20 concurrent LLM calls (semaphore)
+- Each call holds ~2-60s of connection time
+- With 30s average response: ~40 chat messages/min at comfortable utilization
+
+### Scaling Formula
+
+```
+required_replicas = ceil(peak_concurrent_chats / OPENROUTER_CONCURRENCY)
+```
+
+Example: 100 concurrent users × 50% chatting = 50 concurrent chats ÷ 20 = **3 IS replicas minimum**.
+
+### Memory per IS Replica
+
+- Base Node.js: ~200MB
+- Embedding LRU cache (10K entries × 1536 × 8 bytes): ~120MB
+- MCP connections (100 max): ~50MB
+- In-flight LLM streams: ~10MB each
+- **Total: reserve 1-2GB per replica**
+
+### PgBouncer Pool Size
+
+```
+pool_size = max_connections_postgres / (is_replicas + backend_replicas + headroom)
+# Example: 100 postgres connections, 3 IS + 2 backend = 100 / (3+2+2) = ~14
+# Round up to 20 for headroom
+```
+
+---
+
+## Security Notes
+
+- **Traefik terminates SSL** — IS and backend never see raw TLS
+- **API keys** are never logged (Traefik redacts `X-API-Key` and `Authorization` headers)
+- **Docker Secrets** are used for database passwords and internal keys — not env vars
+- **Internal network** (`synap_internal`) is not reachable from the internet — only Traefik is on the public network
+- **`/metrics` endpoint** is on port 3001 (internal only) — never exposed publicly
+- **Admin routes** (`/admin/*`) use HMAC signature verification with replay protection (±5 min window)
+- **Rate limiting** is layered: Traefik (per customer key) + IS Redis (per customer) + quota-guard (per customer concurrent)

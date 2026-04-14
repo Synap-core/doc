@@ -1,0 +1,406 @@
+---
+title: "North Star"
+description: "Synap's product vision, philosophy, and emergent complexity model."
+---
+
+  
+**SYNAP**
+
+**NORTH STAR**
+
+The Knowledge Infrastructure for the Agent Economy
+
+Strategic Vision & Execution Plan
+
+April 2026 — Confidential
+
+**Founder:** Antoine Servant — CEO & CTO, Synap Technologies
+
+**Version:** 1.0 — April 4, 2026
+
+# **Contents**
+
+1\. The Thesis
+
+2\. Market Context: The Agent Economy
+
+3\. What Synap Is
+
+4\. The Stack: Five Layers
+
+5\. The OpenClaw Bridge: Our Primary Funnel
+
+6\. Beyond OpenClaw: Direct Acquisition
+
+7\. Schema & Entity Architecture
+
+8\. Revenue Architecture
+
+9\. Execution Phases
+
+10\. What We Ship vs. What We Don’t
+
+11\. The Endgame
+
+# **1\. The Thesis**
+
+AI models are commoditizing. The moat is structured knowledge. Synap is the sovereign knowledge infrastructure that makes every AI — and every agent — smarter, safer, and permanent.
+
+Three shifts are converging simultaneously:
+
+**Model commoditization.** The gap between frontier and open-source LLMs is shrinking every quarter. GPT-4 was state of the art for eleven months. Within two years, the model layer will be functionally interchangeable for most use cases. Models are the engine. They are not the moat.
+
+**The agent explosion.** OpenClaw proved in 60 days that people want AI that does things, not AI that talks. 250,000+ GitHub stars. Agents clearing inboxes, managing calendars, writing code, controlling smart devices. But these agents operate on unstructured data — flat files, conversation logs, raw API calls. They have hands but no memory.
+
+**SaaS fatigue.** Knowledge workers pay for 8–12 subscriptions. Each stores a fragment of their context. None of them talk to each other. And every time you switch AI providers, you start from zero. Your context is hostage.
+
+Synap exists at the intersection of these three shifts. We are not building another productivity tool. We are not building another AI chatbot. We are building the knowledge infrastructure layer — the permanent, structured, sovereign substrate that any AI model, any agent framework, and any application can plug into.
+
+*When every company has access to the same AI models, context becomes the competitive advantage. — Harvard Business Review, February 2026*
+
+# **2\. Market Context: The Agent Economy**
+
+The AI agent ecosystem exploded in early 2026\. OpenClaw — created by Austrian developer Peter Steinberger — went from a weekend hack to the fastest-growing open-source project in GitHub history. But OpenClaw exposed a fundamental gap that no product has filled:
+
+**What agents CAN do (OpenClaw)**
+
+Execute shell commands, browse the web, send emails, manage calendars, control smart devices, run code, interact via WhatsApp/Telegram/Discord. Full system access. 100+ skills. Proactive heartbeat monitoring.
+
+**What agents CANNOT do (the gap Synap fills)**
+
+Remember structured information across sessions. Understand relationships between entities (people, projects, tasks, deals). Operate within a governance framework. Track their own costs, permissions, and audit trails. Access a typed knowledge graph instead of flat text files.
+
+OpenClaw’s own security track record illustrates this gap. Cisco found third-party skills performing data exfiltration. China restricted government use. Credentials stored in plaintext. No proposal system, no event chain, no structured audit trail. These are not bugs — they are architectural absences. Absences that Synap’s architecture already addresses.
+
+Synap is to OpenClaw what PostgreSQL is to a shell script that reads CSV files. Both can store data. One is infrastructure.
+
+# **3\. What Synap Is**
+
+Synap is sovereign AI knowledge infrastructure. It is three things in one:
+
+**A. A Data Pod**
+
+A dedicated private server provisioned for one user or team. Real PostgreSQL \+ pgvector \+ Typesense \+ MinIO. Not a row in someone else’s table. Standard formats (Markdown, SQL, JSON). Full export at any time. EU or US hosting. If Synap disappears, your server keeps running.
+
+**B. A Knowledge Graph**
+
+Everything captured becomes a typed entity with properties, relationships, and history. A “task” is linked to a “project” which is linked to a “person.” AI auto-classifies and connects entities on capture. Semantic search via pgvector. Full-text search via Typesense. The graph builds itself.
+
+**C. An AI Governance Layer**
+
+Every AI write operation goes through the proposal system. The AI proposes a change, shows its reasoning, and waits for approval. Every mutation is recorded in an immutable event chain — what changed, when, by whom, why. AI can be genuinely autonomous because the architecture makes it impossible to act without a trace.
+
+**Core Architectural Primitives**
+
+| Primitive | What It Is | Why It Matters |
+| :---- | :---- | :---- |
+| Entities | Typed data objects with properties and relationships | Everything is an entity: notes, tasks, people, deals, agents, skills. Universal data model. |
+| Views | Rendering configurations (kanban, table, graph, calendar, etc.) | Same data, infinite perspectives. Views are lenses, not containers. |
+| Channels | Communication flows (Telegram, API, webhooks, connectors) | Every way data enters or leaves the system. |
+| Cells | Universal rendering units (widgets, cards, panels) | Everything visible is a cell. AI can create new cell types. |
+| Proposals | Reviewable AI write operations with reasoning traces | Human oversight by architecture, not by policy. |
+| Event Chain | Append-only immutable mutation log | Full history. Time-travel. Undo. Audit trail. |
+| Hub Protocol | Open REST API contract (50+ endpoints, 20 sub-routers) | Any AI model can plug in. The protocol is the constant. |
+
+# **4\. The Stack: Five Layers**
+
+Synap’s architecture is organized in five layers. Each layer pulls users upward from the one below. The critical strategic decision: users enter at Layer 0 (open source, free), not at Layer 2 (visual products, paid).
+
+## **Layer 0 — Open Source Foundation (Free)**
+
+The community layer. Everything here is MIT-licensed, on GitHub, free forever.
+
+| Component | Description | Distribution Channel |
+| :---- | :---- | :---- |
+| synap-memory | OpenClaw/ZeroClaw skill: structured entity memory via Hub Protocol | ClawHub, GitHub, OpenClaw Discord |
+| synap-connector | ZeroClaw integration module | ZeroClaw registry, GitHub |
+| Self-hosted pod | docker-compose: PostgreSQL \+ Typesense \+ pgvector \+ MinIO \+ Synap backend | GitHub, docs |
+| Hub Protocol spec | Open REST API contract for AI-to-knowledge communication | GitHub, documentation |
+| Agent OS template | Pre-built workspace: Agent, Project, Task, Skill, Provider entities \+ 15 views | Ships with synap-memory |
+| MCP Server | Model Context Protocol server for Claude Desktop, Cursor, etc. | GitHub, MCP registry |
+
+Layer 0 is the funnel. It’s how 250,000+ OpenClaw users discover Synap — not through a landing page, but through a skill install inside their existing workflow.
+
+## **Layer 1 — Managed Infrastructure ($15–20/month)**
+
+Same pod, zero ops. One command provisions a managed server on Synap’s infrastructure.
+
+| Component | Description |
+| :---- | :---- |
+| Managed pod | Dedicated VPS (EU or US), auto-provisioned, TLS, backups, monitoring |
+| Managed PostgreSQL | pgvector enabled, automatic vacuuming, point-in-time recovery |
+| Managed search | Typesense full-text \+ semantic search, indexed automatically |
+| Managed storage | MinIO S3-compatible, files, attachments, media |
+| Synap backend | tRPC server, 47+ routers, event chain, proposal engine |
+
+Value proposition: “Don’t want to manage PostgreSQL? We do it for you.” For users already spending $50–300/month on LLM tokens for OpenClaw, $15–20/month for managed knowledge infrastructure is a rounding error.
+
+## **Layer 2 — Visual Products ($50/month or included in Pro)**
+
+The “macOS layer” — the opinionated, integrated experience on top of the infrastructure.
+
+| Product | Description |
+| :---- | :---- |
+| Desktop app | Electron app with built-in Chromium browser. Browse, capture, manage — one interface. |
+| Bento dashboard | AI-generatable grid layouts from JSON. Morning briefing, project overview, agent fleet. |
+| 12+ view types | Table, Kanban, Calendar, Graph, Whiteboard, Flow, List, Feed, Timeline, Dashboard, Mindmap. |
+| Telegram bot | @SynapOS\_bot — capture voice notes, links, files, messages. AI structures on arrival. |
+| Deep Focus design | Warm amber/mint palette, Fraunces \+ DM Sans typography. The anti-dashboard aesthetic. |
+
+Critical insight: the visual layer is the UPSELL, not the entry point. Users discover Synap through Layer 0 (agent memory). They upgrade to Layer 2 when they want to SEE their knowledge graph, manage their entities visually, and use the full workspace.
+
+## **Layer 3 — Intelligence Service (Premium)**
+
+Synap’s own AI processing tier. Not required (bring your own model), but optimized for structured data.
+
+| Component | Description |
+| :---- | :---- |
+| Four-tier model routing | DeepSeek V3 / Kimi K2.5 (commodity, \~90% of traffic) → Claude Sonnet (complex) → Claude Opus (critical). Cost optimization without quality loss. |
+| Auto-classification | On capture: entity type detection, property extraction, relationship inference. |
+| Semantic analysis | Cross-entity pattern detection, contradiction surfacing, theme clustering. |
+| Proposal generation | AI-generated suggestions: “This article relates to Project X, should I link them?” |
+| Connectors (via Nango) | Self-hosted OAuth \+ data sync for Google Calendar, GitHub, Gmail, etc. |
+
+## **Layer 4 — Ecosystem (Long-term)**
+
+Network effects. The platform play.
+
+| Component | Description |
+| :---- | :---- |
+| Package marketplace | Composable blueprints: entity profiles \+ views \+ automations. CRM, project management, research toolkit, personal finance — as installable packages. |
+| Third-party cells | Developers build custom rendering components. Sandboxed iframes \+ postMessage SDK. |
+| Template gallery | Pre-configured workspaces: Second Brain, Agent Fleet Manager, Startup OS, Research Hub. |
+| Revenue share | 15–20% marketplace fee on paid packages and premium templates. |
+
+# **5\. The OpenClaw Bridge: Our Primary Funnel**
+
+OpenClaw is not a competitor. It is Synap’s primary distribution channel. 250,000+ developers have already adopted agent frameworks. They are already experiencing the exact pain that Synap solves: unstructured memory, no governance, no entity relationships, no audit trail.
+
+## **5.1 Integration Architecture**
+
+Synap connects to the agent ecosystem in three modes, deployed in sequence:
+
+**Mode A: “Agent uses Synap” (Ship first)**
+
+Synap is a skill/connector that OpenClaw or ZeroClaw calls when it needs structured memory. The agent orchestrator stays in control. Synap is the knowledge backend.
+
+User experience: the agent says “remember that Marc wants projections by Friday” and instead of appending to a text file, it creates a Task entity linked to a Contact entity in the Synap pod. When the agent needs to plan its day, it queries Synap: “what’s overdue?” and gets structured, relational results.
+
+**Mode B: “Beside the agent” (Ship second)**
+
+Synap runs as a separate service on the same machine. The agent talks to it via Hub Protocol or MCP. More independent, more modular. Better for power users and self-hosted deployments.
+
+**Mode C: “Synap manages agents” (Long-term)**
+
+Synap becomes the control plane that spawns and manages agent instances. The Agent OS template becomes the live operational interface. This is the endgame: Synap as the operating system for your agent fleet.
+
+## **5.2 Two-Path Provisioning**
+
+When a user installs synap-memory, they choose:
+
+| Path | How It Works | Price | Audience |
+| :---- | :---- | :---- | :---- |
+| Self-hosted | docker-compose alongside existing OpenClaw/ZeroClaw. User owns everything. | Free | Open-source community, privacy-maximalists, developers |
+| Managed pod | One command: synap pod create \--region eu. Hosted on Synap infra. | $15–20/mo | Users who don’t want to manage PostgreSQL. Revenue path. |
+
+## **5.3 The Agent OS Template**
+
+Ships with synap-memory as the default workspace. Five entity types, fifteen views. Immediately gives OpenClaw users a structured control plane they’ve never had.
+
+| Entity Profile | Key Properties | Relationships |
+| :---- | :---- | :---- |
+| Agent | Status, runtime, version, model, channels, heartbeat, health | Has Skills, uses Provider, assigned to Projects, owns Tasks |
+| Project | Status, goal, priority, deadline, health, expected outcome | Has Agents, contains Tasks, owned by Person |
+| Task | Status, type, priority, effort, due date, blocked-by | Assigned to Agent, part of Project |
+| Skill | Source, category, trust level, version, VirusTotal status, audit date | Installed on Agents |
+| Provider | Type, model, cost/token, key health, budget ceiling, actual spend | Used by Agents |
+
+Key views: Agent Fleet (kanban by status), Agent → Projects → Tasks (hierarchy drill-down), Cost Dashboard (provider spend tracking), Skill Audit (trust level matrix), Daily Briefing (bento grid with agent health, overdue tasks, budget status).
+
+# **6\. Beyond OpenClaw: Direct Acquisition**
+
+OpenClaw is the primary funnel NOW. But the North Star is that Synap stands on its own. The goal is that people don’t need OpenClaw to use Synap — but OpenClaw is how they discover it.
+
+## **6.1 The Gravity Model**
+
+Each acquisition channel feeds into the same infrastructure:
+
+| Channel | Entry Point | First Experience | Upgrade Path |
+| :---- | :---- | :---- | :---- |
+| OpenClaw ecosystem | synap-memory skill install | Structured memory for agents | Managed pod → Visual layer → Full workspace |
+| Developer community | GitHub, HN, dev blogs | Self-hosted pod \+ SDK | Intelligence service → Packages |
+| PKM / productivity | Landing page, Telegram bot | Capture → AI organizes | Desktop app → Full workspace |
+| Enterprise / teams | Direct sales, referrals | Team pods \+ governance | Intelligence service → Compliance → On-prem |
+| Francophone market | LinkedIn, conferences | Souveraineté numérique narrative | Same stack, cultural positioning |
+
+The infrastructure is the same in every case. Only the entry point and the narrative change. A PKM user and an OpenClaw developer both end up on a Synap pod with entities, views, and AI governance. They just arrived through different doors.
+
+## **6.2 The Visual Product as Standalone**
+
+Once the infrastructure layer is proven (via OpenClaw adoption), Synap’s visual products (desktop app, bento dashboard, Telegram bot, view system) become independently marketable. The pitch shifts from “structured memory for agents” to “the workspace that organizes itself.” This is the Notion/Obsidian replacement narrative — but backed by real infrastructure that those tools can’t match.
+
+The key insight: the visual layer IS the product for 90% of future users. But the infrastructure layer is what makes it defensible. Build the infrastructure first (via the agent funnel), then market the visual layer to the mass market. Don’t try to do both simultaneously as a solo founder.
+
+# **7\. Schema & Entity Architecture**
+
+Synap’s data model is built on composable entity profiles. Each profile defines a type (e.g., “note,” “task,” “person”) with typed properties and relationship slots. Profiles are defined in JSON and installed as packages.
+
+## **7.1 Core Entity Profiles (Second Brain Template)**
+
+The Second Brain template ships 22 entity types across 6 domains. This is the default workspace for personal knowledge management users:
+
+| Domain | Entity Types | Purpose |
+| :---- | :---- | :---- |
+| Knowledge | Note, Article, Bookmark, Highlight, Quote | Everything you learn and reference |
+| Work | Project, Task, Goal, Milestone, Decision | Everything you do and plan |
+| People | Person, Company, Interaction | Everyone you know and engage with |
+| Assets | File, Document, Image, Template | Everything you create and store |
+| Time | Event, Habit, Journal Entry | Everything anchored to when it happened |
+| Meta | Tag, Collection, Dashboard | Organizational primitives that compose |
+
+## **7.2 Agent OS Template (5 profiles)**
+
+For OpenClaw/ZeroClaw users. Covered in section 5.3. Ships alongside the Second Brain template but targeted at agent operators.
+
+## **7.3 Technical Schema**
+
+Every entity shares a common base: unique ID, profile slug, workspace, created/updated timestamps, creator (human or AI), event chain reference. Properties are strongly typed: text, number, date, select, multi-select, entity\_id (relationships), rich text (Markdown), file, URL, email, phone.
+
+Relationships are bidirectional and typed. When a Task links to a Project via “belongs-to,” the Project automatically shows the Task in its “contains” sidebar. The graph is maintained automatically by the backend.
+
+# **8\. Revenue Architecture**
+
+Three revenue streams, each corresponding to a layer of the stack:
+
+| Stream | Source | Pricing | Margin Profile |
+| :---- | :---- | :---- | :---- |
+| Infrastructure | Managed pod hosting (Layer 1\) | $15–20/month per pod | High margin. VPS cost \~$5–8/mo. 60–75% gross margin. |
+| Intelligence | AI routing \+ classification (Layer 3\) | Usage-based or $30–50/mo premium tier | Medium margin. LLM API costs offset by four-tier routing optimization. |
+| Ecosystem | Marketplace revenue share (Layer 4\) | 15–20% of paid packages | Pure margin. Network effects compound. |
+
+The free self-hosted path (Layer 0\) generates no direct revenue but drives adoption, community contributions, and trust. This is the Redis/MongoDB model: open-source core, managed hosting as the business.
+
+## **Pricing Tiers**
+
+| Tier | Price | Includes |
+| :---- | :---- | :---- |
+| Open Source | Free | Self-hosted pod, all entity types, all views, Hub Protocol, MCP server, Agent OS template, community support |
+| Managed | $15–20/mo | Hosted pod (EU or US), automatic backups, TLS, monitoring, email support |
+| Pro | $50/mo | Managed pod \+ Desktop app \+ Intelligence Service \+ all connectors \+ priority support |
+| Team | TBD | Shared pod, multi-user, team workspace, role-based access, compliance features |
+
+# **9\. Execution Phases**
+
+## **Phase 0: The Exit Ramp (Weeks 1–2)**
+
+**Objective: Ship synap-memory to the OpenClaw ecosystem**
+
+| Action | Deliverable | Owner |
+| :---- | :---- | :---- |
+| Reactivate OpenClaw/ZeroClaw integration code | Working synap-memory skill, one-command install | Antoine |
+| Package Agent OS template as default workspace | 5 entity types, 15 views, ships with connector | Antoine |
+| Implement two-path provisioning | docker-compose (self-hosted) \+ synap pod create (managed) | Antoine |
+| Write GitHub README | Architecture in 2 minutes, install in 1 command, screenshot of dashboard | Antoine |
+| Post on OpenClaw Discord \+ GitHub Discussions | Launch post with demo screenshot | Antoine |
+| Record 60-second demo video | Agent queries Synap, gets structured results, dashboard view | Antoine |
+
+Success metric: 50+ installs of synap-memory in 2 weeks. Signal that the OpenClaw community wants structured agent memory.
+
+## **Phase 1: First 50 Users (Weeks 3–6)**
+
+**Objective: 50 active users with 10+ entities and 3+ dashboard opens**
+
+| Action | Deliverable | Channel |
+| :---- | :---- | :---- |
+| Launch free tier (100 entities, managed) | 30-day trial, no card required | All channels |
+| Show HN post | “Self-hosted knowledge graph for AI agents” | Hacker News |
+| French tech community push | Souveraineté numérique narrative, LinkedIn \+ Twitter | Francophone market |
+| Personal onboarding of every user | DM each installer, ask what they’re building, fix issues live | Discord, Telegram |
+| Collect 10 testimonials | Screenshots, quotes, use cases | All channels |
+| Iterate on Agent OS template based on feedback | Add/remove views, adjust entity properties | GitHub issues |
+
+Success metric: 50 active users. 5+ who tweet/post about it unprompted. Qualitative signal that the product is worth paying for.
+
+## **Phase 2: The Bridge (Months 2–3)**
+
+**Objective: Revenue, co-pilot hire, visual layer upsell**
+
+| Action | Deliverable |
+| :---- | :---- |
+| Convert free users to Managed tier | Email sequence: “Your trial ends in 7 days. Keep your pod for $15/mo.” |
+| Ship the “holy shit” moment | Telegram voice note → AI structures → morning dashboard. End-to-end, polished. |
+| Find the growth co-pilot | Recruit from first 50 users. Offer equity. GTM-obsessed. |
+| Desktop app as upsell | “Want to SEE your knowledge graph? Download the app.” |
+| Begin Nango connector integrations | Google Calendar, GitHub, Gmail sync into pods |
+| Publish “Why your agent needs a knowledge graph” | Long-form blog post, technical depth, SEO play |
+
+## **Phase 3: Infrastructure Play (Months 4–6)**
+
+**Objective: Position for fundraising, ecosystem growth**
+
+| Action | Deliverable |
+| :---- | :---- |
+| Ship Intelligence Service (four-tier routing) | Auto-classification, proposal generation, semantic analysis |
+| Launch package marketplace (beta) | CRM template, Research Hub template, Project Management template |
+| Publish Hub Protocol specification | Open spec for any AI system to implement. Ecosystem play. |
+| Begin fundraising conversations | Pitch: open-source knowledge infra for the agent economy. TAM: $200B+ convergence. |
+| Ship Mode C (Synap manages agents) | Agent spawning/management from within the Synap workspace |
+| Enterprise pilot | 1–2 companies using team pods with governance and compliance |
+
+# **10\. What We Ship vs. What We Don’t**
+
+Focus is the scarcest resource for a solo founder. This list is a commitment device.
+
+## **SHIP NOW (next 30 days)**
+
+| Item | Why |
+| :---- | :---- |
+| synap-memory OpenClaw skill | Primary funnel. Distribution. The exit ramp. |
+| Self-hosted docker-compose | Free tier. Community trust. Open source credibility. |
+| Managed pod provisioning | Revenue. Even at $15/mo, proves unit economics. |
+| Agent OS template (5 profiles, 15 views) | Immediate value for OpenClaw users. “Holy shit” moment. |
+| GitHub README \+ demo video | The new landing page. Distribution through ecosystem. |
+| Free trial (30 days, no card) | Removes friction. Gets people in. |
+
+## **STOP / DEPRIORITIZE**
+
+| Item | Why |
+| :---- | :---- |
+| New view types | Already have 12+. Enough for now. |
+| Comparison pages (vs Notion, Obsidian, etc.) | SEO content for traffic you don’t have yet. Wasted effort at \&lt;100 monthly visitors. |
+| SDK documentation polish | Nobody’s building on the SDK yet. Docs matter when devs decide to build. |
+| Desktop app as primary entry point | Heavy lift. Entry point is now the agent ecosystem, not a download. |
+| Agora (civic transparency dashboard) | Parallel project. 90-day moratorium. Focus. |
+| Africa GTM play | Interesting but premature. Revisit after proving the agent infra thesis. |
+| $50/mo as only price | Replace with tiered pricing: free → $15–20 → $50. Match the funnel. |
+| Landing page optimization | It’s good enough. Stop polishing. Start distributing. |
+
+# **11\. The Endgame**
+
+The North Star is not a product. It is a position in the stack.
+
+## **The Emerging AI Stack**
+
+| Layer | What It Does | Who Owns It Today | Synap’s Position |
+| :---- | :---- | :---- | :---- |
+| Models | Reasoning, intelligence | Anthropic, OpenAI, open-source | Consumer (any model plugs in) |
+| Orchestration | Routing, tool calling, skills | OpenClaw, LangChain, CrewAI | Complementary (not competitive) |
+| **Knowledge** | **Structured data, context, memory** | **NOBODY** | **THIS IS SYNAP** |
+| Execution | File system, browser, APIs | OpenClaw, OS-level | Consumer (agents use pods) |
+| Interface | Chat apps, desktop, browser | WhatsApp, Telegram, browsers | Provider (desktop app, bento grid) |
+
+The knowledge layer is the only layer in the AI stack that nobody owns. Models are commoditizing (Anthropic, OpenAI, open-source). Orchestration has OpenClaw. Execution is OS-level. Interfaces are platform-level. But structured, sovereign, AI-accessible knowledge infrastructure? That’s an open field.
+
+*Synap’s endgame: to be the knowledge infrastructure that every AI model, every agent framework, and every application depends on. Not the model. Not the orchestrator. The substrate.*
+
+## **What Success Looks Like**
+
+In three years, “Synap pod” is to personal/team knowledge what “AWS instance” is to compute. Every agent framework ships with a Synap connector. Every AI model speaks Hub Protocol. Every knowledge worker has a pod. The visual layer (desktop app, dashboard, views) is how most people interact with it. But underneath, it’s infrastructure.
+
+The “macOS of AI” comparison becomes real: open standards underneath (PostgreSQL, Hub Protocol, MCP), opinionated integrated experience on top (entity graph, proposal system, bento dashboard, Deep Focus design). Premium because the vertical integration justifies the premium. Sovereign because the architecture guarantees it.
+
+## **For the Founder**
+
+Antoine, this document is a commitment. Not to a roadmap that won’t change — it will. But to an order of operations: infrastructure first, distribution through the agent ecosystem, visual products as the upsell, platform as the long-term play. Build the exit ramp. Get 50 people. Find the co-pilot. Then build the platform. In that order.
+
+The architecture is Mac-worthy. The experience needs to catch up to the architecture. Ship the moment. The rest follows.

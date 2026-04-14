@@ -1,0 +1,36 @@
+---
+title: "Product & surface index"
+description: "Internal map of Synap repos, apps, and docs — for team orientation"
+---
+
+**Team-only orientation page.** Use this to see **everything we ship** in one place. Public docs use **journeys** ([Start](/docs/start), [Integrate](/docs/integrate), [Contributing](/docs/contributing), [Cloud & Intelligence](/docs/cloud), [Architecture](/docs/architecture)); this page is the **matrix view**.
+
+## Core runtime
+
+| Surface | Repo / package area | Public doc journey |
+|--------|---------------------|-------------------|
+| Data pod | `synap-backend` | [Architecture → deployment](/docs/architecture/deployment), [Integrate → reference](/docs/integrate/reference) |
+| Web monorepo + extension | `synap-app` | Shared packages & Chrome extension · team → [Synap App](/team/synap-app) · **[Package map](/team/synap-packages)** · *primary UI is Browser, not web* |
+| Desktop (Browser) | `browser` | Team → [Browser](/team/browser) · *public “clients” page still TBD* |
+| Mobile (Relay) | `relay-app` | Team → [Relay](/team/relay) |
+| Intelligence hub | `synap-intelligence-service` | [Cloud & Intelligence (public)](/docs/cloud/intelligence), team → [Intelligence](/team/intelligence) |
+| Control plane | `synap-control-plane-*` | [Synap Cloud (public)](/docs/cloud/synap-cloud), team → [Control plane](/team/control-plane) |
+
+## Developer & ecosystem tooling
+
+| Surface | Notes |
+|--------|--------|
+| OpenClaw / CLI | `synap-cli`, skills in backend |
+| **Eve** (Entity Creation System) | Monorepo folder `hestia-cli/` (`packages/eve-cli`, CLI `eve`) — team → [Eve](/team/eve-cli) |
+| Browser extension | `synap-app/packages/apps/extension` — see `EXTENSION.md` in that package |
+| Raycast | macOS commands (if shipped) — team → [Raycast](/team/raycast) |
+| Connectors | Nango, OAuth — [Platform → connectors](/team/platform/connectors) |
+
+## Docs site (this app)
+
+| Route | Audience |
+|-------|----------|
+| `/docs/*` | Public journeys + stubs for Cloud & Intelligence |
+| `/team/*` | Authenticated team |
+
+> **Next edit:** Add deep links to canonical GitHub org, version tags, and “owner” per area.

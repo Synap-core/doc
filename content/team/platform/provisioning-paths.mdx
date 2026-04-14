@@ -1,0 +1,230 @@
+---
+title: "Provisioning Paths"
+description: "All pod provisioning paths: standard, warm pool, self-hosted."
+---
+
+# Synap + OpenClaw Provisioning Paths
+
+**Date:** 2026-04-04
+**Status:** Architecture document — defines all user journeys for provisioning.
+
+---
+
+## Pricing Model
+
+| Product | Solo | Bundle |
+|---------|------|--------|
+| **Synap Data Pod** (managed) | ~20/mo | |
+| **OpenClaw Server** (managed) | ~15/mo | |
+| **Both together** | | ~30/mo (save ~5) |
+| **Self-hosted** | Free | Free |
+
+The discount incentivizes bundling. Both products are independently useful but better together.
+
+---
+
+## Six Provisioning Paths
+
+### Path 1: OpenClaw User Discovers Synap (Primary Funnel)
+
+**Entry:** OpenClaw user installs `synap` skill
+
+```
+OpenClaw agent running (anywhere)
+  → User installs synap skill
+  → Skill requires: SYNAP_POD_URL + SYNAP_HUB_API_KEY
+  → Two options presented:
+
+  Option A: Self-hosted (free)
+    → docker compose up (same server or separate)
+    → setup-openclaw.sh generates API key
+    → Done
+
+  Option B: Managed pod (~20/mo)
+    → synap.live/signup → subscribe → pod provisioned
+    → Settings → API Keys → create key
+    → Paste key into OpenClaw .env
+    → Done
+```
+
+**What exists:** Skill file, setup script, install.sh, CP provisioning
+**Gap:** No CLI command like `synap pod create` for managed path. User must go through web UI.
+
+### Path 2: Synap User Adds OpenClaw (Upsell)
+
+**Entry:** Synap user clicks "Add OpenClaw" in Browser/Dashboard
+
+```
+User has Synap pod (self-hosted or managed)
+  → Browser → Intelligence → Services → "Add OpenClaw"
+  → Three options:
+
+  Option A: Connect existing OpenClaw
+    → Enter OpenClaw URL (self-hosted or remote)
+    → Backend registers it as Intelligence Service
+    → API key generated, delivered to OpenClaw
+    → Done
+
+  Option B: Self-hosted on same server (free)
+    → setup-openclaw.sh (or button triggers it via SSH for managed)
+    → OpenClaw container starts with Docker profile
+    → Registered as IS automatically
+    → Done
+
+  Option C: Managed OpenClaw server (~15/mo)
+    → CP provisions new VPS with OpenClaw
+    → Connects to existing Synap pod
+    → API key exchanged automatically
+    → Done
+```
+
+**What exists:** CP provisioning API (5-step SSH), Browser OpenClawOnboardingSheet, ServicesTab
+**Gap:** Option C (dedicated managed OpenClaw server) doesn't exist. Currently OpenClaw only runs as addon ON the pod server.
+
+### Path 3: New User Wants Both (Bundle)
+
+**Entry:** User signs up at synap.live and picks the bundle
+
+```
+synap.live → signup → choose plan
+  → "Synap + OpenClaw" bundle (~30/mo)
+  → CP provisions pod with OpenClaw addon enabled
+  → Both services on same managed server
+  → Admin email with setup instructions
+  → Done
+```
+
+**What exists:** Pod provisioning with `addons.openclaw: true` flag
+**Gap:** No bundle pricing in CP. No "bundle" plan option in signup flow.
+
+### Path 4: Self-Hosted Everything (Free)
+
+**Entry:** Developer wants full stack on their own server
+
+```
+curl install.sh | bash
+  → Prompts: domain, email, admin_email
+  → Starts 11 services
+  → User creates account at /registration
+
+./setup-openclaw.sh
+  → Creates agent user + API key
+  → Starts OpenClaw container
+  → Installs synap skill
+
+Done — fully self-hosted, zero cost
+```
+
+**What exists:** Full flow implemented and tested
+**Gap:** None for basic path. Could improve with skill auto-install.
+
+### Path 5: Existing OpenClaw Connects to Managed Synap (Remote)
+
+**Entry:** User has OpenClaw on their machine, wants cloud Synap
+
+```
+OpenClaw running locally (laptop, VPS, etc.)
+  → User subscribes at synap.live (~20/mo)
+  → Pod provisioned in cloud
+  → User gets API key from Settings → API Keys
+  → Configures OpenClaw: SYNAP_POD_URL + SYNAP_HUB_API_KEY
+  → Done — local OpenClaw talks to cloud Synap
+```
+
+**What exists:** Full flow works today
+**Gap:** Could streamline with a "connect OpenClaw" wizard in the Synap web UI that generates the right env vars.
+
+### Path 6: Managed Synap Adds Dedicated OpenClaw Server
+
+**Entry:** User wants OpenClaw on a separate managed server (not colocated)
+
+```
+User has managed Synap pod
+  → Wants OpenClaw but NOT on same server (performance, isolation)
+  → CP provisions new VPS just for OpenClaw (~15/mo)
+  → OpenClaw connects to Synap pod via Hub Protocol (cross-server)
+  → Both managed by CP, billed together
+```
+
+**What exists:** Nothing — current model assumes OpenClaw runs ON the pod server
+**Gap:** CP would need a new provisioning job for standalone OpenClaw VPS. Lower priority.
+
+---
+
+## Implementation Priority
+
+| Path | Status | Priority | Effort |
+|------|--------|----------|--------|
+| **Path 4** (self-hosted both) | DONE | Shipped | 0 |
+| **Path 5** (local OC + cloud Synap) | DONE | Works now | 0 |
+| **Path 1** (OC user discovers Synap) | 90% | Skill shipped, needs managed CLI | LOW |
+| **Path 2** (Synap adds OC) | 80% | Browser UI exists, needs self-hosted path | MEDIUM |
+| **Path 3** (bundle signup) | 50% | CP provisioning works, needs pricing/plan UI | MEDIUM |
+| **Path 6** (dedicated OC server) | 0% | Architecture needed | LOW (future) |
+
+---
+
+## Architecture: How Services Connect
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  SAME SERVER (self-hosted or managed pod)                │
+│                                                          │
+│  ┌─────────────┐    Hub Protocol     ┌──────────────┐   │
+│  │ OpenClaw     │◄──── REST ────────►│ Synap Backend │   │
+│  │ :18789      │   /api/hub/*        │ :4000         │   │
+│  │              │   Bearer token      │               │   │
+│  └─────────────┘                     └──────────────┘   │
+│       ▲                                    ▲             │
+│       │ Docker network                     │ Docker net  │
+│       │ (http://openclaw:3050)             │             │
+└───────┼────────────────────────────────────┼─────────────┘
+        │                                    │
+   External channels                   Browser/Web UI
+   (Telegram, WhatsApp...)             (HTTPS)
+
+┌─────────────────────────────────────────────────────────┐
+│  CROSS-SERVER (remote OpenClaw)                          │
+│                                                          │
+│  User's machine          │        Cloud (Synap infra)    │
+│  ┌─────────────┐         │        ┌──────────────┐      │
+│  │ OpenClaw     │─── HTTPS ──────►│ Synap Pod     │     │
+│  │              │  /api/hub/*     │ pod.synap.live │     │
+│  └─────────────┘  Bearer token    └──────────────┘      │
+└─────────────────────────────────────────────────────────┘
+```
+
+Both topologies use the same Hub Protocol REST interface. No code changes needed — just different URLs in the config.
+
+---
+
+## CP Database Changes Needed for Pricing
+
+```sql
+-- Current: subscriptions table has tier (solo/pro/team/enterprise)
+-- Needed: addon pricing attached to pod
+
+ALTER TABLE data_pods ADD COLUMN IF NOT EXISTS
+  addon_billing jsonb DEFAULT '{}';
+-- Example: { "openclaw": { "status": "active", "monthlyPrice": 1500, "startedAt": "..." } }
+```
+
+Or simpler: bundle as a higher tier.
+
+| Tier | Price | Includes |
+|------|-------|----------|
+| solo | ~20/mo | Synap pod only |
+| solo+agent | ~30/mo | Synap pod + OpenClaw addon |
+| pro | ~50/mo | Synap pod + OpenClaw + Intelligence Service + all connectors |
+
+---
+
+## Key Decision: OpenClaw as Addon vs Separate Product
+
+**Recommendation: Addon** (on same server). Reasons:
+- Simpler billing (one subscription per pod)
+- Better performance (localhost networking)
+- Easier provisioning (existing Docker profile)
+- Lower cost (one VPS, not two)
+
+Standalone OpenClaw server (Path 6) is a future option for enterprise users who want isolation.

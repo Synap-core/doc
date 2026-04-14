@@ -1,0 +1,74 @@
+---
+title: "View Type: Flow"
+description: "Flow/graph view skill guidance."
+---
+
+# Skill: Flow View
+
+A flow view renders entities as an interactive node graph using React Flow.
+Use for process maps, pipelines, decision trees, org charts, or agent orchestration diagrams.
+
+## Creating a flow view
+
+```
+create_view({
+  name: "Onboarding Process",
+  type: "flow",
+  profileId: "<task-profile-id>"
+})
+```
+
+Nodes and edges are part of the view `config` and can be updated via `update_view` (creates a proposal).
+
+## Node types
+
+| type         | Purpose                          | Data fields                            |
+| ------------ | -------------------------------- | -------------------------------------- |
+| `EntityNode` | Represents a workspace entity    | `entityId`, `label`, `status`, `color` |
+| `BranchNode` | Represents a conversation branch | `channelId`, `branchPurpose`, `status` |
+| `AgentNode`  | Represents an active agent       | `agentType`, `currentTask`, `status`   |
+| `TextNode`   | Plain label / annotation         | `text`                                 |
+| `StepNode`   | Process step                     | `title`, `description`, `index`        |
+
+## Config structure
+
+```json
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "StepNode",
+      "position": { "x": 0, "y": 0 },
+      "data": { "title": "Start", "index": 0 }
+    },
+    {
+      "id": "2",
+      "type": "StepNode",
+      "position": { "x": 200, "y": 0 },
+      "data": { "title": "Review", "index": 1 }
+    },
+    {
+      "id": "3",
+      "type": "StepNode",
+      "position": { "x": 400, "y": 0 },
+      "data": { "title": "Approve", "index": 2 }
+    }
+  ],
+  "edges": [
+    { "id": "e1-2", "source": "1", "target": "2", "label": "submitted" },
+    { "id": "e2-3", "source": "2", "target": "3", "label": "reviewed" }
+  ]
+}
+```
+
+## Layout tips
+
+- Place nodes left-to-right for processes, top-to-bottom for hierarchies.
+- Space nodes ~200px apart horizontally, ~100px vertically.
+- Use `label` on edges to describe the transition condition.
+- For org charts: root node at top, children below.
+
+## When to use flow vs graph
+
+- **flow**: Human-defined structure, explicit layout, processes/pipelines. You control the node positions.
+- **graph**: Auto-layout from entity relations, exploratory, force-directed. Uses `create_relation` links.

@@ -1,0 +1,224 @@
+---
+title: Synap app packages
+description: Full map of the synap-app monorepo — packages, boundaries, and GitHub entry points
+---
+
+The **`synap-app`** monorepo ([**Synap-core/synap-app** on GitHub](https://github.com/Synap-core/synap-app)) is the **shared frontend OS**: Tamagui UI, tRPC client, hooks, stores, view implementations, cells, and feature apps. **Primary user surface today is the Electron Browser**; `apps/web` and other apps are hosts or legacy shells that **reuse the same packages**.
+
+**Path prefix on GitHub:** `https://github.com/Synap-core/synap-app/tree/main/` + path below.
+
+---
+
+## Why packages instead of one app folder
+
+1. **Bundle control** — hosts import only the features they ship (Browser vs extension vs Relay).  
+2. **Non-React contracts** — e.g. **`@synap-core/capabilities`** stays free of React so **agents, scripts, and the backend** can read manifests.  
+3. **Swappable view engines** — each view type is a package (`view-table`, `@synap-core/kanban-view`, …) behind **`@synap-core/view-renderer`**.  
+4. **Separation of concerns** — **entity card** (dense list/grid tile) ≠ **entity views** (inspector / tabs / full layout) ≠ **property-renderer** (typed fields). Each can version independently.
+
+---
+
+## Three-layer data (mandatory)
+
+Components use **`@synap-core/hooks`** → **`@synap-core/stores`** → **`@synap-core/client`** (tRPC + TanStack Query). Do not import the client directly from random UI packages.
+
+---
+
+## Data & API client
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/synap-client`](https://github.com/Synap-core/synap-app/tree/main/packages/synap-client) | `@synap-core/client` | tRPC client, query defaults, transport to the pod. |
+| [`packages/synap-hooks`](https://github.com/Synap-core/synap-app/tree/main/packages/synap-hooks) | `@synap-core/hooks` | Composed hooks (queries + stores + UX rules). |
+| [`packages/synap-stores`](https://github.com/Synap-core/synap-app/tree/main/packages/synap-stores) | `@synap-core/stores` | Zustand ephemeral state (selection, layout, UI). |
+| [`packages/sdk`](https://github.com/Synap-core/synap-app/tree/main/packages/sdk) | `@synap-core/sdk` | Typed SDK surface for integrators. |
+| [`packages/react`](https://github.com/Synap-core/synap-app/tree/main/packages/react) | `@synap-core/react` | React provider + hooks for pod data. |
+| [`packages/core/database`](https://github.com/Synap-core/synap-app/tree/main/packages/core/database) | `@synap-core/database` | Client-side DB helpers where applicable. |
+| [`packages/core/data-utils`](https://github.com/Synap-core/synap-app/tree/main/packages/core/data-utils) | `@synap-core/data-utils` | Shared data transforms. |
+
+---
+
+## Design system & presentation
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/ui-system`](https://github.com/Synap-core/synap-app/tree/main/packages/core/ui-system) | `@synap-core/ui-system` | Tamagui design system — **source of visual truth** (tokens, components). |
+| [`packages/core/design-tokens`](https://github.com/Synap-core/synap-app/tree/main/packages/core/design-tokens) | `@synap-core/design-tokens` | JSON / CSS / TS tokens for non-Tamagui consumers. |
+| [`packages/core/icons`](https://github.com/Synap-core/synap-app/tree/main/packages/core/icons) | `@synap-core/icons` | Icon registry + platform helpers. |
+
+---
+
+## Capabilities, cells, and dashboard
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/capabilities`](https://github.com/Synap-core/synap-app/tree/main/packages/core/capabilities) | `@synap-core/capabilities` | **Manifest** of widget kinds, view kinds, JSON schemas — **zero React**. |
+| [`packages/core/cell-runtime`](https://github.com/Synap-core/synap-app/tree/main/packages/core/cell-runtime) | `@synap-core/cell-runtime` | Host-agnostic **CellRenderer** (bento / panel / page). |
+| [`packages/core/cells`](https://github.com/Synap-core/synap-app/tree/main/packages/core/cells) | `@synap-core/cells` | Registry of built-in cells + domain registration. |
+| [`packages/views/bento`](https://github.com/Synap-core/synap-app/tree/main/packages/views/bento) | `@synap-core/bento-view` | Bento grid host + layout persistence. |
+
+---
+
+## View system (why `view-renderer` + many `*-view` packages)
+
+**[`@synap-core/view-renderer`](https://github.com/Synap-core/synap-app/tree/main/packages/core/view-renderer)** picks the right adapter for a **view record** (table, kanban, calendar, …). Each concrete implementation lives in its own package so **Tree-shaking**, **lazy loading**, and **team ownership** stay sane.
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/view-renderer`](https://github.com/Synap-core/synap-app/tree/main/packages/core/view-renderer) | `@synap-core/view-renderer` | Dispatcher + shared view chrome. |
+| [`packages/views/table`](https://github.com/Synap-core/synap-app/tree/main/packages/views/table) | `@synap-core/view-table` | Table adapter. |
+| [`packages/views/kanban`](https://github.com/Synap-core/synap-app/tree/main/packages/views/kanban) | `@synap-core/kanban-view` | Kanban adapter. |
+| [`packages/views/list`](https://github.com/Synap-core/synap-app/tree/main/packages/views/list) | `@synap-core/list-view` | List adapter. |
+| [`packages/views/grid`](https://github.com/Synap-core/synap-app/tree/main/packages/views/grid) | `@synap-core/grid-view` | Grid / gallery adapter. |
+| [`packages/views/masonry`](https://github.com/Synap-core/synap-app/tree/main/packages/views/masonry) | `@synap-core/masonry-view` | Masonry / feed density. |
+| [`packages/views/calendar`](https://github.com/Synap-core/synap-app/tree/main/packages/views/calendar) | `@synap-core/view-calendar` | Calendar adapter. |
+| [`packages/views/timeline`](https://github.com/Synap-core/synap-app/tree/main/packages/views/timeline) | `@synap-core/view-timeline` | Timeline spine UI. |
+| [`packages/views/flow`](https://github.com/Synap-core/synap-app/tree/main/packages/views/flow) | `@synap-core/flow-view` | Flow / node canvas adapter. |
+| [`packages/views/graph`](https://github.com/Synap-core/synap-app/tree/main/packages/views/graph) | `@synap-core/graph-view` | Graph visualization. |
+| [`packages/views/map`](https://github.com/Synap-core/synap-app/tree/main/packages/views/map) | `@synap-core/view-map` | Map + routes. |
+
+---
+
+## Entity & property UI (card vs inspector)
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/entity-card`](https://github.com/Synap-core/synap-app/tree/main/packages/core/entity-card) | `@synap-core/entity-card` | **Card / tile** density — lists, boards, pickers. |
+| [`packages/features/entity-views`](https://github.com/Synap-core/synap-app/tree/main/packages/features/entity-views) | `@synap-core/entity-views` | **Full entity** surfaces (tabs, relations, history). |
+| [`packages/core/property-renderer`](https://github.com/Synap-core/synap-app/tree/main/packages/core/property-renderer) | `@synap-core/property-renderer` | **Typed property** controls from `PropertyDef`. |
+| [`packages/core/profile-management`](https://github.com/Synap-core/synap-app/tree/main/packages/core/profile-management) | `@synap-core/profile-management` | Profile editor + schema UI. |
+
+---
+
+## Workspace, navigation, shell
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/workspace`](https://github.com/Synap-core/synap-app/tree/main/packages/core/workspace) | `@synap-core/workspace` | Workspace chrome primitives. |
+| [`packages/core/workspace-state`](https://github.com/Synap-core/synap-app/tree/main/packages/core/workspace-state) | `@synap-core/workspace-state` | URL-synced workspace state. |
+| [`packages/features/sidebar`](https://github.com/Synap-core/synap-app/tree/main/packages/features/sidebar) | `@synap-core/sidebar` | Sidebar model + item resolution. |
+| [`packages/features/floating-panels`](https://github.com/Synap-core/synap-app/tree/main/packages/features/floating-panels) | `@synap-core/floating-panels` | Floating entity / view pickers. |
+| [`packages/core/command-palette`](https://github.com/Synap-core/synap-app/tree/main/packages/core/command-palette) | `@synap-core/command-palette` | Command palette UI + wiring. |
+| [`packages/features/commands`](https://github.com/Synap-core/synap-app/tree/main/packages/features/commands) | `@synap-core/commands` | Command registry / execution. |
+| [`packages/core/command-template`](https://github.com/Synap-core/synap-app/tree/main/packages/core/command-template) | `@synap-core/command-template` | Templated commands. |
+
+---
+
+## Channels, chat, notifications
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/channels`](https://github.com/Synap-core/synap-app/tree/main/packages/core/channels) | `@synap-core/channels` | Channel store + shared UI. |
+| [`packages/core/chat-interface`](https://github.com/Synap-core/synap-app/tree/main/packages/core/chat-interface) | `@synap-core/chat-interface` | Styled chat primitives. |
+| [`packages/core/notifications`](https://github.com/Synap-core/synap-app/tree/main/packages/core/notifications) | `@synap-core/notifications` | Notification bell + hooks. |
+
+---
+
+## AI, intelligence, capture
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/features/ai-chat`](https://github.com/Synap-core/synap-app/tree/main/packages/features/ai-chat) | `@synap-core/ai-chat` | Full AI chat app module (branching, docs, stream). |
+| [`packages/apps/chat`](https://github.com/Synap-core/synap-app/tree/main/packages/apps/chat) | `@synap-core/chat-app` | Standalone chat shell layout. |
+| [`packages/apps/intelligence`](https://github.com/Synap-core/synap-app/tree/main/packages/apps/intelligence) | `@synap-core/intelligence` | Intelligence hub UI inside the shell. |
+| [`packages/core/intelligence-connect`](https://github.com/Synap-core/synap-app/tree/main/packages/core/intelligence-connect) | `@synap-core/intelligence-connect` | Provisioning + status for IS across hosts. |
+| [`packages/features/agent-service`](https://github.com/Synap-core/synap-app/tree/main/packages/features/agent-service) | `@synap-core/agent-service` | Service registry UI (ServiceChip / Card). |
+| [`packages/core/capture-pipeline`](https://github.com/Synap-core/synap-app/tree/main/packages/core/capture-pipeline) | `@synap-core/capture-pipeline` | Multi-entity capture state machine. |
+| [`packages/features/capture`](https://github.com/Synap-core/synap-app/tree/main/packages/features/capture) | `@synap-core/capture` | Capture UI surfaces. |
+
+---
+
+## Documents, markdown, whiteboard
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/features/document`](https://github.com/Synap-core/synap-app/tree/main/packages/features/document) | `@synap-core/document` | Collaborative doc feature + versioning. |
+| [`packages/core/markdown-engine`](https://github.com/Synap-core/synap-app/tree/main/packages/core/markdown-engine) | `@synap-core/markdown-engine` | Markdown viewer/editor + embeds. |
+| [`packages/apps/whiteboard`](https://github.com/Synap-core/synap-app/tree/main/packages/apps/whiteboard) | `@synap-core/whiteboard` | Spatial canvas. |
+
+---
+
+## Proposals, connectors, feed, search
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/proposal-types`](https://github.com/Synap-core/synap-app/tree/main/packages/core/proposal-types) | `@synap-core/proposal-types` | Shared proposal types (cross-package). |
+| [`packages/features/proposals`](https://github.com/Synap-core/synap-app/tree/main/packages/features/proposals) | `@synap-core/proposals` | Proposal inbox UI. |
+| [`packages/features/connectors`](https://github.com/Synap-core/synap-app/tree/main/packages/features/connectors) | `@synap-core/connectors` | OAuth / Nango connector UX. |
+| [`packages/core/feed`](https://github.com/Synap-core/synap-app/tree/main/packages/core/feed) | `@synap-core/feed` | Activity feed model + `FeedView`. |
+| [`packages/features/search`](https://github.com/Synap-core/synap-app/tree/main/packages/features/search) | `@synap-core/search` | Search UI. |
+
+---
+
+## Control plane, pod, platform auth
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/platform`](https://github.com/Synap-core/synap-app/tree/main/packages/core/platform) | `@synap-core/platform` | CP client: billing, pods, auth. |
+| [`packages/core/platform-sdk`](https://github.com/Synap-core/synap-app/tree/main/packages/core/platform-sdk) | `@synap-core/platform-sdk` | CP SDK + feature flags. |
+| [`packages/features/platform-auth`](https://github.com/Synap-core/synap-app/tree/main/packages/features/platform-auth) | `@synap-core/platform-auth` | Shared CP auth / provisioning UI. |
+| [`packages/core/pod-connect`](https://github.com/Synap-core/synap-app/tree/main/packages/core/pod-connect) | `@synap-core/pod-connect` | Pod handshake flows (landing, Telegram, Browser). |
+| [`packages/core/pod-failover`](https://github.com/Synap-core/synap-app/tree/main/packages/core/pod-failover) | `@synap-core/pod-failover` | Dual-pod health + failover UX. |
+
+---
+
+## Native OS bridges (Relay / mobile)
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/core/native-os`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os) | `@synap-core/native-os` | Unified facade over share, widgets, intents, … |
+| [`packages/core/native-os-share`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os-share) | `@synap-core/native-os-share` | Share extensions. |
+| [`packages/core/native-os-widgets`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os-widgets) | `@synap-core/native-os-widgets` | Home-screen widgets. |
+| [`packages/core/native-os-intents`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os-intents) | `@synap-core/native-os-intents` | Siri / Assistant shortcuts. |
+| [`packages/core/native-os-spotlight`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os-spotlight) | `@synap-core/native-os-spotlight` | OS search indexing. |
+| [`packages/core/native-os-live-updates`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os-live-updates) | `@synap-core/native-os-live-updates` | Live Activities / ongoing notif. |
+| [`packages/core/native-os-vision`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os-vision) | `@synap-core/native-os-vision` | On-device OCR bridge. |
+| [`packages/core/native-os-shared-storage`](https://github.com/Synap-core/synap-app/tree/main/packages/core/native-os-shared-storage) | `@synap-core/native-os-shared-storage` | App Group / shared prefs. |
+
+Each sub-package has its own **README** under `packages/core/native-os-*/README.md`.
+
+---
+
+## Apps (feature modules in `packages/apps/*`)
+
+These are **embeddable apps** for the shell (Browser / web): `fluid`, `data`, `views-management`, `billing`, `docs`, `relay`, `telegram`, `extension`, `agent-os`, `zeroclaw`, `platform`, etc. Each `package.json` describes the module boundary; the **Browser manifest** decides what ships in the desktop sidebar.
+
+---
+
+## IPC & cross-process
+
+| Package / path | npm name | Role |
+|----------------|----------|------|
+| [`packages/ipc-contract`](https://github.com/Synap-core/synap-app/tree/main/packages/ipc-contract) | `@synap-core/ipc-contract` | Zod schemas for Electron IPC. |
+| [`packages/core/deep-link-constants`](https://github.com/Synap-core/synap-app/tree/main/packages/core/deep-link-constants) | `@synap-core/deep-link-constants` | `synap://` URL constants across hosts. |
+
+---
+
+## How to integrate a new host (checklist)
+
+1. Add **`@synap-core/client`** + **`@synap-core/hooks`** + **`@synap-core/stores`** with your pod URL / auth.  
+2. Wrap with **`@synap-core/ui-system`** `TamaguiProvider` + theme.  
+3. Pull only the **feature packages** you need (avoid importing all `packages/apps/*`).  
+4. Register cells via **`@synap-core/cell-runtime`** if you embed dashboard tiles.  
+5. For **view types**, depend on **`@synap-core/view-renderer`** — it pulls concrete view packages.
+
+---
+
+## More workspace packages (quick index)
+
+Also in the repo (each has a `package.json` + usually a `README.md`): **`@synap-core/auth`**, **`@synap-core/workflows`**, **`@synap-core/template-engine`**, **`@synap-core/marketplace`**, **`@synap-core/data-structure`**, **`@synap-core/data-app`**, **`@synap-core/views-management`**, **`@synap-core/onboarding`**, **`@synap-core/workspace-settings`**, **`@synap-core/entity-links`**, **`@synap-core/import-parsers`**, **`@synap-core/file-hub`**, **`@synap-core/relay`** / **`@synap-core/relay-app`**, **`@synap-core/agent-os`**, **`@synap-core/zeroclaw`**, **`@synap/extension`**, **`apps/web`**, **`apps/telegram`**, plus **`packages/landing/*`** and workspace-linked **`../synap-control-plane-api/packages/pricing`** / **`control-plane-types`**. When in doubt, search the monorepo for the **npm `name`** field.
+
+---
+
+## Historical `synap-app/docs/*` audits
+
+Dozens of markdown audits (workspace URL, entity panel, bento, whiteboard, …) lived under **`synap-app/docs/`**. They were **deleted** after this team space became the durable map; if you need a forensic audit, use **git history** on `synap-app`.
+
+---
+
+## Related team spaces
+
+- **[Synap App](/team/synap-app)** — product positioning (not “the signup app”).  
+- **[Browser](/team/browser)** — Electron host.  
+- **[Platform](/team/platform)** — pod contracts feeding these packages.  
+- **[Relay](/team/relay)** — mobile + native OS story.

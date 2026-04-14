@@ -1,0 +1,225 @@
+---
+title: "Home"
+description: "Synap product vision, strategy, and team resources"
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { TeamSpacesGrid, PublicSpacesGrid } from '@/components/SpaceGrids';
+import {
+  Layers,
+  Brain,
+  Server,
+  Compass,
+  Rocket,
+  GitBranch,
+  Target,
+  Shield,
+  Eye,
+  Terminal,
+  Users,
+  Smartphone,
+} from 'lucide-react';
+
+# Welcome to the Synap team portal
+
+Your hub for product vision, roadmap, development resources, and collaboration. Sign in with Control Plane credentials to access restricted spaces.
+
+**Internal map:** [Product & surface index](./synap-products) lists every repo and where it appears in public vs team docs.
+
+<div className="not-prose my-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+  <a
+    href="/team/platform"
+    className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+  >
+    <Layers className="size-5 shrink-0" />
+    Platform
+  </a>
+  <a
+    href="/team/intelligence"
+    className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+  >
+    <Brain className="size-5 shrink-0" />
+    Intelligence
+  </a>
+  <a
+    href="/team/control-plane"
+    className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+  >
+    <Server className="size-5 shrink-0" />
+    Control plane
+  </a>
+</div>
+
+<Callout type="info" title="Internal documentation">
+  This portal is for the Synap team. Some sections require authentication.
+</Callout>
+
+## Quick links
+
+<Cards>
+  <Card
+    icon={<Compass className="size-4" />}
+    title="Platform overview"
+    description="High-level architecture and systems."
+    href="/team/platform"
+  />
+  <Card
+    icon={<Brain className="size-4" />}
+    title="AI architecture"
+    description="Agent system and intelligence service."
+    href="/team/intelligence"
+  />
+  <Card
+    icon={<Server className="size-4" />}
+    title="Control plane"
+    description="SaaS provisioning and management."
+    href="/team/control-plane"
+  />
+  <Card
+    icon={<Smartphone className="size-4" />}
+    title="Relay (mobile)"
+    description="Mobile app architecture."
+    href="/team/relay"
+  />
+</Cards>
+
+## Learning path (new teammates)
+
+<Cards>
+  <Card icon={<Rocket className="size-4" />} title="Week 1: Foundation" description="Core concepts and setup.">
+    <ol className="mt-2 list-decimal space-y-2 pl-4 text-fd-muted-foreground">
+      <li>
+        <a href="/docs/start/concepts/what-is-synap" className="text-fd-primary underline-offset-4 hover:underline">
+          What is Synap?
+        </a>
+      </li>
+      <li>
+        <a href="/team/platform" className="text-fd-primary underline-offset-4 hover:underline">
+          Platform overview
+        </a>
+      </li>
+      <li>
+        <a href="/team/devops/start-here" className="text-fd-primary underline-offset-4 hover:underline">
+          Development environment
+        </a>
+      </li>
+    </ol>
+  </Card>
+  <Card icon={<Layers className="size-4" />} title="Week 2: Deep dive" description="Data model and key services.">
+    <ol className="mt-2 list-decimal space-y-2 pl-4 text-fd-muted-foreground">
+      <li>
+        <a href="/team/platform/entity-profiles" className="text-fd-primary underline-offset-4 hover:underline">
+          Entity profiles
+        </a>
+      </li>
+      <li>
+        <a href="/team/intelligence/agent-system" className="text-fd-primary underline-offset-4 hover:underline">
+          Agent system
+        </a>
+      </li>
+      <li>
+        <a href="/team/control-plane/pod-management" className="text-fd-primary underline-offset-4 hover:underline">
+          Pod management
+        </a>
+      </li>
+    </ol>
+  </Card>
+  <Card icon={<GitBranch className="size-4" />} title="Week 3: Contribute" description="Ship your first changes.">
+    <ol className="mt-2 list-decimal space-y-2 pl-4 text-fd-muted-foreground">
+      <li>
+        <a
+          href="https://github.com/orgs/Synap-core/repositories"
+          className="text-fd-primary underline-offset-4 hover:underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Repositories & issues
+        </a>
+      </li>
+      <li>
+        <a href="/team/platform/creating-apps" className="text-fd-primary underline-offset-4 hover:underline">
+          Building on the platform
+        </a>
+      </li>
+      <li>
+        <a href="/team/platform/design-guidelines" className="text-fd-primary underline-offset-4 hover:underline">
+          Design guidelines
+        </a>
+      </li>
+    </ol>
+  </Card>
+</Cards>
+
+## Featured
+
+<Cards>
+  <Card icon={<Target className="size-4" />} title="Product vision & roadmap" description="Direction and priorities.">
+    <p className="mt-2 text-fd-muted-foreground">
+      Sovereign personal data infrastructure: capture, organize, and extend with AI under your governance.
+    </p>
+    <p className="mt-4">
+      <a
+        href="/team/home/roadmap"
+        className="text-sm font-medium text-fd-primary underline-offset-4 hover:underline"
+      >
+        View roadmap →
+      </a>
+    </p>
+  </Card>
+  <Card icon={<Shield className="size-4" />} title="Team resources" description="Tools and collaboration.">
+    <ul className="mt-2 list-none space-y-2 p-0 text-fd-muted-foreground">
+      <li>
+        <a
+          href="https://github.com/Synap-core"
+          className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <GitBranch className="size-4 shrink-0" />
+          GitHub organization
+        </a>
+      </li>
+      <li>
+        <a href="/team/devops" className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline">
+          <Terminal className="size-4 shrink-0" />
+          DevOps & deployment
+        </a>
+      </li>
+      <li>
+        <a
+          href="/team/platform/design-guidelines"
+          className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline"
+        >
+          <Eye className="size-4 shrink-0" />
+          Design system
+        </a>
+      </li>
+      <li>
+        <a
+          href="https://discord.gg/synap"
+          className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <Users className="size-4 shrink-0" />
+          Discord
+        </a>
+      </li>
+    </ul>
+  </Card>
+</Cards>
+
+## All team documentation
+
+*Requires authentication.*
+
+<TeamSpacesGrid />
+
+## Related public documentation
+
+<PublicSpacesGrid limit={3} />
+
+---
+
+> This space is for the Synap development team. Ask your lead if you need access to a specific area.

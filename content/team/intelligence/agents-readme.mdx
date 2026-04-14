@@ -1,0 +1,154 @@
+---
+title: "Agents README"
+description: "Agent implementation guide and registry patterns."
+---
+
+# Agents
+
+All agents extend `BaseAgent`, which provides tool wrapping, AIStep tracking, proposal extraction, streaming, and context assembly.
+
+## Directory structure
+
+```
+agents/
+├── base/
+│   ├── agent.ts              # BaseAgent — all shared execution logic
+│   ├── agent-registry.ts     # getAgentForType() routing table
+│   ├── types.ts              # AgentContext, AgentResponse, etc.
+│   ├── prompt-sections.ts    # composePrompt() + shared SECTION_* constants
+│   ├── prompt-builder.ts     # Runtime context injection into system prompt
+│   ├── branching-analyzer.ts # analyzeBranching() hook (no-op by default)
+│   ├── tool-wrapper.ts       # Type-safe tool wrapping for AI SDK
+│   ├── ai-step-factory.ts    # AIStep creation helpers
+│   ├── proposal-extractor.ts # Extract proposals from tool results
+│   ├── grounding-check.ts    # Response grounding validation
+│   └── default-agent.ts      # Backward compat shim for legacy "default" channels
+├── orchestrator/
+│   └── orchestrator-agent.ts # OrchestratorAgent — proactive co-founder AI
+├── personal/
+│   └── personal-agent.ts     # PersonalAgent — memory-first personal companion
+├── persona/
+│   └── persona-agent.ts      # PersonaAgent — domain expert factory (CTO, Marketing, Sales, PM)
+├── specialist/
+│   ├── action-agent.ts       # Entity CRUD (tasks, contacts, meetings)
+│   ├── code-agent.ts         # Code generation and review
+│   ├── insight-discovery-agent.ts  # Pattern detection across the entity graph
+│   ├── knowledge-search-agent.ts   # Read-only research and synthesis
+│   ├── onboarding-agent.ts         # New user workspace setup
+│   ├── view-builder-agent.ts       # Dashboard and view design
+│   ├── workspace-builder-agent.ts  # Full workspace scaffolding
+│   ├── workspace-creation-agent.ts # Additional workspace creation
+│   └── writing-agent.ts            # Document creation and editing
+└── utils/
+    ├── context-manager.ts    # assembleContext() — session + branch graph + entities
+    └── entity-extraction.ts  # Entity extraction from text
+```
+
+## Routing
+
+`agent-registry.ts` maps `agentType` strings to agent instances:
+
+| agentType                   | Agent                       | Notes                          |
+| --------------------------- | --------------------------- | ------------------------------ |
+| `"meta"` / `"orchestrator"` | OrchestratorAgent           | Default for workspace channels |
+| `"personal"`                | PersonalAgent               | Personal channels only         |
+| `"persona:cto"` etc.        | PersonaAgent factory        | Branch-only domain experts     |
+| `"knowledge-search"`        | KnowledgeSearchAgent        | Read-only research             |
+| `"code"`                    | CodeAgent                   |                                |
+| `"writing"`                 | WritingAgent                |                                |
+| `"action"`                  | ActionAgent                 | Entity CRUD                    |
+| `"insight-discovery"`       | InsightDiscoveryAgent       |                                |
+| `"view-builder"`            | ViewBuilderAgent            |                                |
+| `"workspace-builder"`       | WorkspaceBuilderAgent       |                                |
+| `"onboarding"`              | OnboardingAgent             |                                |
+| `"workspace-creation"`      | WorkspaceCreationAgent      |                                |
+| `"default"`                 | DefaultAgent                | Legacy pre-redesign channels   |
+| anything else               | OrchestratorAgent + warning | Never throws                   |
+
+## Prompt architecture
+
+Three layers — never duplicate across them:
+
+1. **Agent system prompt** — WHO (identity) + WHEN (process/flow). Written with `composePrompt()` + `SECTION_*` from `prompt-sections.ts`. Keep short (10–30 lines).
+2. **Skill files** (`/skills/*.md`) — HOW (tool schemas, field types, examples). Injected automatically at runtime based on which tools the agent has. Never put tool schemas in agent prompts.
+3. **Runtime context** — WHAT (actual workspace data discovered via `list_profiles`, `search_*`, etc.)
+
+## Creating a new agent
+
+```typescript
+import { BaseAgent } from "../base/agent";
+import {
+  composePrompt,
+  SECTION_INVESTIGATION,
+  SECTION_PROPOSAL_PROTOCOL,
+} from "../base/prompt-sections";
+
+const IDENTITY = `\
+You are a [role] specialist within Synap — [one-line description].
+
+[Core operating rules — brief, behavioral.]`;
+
+export class MyAgent extends BaseAgent {
+  constructor() {
+    super({
+      agentType: "my-agent",
+      systemPrompt: composePrompt(
+        IDENTITY,
+        SECTION_INVESTIGATION, // if agent has investigation tools
+        SECTION_PROPOSAL_PROTOCOL // if agent has write tools
+      ),
+      categories: ["investigation", "write"], // tool access via tool-categories.ts
+      disabledTools: ["create_skill"], // optional per-tool blocks
+      maxSteps: 10,
+      includeContext: true,
+    });
+  }
+}
+```
+
+Then register it in `agent-registry.ts` and add it to `AGENT_TYPES` in `config/models.ts`.
+
+## Core API
+
+### `execute(context: AgentContext): Promise&lt;AgentResponse>`
+
+```typescript
+const response = await agent.execute({
+  userId: "user-123",
+  threadId: "thread-456",
+  message: "Create a task to review the proposal",
+  history: [],
+});
+// response.content — AI text
+// response.aiSteps — all tool calls and results
+// response.createdProposals — proposals pending user approval
+```
+
+### `executeWithStream(context: StreamingAgentContext): Promise&lt;AgentResponse>`
+
+```typescript
+await agent.executeWithStream({
+  ...context,
+  onContent: (chunk) => socket.emit("chat:stream:chunk", chunk),
+  onThinking: (step, title) => socket.emit("chat:thinking", { step, title }),
+});
+```
+
+## Tool categories
+
+Defined in `tools/tool-categories.ts` — the single source of truth for what tools each agent can access. Agents declare `categories`, categories contain tool names. Adding a tool to a category automatically makes it available to all agents in that category.
+
+## Skill files
+
+Located in `skills/`. Loaded by `skills/skill-loader.ts` based on tool availability:
+
+| Skill file               | Loads when agent has                  |
+| ------------------------ | ------------------------------------- |
+| `hub-protocol.md`        | any search/memory tool                |
+| `inline-references.md`   | search or write tools                 |
+| `workspace-views.md`     | `create_view`                         |
+| `propose-workspace.md`   | `propose_workspace`                   |
+| `entity-schema.md`       | `create_profile` / `list_profiles`    |
+| `entity-management.md`   | `create_entity` / `update_entity`     |
+| `document-management.md` | `create_document` / `update_document` |
+| `view-types/*.md`        | `create_view`                         |

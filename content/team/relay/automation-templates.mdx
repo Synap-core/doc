@@ -1,0 +1,431 @@
+---
+title: Relay User Flows
+description: Capture flow, morning flow, space switcher, automation templates.
+---
+
+# Relay — User Flows
+
+Detailed step-by-step flows for core user journeys.
+
+---
+
+## Flow 1: First-Time Onboarding
+
+**Entry:** User downloads Relay app (or opens Relay module in Synap Browser)
+
+```
+┌─────────────────┐
+│  Welcome Screen  │
+│  "Build your     │
+│  relationship    │
+│  graph"          │
+│  [Get Started]   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌──────────────────┐
+│  Auth / Pod      │────▶│  Pod Connect      │
+│  Sign in with    │     │  via pod-connect  │
+│  Synap account   │     │  (shared or own)  │
+└────────┬────────┘     └──────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Connect Telegram│
+│  [Link account]  │──── Opens Telegram bot → /link TOKEN
+│  [Skip for now]  │
+└────────┬────────┘
+         │ (on success)
+         ▼
+┌─────────────────┐
+│  Import Progress │
+│  "Found 142      │
+│  contacts..."    │
+│  (background     │
+│   processing)    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Import Contacts │
+│  [Allow access]  │──── Google Contacts OAuth (Nango)
+│  [Skip]          │     or mobile permission
+└────────┬────────┘
+         │ (on success)
+         ▼
+┌─────────────────┐
+│  Merge Results   │
+│  "Matched 37     │
+│  phone contacts  │
+│  with Telegram"  │
+│  [Continue]      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  First Capture   │
+│  "Who did you    │
+│  meet recently?" │
+│  [Text input]    │
+│  [Skip]          │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Feed (Home)     │
+│  Populated with  │
+│  first results   │
+│  (progressively) │
+└─────────────────┘
+```
+
+**Duration:** ~2 minutes active, background processing continues
+**Key metric:** Time to first value (seeing populated feed)
+
+---
+
+## Flow 2: Quick Capture (Post-Event)
+
+**Trigger:** User just left a conference session, met someone interesting
+
+```
+┌─────────────────┐
+│  Any screen      │
+│  Tap FAB [+]     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Capture Sheet   │
+│  (bottom sheet   │
+│   slides up)     │
+│                  │
+│  [Text input]    │
+│  [🎤] [] [→]  │
+└────────┬────────┘
+         │ User types: "Met Sarah at ETHGlobal,
+         │ she builds compliance tools at LexDAO,
+         │ knows Solidity, interested in zkProofs"
+         ▼
+┌─────────────────┐
+│  AI Preview      │
+│  (appears live   │
+│   as user types) │
+│                  │
+│   Sarah (new)  │
+│   ETHGlobal    │
+│   LexDAO (new) │
+│   Solidity     │
+│   zkProofs     │
+│                  │
+│  [Edit] [Confirm]│
+└────────┬────────┘
+         │ User taps Confirm
+         ▼
+┌─────────────────┐
+│  Entities Created│
+│  ✓ Sarah         │
+│  ✓ LexDAO        │
+│  ✓ 3 relations   │
+│  ✓ 1 interaction │
+│                  │
+│  [View Sarah]    │
+│  [Capture more]  │
+│  (auto-dismiss   │
+│   after 3s)      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Feed updates    │
+│  New card at top │
+│  "New: Sarah     │
+│   from ETHGlobal"│
+└─────────────────┘
+```
+
+**Duration:** &lt;30 seconds
+**Key metric:** Capture-to-confirm time
+
+---
+
+## Flow 3: Voice Capture
+
+**Trigger:** User walking between sessions, hands busy
+
+```
+┌─────────────────┐
+│  Capture Sheet   │
+│  Tap [🎤 Voice]  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Recording...    │
+│  🔴 "Met Jean    │
+│  at the DeFi     │
+│  panel, he's CTO │
+│  at LexDAO..."   │
+│                  │
+│  [Stop]          │
+└────────┬────────┘
+         │ User taps Stop (or pauses for 2s)
+         ▼
+┌─────────────────┐
+│  Transcribing... │
+│  (1-2 seconds)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  AI Preview      │
+│  (same as text   │
+│   capture flow)  │
+│  [Edit] [Confirm]│
+└─────────────────┘
+```
+
+---
+
+## Flow 4: Pre-Event Preparation
+
+**Trigger:** User has an event in 3 days, opens Events tab
+
+```
+┌─────────────────┐
+│  Events tab      │
+│  See upcoming:   │
+│  "ETHGlobal      │
+│   Cannes — 3d"   │
+│  [Prep Briefing] │
+└────────┬────────┘
+         │ Tap "Prep Briefing"
+         ▼
+┌─────────────────┐
+│  Generating...   │
+│  AI processing   │
+│  (3-5 seconds)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│  Prep Briefing: ETHGlobal Cannes │
+│                                  │
+│  ── People You Know (7) ──      │
+│  [Person cards with last         │
+│   interaction + suggested topic] │
+│                                  │
+│  ── Should Meet (3) ──          │
+│  [Person cards with reason:      │
+│   "2nd degree via Samir,         │
+│    works on DeFi compliance"]    │
+│                                  │
+│  ── Topics Trending ──          │
+│  "RWA tokenization (4 contacts), │
+│   zkML (2 contacts)"            │
+│                                  │
+│  ── Follow-ups Pending ──       │
+│  "Promised to intro Jean to      │
+│   Alice (from Prague event)"     │
+│                                  │
+│  [Share briefing]  [Save]        │
+└─────────────────────────────────┘
+```
+
+**Duration:** 5-10 seconds for generation, 2-3 minutes to review
+**Key metric:** Did user consult briefing before event?
+
+---
+
+## Flow 5: Finding the Right Person
+
+**Trigger:** User needs someone with specific skills for a project
+
+```
+┌─────────────────┐
+│  Explore tab     │
+│  Search bar:     │
+│  "Who knows      │
+│   Solidity and   │
+│   French law?"   │
+└────────┬────────┘
+         │ Submit query
+         ▼
+┌─────────────────┐
+│  Processing...   │
+│  AI parsing      │
+│  query + graph   │
+│  traversal       │
+│  (2-3 seconds)   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│  Results (3 matches)             │
+│                                  │
+│  1. Jean-Baptiste (95% match)    │
+│     "Solidity expert at LexDAO,  │
+│      specializes in French       │
+│      crypto compliance"          │
+│     Last talked: 2 weeks ago     │
+│     [View] [Message]             │
+│                                  │
+│  2. Marie (72% match)            │
+│     "Former lawyer, now building │
+│      DeFi compliance tools"      │
+│     Last talked: 3 months ago    │
+│     [View] [Message]             │
+│                                  │
+│  ── AI Insight ──               │
+│  "Jean-Baptiste and Marie are    │
+│   both in the LexDAO Telegram    │
+│   group — they likely know each  │
+│   other"                         │
+└────────────────┬────────────────┘
+                 │ Tap "View" on Jean-Baptiste
+                 ▼
+┌─────────────────┐
+│  Person Detail   │
+│  (full profile)  │
+└─────────────────┘
+```
+
+---
+
+## Flow 6: Reconnection from Nudge
+
+**Trigger:** AI-generated nudge appears in feed
+
+```
+┌─────────────────────────────────┐
+│  Feed Card:                      │
+│  "You haven't talked to Marie    │
+│   in 2 months. She just posted   │
+│   about hiring a Rust dev —      │
+│   you know 3 Rust devs."        │
+│  [Message] [Remind later] [×]   │
+└────────────────┬────────────────┘
+                 │ Tap "Message"
+                 ▼
+┌─────────────────┐
+│  Action Sheet    │
+│  Message via:    │
+│  [Telegram]      │──── Opens Telegram DM (deep link)
+│  [LinkedIn]      │──── Opens LinkedIn message
+│  [Add note]      │──── Log the interaction manually
+└─────────────────┘
+```
+
+---
+
+## Flow 7: Entity Resolution (Merge)
+
+**Trigger:** System detects potential duplicate after new import
+
+```
+┌─────────────────────────────────┐
+│  Feed Card:                      │
+│  "Possible duplicate detected"   │
+│                                  │
+│  ┌──────┐    ┌──────┐           │
+│  │@samir│ ≈  │Samir │           │
+│  │Tele  │    │Phone │           │
+│  │gram  │    │Contact│          │
+│  └──────┘    └──────┘           │
+│                                  │
+│  "Same phone number, similar     │
+│   name. Merge?"                  │
+│                                  │
+│  [Merge]  [Not same]  [Later]   │
+└────────────────┬────────────────┘
+                 │ Tap "Merge"
+                 ▼
+┌─────────────────────────────────┐
+│  Merge Preview                   │
+│                                  │
+│  Name: Samir Touinssi            │
+│  Telegram: @samir_t ✓           │
+│  Phone: +33 6 XX XX ✓           │
+│  Email: samir@thesignal.xyz ✓   │
+│                                  │
+│  "All interactions from both     │
+│   profiles will be combined"     │
+│                                  │
+│  [Confirm merge]  [Cancel]       │
+└────────────────┬────────────────┘
+                 │ Confirm
+                 ▼
+┌─────────────────┐
+│  ✓ Merged into   │
+│  one profile     │
+│  [View Samir]    │
+└─────────────────┘
+```
+
+---
+
+## Flow 8: Graph Exploration
+
+**Trigger:** User wants to discover network structure
+
+```
+┌─────────────────┐
+│  People tab      │
+│  Toggle: [Graph] │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│  Graph View (full screen)        │
+│                                  │
+│  ┌─ Filter bar ──────────────┐  │
+│  │ [All] [Event ▾] [Topic ▾] │  │
+│  └───────────────────────────┘  │
+│                                  │
+│     ○──○     ○                   │
+│    /    \   / \                  │
+│   ○  ●──○─○   ○                 │
+│    \ |     \ /                  │
+│     ○──○    ○                   │
+│                                  │
+│  ● = you (center)               │
+│  Pinch to zoom, drag to pan     │
+│                                  │
+│  ── Tap on a node ──            │
+│  ┌─ Bottom Sheet ─────────────┐ │
+│  │ [Photo] Jean-Baptiste       │ │
+│  │ CTO @ LexDAO               │ │
+│  │ Last: 2w ago · Strength: 8 │ │
+│  │ [Full profile] [Message]   │ │
+│  └────────────────────────────┘ │
+└─────────────────────────────────┘
+```
+
+---
+
+## Flow 9: Daily Usage Pattern
+
+**Typical morning routine:**
+
+```
+1. Open app → Feed tab
+2. Scan highlights (AI-pinned items at top)
+3. See: "3 new messages processed overnight"
+   → Tap → see AI summaries of Telegram conversations
+4. See: "ETHGlobal Cannes in 2 days"
+   → Tap → review prep briefing
+5. See reconnection nudge for Marie
+   → Tap Message → send quick Telegram DM
+6. Close app (< 3 minutes total)
+```
+
+**Post-event capture:**
+
+```
+1. At event: tap FAB, voice capture 3 new contacts
+2. Evening: open Person Detail for each
+   → Review AI extractions, add manual notes
+   → Tag all with event name
+3. Next day: feed shows "3 new contacts from ETHGlobal"
+   → AI already extracted skills and topics from names + context
+```

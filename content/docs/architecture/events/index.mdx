@@ -1,0 +1,38 @@
+---
+title: Event Architecture
+description: Event metadata, automation signals, and write pipeline model.
+---
+
+# Event Architecture
+
+The event stream is the write backbone of Synap.
+
+## Event phases
+
+- `requested`: intent is emitted
+- `validated` / `approved`: policy checks pass
+- `completed`: operation is executed and finalized
+
+## Event metadata
+
+Each event carries source and context for traceability:
+
+- actor/user identifiers
+- workspace context
+- event source (`user`, `ai`, `system`, connector)
+- timestamps and correlation IDs
+
+## Automation integration
+
+Events can trigger:
+
+- workers/executors
+- notification fanout
+- search/index updates
+- downstream automation/webhook actions
+
+## Related pages
+
+- [System Patterns](/docs/architecture/system-patterns)
+- [Events API](/docs/integrate/reference/events-api)
+- [Event Catalog](/docs/integrate/reference/event-catalog)

@@ -1,0 +1,190 @@
+---
+title: "Design System Audit"
+description: "Design system coherence audit: tokens, components, patterns."
+---
+
+# Design System Coherence Audit
+
+**Date:** 2026-04-12
+**Scope:** `@synap-core/ui-system` themes + `browserTokens` + Button/IconButton + Browser usage
+
+---
+
+## 1. CRITICAL: Button Text Contrast Failures (WCAG AA)
+
+Every accent/primary color in the system is a **mid-to-high luminance** color (L > 0.18). White text on any of them fails WCAG AA (4.5:1 for normal text, 3.0:1 for large).
+
+| Button bg              | Hex       | Lum   | White contrast | Dark contrast | Current token          | Status  |
+|------------------------|-----------|-------|----------------|---------------|------------------------|---------|
+| Primary (light)        | `#F4A460` | 0.466 | **2.03:1 FAIL** | 9.92:1 PASS  | `primaryButtonText: #FFFFFF` | **BUG** |
+| Primary (dark)         | `#38BDF8` | 0.440 | 2.14:1 FAIL    | **9.42:1 PASS** | `primaryButtonText: #020617` | OK |
+| Primary (fluid dark)   | `#d4a574` | 0.422 | 2.23:1 FAIL    | **8.49:1 PASS** | `primaryButtonText: #111110` | OK |
+| Primary (fluid light)  | `#c49060` | 0.325 | 2.64:1 FAIL    | **6.20:1 PASS** | `primaryButtonText: #faf8f5` | **BUG** |
+| AI (emerald)           | `#10B981` | 0.364 | **2.54:1 FAIL** | 7.95:1 PASS  | hardcoded `white`      | **BUG** |
+| Danger (red)           | `#F87171` | 0.330 | **2.77:1 FAIL** | 7.29:1 PASS  | hardcoded `white`      | **BUG** |
+| Success (emerald)      | `#34D399` | 0.496 | **1.92:1 FAIL** | 10.49:1 PASS | hardcoded `white`      | **BUG** |
+| Secondary (light teal) | `#2DD4BF` | 0.514 | **1.86:1 FAIL** | 10.84:1 PASS | `secondaryButtonText: #FFFFFF` | **BUG** |
+| Secondary (dark amber) | `#FBBF24` | 0.579 | 1.56:1 FAIL    | **12.91:1 PASS** | `secondaryButtonText: #020617` | OK |
+| Hover (light)          | `#D97706` | 0.280 | 3.45:1 FAIL    | **5.85:1 PASS** | inherits from primary  | **BUG** |
+| Hover (dark)           | `#22D3EE` | 0.531 | 1.80:1 FAIL    | **10.71:1 PASS** | inherits               | OK |
+
+**Root cause:** All Synap primary/accent colors are 400-level (bright, saturated) — they're designed to be *seen on dark/light backgrounds*, not to *be* backgrounds carrying text. White text on these mid-luminance colors is fundamentally wrong.
+
+### Fix: Dynamic `contrastText` token
+
+Add a utility that computes the optimal text color per background:
+
+```typescript
+function contrastText(bgHex: string): string {
+  const lum = relativeLuminance(bgHex);
+  return lum > 0.179 ? '#1C1917' : '#FFFFFF'; // dark or light
+}
+```
+
+Then derive button text tokens:
+
+```typescript
+// themes.ts
+primaryButtonText: contrastText(primary),    // "#1C1917" for amber
+secondaryButtonText: contrastText(secondary), // "#1C1917" for teal
+aiButtonText: contrastText(ai),              // "#1C1917" for emerald
+errorButtonText: contrastText(error),        // "#1C1917" for red-400
+successButtonText: contrastText(success),    // "#1C1917" for emerald-400
+```
+
+In the Button component, each variant references its token instead of hardcoding `white`:
+
+```typescript
+ai: { backgroundColor: '$ai', color: '$aiButtonText' },
+danger: { backgroundColor: '$error', color: '$errorButtonText' },
+success: { backgroundColor: '$success', color: '$successButtonText' },
+```
+
+**Impact:** Fixes accessibility on every colored button across all 3 surfaces (Browser, Relay, web).
+
+---
+
+## 2. Border-Radius Fragmentation
+
+### Current state: 3 competing systems
+
+| System | Values | Used in |
+|--------|--------|---------|
+| **Tamagui tokens** `$1=6, $2=8, $3=12, $4=24, $round=9999` | 5 steps | Button (`$4`), IconButton (`$3`) |
+| **browserTokens.radius** `widget=16, card=12, button=8, badge=6, pill=9999` | 5 names | 53 Browser files |
+| **Raw pixel values** `8, 10, 12, 14, 16` | ad-hoc | 66 Browser files |
+
+### Problems
+
+1. **Button `$4 = 24px`** is extremely rounded — nearly a pill. Most UI libraries use 6-8px for buttons. This makes standard buttons look like lozenges.
+2. **Tamagui `$4` ≠ `browserTokens.radius.card`** — `$4=24` vs `card=12`. Same semantic intent ("card radius"), different values.
+3. **No "medium" radius** — there's `$2=8` (small) and `$4=24` (pill-adjacent) but nothing at 12-14px which is where most modern UIs sit for cards/modals.
+4. **66 files use raw pixels** — no tokenization, no consistency.
+
+### Proposed radius scale
+
+A 5-step semantic scale that replaces all three systems:
+
+| Token | px | Use case | Current equivalent |
+|-------|-----|----------|-------------------|
+| `$radius.xs` | 4 | Tags, tiny chips | — |
+| `$radius.sm` | 6 | Badges, small inputs | `browserTokens.radius.badge` |
+| `$radius.md` | 8 | Buttons, inputs, dropdowns | `browserTokens.radius.button` |
+| `$radius.lg` | 12 | Cards, modals, panels | `browserTokens.radius.card` |
+| `$radius.xl` | 16 | Widgets, hero cards | `browserTokens.radius.widget` |
+| `$radius.full` | 9999 | Pills, avatars, toggles | `$round` / `pill` |
+
+**Key decision:** Buttons should be `$radius.md` (8px), not `$4` (24px). The current 24px pill buttons are a design anomaly.
+
+---
+
+## 3. Surface / Hover / Press Color Ladder
+
+### Current state: mostly correct, some gaps
+
+The theme defines a clear background ladder:
+
+| Token | Light | Dark | Fluid Dark |
+|-------|-------|------|------------|
+| `background` | `#FAFAF9` | `#020617` | `#111110` |
+| `backgroundSurface` | `#F5F4F1` | `#1E293B` | `#1a1816` |
+| `backgroundHover` | `#F5F4F1` | `rgba(255,255,255,0.05)` | `#252320` |
+| `backgroundPress` | `#E7E5E1` | `rgba(255,255,255,0.08)` | `#302d2a` |
+
+**Issue in light mode:** `backgroundSurface` and `backgroundHover` are the same value (`#F5F4F1`). A card sitting on `backgroundSurface` has no visible hover effect when `backgroundHover` is identical. Fix: `backgroundHover` should be one step darker (`#E7E5E1` or between).
+
+**Issue in dark mode (base):** `backgroundHover` is `rgba(255,255,255,0.05)` — this stacks on any background (good for overlays) but produces different actual colors depending on the parent. `backgroundSurface` is opaque `#1E293B`. Mixing opaque and transparent backgrounds means hover on a surface card looks different from hover on page background.
+
+### Recommendation
+
+Either go fully opaque (predictable, simple) or fully layered-rgba (composable but harder to debug). Don't mix. The fluid themes are fully opaque — follow that model.
+
+---
+
+## 4. Token Proliferation
+
+The theme currently defines **~120 extra tokens** per mode. Many are redundant:
+
+| Redundancy | Example | Recommendation |
+|-----------|---------|----------------|
+| `primary` = `accent` = `link` = `borderColorFocus` | 4 tokens, 1 value | Keep `primary`, derive others |
+| `primaryHover` = `accentHover` = `linkHover` | 3 tokens, 1 value | Derive from `primary` |
+| `primary400` = `primary` | alias | Remove `primary400` |
+| `color` = `textPrimary` (fluid) | 2 names for same role | Standardize on Tamagui's `color` |
+| ~35 command palette tokens | Per-component tokens | Should reference base tokens |
+
+### Recommendation
+
+Reduce to ~60 semantic tokens + a computed derivative layer. The command palette / category tokens should be in the command palette package, not the global theme.
+
+---
+
+## 5. Two-Theme-System Problem
+
+Browser uses **two parallel systems**:
+
+1. **Tamagui theme** (via `useTheme()`) — `$primary`, `$background`, etc. Used by Tamagui components.
+2. **CSS variables** (via `getCSSVariables()` → `darkTheme`/`lightTheme` objects) — `theme.accent`, `theme.bgSurface`, etc. Used by raw HTML components.
+
+Both carry the same semantic values but with different names (`$primary` vs `theme.accent`, `$background` vs `theme.bgBase`). This doubles the maintenance surface and creates naming confusion.
+
+### Recommendation
+
+Generate the CSS variable set FROM the Tamagui theme, not alongside it. One source of truth → two output formats.
+
+---
+
+## Summary: Priority Actions
+
+| # | Action | Impact | Effort | Status |
+|---|--------|--------|--------|--------|
+| **1** | Fix button text contrast (dynamic `contrastText`) | A11y critical — fixes all surfaces | Medium | **DONE** |
+| **2** | Unify radius scale (Button $4→$2, aligned with browserTokens) | Consistency | Small | **DONE** |
+| **3** | Fix light-mode `backgroundHover` = `backgroundSurface` | Visual bug — no visible hover on cards | Small | **DONE** |
+| **4** | Derive CSS vars from Tamagui theme | Maintenance — one source of truth | Large | **DONE** |
+| **5** | Reduce token count (~120 → ~85 per mode) | Clarity — easier to maintain | Medium | **DONE** |
+| **6** | Move command palette tokens to its own package | Architecture — theme stays lean | Small | Deferred |
+
+### Changes Made (2026-04-12)
+
+**themes.ts:**
+- Added `contrastText()` utility (exported) — computes WCAG AA-compliant text color from any background
+- All button text tokens now derived: `primaryButtonText`, `secondaryButtonText`, `aiButtonText`, `errorButtonText`, `successButtonText`
+- Removed ~26 unused palette step tokens per mode (primary50-600, secondary50-500, etc.)
+- Fixed `backgroundHover` in light mode: `#F5F4F1` → `#EEECE8` (one step darker than backgroundSurface)
+- Fluid light theme: `primaryButtonText` fixed from `#faf8f5` (white, 2.64:1 FAIL) to dark text
+
+**Button.tsx:**
+- `borderRadius: '$4'` (16px) → `'$2'` (8px) — standard button radius
+- AI variant: `color: 'white'` → `'$aiButtonText'`
+- Danger variant: `color: 'white'` → `'$errorButtonText'`
+- Success variant: `color: 'white'` → `'$successButtonText'`
+
+**IconButton.tsx:**
+- Primary variant: `color: 'white'` → `'$primaryButtonText'`
+- Danger pressStyle: `color: 'white'` → `'$errorButtonText'`
+
+**theme-bridge.ts:**
+- Refactored `getCSSVariables()` to derive from Tamagui theme object via `THEME_TO_CSS` mapping
+- Eliminated ~40 duplicated hardcoded color values (was 2 presets × 2 modes × ~20 vars)
+- browserTokens.radius comments aligned with Tamagui tokens ($1-$4, $round)

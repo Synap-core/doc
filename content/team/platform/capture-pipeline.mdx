@@ -1,0 +1,302 @@
+---
+title: "Capture Pipeline"
+description: "Unified AI capture pipeline across 7 surfaces."
+---
+
+# Capture Pipeline — Architecture & Integration Guide
+
+**Date:** 2026-04-08
+**Status:** Implemented — shared package used by Browser and Relay.
+
+---
+
+## Overview
+
+The capture pipeline turns free-form text into structured entities with relations. Users type "I met Samir from Acme at the AI conference" and the system extracts:
+- Person: Samir (role, company: Acme)
+- Company: Acme
+- Event: AI conference
+- Relations: Samir → works_at → Acme, Samir → attended → AI conference
+
+This document covers the architecture, shared package, and per-surface integration.
+
+---
+
+## Event Chain Integration
+
+Quick capture currently does NOT emit to the event chain after `execute` completes. This means:
+- Automations cannot trigger on "user captured something"
+- No audit trail entry that a capture happened (only the capture thread channel records it)
+- Sync-push does not replicate capture completions to peer pods
+
+Planned fix: `EVENT-CHAIN.md` Phase 1-A — emit `capture.completed` from `capture.execute` router after successful entity creation.
+
+---
+
+## 1. Channel Integration
+
+Every capture interaction is recorded in a **capture thread channel** — an `ai_thread` channel with `metadata.isCaptureThread = true`. One per user, auto-created on first capture.
+
+- **User message**: the raw capture text
+- **AI message**: summary of extracted entities + full proposals in metadata
+- **Hidden from UI**: `listChannels` filters out capture threads
+- **Auditable**: every AI decision is traceable in the DB
+
+Three pod-wide AI channels per user:
+1. **Personal chat** (`isPersonal: true`) — user↔AI conversation
+2. **Proactive feed** (`isProactiveFeed: true`) — AI-initiated posts
+3. **Capture thread** (`isCaptureThread: true`) — capture audit trail
+
+---
+
+## 2. Flow
+
+```
+User types text
+  → Frontend calls backend: capture.structure({ text })
+  → Backend calls IS: /api/structure (AI extraction)
+  → IS returns: entities[] + relations[] + followUp?
+  → Backend searches Typesense for dedup candidates per entity
+  → Returns: { proposals, relations, followUp, dedupCandidates }
+
+Frontend shows review UI:
+  → ProposalCards with editable titles, type badges, properties
+  → Dedup candidates ("3 possible matches" — link/dismiss)
+  → Follow-up question input (if AI needs clarification)
+  → User confirms
+
+Frontend calls backend: capture.execute({ entities, relations })
+  → Backend batch-creates entities + relations
+  → Returns: { created[], relations[] }
+```
+
+### Fallback Chain
+
+| Scenario | Behavior |
+|----------|----------|
+| IS available | Full AI extraction with multiple entities + relations |
+| IS unavailable (credentials error) | Backend returns single note fallback (confidence 0.3). Frontend auto-provisions via CP and retries. |
+| IS unavailable (no subscription) | Same note fallback. Frontend shows "Subscribe" hint. |
+| Pod offline | `offlineStructure()` — creates a raw capture entity locally |
+
+---
+
+## 2. `@synap-core/capture-pipeline` Package
+
+**Location:** `synap-app/packages/core/capture-pipeline/`
+
+### Architecture
+
+```
+Pure TypeScript (no React)              React Hook
+──────────────────────────              ──────────
+types.ts   — CaptureProposal,          useStructureCapture(options)
+             ProposedRelation,            → Full state machine
+             CaptureClient adapter        → Pluggable CaptureClient
+state.ts   — enrichProposals(),           → Proposal manipulation
+             offlineStructure(),          → Auto-fallback on failure
+             mapToExecuteInput(),
+             PROFILE_COLORS/ICONS
+```
+
+### CaptureClient Adapter
+
+Each surface provides its own implementation:
+
+```typescript
+interface CaptureClient {
+  structure(input: {
+    text: string;
+    url?: string;
+    html?: string;
+    context?: string;
+    previousEntities?: PreviousEntity[];
+  }): Promise<StructureResponse>;
+
+  execute(input: ExecuteInput): Promise<ExecuteResponse>;
+
+  searchEntities?(query: string, limit?: number): Promise<SearchResult[]>;
+}
+```
+
+**Browser:** Wraps `@synap-core/hooks` tRPC mutations
+**Relay:** Wraps `(client as any).capture` tRPC calls + auto-provision on fallback
+**CLI:** Could wrap direct HTTP fetch to `{podUrl}/trpc`
+
+### State Machine
+
+```
+input → structuring → follow-up → reviewing → executing → done
+                                      ↓
+                               dismiss all → input (auto-reset)
+```
+
+### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `enrichProposals(response)` | Maps raw proposals + dedup candidates into `CaptureProposal[]` with auto-link decisions (score >= 0.85) |
+| `offlineStructure(text)` | Creates a single capture entity from raw text (no AI) |
+| `mapToExecuteInput(proposals, relations)` | Filters dismissed proposals, maps to backend execute shape |
+| `makeTempId()` | Generates unique temp IDs for proposals |
+
+---
+
+## 3. Backend Contract
+
+### `capture.structure` (tRPC mutation)
+
+**Input:**
+```typescript
+{
+  text: string;           // Required, 1-8000 chars
+  url?: string;           // Source URL
+  html?: string;          // Full page HTML (max 50k)
+  context?: string;       // Follow-up answer or additional context
+  previousEntities?: [{   // For refining after follow-up
+    tempId, profileSlug, title, description?, properties?
+  }];
+}
+```
+
+**Response:**
+```typescript
+{
+  proposals: [{
+    tempId: string;
+    profileSlug: string;
+    title: string;
+    description?: string;
+    properties?: Record<string, unknown>;
+    confidence: number;    // 0-1, AI's confidence
+  }];
+  relations: [{
+    sourceTempId: string;
+    targetTempId: string;
+    relationType: string;
+  }];
+  followUp: string | null;   // Clarifying question from AI
+  dedupCandidates: {          // Typesense search results per entity
+    [tempId]: [{
+      entityId, title, profileSlug, score  // score 0-1
+    }]
+  };
+}
+```
+
+### `capture.execute` (tRPC mutation)
+
+**Input:**
+```typescript
+{
+  entities: [{
+    tempId: string;
+    profileSlug: string;
+    title: string;
+    description?: string;
+    properties?: Record<string, unknown>;
+    existingEntityId?: string;  // If linking to existing entity
+  }];
+  relations: [{
+    sourceTempId: string;
+    targetTempId: string;
+    relationType: string;
+  }];
+}
+```
+
+**Response:**
+```typescript
+{
+  created: [{
+    tempId: string;
+    entityId: string;     // Real ID
+    profileSlug: string;
+    linked: boolean;      // true if linked to existing
+  }];
+  relations: [{
+    sourceEntityId: string;
+    targetEntityId: string;
+    relationType: string;
+  }];
+}
+```
+
+---
+
+## 4. Per-Surface Integration
+
+### Browser (`@synap-core/capture`)
+
+The Browser features package wraps the shared pipeline:
+
+| File | Role |
+|------|------|
+| `types.ts` | Re-exports types from `@synap-core/capture-pipeline` |
+| `hooks/useStructureCapture.ts` | Browser adapter — uses `enrichProposals()` from pipeline, keeps own state (CaptureFlow needs `setState`) |
+| `hooks/useCaptureExecute.ts` | Uses `mapToExecuteInput()` from pipeline |
+| `components/CaptureFlow.tsx` | Full UI — input, structuring, follow-up, review, execute |
+| `components/CaptureProposalCard.tsx` | Tamagui proposal card with dedup |
+| `components/CaptureRelationPreview.tsx` | Relation tree visualization |
+
+### Relay
+
+| File | Role |
+|------|------|
+| `hooks/useCapture.ts` | Builds `CaptureClient` from tRPC, delegates to shared `useStructureCapture`. Auto-provisions IS + retries on fallback. |
+| `components/ProposalCard.tsx` | RN proposal card — editable title, confidence dot, properties, dedup candidates, link/dismiss |
+| `components/CaptureModal.tsx` | Full capture flow — input, review with ProposalCards, follow-up, confirm |
+
+**Auto-provision on fallback:**
+When the backend returns a single low-confidence note (IS unavailable):
+1. Relay detects the fallback
+2. Calls `triggerProvision()` on CP to activate IS
+3. Waits 2 seconds for credentials to propagate
+4. Retries `capture.structure` — if AI now works, returns the real proposals
+5. User sees AI-extracted entities instead of raw capture
+
+### CLI (Future)
+
+Could use the pure functions directly:
+```typescript
+import { offlineStructure, mapToExecuteInput } from '@synap-core/capture-pipeline';
+```
+
+---
+
+## 5. Dedup & Linking
+
+### Auto-Link Threshold
+
+When a dedup candidate has score >= 0.85 (85% match), the proposal is automatically set to `action: 'link'` instead of `action: 'create'`. The user can override.
+
+### Manual Linking
+
+Users can expand the dedup section on a ProposalCard to see all matches:
+- Match score percentage
+- Entity title and profile type
+- "Link" button to merge with existing
+
+### Relation Type Inference
+
+The IS infers relation types between entities:
+- person → company: `works_at`
+- person → event: `attended`
+- task → project: `belongs_to`
+- If the relation type doesn't exist in the workspace's `relation_defs`, falls back to `relates_to`.
+
+---
+
+## 6. Key Files Reference
+
+| Area | File | Purpose |
+|------|------|---------|
+| **Package** | `synap-app/packages/core/capture-pipeline/src/types.ts` | Canonical types |
+| **Package** | `.../state.ts` | Pure functions (enrich, offline, map) |
+| **Package** | `.../react/useStructureCapture.ts` | Shared React hook |
+| **Browser** | `synap-app/packages/features/capture/src/` | UI components + Browser adapter |
+| **Relay** | `relay-app/src/hooks/useCapture.ts` | Relay adapter with auto-provision |
+| **Relay** | `relay-app/src/components/ProposalCard.tsx` | RN proposal card |
+| **Relay** | `relay-app/src/components/CaptureModal.tsx` | Capture flow UI |
+| **Backend** | `synap-backend/packages/api/src/routers/capture.ts` | Structure + execute endpoints |
+| **IS** | IS `/api/structure` endpoint | AI entity extraction |

@@ -1,0 +1,237 @@
+---
+title: "Skill: Propose Workspace"
+description: "Workspace proposal skill — AI-driven space creation."
+---
+
+# Skill: Propose Workspace
+
+Call `propose_workspace` when you have gathered enough context about what the user does and wants to track. The proposal is shown to the user for review — nothing is created until they confirm.
+
+---
+
+## When to call it
+
+After 3–5 conversational exchanges you understand:
+
+- What they do (role, domain)
+- What they want to track (entity types)
+- How they work (workflows, views they prefer)
+
+---
+
+## Parameters reference
+
+### `workspaceName` + `description`
+
+Short, descriptive. Reflects the user's actual use case.
+
+### `profiles` — entity types (3–5, max 8)
+
+```json
+{
+  "slug": "deal",
+  "displayName": "Deal",
+  "icon": "dollar-sign",
+  "color": "#10B981",
+  "description": "Sales opportunities and pipeline",
+  "scope": "WORKSPACE",
+  "properties": [
+    {
+      "slug": "status",
+      "label": "Status",
+      "valueType": "string",
+      "inputType": "select",
+      "enumValues": [
+        "prospect",
+        "qualified",
+        "proposal",
+        "closed-won",
+        "closed-lost"
+      ]
+    },
+    {
+      "slug": "value",
+      "label": "Value",
+      "valueType": "number",
+      "inputType": "number"
+    },
+    {
+      "slug": "company",
+      "label": "Company",
+      "valueType": "entity_id",
+      "inputType": "select"
+    },
+    {
+      "slug": "close-date",
+      "label": "Close Date",
+      "valueType": "date",
+      "inputType": "date"
+    }
+  ]
+}
+```
+
+**Property `valueType` options:** `string` · `number` · `boolean` · `date` · `entity_id` · `array` · `object`
+
+**`inputType` options:** `text` · `textarea` · `number` · `boolean` · `date` · `select` · `url` · `email`
+
+**Property slug rules:**
+
+- Slugs are profile-scoped — use clean names: `"status"` not `"deal-status"`, `"owner"` not `"deal-owner"`
+- Lowercase hyphenated: `"due-date"`, `"close-date"`, `"assigned-to"`
+
+**`scope` options:** `WORKSPACE` (default) · `SYSTEM` (pod-wide, for common types like Contact) · `USER` (personal)
+
+### `views` — pre-configured views (4–7)
+
+```json
+[
+  {
+    "name": "Pipeline",
+    "type": "kanban",
+    "scopeProfileSlug": "deal",
+    "config": { "groupByField": "status" }
+  },
+  { "name": "Contacts Table", "type": "table", "scopeProfileSlug": "contact" },
+  {
+    "name": "Due This Week",
+    "type": "calendar",
+    "scopeProfileSlug": "deal",
+    "config": { "dateField": "close-date" }
+  },
+  {
+    "name": "Relationship Graph",
+    "type": "graph",
+    "scopeProfileSlugs": ["deal", "contact", "company"],
+    "config": { "layout": "force", "showRelations": true }
+  }
+]
+```
+
+**View types:** `table` · `kanban` · `list` · `calendar` · `timeline` · `graph` · `flow`
+
+- `kanban` needs `config.groupByField` pointing to a `select` property
+- `calendar` needs `config.dateField` pointing to a `date` property
+- `graph` spanning multiple types: use `scopeProfileSlugs` (plural), not `scopeProfileSlug`
+
+### `bentoLayout` — dashboard widget grid (12-column)
+
+```json
+[
+  {
+    "widgetType": "entity-count",
+    "pos": { "x": 0, "y": 0, "w": 3, "h": 3 },
+    "config": { "profileSlug": "deal", "title": "Open Deals" }
+  },
+  {
+    "widgetType": "entity-list",
+    "pos": { "x": 3, "y": 0, "w": 6, "h": 6 },
+    "config": { "profileSlug": "deal", "title": "Active Pipeline" }
+  },
+  { "widgetType": "feed", "pos": { "x": 9, "y": 0, "w": 3, "h": 6 } }
+]
+```
+
+**Widget types:** `welcome-header` · `entity-count` · `entity-list` · `feed` · `calendar` · `quick-access`
+
+**Grid rules:** `x + w ≤ 12` — rows that fill 12 columns look balanced (3+3+3+3, 6+6, 4+4+4, etc.)
+
+Design the layout to fit the user's workflow — there is no required structure.
+
+### `suggestedEntities` — seed data (8–15 total, at least 2 per profile)
+
+```json
+[
+  {
+    "profileSlug": "deal",
+    "title": "Acme Corp License",
+    "properties": {
+      "status": "proposal",
+      "value": 24000,
+      "company": "ref:company:Acme Corp"
+    }
+  },
+  {
+    "profileSlug": "deal",
+    "title": "Beta Launch Campaign",
+    "properties": { "status": "qualified" },
+    "content": "# Beta Launch\n\nKey goals for this deal:\n- ..."
+  }
+]
+```
+
+- Cross-reference entities: `"ref:profileSlug:Entity Title"`
+- Add `content` (markdown) to 2–3 entities where a document makes sense (meeting notes, project briefs)
+- Use varied status values to show the full workflow
+- Set dates within the current quarter
+
+### `suggestedRelations` — typed edges (5–15)
+
+```json
+[
+  {
+    "sourceRef": "contact:Sarah Chen",
+    "targetRef": "company:Acme Corp",
+    "type": "works_at"
+  },
+  {
+    "sourceRef": "deal:Acme Corp License",
+    "targetRef": "contact:Sarah Chen",
+    "type": "owned_by"
+  }
+]
+```
+
+Use specific domain types (`works_at`, `manages`, `supplies_to`) over generic ones (`relates_to`). Build a connected graph.
+
+### `entityLinks` — schema-level connections
+
+```json
+[
+  {
+    "sourceProfileSlug": "contact",
+    "targetProfileSlug": "company",
+    "type": "works_at",
+    "label": "Works at"
+  },
+  {
+    "sourceProfileSlug": "deal",
+    "targetProfileSlug": "contact",
+    "type": "owned_by",
+    "label": "Owned by"
+  }
+]
+```
+
+### `displayTemplates` — optional rich entity rendering (1–2 key profiles)
+
+```json
+[
+  {
+    "name": "Deal Card",
+    "entityType": "deal",
+    "isDefault": true,
+    "config": {
+      "layout": {
+        "zones": {
+          "header": { "enabled": true, "slots": ["status"] },
+          "sidebar": {
+            "enabled": true,
+            "slots": ["value", "close-date", "company"]
+          },
+          "main": { "enabled": true }
+        },
+        "fieldSlots": [
+          { "slot": "status", "renderer": { "type": "status-pill" } },
+          {
+            "slot": "value",
+            "renderer": { "type": "number", "format": "currency" }
+          }
+        ]
+      }
+    }
+  }
+]
+```
+
+**Renderer types:** `status-pill` · `progress-bar` · `avatar` · `date` · `number` · `text` · `email` · `tags` · `boolean`

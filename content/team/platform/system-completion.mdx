@@ -1,0 +1,268 @@
+---
+title: "System Completion Status"
+description: "Overall platform system completion tracking."
+---
+
+# Synap — System Completion Plan
+
+> Generated 2026-03-25. This document tracks everything needed to ship a complete, cohesive v1 of the Synap platform.
+
+---
+
+## Current State Summary
+
+| Area | Status | Completeness |
+|------|--------|--------------|
+| Widget System (native + iframe) |  DONE | ~95% |
+| Entity Profiles + Profile Packs |  Phases A-C DONE, Phase D pending | ~85% |
+| Template System |  CP serves packs, browser fetches/installs | ~85% |
+| Notification System |  Unified — 27 registry types, lifecycle managed, proactive integration | ~90% |
+| Proposals / Governance |  Solid — checkPermissionOrPropose(), all paths emit, notifications actioned on approve/reject | ~95% |
+| Data Structure Viewer |  DONE (PLAN-04 Part 2) | ~90% |
+| Connectors (Nango Phase 1) |  Code complete, ❌ not deployed | ~75% |
+| Telegram Integration |  Auth, screens, bot (Phases 1-3) | ~70% |
+| Marketplace |  Full stack built | ~80% |
+| AI Chat + Agents |  Orchestrator + Persona, Hub Protocol, Proactive Intelligence | ~90% |
+| Cell System / Bento |  80+ widgets, react-grid-layout, proactive + AI action cells | ~95% |
+| Automation System |  Triggers, steps, commands | ~80% |
+| Event-Triggered Skills | ❌ Infrastructure ready, bridge missing | ~30% |
+| Terminal Bridge | ❌ Research only | ~30% |
+| Vault AI (secret request flow) |  Built, missing request_secret tool | ~85% |
+| Proactive Intelligence |  5 phases complete — cron workers, nudges, Hub endpoint, cells, settings | ~90% |
+| Workspace Terminology |  "space" replaces "workspace" in UI, single-workspace detection | ~95% |
+| Onboarding Flow |  FirstTimeSetupFlow exists, needs redesign | ~40% |
+| Unified Relation Model |  Structure viewer done, auto-sync not started | ~50% |
+| Profile Packs Phase D |  Pending onboarding integration | ~70% |
+
+---
+
+## Completion Tracks
+
+### Track 1 — PLAN-03: Event-Triggered Skills
+**Priority: #1 — Highest remaining product impact**
+
+The "magic moment": AI automatically reacts when data changes. Infrastructure is 90% there (automation system, triggers, commands, skills all exist). The gap is the bridge connecting them.
+
+**What's missing:**
+- `skill_triggers` DB table (or reuse existing `automation_triggers` with `actionType: 'skill'`)
+- Backend: when trigger fires, resolve skill → run IS endpoint
+- IS: skill execution endpoint `/skills/trigger` (Hub Protocol route)
+- Frontend: skill trigger configuration UI in automation editor
+- Frontend: `SkillTriggerWidget` bento cell (shows active skill triggers)
+
+**What's already there:**
+- `automation_triggers` table with event type matching
+- `pg-boss` workers that process trigger events
+- 13 system skills loadable by IS
+- Hub Protocol: IS ↔ Backend REST fully wired
+- `skill-loader.ts` in IS handles skill routing
+
+**Effort:** ~3-4 days
+**Unlocks:** The entire "AI reacts to your data" narrative. Demo moment: create a task → AI automatically enriches it via skill.
+
+---
+
+### Track 2 — Onboarding Flow Redesign
+**Priority: #2 — Blocks user acquisition**
+
+Current `FirstTimeSetupFlow` in browser is a series of modals. Target: `@synap/onboarding-flow` unified package with 4 steps: Hook → FirstCapture → Connect → Done.
+
+**What's missing:**
+- `@synap/onboarding-flow` package (new)
+- Hook screen: value prop + 1-minute promise
+- FirstCapture: capture anything (text/URL/file) in 30 seconds
+- Connect screen: install 1 profile pack (from CP pack browser)
+- Done screen: first bento dashboard seeded
+- Profile Pack Phase D: pack selection wired into onboarding step 3
+- Replace `FirstTimeSetupFlow` in browser with the new package
+
+**What's already there:**
+- Profile pack browser cell (CP fetch + offline fallback) — PLAN-02 done
+- `createDefaultHomeBentoConfig()` seeds dashboard
+- Capture flow (tab saving, selection capture) exists
+- Settings WsPacksTab shows installed packs
+
+**Effort:** ~4-5 days
+**Unlocks:** Clean entry into the product. Retention cliff fix.
+
+---
+
+### Track 3 — PLAN-05 Phase 1: Notification Foundation — DONE (2026-03-28)
+**Status: COMPLETE**
+
+Unified notification system built with 27 registry types, NotificationService, lifecycle management. Proactive messages create notification rows. Proposal approve/reject marks notifications as actioned. Daily expiry cleanup worker.
+
+---
+
+### Track 4 — Vault AI: Secret Request Flow
+**Priority: #4 — Completes vault integration (~85% done)**
+
+The vault is built. AI can read secrets it has been pre-authorized for. The missing piece: AI asks for a secret it doesn't have access to yet, creating a reviewable request.
+
+**What's missing:**
+- `request_secret` tool in IS tool registry
+- Hub Protocol route: `POST /vault/request-secret` (creates pending vault request)
+- `vault_requests` table (or reuse proposals with `proposalType: 'vault_access'`)
+- Frontend: `AIRequestCard` component (banner variant) — shows "AI needs GITHUB_TOKEN" with [Provide] [Deny]
+- Notification type `ai_request.vault_access` in registry (requires Track 3)
+- Vault side panel integration: [Provide] opens vault with secret pre-selected
+
+**What's already there:**
+- Vault built, secret storage, per-secret permissions
+- `checkPermissionOrPropose()` pattern available for reuse
+- PLAN-05 architecture already defines `AIRequestCard` component
+- `navigatePanel('vault', { secretId })` navigation is available
+
+**Effort:** ~2 days
+**Unlocks:** Full AI ↔ vault interaction loop. AI becomes self-sufficient with user approval.
+
+---
+
+### Track 5 — Terminal Bridge (PLAN-04: Remote Execution)
+**Priority: #5 — Required for DevOps workspace**
+
+AI can run commands. The gap: no Hub Protocol route for terminal operations, no terminal widget that AI can target, no security policy for command authorization.
+
+**What's missing:**
+- Hub Protocol: `POST /terminal/execute` (creates session + runs command)
+- Hub Protocol: `GET /terminal/sessions/{id}` (poll output)
+- `ai_request.terminal_exec` proposal type — every command goes through `checkPermissionOrPropose()`
+- IS tool: `execute_command(command, cwd, workspaceId)` → Hub Protocol → pod terminal
+- `TerminalOutputCell` bento widget — streams output from a session
+- DEFAULT_AUTO_APPROVE: opt-in terminal commands (read-only shell ops only)
+
+**What's already there:**
+- Terminal service in Electron main (pty, sessions, IPC)
+- `terminal:create`, `terminal:write`, `terminal:kill` preload APIs
+- IS Hub Protocol router wired for 20 sub-routers (easy to add)
+- `checkPermissionOrPropose()` reusable for command approval
+
+**Effort:** ~3-4 days
+**Unlocks:** DevOps workspace (git status, npm run, docker ps). AI debugging loop.
+
+---
+
+### Track 6 — Connectors Deployment
+**Priority: #6 — Code complete, needs ops**
+
+All connector code (39 files, Nango integration, CP→Pod pull-sync) was implemented 2026-03-23 but not deployed.
+
+**What's missing (ops only, no new code):**
+- Nango self-hosted deployment (Docker compose)
+- Set `NANGO_SECRET_KEY` + `NANGO_CALLBACK_URL` env vars on pod
+- Drizzle migration run: `connectors`, `connector_syncs`, `connector_auth` tables
+- Register OAuth apps: Google Calendar, Google Contacts, GitHub
+- Set webhook URL: `https://[pod]/webhooks/nango`
+- Test end-to-end: connect GitHub → import issues → entities appear in Library
+
+**Effort:** ~1 day (ops), ~1 day (smoke testing)
+**Unlocks:** Live data import from 40+ services. Connector sync notifications (requires Track 3).
+
+---
+
+### Track 7 — PLAN-05 Phases 3+5: Actionable Notifications + Preferences
+**Priority: #7 — Polish after foundation**
+
+Depends on Track 3 (notification foundation).
+
+**Phase 3 — Actionable (after Track 3):**
+- `AIRequestCard` component (blocking banner: vault, terminal, confirm)
+- `NotificationBanner` (persistent, top of app, max 1 visible)
+- `NotificationToast` (bottom-right, 4-8s auto-dismiss)
+- Action handler wiring (mutation dispatch from notification actions)
+- "Provide secret" → vault side panel
+
+**Phase 5 — Preferences:**
+- `NotificationPreferences` settings panel
+- Per-type routing rules UI
+- Quiet hours config
+- Category muting
+
+**Effort:** ~4 days combined
+**Unlocks:** Full notification UX parity with Linear/Slack/GitHub.
+
+---
+
+### Track 8 — Unified Relation Model (PLAN-04 Part 1)
+**Priority: #8 — Data integrity, lower urgency**
+
+The Data Structure Viewer (PLAN-04 Part 2) is done. Part 1 — auto-sync between `entity_links` and `relations` tables — is not started.
+
+**What's missing:**
+- `entity_links` → `relations` auto-sync trigger (pg trigger or application-level hook)
+- `relations` → `entity_links` backfill migration
+- Deduplication logic on conflict
+- Remove `entity_links` create/delete bypasses in `entityLinks` router
+
+**Effort:** ~2 days
+**Dependency:** None (pure backend)
+
+---
+
+### Track 9 — Skill Editor in Browser
+**Priority: #9 — Nice-to-have, not blocking**
+
+Users can create/edit skills from the Browser UI instead of editing markdown files.
+
+**What's missing:**
+- `SkillEditorPanel` in browser (side panel, code editor, save to DB)
+- `skills` tRPC router: `create`, `update`, `delete` (user-defined skills)
+- `user_skills` DB table (workspace-scoped, overrides/extends system skills)
+- Skill trigger configuration UI (what events activate this skill)
+
+**Effort:** ~3 days
+**Dependency:** Track 1 (event triggers define how skills are activated)
+
+---
+
+## Recommended Execution Order
+
+```
+Week 1:
+  [Track 1] Event-Triggered Skills            3-4 days  ← HIGHEST IMPACT
+  [Track 6] Connectors Deployment             1 day (ops, can be parallelized)
+
+Week 2:
+  [Track 2] Onboarding Flow Redesign          4-5 days
+
+Week 3:
+  [Track 3] Notification Foundation (Phase 1) DONE (2026-03-28)
+  [Track 4] Vault AI Secret Request           2 days
+
+Week 4:
+  [Track 5] Terminal Bridge                   3-4 days
+
+Week 5:
+  [Track 7] Actionable Notifications + Prefs  4 days
+  [Track 8] Unified Relation Model            2 days
+
+Future:
+  [Track 9] Skill Editor                      3 days
+  PLAN-05 Phase 6 — Telegram inline actions   2 days
+  PLAN-05 Phase 7 — Mobile push               future
+```
+
+---
+
+## Definition of "System Complete"
+
+The system is complete (v1 shippable) when:
+
+1.  A user can capture anything (browser, Telegram, manual) and it lands in Library
+2.  AI can organize captures into entities, grouped by profile
+3.  AI mutations are reviewable via real-time bell with inline approve/reject
+4. ❌ **AI reacts to data changes** (event-triggered skills — Track 1)
+5. ❌ **New users get in smoothly** (onboarding redesign — Track 2)
+6.  External data flows in via connectors (code done, needs deploy — Track 6)
+7. ❌ **AI can request vault secrets with user approval** (Track 4)
+8. ❌ **AI can run terminal commands with user approval** (Track 5)
+9.  Notifications reach OS (Electron IPC fixed)
+10.  **All notification types delivered** (DB table + registry + NotificationService + toasts + banners + prefs + proactive integration — Track 3 DONE 2026-03-28)
+
+**Current score: 8.5/10.** Remaining: onboarding (2), connectors deploy (6), vault grant dispatch (4), terminal bridge (5).
+
+**Launch readiness: ~1 day.** As of 2026-03-26, all transactional routes are implemented, security is correct, billing redirects are proper 302s. Only blocking items: 2 CP API invite endpoints + invite email + Browser first release (v0.5.0).
+
+---
+
+*Last updated: 2026-03-28*

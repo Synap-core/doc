@@ -1,0 +1,153 @@
+---
+title: "OpenClaw State & Implications"
+description: "Current OpenClaw ecosystem state and implications."
+---
+
+
+## The Quick Reality Check (April 2026)
+
+As of April 4, 2026, Anthropic announced that Pro/Max subscription credits no longer apply to third-party tools including OpenClaw. To use Claude with OpenClaw, only API Key (pay-as-you-go) or extra usage remain. This is important — it means running OpenClaw with Claude now has real per-token costs. Good news for you: this makes Synap's four-tier routing (where 90% of traffic goes to cheap/free models) a genuine cost advantage you can pitch.
+
+OpenClaw requires Node.js ≥ 22. The project is moving fast — the latest release notes show daily updates with plugin SDK changes, security patches, and breaking changes. Expect things to be a bit rough around the edges.
+
+---
+
+## Recommended Install Path for You
+
+You have three options. Given that you're a developer who needs to understand the internals (to build synap-memory), I'd go with the **hackable install**, not the one-liner.
+
+### Option 1: One-liner (fastest, 10 min)
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash
+```
+
+This installs Node.js if needed, pulls OpenClaw, and starts the onboarding wizard. The onboarding wizard helps you configure essential connections and features without guesswork. Fine for getting a feel for the product, but you won't understand what's happening underneath.
+
+### Option 2: npm global (recommended for daily use)
+
+```bash
+npm i -g openclaw
+openclaw onboard
+```
+
+Clean, standard, easy to update.
+
+### Option 3: Hackable / git clone (what I'd recommend for you)
+
+```bash
+git clone https://github.com/openclaw/openclaw.git
+cd openclaw && pnpm install && pnpm run build
+pnpm run openclaw onboard
+```
+
+This gives you full source access, which you'll need when writing the synap-memory skill. You can inspect how skills are loaded, how memory works internally, how the Gateway routes tool calls — all the internals you need to understand for the integration.
+
+---
+
+## Post-Install: The Onboarding Wizard
+
+The wizard walks you through:
+
+1. **Model provider** — Pick Anthropic (API key) for now. You can add OpenRouter, Ollama, or others later. Run `openclaw models list` after setup — if the list is empty, it almost always means the API key is wrong.
+
+2. **Channel** — Start with **Telegram** (easiest to set up, best for mobile use) or **TUI** (terminal interface, fastest for dev work). Discord and WhatsApp are more complex. I'd say Telegram first since you already use it for Synap's @SynapOS_bot — you'll be living in both simultaneously, which is useful for feeling the integration opportunity.
+
+3. **Gateway token** — The wizard generates a security token. Keep it. This authenticates connections to your OpenClaw instance.
+
+---
+
+## Critical Security Hardening (Do This Immediately)
+
+This is non-optional. OpenClaw's Canvas Host component defaults to binding 0.0.0.0 — meaning any device on your local network can reach your OpenClaw interface. The community has been bitten hard by this:
+
+```bash
+# In your openclaw.json or via CLI:
+# Bind to localhost only
+openclaw config set gateway.host "127.0.0.1"
+
+# If you need web UI access:
+# Open http://127.0.0.1:18789 in your browser
+```
+
+Most security incidents in AI-agent systems come from control failures, not model failures. In OpenClaw environments, risks usually cluster into identity, execution, data, and observability.
+
+Treat your Gateway as a trusted boundary, and don't expose it to the public internet without strong authentication and firewalls. The key hardening steps: bind to loopback, require token auth, limit tool access to only what you need, enforce workspace-only filesystem access.
+
+---
+
+## Where to Run It
+
+The key security principle: OpenClaw's real power comes from the permissions you give it. The right strategy isn't restricting access on your work machine. It's choosing a dedicated machine you're comfortable giving full access to.
+
+For your purposes (learning the system + building the integration), I'd recommend running it on your **development machine locally** first for a few days to understand the workflow. Then move it to a **dedicated VPS or a separate Docker container** once you start building synap-memory — you don't want your agent accidentally messing with your Synap codebase.
+
+A cheap Hetzner VPS (you already know Hetzner from the Synap infra) works perfectly. $5-10/month. Keep it separate from your Synap pods.
+
+---
+
+## Understanding the Memory System (Critical for Your Integration)
+
+This is what you need to study deeply, because synap-memory will replace/augment this layer:
+
+OpenClaw memory follows one critical principle: if it's not written to a file, it doesn't exist.
+
+The current memory architecture uses three layers:
+
+**MEMORY.md** — The evergreen file. Persistent facts about the user. Survives compaction. This is what Synap's entity graph will replace. Make retrieval mandatory — add a rule to AGENTS.md that says "search memory before acting." Without it, the agent guesses instead of checking its notes.
+
+**Daily notes** — Ephemeral scratch pads. Important facts get promoted to MEMORY.md.
+
+**Context compaction** — When the conversation grows too long, the system detects the context window approaching capacity, runs a silent pre-compaction memory flush (prompting the model to extract key facts and write them to MEMORY.md), then summarizes and replaces the oldest conversation history. This is where context loss happens — the exact pain point Synap solves.
+
+OpenClaw now supports hybrid memory search with vector + text weights, temporal decay, and MMR — but it's all built on flat Markdown files and local embeddings. Functional but primitive compared to what you've built with PostgreSQL + pgvector + Typesense + typed entities.
+
+**The integration point:** The memory tools that OpenClaw agents use (memory_search, memory_get, memory_write) are the API surface you'll intercept or extend with synap-memory. Instead of writing to MEMORY.md, the agent writes typed entities to the Synap pod. Instead of grep-ing Markdown files, it queries the entity graph via Hub Protocol.
+
+---
+
+## Understanding the Skills System (How You'll Ship synap-memory)
+
+Skills install to ~/.openclaw/skills/. No restart required.
+
+A skill is a directory with a SKILL.md file containing YAML frontmatter (metadata, dependencies, tool definitions) and markdown instructions that get injected into the agent's context. Skills declare their runtime requirements (env vars, binaries, install specs) in the SKILL.md frontmatter.
+
+To publish on ClawHub: `clawhub skill publish &lt;path>` — then it's discoverable via `clawhub search` and installable via `clawhub install`.
+
+One of OpenClaw's striking features: the agent can write its own skills. This means Synap could eventually have its agent create new entity profiles, views, and automations — all proposed through the skill system and governed by proposals.
+
+---
+
+## Your First Week — What to Do
+
+**Day 1-2: Install and play.** Get OpenClaw running locally with Telegram. Send it tasks. Ask it to manage your calendar, summarize a document, organize files. Feel the product as a user. Notice what works and what frustrates you. Pay special attention to what happens when context gets long and compaction kicks in — that's the pain you're solving.
+
+**Day 3: Study the memory layer.** Read MEMORY.md, AGENTS.md, the memory config reference. Run `/context list` to see what's actually in context. Trigger compaction manually with `/compact` and observe what gets lost. This is your "before" baseline.
+
+**Day 4-5: Study the skills system.** Install 2-3 skills from ClawHub (try agent-brain, the memory skills). Read their SKILL.md files. Understand the format, the tool definitions, how they inject into context. Then write a minimal test skill — even something trivial like "when asked about my projects, query this API." Feel the authoring workflow.
+
+**Day 6-7: Prototype synap-memory.** Write a SKILL.md that teaches the agent to use Synap's Hub Protocol for entity CRUD instead of (or alongside) MEMORY.md. The minimum viable skill: `synap_create_entity`, `synap_search`, `synap_get_entity`, `synap_list_entities`. Test it with the Agent OS template entities (Agent, Project, Task, Skill, Provider).
+
+**End of week 1:** You should have a working prototype where your OpenClaw agent can create a Task entity in your Synap pod by saying "remember I need to send Marc the projections by Friday" — and later query "what's overdue?" and get a structured response from the entity graph rather than a grep through Markdown files.
+
+That prototype is what you post on the Discord. That's the exit ramp.
+
+---
+
+## Model Recommendation for Your Usage
+
+Since you're paying per-token now, be smart about it:
+
+For daily use and testing: **Claude Sonnet 4.6 via Anthropic API**. Best balance of quality and cost for agent work.
+
+For skill development/debugging (high volume, lower stakes): **Add Ollama with a local model** as a secondary provider. Qwen3.5 27B is the current community favorite for agent work — reliable tool calling, good enough for most tasks. Free. Run it alongside the cloud model and route cheap tasks locally. This also lets you dogfood your own four-tier routing thesis.
+
+Config for dual models is straightforward — OpenClaw supports per-agent and per-task model routing natively.
+
+---
+
+## One Last Thing
+
+As you're using OpenClaw, keep a running list of every moment where you think "this would be better with structured entities" or "the agent just lost context it shouldn't have" or "I wish I could see a dashboard of what my agent has done." That list becomes the feature comparison in your README, the pain points in your Discord post, and the substance of your "Why Your Agent Needs a Knowledge Graph" blog post.
+
+You're not just installing OpenClaw. You're doing product research on a 250K-user platform whose biggest gap is the thing you already built. Go in with that lens.

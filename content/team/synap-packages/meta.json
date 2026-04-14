@@ -1,0 +1,7 @@
+{
+  "title": "Synap app packages",
+  "description": "Monorepo package map — client, UI, views, cells, features, and why boundaries exist",
+  "root": true,
+  "icon": "package",
+  "pages": ["index"]
+}

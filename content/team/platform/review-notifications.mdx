@@ -1,0 +1,239 @@
+---
+title: "Platform Review: Notifications"
+description: "Notification system completeness."
+---
+
+# 05 — Notification & Proposal UX
+
+## Current State
+
+### Notification System — Basic, Local Only
+
+**Store:** `browser/electron/renderer/src/stores/notificationStore.ts`
+
+A Zustand store with:
+- **Types:** `sync`, `capture`, `message`, `reminder`, `system`, `update`
+- **Delivery:** Electron IPC (`window.synap.notifications.show()`) with web fallback
+- **Persistence:** Last 50 items in localStorage
+- **Preferences:** Per-type toggles, quiet hours, sound settings
+- **Urgency:** `low`, `normal`, `critical` (critical bypasses quiet hours)
+- **Helpers:** `notifySync()`, `notifyCapture()`, `notifyReminder()`, `notifySystem()`, `notifyUpdate()`
+
+**NOT used for:** Proposal alerts, AI requests, vault access requests
+
+### Proposal System — Two-Layer Notification
+
+**Layer 1: Sidebar Badge**
+- Hook: `browser/electron/renderer/src/hooks/usePendingProposalsCount.ts`
+- Polls every 60s for pending proposals
+- Shows count badge on "Proposals" nav item
+- Collapsed sidebar: dot indicator. Expanded: numeric badge.
+
+**Layer 2: Real-Time Socket Events**
+- Socket event: `ai:proposal` from backend
+- Handler in: `synap-app/packages/features/proposals/src/hooks/useProposals.ts`
+- Shows toast notification via `toast.info('New proposal available')`
+- Refetches proposal list
+
+**Layer 3: Telegram (Background)**
+- `notifyProposalViaTelegram()` — fire-and-forget
+- Sends proposal details to user's Telegram
+
+### Proposal UI — Dedicated App
+
+**Proposals App:** `browser/electron/renderer/src/apps/ProposalsApp.tsx`
+- Two-column layout: Pending | Staged for Approval
+- Cards with icon, title, AI reasoning, timestamps
+- Stage/unstage, approve/reject, batch validate
+- Theme-aware with accent colors per proposal type
+
+**Proposal Cards:** `synap-app/packages/features/proposals/src/components/ProposalCard.tsx`
+- Expandable with metadata
+- AI source (emerald icon) vs User source
+- Inline editing support
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| Notification store | `browser/electron/renderer/src/stores/notificationStore.ts` |
+| Proposals badge hook | `browser/electron/renderer/src/hooks/usePendingProposalsCount.ts` |
+| Proposals app | `browser/electron/renderer/src/apps/ProposalsApp.tsx` |
+| Proposals hook (realtime) | `synap-app/packages/features/proposals/src/hooks/useProposals.ts` |
+| Proposal cards | `synap-app/packages/features/proposals/src/components/ProposalCard.tsx` |
+| Permission check → proposal | `synap-backend/packages/api/src/utils/permission-check.ts` |
+| Chat event broadcast | `synap-backend/packages/api/src/utils/chat-realtime-broadcast.ts` |
+| Channels router (ai:proposal emit) | `synap-backend/packages/api/src/routers/channels.ts` |
+| Hub Protocol proposals | `synap-backend/packages/api/src/routers/hub-protocol/proposals.ts` |
+| Realtime broadcast | `synap-backend/packages/jobs/src/utils/realtime-broadcast.ts` |
+
+### Proposal Creation Pipeline
+
+```
+AI Action Attempted
+  → checkPermissionOrPropose()
+  → [Whitelisted] → Grant immediately
+  → [Not whitelisted] → Create proposal
+    → broadcastNotification() → Realtime → user room
+    → notifyProposalViaTelegram() → Telegram (background)
+    → emitChatEvent(ai:proposal) → Socket.IO → workspace + user rooms
+    → Frontend: useProposals() → toast + refetch + sidebar badge
+```
+
+## Limitations
+
+### 1. No Unified Notification Center
+- Desktop notifications (OS-level) and in-app toasts are separate systems
+- No persistent in-app notification feed showing all events
+- Proposals have their own UI, disconnected from general notifications
+- No notification center panel (like GitHub's bell icon)
+
+### 2. Proposals Are Buried
+- Proposals only show in dedicated ProposalsApp (hidden by default in sidebar)
+- Toast notification is easily missed
+- No floating indicator or persistent banner for urgent proposals
+- User must navigate to proposals to act on them
+
+### 3. No Rich Notification Actions
+- Notifications are display-only — no inline approve/reject
+- Can't act on a proposal from the notification toast
+- Can't act on a proposal from Telegram (read-only)
+- No "quick approve" gesture (swipe, keyboard shortcut)
+
+### 4. No Notification Routing
+- All proposals go to the same place regardless of type
+- No way to auto-approve certain categories (e.g., always approve entity creation)
+- No notification rules (e.g., "urgent proposals → Telegram + desktop notification")
+
+### 5. AI Request Notifications Don't Exist
+When AI needs something from the user (vault access, terminal permission, confirmation), there's no specific UX for:
+- "AI wants to access your vault for GitHub API key"
+- "AI wants to run `docker restart backend` on your pod"
+- "AI is asking: Should I create a 'book' profile type?"
+
+These all go through the generic proposal system, which doesn't differentiate urgency or type.
+
+## Proposed Architecture
+
+### Unified Notification Model
+
+```typescript
+interface SynapNotification {
+  id: string;
+  type: 'proposal' | 'ai_request' | 'sync' | 'capture' | 'message' | 'system' | 'update';
+  urgency: 'low' | 'normal' | 'high' | 'critical';
+  title: string;
+  body: string;
+  source: 'ai' | 'system' | 'user' | 'connector';
+
+  // Action buttons
+  actions?: Array<{
+    label: string;
+    action: string;  // 'approve' | 'reject' | 'view' | 'dismiss' | custom
+    style: 'primary' | 'danger' | 'ghost';
+  }>;
+
+  // Metadata
+  proposalId?: string;
+  channelId?: string;
+  entityId?: string;
+  workspaceId?: string;
+
+  // State
+  read: boolean;
+  actedOn: boolean;
+  createdAt: string;
+  expiresAt?: string;
+}
+```
+
+### Notification Surface Layers
+
+```
+Layer 1: Desktop OS notification (Electron)
+  → Click → Opens browser, focuses relevant panel
+
+Layer 2: In-app notification bell (persistent indicator)
+  → Badge count on bell icon in toolbar
+  → Dropdown panel showing recent notifications
+  → Grouped by type (proposals, AI requests, system)
+
+Layer 3: Contextual toasts (transient)
+  → Appears in bottom-right, auto-dismisses
+  → Action buttons for quick approve/reject
+
+Layer 4: Floating proposal banner (for critical items)
+  → Appears at top of workspace when AI needs urgent approval
+  → "AI is waiting for your approval to run..."
+  → Inline approve/reject buttons
+
+Layer 5: Telegram bridge (external)
+  → Rich notifications with inline keyboards
+  → Approve/reject from Telegram
+  → Status updates when proposal is resolved
+```
+
+### AI Request Cards
+
+Special notification type for when AI needs user input:
+
+```
+┌──────────────────────────────────────┐
+│  AI Request                        │
+│                                      │
+│ I need access to your GitHub API key │
+│ to check repository status.          │
+│                                      │
+│ [Open Vault]  [Deny]  [Always Allow] │
+└──────────────────────────────────────┘
+```
+
+Types of AI requests:
+- **Vault access** → Open vault dialog, pre-fill with what AI needs
+- **Terminal execution** → Show command preview, approve/reject
+- **Entity creation** → Show entity preview, approve/edit/reject
+- **External API call** → Show request details, approve/reject
+- **Confirmation** → Yes/No question from AI to user
+
+## Action Items — Updated 2026-03-28
+
+### Phase 1: Notification Bell + Panel — DONE
+- [x] Add notification bell icon to browser toolbar
+- [x] Create NotificationPanel component (dropdown from bell)
+- [x] Merge proposal notifications into unified notification feed
+- [x] Group notifications by type
+- [x] Unread count badge on bell
+- [x] Mark as read on click
+
+### Phase 2: Actionable Notifications — DONE
+- [x] Add action buttons to notification items (approve/reject for proposals)
+- [x] Inline approve/reject in toast notifications
+- [x] Proposal approve/reject marks notification as `actioned`
+- [ ] Quick-approve keyboard shortcut
+- [ ] "Always allow" option for repeated similar requests
+
+### Phase 3: AI Request Cards — DONE (proactive + action cells)
+- [x] Define `ai_request` notification type (5 governance + 8 AI types in registry)
+- [x] ProactiveCard cell renders in chat, bell, bento, panel
+- [x] ActionCardShell shared base for AI action cards (3 kinds)
+- [x] 27 notification registry types total
+- [ ] Vault request card → opens vault with pre-filled context (needs vault tool)
+- [ ] Terminal request card → shows command preview (needs terminal bridge)
+
+### Phase 4: Notification Rules — PARTIAL
+- [x] User-configurable notification preferences (global toggle, sound, quiet hours, per-category)
+- [x] Proactive AI preferences (nudge density, schedule toggles)
+- [ ] Auto-approve rules per action type
+- [ ] Urgency-based delivery routing enforcement
+
+### Phase 5: Telegram Interactive Notifications — NOT STARTED
+- [ ] Telegram inline keyboards for approve/reject
+- [ ] Webhook from Telegram → CP → Pod → resolve proposal
+- [ ] Rich proposal previews in Telegram (entity data, command details)
+
+## Relationship to Other Features
+
+- **Terminal Bridge (04)** — Terminal proposals need good notification UX to not block AI
+- **Vault (07)** — Vault access requests need dedicated notification card
+- **AI Skills (06)** — Skills that need user input should use notification system
+- **Widget System (01)** — Notification center could be a widget/cell

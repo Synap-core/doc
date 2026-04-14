@@ -1,0 +1,135 @@
+---
+title: "View Type: Bento"
+description: "Bento grid view — how agents compose bento dashboards."
+---
+
+# Skill: Bento Dashboard View
+
+A bento view is a responsive dashboard grid composed of widget cells.
+It does NOT require a profileId — it's a workspace-level composition layer.
+
+## Workflow
+
+1. Call `get_bento_schema` to see all available widget types and their config fields
+2. Call `create_view({ name, type: "bento", metadata: { homeScope: "workspace" } })` to create the dashboard
+3. Call `arrange_workspace({ viewId, widgets: [...] })` to place widgets on the grid
+
+## Widget grid system
+
+The grid is 12 columns wide. Each widget has:
+
+- `key`: registered cell type (see tables below)
+- `config`: type-specific configuration object
+- `x`: column start (0–11)
+- `y`: row start (0–N)
+- `w`: width in columns (1–12)
+- `h`: height in rows (~60px each)
+
+## Data widgets (most commonly used)
+
+| key | What it does | Key config fields | Size |
+|-----|-------------|-------------------|------|
+| `stat-card` | KPI metric with optional chart | profileSlug, label, aggregation, field, chartType, timePeriod | 3×3 |
+| `entity-list` | Scrollable entity list with badges | profileSlug, title, limit, sortField, filter | 6×6 |
+| `calendar` | Calendar view of date-bearing entities | profileSlug, dateField, endDateField | 4×6 |
+| `entity-spotlight` | Feature one entity with key details | profileSlug, seed, titleField, subtitleField | 4×4 |
+| `entity-gallery` | Image grid of entities | profileSlug, coverField, limit | 6×6 |
+| `quick-capture` | Quick entity creation input | profileSlug, placeholder | 4×3 |
+| `random-highlight` | Spaced repetition highlight | profileSlug, textField, sourceField | 4×4 |
+| `quote-card` | Quote with accent bar + author | profileSlug, textField, authorField | 4×3 |
+| `reading-progress` | Book/article progress tracker | profileSlug, pageField, totalPagesField | 4×4 |
+
+### stat-card config examples
+
+```json
+// Count of all deals
+{ "profileSlug": "deal", "label": "Total Deals", "aggregation": "count", "chartType": "sparkline", "icon": "TrendingUp" }
+
+// Sum of revenue with monthly trend
+{ "profileSlug": "deal", "label": "Revenue", "aggregation": "sum", "field": "value", "chartType": "bar", "timePeriod": "month", "prefix": "$" }
+
+// Status breakdown as donut
+{ "profileSlug": "task", "label": "By Status", "displayMode": "distribution", "field": "status", "chartType": "donut" }
+
+// Average rating
+{ "profileSlug": "review", "label": "Avg Rating", "aggregation": "avg", "field": "rating", "suffix": "/5" }
+```
+
+## Layout/UX widgets
+
+| key | What it does | Key config fields | Size |
+|-----|-------------|-------------------|------|
+| `welcome` | Time-based greeting + date | name, subtitle | 12×2 |
+| `section-header` | Section title with icon + count | title, icon, profileSlug, showCount, color | 12×2 |
+| `feed` | Activity feed (no config needed) | — | 4×6 |
+| `link-grid` | Grid of clickable links | links, columns | 4×3 |
+| `iframe-embed` | External webpage embed | url, title | 6×6 |
+
+## Reference widgets (embed existing content)
+
+| key | What it does | Required config |
+|-----|-------------|-----------------|
+| `entity-detail` | Full entity panel | entityId |
+| `entity-card` | Compact entity card | entityId or profileSlug |
+| `document-editor` | Document viewer | documentId |
+| `view-table` | Embed a table view | viewId |
+| `view-list` | Embed a list view | viewId |
+| `view-kanban` | Embed a kanban view | viewId |
+| `view-calendar` | Embed a calendar view | viewId |
+| `view-grid` | Embed a grid view | viewId |
+| `channel-view` | Embed a channel thread | channelId |
+| `ai-chat` | AI chat interface | channelId (optional) |
+
+## Entity bento widgets (for single-entity dashboards)
+
+| key | What it does | Size |
+|-----|-------------|------|
+| `entity-header` | Entity title, type, status | 12×2 |
+| `entity-properties` | All entity properties with inline editing | 4×6 |
+| `entity-content` | Related entities (list/graph) | 6×6 |
+| `property-value` | Single property with editing | 3×2 |
+| `property-group` | Curated set of properties | 4×4 |
+
+## Governance
+
+| key | What it does | Key config |
+|-----|-------------|------------|
+| `proposals-list` | Pending AI proposals | limit, status |
+| `notifications` | Notification feed | limit |
+| `search` | Search widget | placeholder |
+
+## Example: CRM dashboard
+
+```json
+{
+  "widgets": [
+    { "key": "welcome", "config": { "name": "Antoine" }, "x": 0, "y": 0, "w": 12, "h": 2 },
+    { "key": "stat-card", "config": { "profileSlug": "deal", "label": "Open Deals", "aggregation": "count", "chartType": "sparkline", "icon": "TrendingUp" }, "x": 0, "y": 2, "w": 3, "h": 3 },
+    { "key": "stat-card", "config": { "profileSlug": "deal", "label": "Revenue", "aggregation": "sum", "field": "value", "chartType": "bar", "timePeriod": "month", "prefix": "$" }, "x": 3, "y": 2, "w": 3, "h": 3 },
+    { "key": "stat-card", "config": { "profileSlug": "contact", "label": "Contacts", "aggregation": "count", "icon": "Users" }, "x": 6, "y": 2, "w": 3, "h": 3 },
+    { "key": "stat-card", "config": { "profileSlug": "task", "label": "Open Tasks", "aggregation": "count", "icon": "Target" }, "x": 9, "y": 2, "w": 3, "h": 3 },
+    { "key": "entity-list", "config": { "profileSlug": "deal", "title": "Recent Deals", "limit": 8, "sortField": "createdAt", "sortDirection": "desc" }, "x": 0, "y": 5, "w": 6, "h": 6 },
+    { "key": "calendar", "config": { "profileSlug": "task", "dateField": "due_date" }, "x": 6, "y": 5, "w": 6, "h": 6 }
+  ]
+}
+```
+
+## homeScope
+
+- `metadata: { homeScope: "workspace" }` — workspace home page
+- Only one view per scope should have `homeScope` set.
+
+## Three bento view types
+
+1. **Home bento** — `metadata.homeScope: "workspace"`. The workspace home page.
+2. **Profile bento** — `metadata.isProfileBento: true, metadata.profileSlug: "deal"`. Dashboard for all entities of a type.
+3. **Entity instance bento** — `metadata.entityId: "uuid"`. A single entity's dashboard.
+
+## Tips
+
+- Always call `get_bento_schema` first — it returns the full, live widget catalog including any custom widgets.
+- Design for the user's workflow, not a template. Ask what they need to see daily.
+- stat-card is the primary analytics widget — use aggregation + chartType + timePeriod for rich KPIs.
+- Stack 4 stat-cards at w:3 for a metrics row, then content widgets below.
+- For entity-list: use sortField + filter to show actionable items, not just "all entities".
+- Reference widgets (view-table, view-kanban, etc.) require creating the view first with `create_view`, then embedding it.

@@ -1,0 +1,7 @@
+{
+  "title": "Browser",
+  "description": "Electron app — onboarding, web capture, trust model, release ops",
+  "root": true,
+  "icon": "app-window",
+  "pages": ["index"]
+}

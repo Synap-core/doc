@@ -1,0 +1,401 @@
+---
+title: "Agent System"
+description: "OrchestratorAgent + PersonaAgent, registry, session memory, tools."
+---
+
+# Agent System — Intelligence Service
+
+> **Scope:** This document covers what the Intelligence Service (IS) enables: agent classes, routing, tools, personas, and the execution pipeline. For how the Backend stores, validates, and forwards agent identity see [`synap-backend/docs/CHANNEL_AGENT_FLOW.md`](../../synap-backend/docs/CHANNEL_AGENT_FLOW.md).
+
+---
+
+## 1. Core Principle
+
+The Intelligence Service is **stateless and personality-authoritative**. It:
+
+- Receives a message + `agentType` + `agentConfig` from the Backend
+- Instantiates the correct agent class via `getAgentForType(agentType)`
+- Assembles context (session bootstrap, 5-block memory, linked entities)
+- Executes the agent in a ReAct loop and streams the result back
+- **Never stores anything** — all persistence is handled by the Backend
+
+---
+
+## 2. The Two Layers of Intelligence
+
+The agent system has two fundamentally different layers of intelligence. Understanding this separation is the key to the whole architecture.
+
+### Layer A — Workspace Intelligence (OrchestratorAgent)
+
+The **OrchestratorAgent** is the default agent for every new channel. It is workspace-aware, not user-character-aware.
+
+| Dimension        | Description                                                       |
+| ---------------- | ----------------------------------------------------------------- |
+| **Perspective**  | Knows the workspace (all entities, documents, threads)            |
+| **Personality**  | Proactive co-founder — investigates, challenges, connects         |
+| **Memory**       | Session-scoped 5-block memory (workspace context, goals, history) |
+| **Tools**        | Full set: search, create, branch, dispatch, workspace tools       |
+| **Routing**      | `"meta"` or `"orchestrator"`                                      |
+| **When spawned** | Always — it's the default for new channels                        |
+
+The Orchestrator's job is to be a **strategic partner for the workspace**. It doesn't play a character; it investigates the space, surfaces conflicts and connections, proposes actions, and delegates to specialists.
+
+### Layer B — Persona Intelligence (PersonaAgent)
+
+A **PersonaAgent** is a domain-expert character overlaid on the same tool infrastructure. It is user-relationship-aware, not workspace-management-aware.
+
+| Dimension        | Description                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| **Perspective**  | Knows its domain (CTO, Marketing, etc.)                                                 |
+| **Personality**  | Fixed character with domain-specific values and voice                                   |
+| **Memory**       | Same 5-block session memory, but filtered through the persona's lens                    |
+| **Tools**        | Domain-scoped subset (e.g., CTO: GPT-4o + tech docs; Marketing: Sonnet + content tools) |
+| **Routing**      | `"persona:cto"`, `"persona:marketing"`, `"persona:sales"`, `"persona:project-manager"`  |
+| **When spawned** | Only when user explicitly selects a persona (creates a branch)                          |
+
+Persona agents don't orchestrate the workspace — they advise from their domain. They're the "people" the user brings into a conversation to get a specific perspective.
+
+### Specialists — Task Agents
+
+Specialists are narrow-purpose agents spawned by the Orchestrator (via `dispatch_agent`) or by user selection:
+
+| Agent                    | agentType            | Purpose                                                     | Category access                                        |
+| ------------------------ | -------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| `KnowledgeSearchAgent`   | `knowledge-search`   | Deep research, synthesis — read-only                        | investigation + memory + context                       |
+| `CodeAgent`              | `code`               | Code generation, doc editing — GPT-4o                       | investigation + context + write (docs only)            |
+| `WritingAgent`           | `writing`            | Long-form writing                                           | investigation + context + write (docs only)            |
+| `ActionAgent`            | `action`             | Entity CRUD — free tier model                               | investigation + write (entities only)                  |
+| `InsightDiscoveryAgent`  | `insight-discovery`  | Graph pattern detection — finds hidden connections          | investigation + memory + context                       |
+| `ViewBuilderAgent`       | `view-builder`       | Dashboard design using widget catalog                       | investigation + context + workspace + get_bento_schema |
+| `WorkspaceBuilderAgent`  | `workspace-builder`  | Full workspace scaffolding (profiles, views, entities)      | investigation + memory + context + workspace + write   |
+| `OnboardingAgent`        | `onboarding`         | First-run setup via guided questions                        | remember_fact + propose_workspace                      |
+| `WorkspaceCreationAgent` | `workspace-creation` | Legacy workspace creation (same tools as workspace-builder) | investigation + memory + context + workspace + write   |
+
+Specialists are always short-lived (branch channels). They complete their task and return.
+
+---
+
+## 3. Agent Type String
+
+`agentType` is a **free string** — no allowlist, no enum. Any string routes through.
+
+```typescript
+// config/models.ts
+export type AgentType = string;
+
+export const AGENT_TYPES = {
+  ORCHESTRATOR: "orchestrator", // explicit name
+  META: "meta", // public-facing alias (both → OrchestratorAgent)
+  PROMPTING: "prompting", // read-only prompt refinement (internal)
+  KNOWLEDGE_SEARCH: "knowledge-search",
+  CODE: "code",
+  WRITING: "writing",
+  ACTION: "action",
+  ONBOARDING: "onboarding",
+  WORKSPACE_CREATION: "workspace-creation",
+  DEFAULT: "default", // legacy (pre-redesign channels)
+  // Persona pattern: "persona:{id}" e.g. "persona:cto"
+} as const;
+```
+
+---
+
+## 4. Agent Registry (`agents/base/agent-registry.ts`)
+
+Single entry point for all agent instantiation:
+
+```typescript
+getAgentForType(agentType: string): BaseAgent
+```
+
+Routing table:
+
+| `agentType`                 | Agent class                           | Notes                                       |
+| --------------------------- | ------------------------------------- | ------------------------------------------- |
+| `"meta"`                    | `OrchestratorAgent`                   | Public alias                                |
+| `"orchestrator"`            | `OrchestratorAgent`                   | Explicit name                               |
+| `"personal"`                | `PersonalAgent`                       | Personal channels only (isPersonal=true)    |
+| `"persona:cto"`             | `PersonaAgent.createCTO()`            | GPT-4o, temp 0.3                            |
+| `"persona:marketing"`       | `PersonaAgent.createMarketing()`      | Sonnet, temp 0.7                            |
+| `"persona:sales"`           | `PersonaAgent.createSales()`          | Sonnet, temp 0.5                            |
+| `"persona:project-manager"` | `PersonaAgent.createProjectManager()` | Sonnet, temp 0.4                            |
+| `"persona:{unknown}"`       | `OrchestratorAgent` + warn            | Graceful fallback                           |
+| `"prompting"`               | `PromptingAgent`                      | Internal only                               |
+| `"knowledge-search"`        | `KnowledgeSearchAgent`                |                                             |
+| `"code"`                    | `CodeAgent`                           | GPT-4o                                      |
+| `"writing"`                 | `WritingAgent`                        |                                             |
+| `"action"`                  | `ActionAgent`                         | Free model                                  |
+| `"insight-discovery"`       | `InsightDiscoveryAgent`               | Pattern detection, read-only                |
+| `"view-builder"`            | `ViewBuilderAgent`                    | Dashboard design + bento schema             |
+| `"workspace-builder"`       | `WorkspaceBuilderAgent`               | Full workspace scaffolding                  |
+| `"onboarding"`              | `OnboardingAgent`                     |                                             |
+| `"workspace-creation"`      | `WorkspaceCreationAgent`              | Legacy key, same tools as workspace-builder |
+| `"default"`                 | `DefaultAgent`                        | Legacy fallback                             |
+| anything else               | `OrchestratorAgent` + warn            | Never throws                                |
+
+**Design rule:** The registry never throws. It always returns a valid agent.
+
+> **Historical note:** `MVPChatAgent` was a `DefaultAgent` singleton that was hardcoded into `chat-stream.ts` — meaning every request, regardless of `agentType`, was answered by the simplest possible agent. It has been removed. `MetaAgent` was a placeholder coordinator that was never fleshed out. The `OrchestratorAgent` was always the intended main agent but was unreachable. Both are now cleaned up.
+
+---
+
+## 5. OrchestratorAgent — The Co-Founder AI
+
+**File:** `agents/orchestrator/orchestrator-agent.ts`
+**Model:** DeepSeek V3 (`deepseek/deepseek-chat`, $0.14/M)
+**agentType:** `"meta"` or `"orchestrator"`
+
+### System Prompt (core intent)
+
+```
+You are the Orchestrator for Synap — a proactive co-founder AI, not just a reactive assistant.
+
+OPERATING MODE: CO-FOUNDER LOOP
+1. Investigate (silent, auto-execute): search_unified, vector_search, memory_search
+2. Think strategically: conflicts, opportunities, patterns, duplicates
+3. Respond in layers:
+   - Layer 1: Direct answer
+   - Layer 2: Insights ("I noticed this relates to...")
+   - Layer 3: Challenges ("Have you considered...?")
+   - Layer 4: Proposals (create, branch, link)
+4. Proactively link entities/documents to the thread
+```
+
+### Tool Set (full)
+
+| Category                     | Tools                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Investigation (auto-execute) | `search_unified`, `vector_search`, `memory_search`                                                                      |
+| Context read                 | `get_document`, `search_entities`, `search_documents`, `graph_traverse`                                                 |
+| Thread linking               | `link_entity_to_thread`, `link_document_to_thread`                                                                      |
+| Write (proposals)            | `create_entity`, `create_document`, `create_skill`, `update_proposal`                                                   |
+| Coordination                 | `create_branch`, `dispatch_agent`, `query_agent`                                                                        |
+| Workspace                    | `create_view`, `update_view`, `list_views`, `list_profiles`, `create_profile`, `create_property_def`, `create_relation` |
+| Memory                       | `remember_fact`                                                                                                         |
+
+---
+
+## 6. PersonaAgent — Domain Expert Characters
+
+**File:** `agents/persona/persona-agent.ts`
+**Routing:** `"persona:{id}"` — factory pattern
+
+PersonaAgents are configured via constructor, not hard-coded subclasses. Each factory method sets:
+
+- A domain-specific system prompt (role, expertise, approach, communication style)
+- A domain-scoped tool set
+- A model selected for the domain's needs
+- A temperature tuned for the domain's creativity level
+
+| Persona                   | Model         | Temp | Focus                                  |
+| ------------------------- | ------------- | ---- | -------------------------------------- |
+| `persona:cto`             | GPT-4o        | 0.3  | Architecture, tech stack, trade-offs   |
+| `persona:marketing`       | Claude Sonnet | 0.7  | Content strategy, campaigns, brand     |
+| `persona:sales`           | Claude Sonnet | 0.5  | Pipeline, outreach, objection handling |
+| `persona:project-manager` | Claude Sonnet | 0.4  | Planning, tasks, coordination          |
+
+### Orchestrator vs Persona — Key Differences
+
+|                           | OrchestratorAgent                  | PersonaAgent                                   |
+| ------------------------- | ---------------------------------- | ---------------------------------------------- |
+| Default channel?          | Yes (every new channel)            | No (only when explicitly chosen via branch)    |
+| Knows workspace broadly?  | Yes — investigates across all data | Partially — searches within domain scope       |
+| Has a character/role?     | No — strategic partner             | Yes — specific expert identity                 |
+| Spawns branches?          | Yes                                | No                                             |
+| Delegates to specialists? | Yes (`dispatch_agent`)             | No                                             |
+| Model cost                | $0.14/M (DeepSeek V3)              | $5/M (GPT-4o) or $3/M (Sonnet)                 |
+| User-initiated?           | Automatic                          | User picks via agent selector (creates branch) |
+
+**Design rule:** The Orchestrator is the workspace's intelligence. Personas are the user's chosen advisors. You bring a persona in for a specific conversation; the Orchestrator is always there.
+
+---
+
+## 7. Specialist Agents
+
+Specialists are narrow-purpose, single-task agents. Always spawned into branch channels.
+
+### DefaultAgent (legacy)
+
+- `agentType: "default"` — only for pre-redesign channels
+- 4 read-only tools, suggests routing to specialists
+- Eventually to be migrated to OrchestratorAgent
+
+### PromptingAgent (internal)
+
+- `agentType: "prompting"` — used internally by OrchestratorAgent for vague queries
+- Refines the user's intent into a structured task description
+- 3 read-only tools
+
+---
+
+## 8. Execution Pipeline
+
+```
+POST /api/chat/stream
+  │
+  ├── Parse & validate input (agentType length guard: max 100 chars)
+  ├── Acquire in-flight slot (quota guard — prevents concurrent abuse)
+  ├── Load thread history (HubProtocol, token-budgeted: 12k tokens)
+  ├── Load linked entities/documents (max 10 + 5)
+  │
+  ├── agent = getAgentForType(agentType ?? "meta")
+  │     → Returns OrchestratorAgent for "meta", "orchestrator", or unknown
+  │
+  ├── agent.execute(ctx) or agent.executeWithStream(ctx)
+  │     │
+  │     ├── 0. Load user config overrides (promptAppend, extraToolIds, ...)
+  │     ├── 1. Inject instruction skills (OpenClaw personas from workspace)
+  │     ├── 2. Inject system skills reference (tool documentation)
+  │     ├── 3. Inject branching hint (OrchestratorAgent only)
+  │     ├── 4. Apply channel agentConfig overlay (name, personality, instructions)
+  │     ├── 5. assembleContext() → 5-block bootstrap + entity context
+  │     ├── 6. buildSystemPrompt(basePrompt + context additions + timestamp)
+  │     ├── 7. createToolWrappers(effectiveToolNames, toolContext)
+  │     ├── 8. ReAct loop: generateText() / streamText() — max 10 steps
+  │     ├── 9. extractCreatedProposals(aiSteps)
+  │     ├── 10. analyzeBranching(message, context)
+  │     ├── 11. Log execution (async, non-blocking)
+  │     └── 12. recordSessionUsage() + mid-session compaction check (>80k tokens)
+  │
+  └── Stream SSE events: step → content → branch_decision → complete
+```
+
+---
+
+## 9. Context Assembly — The 5-Block Memory System
+
+When `SESSION_SCOPED_MEMORY=true`, every execution assembles context from a rolling `CompactedState` stored per channel. This replaces the legacy online-compression approach.
+
+### Session Lifecycle
+
+```
+New message arrives
+  │
+  ├── getActiveSession(channelId)
+  │     ├── Active + recent (< 30 min idle) → reuse session, load bootstrap
+  │     └── Expired or none → close old, trigger background compaction, open new
+  │
+  ├── assembleBootstrap() → reads latest CompactedState
+  │     └── Formats 5 blocks as system prompt sections
+  │
+  └── agentContext gets: sessionId + systemPromptAdditions from bootstrap
+```
+
+### The 5 Memory Blocks (compacted in parallel)
+
+| Block              | Budget     | Content                                                                                     |
+| ------------------ | ---------- | ------------------------------------------------------------------------------------------- |
+| **Identity**       | 400 tokens | AI's personality, communication style, behavior preferences set by user                     |
+| **User Model**     | 600 tokens | User profile: preferences, projects, expertise, relationships, communication style          |
+| **Continuity**     | 800 tokens | Narrative of recent interactions (recency gradient: recent = intact, old = facts extracted) |
+| **Active Goals**   | 400 tokens | Open tasks, goals, pending requests. Completed goals removed.                               |
+| **Entity Context** | 800 tokens | Key entities (projects, people, docs) recently interacted with                              |
+
+**Total: ~3,000 tokens injected as system prompt additions** before the agent's base prompt.
+
+### Compaction Models
+
+| Trigger                   | Model           | Rationale                      |
+| ------------------------- | --------------- | ------------------------------ |
+| Session end (background)  | `claude-sonnet` | Quality — thoughtful synthesis |
+| Mid-session (>80k tokens) | `claude-haiku`  | Speed — non-blocking           |
+
+---
+
+## 10. `agentConfig` Overlay
+
+Any channel can carry `agentConfig` (JSONB) that the Backend passes to the IS on every message. The IS applies it as a personality overlay **before** execution, without needing a new agent class:
+
+```json
+{
+  "name": "Alex",
+  "personality": "Concise, direct, never uses bullet points",
+  "instructions": "Always respond in French"
+}
+```
+
+This lets users create custom personas without code. The OrchestratorAgent supports this via `BaseAgent`'s personality injection step.
+
+---
+
+## 11. Backend Validation — What's Complete
+
+### Hub Protocol Routes (IS → Backend)
+
+All data operations from the IS go through 15 Hub Protocol sub-routers:
+
+| Sub-router        | Scope                                   |
+| ----------------- | --------------------------------------- |
+| `context`         | Thread context, history, linked items   |
+| `search`          | Entity + document search, vector search |
+| `entities`        | Create, read, update entities           |
+| `documents`       | Create, read, update documents          |
+| `branches`        | Branch listing, branch context          |
+| `channels`        | Channel read/write                      |
+| `linking`         | Thread context item linking             |
+| `skills`          | User-created skills CRUD                |
+| `backgroundTasks` | Async task tracking                     |
+| `proposals`       | Proposal create/read/approve            |
+| `services`        | Intelligence service registration       |
+| `views`           | View create/read/update                 |
+| `profiles`        | Profile create/read/update              |
+| `relations`       | Entity relation create                  |
+| `sessions`        | Session get/create/update               |
+| `compactedStates` | Compacted memory state read/write       |
+
+### Permission System
+
+`checkPermissionOrPropose()` governs all write operations:
+
+1. No workspace → auto-granted (personal resource)
+2. Filesystem blocklist → hard-deny (defence-in-depth)
+3. `verifyPermission(agentUserId, workspace, requiredPermission)` → RBAC check using agent's own workspace role
+4. If agent user + action in `autoApproveFor` whitelist → `{ granted: true }` + audit trail
+5. Otherwise → create proposal, notify user
+
+**Default auto-approve whitelist** (can be overridden per workspace):
+
+```
+search.*, memory.recall, entity.read, bento.arrange, document.read, context.*,
+filesystem.read, filesystem.write_workspace, view.create, profile.create/update,
+property_def.create/update, entity.create, entity.update, document.create,
+relation.create, channel.create
+```
+
+### Agent Permission Levels (current state)
+
+All agents currently share the same auto-approve whitelist. Per-agent permission scoping (e.g., KnowledgeSearchAgent can only read, OrchestratorAgent can create) is enforced at the **tool level** — the IS simply doesn't give read-only agents write tools. The permission system is a second defence layer. This is intentional and correct for the current scale.
+
+---
+
+## 12. What's Next
+
+### Completed ✓
+
+- OrchestratorAgent constructor tools synced with agentToolMap (query_agent, remember_fact, workspace tools)
+- Branching hint fires for both `"meta"` and `"orchestrator"` agentTypes
+- `PersonalAgent` class for personal channels (`agentType: "personal"`)
+- `ensurePersonalChannel` uses `agentType: "personal"` instead of `"meta"`
+- **`TOOL_CATEGORIES`** — single source of truth in `tools/tool-categories.ts`; all agents use category-based declaration, no drift possible
+- **`AGENT_DEFINITIONS`** — typed record mapping every agentType to its categories+overrides; `getToolsForAgent()` reads from it
+- **`InsightDiscoveryAgent`** — graph pattern detective, read-only, 15 steps
+- **`ViewBuilderAgent`** — dashboard architect with `get_bento_schema` tool
+- **`WorkspaceBuilderAgent`** — full workspace scaffolding (25 steps, all write tools)
+- **`get_bento_schema`** tool — static bento cell catalog with config schemas and layout tips
+
+### Short term
+
+1. **Custom persona via `agentConfig`** — document and test the `{ name, personality, instructions }` overlay flow end-to-end
+2. **Persona channel UX** — agent selector modal: "Start new conversation with…" not "Change agent"
+3. **OrchestratorAgent auto-dispatch** — after 3+ exchanges with no branch, heuristic triggers InsightDiscoveryAgent suggestion
+
+### Medium term
+
+4. **Per-agent auto-approve scopes** — `agentAutoApproveScope` on agent user row; KnowledgeSearchAgent gets read-only whitelist
+5. **A2AI channels** — agent-to-agent channels (`ChannelType.A2AI`) are schema-only; need IS-side routing
+6. **`DefaultAgent` migration** — back-fill `agentType = "default"` channels to `"meta"`
+
+### Long term
+
+7. **Dynamic persona creation** — users define personas via workspace config; stored as `agentConfig` on a channel template
+8. **Agent memory isolation** — separate compacted state per `agentType` so CTO persona doesn't pollute Orchestrator memory

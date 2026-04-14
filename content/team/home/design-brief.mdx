@@ -1,0 +1,524 @@
+---
+title: "Design Brief"
+description: "Synap brand and design philosophy."
+---
+
+# Synap — Design Brief
+### For designers, copywriters, and creative direction
+
+**Version:** 1.1 — March 2026
+**Author:** Product
+**Status:** Living document
+
+---
+
+## The One-Line Truth
+
+> **Never lose anything. Never organize anything.**
+
+Everything in Synap — every design decision, every word, every interaction — serves these two promises. If a design element doesn't reinforce one of them, it shouldn't exist.
+
+---
+
+## What Synap Is
+
+Synap is a **sovereign AI second brain**. It's the place where everything you encounter, think, read, save, or create goes — and where AI quietly turns that stream of raw input into structured, connected, queryable knowledge.
+
+You don't organize. You don't file. You don't maintain folders, tags, or taxonomies. You just capture. The intelligence does the rest.
+
+Your knowledge lives on **infrastructure you own** — a dedicated private server (a "Data Pod") provisioned just for you. Not a shared database. Not someone else's cloud. Yours. Always.
+
+Synap is also an **AI operating system**. The pod is a structured data layer that any AI model can connect to. Synap never locks you to one provider — you bring the model you trust. The same data, relationships, and history are available to any AI service that speaks the protocol.
+
+Synap is also a **programmable platform**. Developers can connect via SDK and API keys, install marketplace packages, and build custom apps that run inside the browser. The entity system, the view engine, and the AI layer are all exposed. If the built-in tools aren't enough, you can extend them.
+
+---
+
+## The Problem We're Solving
+
+A knowledge worker today has:
+- 47 browser tabs they're afraid to close
+- Notes scattered across Notion, Apple Notes, random txt files
+- A "to read" list they never return to
+- A Slack DM they can't find
+- A folder called "misc" with 3,000 files
+- An AI assistant that knows nothing about them
+
+The root cause: **every tool makes you do the organizing**. You have to decide where things go. You have to maintain the structure. You have to remember where you put it.
+
+Synap inverts this. You save it. Synap structures it. You ask for it. Synap finds it.
+
+---
+
+## The Two Promises — Go Deeper
+
+### Promise 1: Never lose anything
+
+This is about **capture velocity**. The moment between "I should save this" and actually saving it is where 90% of valuable information dies. Synap collapses that gap to near zero:
+
+- **Browser extension**: one click to capture any page, article, or highlight while browsing
+- **Telegram bot**: send a message, voice note, photo, or link from your phone — it's captured
+- **File drop**: drag PDFs, images, documents — they become searchable entities
+- **API + webhooks**: your tools pipe data in automatically
+- **In-app capture**: quick capture from the desktop app, always accessible
+
+The emotional state this creates: **relief**. The anxiety of "I'll lose this if I don't do something right now" disappears. Everything is always safe.
+
+### Promise 2: Never organize anything
+
+This is about **AI doing the maintenance work** you hate. When something is captured, Synap's AI:
+
+1. **Classifies it** — is this a research paper? A task? A person? A company? A bookmark? A thought? Synap creates the right entity type automatically.
+2. **Extracts structure** — for a paper: author, title, key concepts. For a task: title, potential due date, related project. For a link: domain, topic, summary.
+3. **Detects relationships** — this paper relates to that project. This person works at that company. This task is part of this goal.
+4. **Builds the graph** — everything connects. Your knowledge isn't a list of notes — it's a living network of linked entities.
+
+The emotional state this creates: **trust**. You don't have to think about where things go. You never have to "organize" a backlog. The system handles it.
+
+---
+
+## The Third Promise (Supporting)
+
+### Your data. Your infrastructure. Forever.
+
+The two core promises only land if users trust that the system will exist when they need it — in 10 years, not just today. Synap's answer is sovereignty:
+
+- Your data lives on a **dedicated VPS** (a private server, not shared infrastructure)
+- Standard PostgreSQL — not a proprietary format
+- Export anytime, in full, as raw data
+- If Synap as a company disappears, your data and your server keep running
+
+This is a trust argument, not a feature argument. It answers: *"Why would I build my life around this?"*
+
+---
+
+## The Architecture That Makes It Possible
+
+For designers: you don't need to implement this, but you need to understand it. The product's power comes from two layers of emergent complexity that make the UI decisions make sense.
+
+### Data Layer — Entities as Bricks
+
+Everything in Synap is an entity. A note, a task, a person, a company, a deal, an article, a capture, a file, an event — all entities. There are 14 built-in types and unlimited custom types you can define.
+
+Each entity type has a typed profile: a schema that says what properties belong to it, what they're called, and how they're rendered. A "deal" entity has a stage, a value, a close date. A "person" entity has an email, a phone number. A "capture" entity has a source URL and a raw transcript.
+
+Views are lenses over the same underlying data. The same set of tasks appears as a table, a kanban board, a calendar, a timeline, a flow diagram, or a bento dashboard — depending on which view you open. Synap has 12 view types implemented: table, list, grid, gallery, kanban, matrix, masonry feed, calendar, flow, bento, branch tree, and whiteboard. The entities don't change. The lens does.
+
+This matters for design because the same information needs to look coherent across radically different layouts. An entity card in a kanban column and an entity card in a masonry feed are the same thing rendered differently.
+
+Two more things to know:
+
+**AI never writes directly.** When AI wants to create or modify an entity, it proposes the change. The user sees the proposal, approves or rejects it. This is not a safety gimmick — it's the governance model. Every AI action is visible and reversible.
+
+**Every action is an immutable event.** The event chain records every mutation. You can walk back through the history of any entity at any granularity. Nothing is silently overwritten.
+
+### UI Layer — Cells as Universal Renderer
+
+Everything in Synap is a cell. An app, a feature, a widget, a full embedded application, a single React component — all cells. A cell is the universal rendering unit.
+
+The same cell renders anywhere: as the main panel of a full-screen app, as a tab in the side panel, as a widget tile on a bento dashboard, embedded in a document, or embedded in a whiteboard. The container changes; the cell doesn't.
+
+There are 72+ built-in cells across 12 categories. AI can compose existing cells (combining and configuring them via JSON) or create entirely new cell types that run in a sandboxed iframe with a postMessage SDK.
+
+The bento dashboard is the clearest expression of this system. It's a 12-column drag-and-drop grid where every tile is a cell — a view of your tasks, an entity spotlight, a calendar, a stat card, a quick capture widget, an embedded custom app. Any arrangement. Fully AI-configurable. The same grid that a new user sees with default tiles is the same grid a power user has assembled and customized over months.
+
+This matters for design because the same widget needs to feel coherent whether it's 2 grid columns wide or 8. The cell system is why the UI can be this flexible without feeling inconsistent.
+
+---
+
+## Surfaces
+
+Synap is accessible from several entry points. Each has a different intent, but all write to the same pod.
+
+**Browser (primary)** — The Electron desktop app. This is where most time is spent. It contains 22 built-in apps: notes, tasks, calendar, kanban, graph, whiteboard, documents, terminal, vault, workflows, marketplace, channels, AI chat, proposals, settings, and more. The sidebar shows four primary destinations: Home (bento dashboard), Browser (embedded Chromium), Chat (AI), and Library (all entities and views).
+
+**Telegram** — Capture from anywhere without opening the app. Send a message, a voice note, a file, or a link to the Synap bot. The AI processes it and creates the right entity. The Telegram Mini App lets you browse and search your entities from mobile.
+
+**Browser Extension** — One-click capture on any web page. Saves the page, an article, a highlight, or a selection. The entity appears in your pod immediately, classified and linked.
+
+**API + SDK** — `@synap/sdk` wraps all 47+ backend routers. `@synap/react` provides full React-Query hooks. API keys are scoped to 18 permissions and bcrypt-hashed. CORS is whitelisted per pod. Custom cells run in sandboxed iframes with a postMessage SDK. An MCP server means any MCP-compatible AI can use Synap as a structured tool.
+
+**Web** — `app.synap.live` handles account management, billing, pod provisioning, and the marketplace. It is not the primary app surface — it's the control plane.
+
+---
+
+## Extensibility — Three Vectors
+
+### Any AI
+
+The pod is the structured data layer. The AI is pluggable. Synap does not lock users to one model or one provider.
+
+The Hub Protocol defines 20 sub-routers covering every operation an AI service might need: read entities, create entities, propose changes, query views, access channels, run skills, manage memory. Any AI service that implements the protocol can be the intelligence layer for a Synap pod.
+
+The MCP server takes this further: any MCP-compatible AI tool can connect to Synap and query it as a structured knowledge base. Your pod becomes a knowledge tool available to any AI you already use.
+
+### Marketplace Packages
+
+Packages are installable bundles: a set of entity profiles, views, automations, and commands that work together. A CRM package installs contact types, deal stages, pipeline views, and automation templates. A project management package installs task types, sprint views, milestone tracking, and weekly review automations.
+
+All packages share the same entity system and AI layer. A CRM deal entity and a personal task entity live in the same graph, with the same relationship detection and the same AI access.
+
+### Developer Platform
+
+Developers can build custom apps that run inside the Synap browser. `@synap/sdk` wraps the backend. `@synap/react` provides hooks. API keys are scoped and auditable. Custom cells run in sandboxed iframes. CORS is configurable per pod.
+
+The same system the Synap team uses to build the 22 built-in apps is available to any developer with API access to a pod.
+
+---
+
+## The Three Audiences
+
+### Audience 1: The Overwhelmed Knowledge Worker
+
+**Profile:** 28–45 years old. Works in a knowledge-intensive field — research, writing, engineering, design, consulting, building products. Intellectually curious. Consumes more than they can process. Has tried every note-taking app and still feels overwhelmed.
+
+**Their day:** Starts with 15 open tabs. Reads three articles they want to remember. Gets a Slack message with a PDF they need to find in three weeks. Has a meeting where someone mentions a tool they want to try. By end of day, 80% of what they encountered is gone.
+
+**What they say:** "I know I read something about this." / "I had a great idea in the shower." / "Where did I put that link?" / "I keep losing things."
+
+**What they want:** To feel like their brain has infinite, perfect memory. To be able to think freely, knowing nothing will fall through the cracks. To ask "what do I know about X?" and get a real answer.
+
+**What they fear:** Building their life in a tool that disappears, changes its pricing, or locks their data away.
+
+### Audience 2: The Builder / Developer
+
+**Profile:** 28–40 years old. Software developer or technical founder. Has tried Notion + Zapier + multiple APIs. Tired of integration hell and data scattered across services they don't control.
+
+**What they want:** A personal data API they actually own. An SDK to build automations. Webhooks that work reliably. Custom entity types without fighting the platform. A system they can extend without asking permission.
+
+**What they say:** "I want Notion with a real API and no vendor lock-in." / "I want my data queryable without five intermediate services." / "I want to script my own workflows."
+
+**What they fear:** Platforms that promise openness but quietly fence the important parts behind enterprise pricing.
+
+### Audience 3: The AI Power User
+
+**Profile:** Curious about AI tools. Has set up multiple AI assistants. Frustrated that every AI forgets context between sessions and has no access to their actual data. Wants AI that is genuinely useful, not just a chat window.
+
+**What they want:** An AI that knows their full context — all their notes, tasks, projects, people, and history. That sees relationships between things they've saved. That proposes changes rather than just chatting. That gets smarter as their knowledge base grows.
+
+**What they say:** "I want an AI that actually knows me." / "Why can't the AI just access my data?" / "I don't want to paste context into every conversation."
+
+**What they fear:** AI that hallucinates because it has no access to ground truth. AI that acts silently and makes changes they can't see or reverse.
+
+---
+
+## Brand Personality
+
+Synap is not a productivity app. It's not a note-taking app. It's not an AI assistant.
+
+It's a **cognitive partner** — calm, intelligent, always present, always remembering.
+
+| Attribute | What it means |
+|---|---|
+| **Intelligent** | Not flashy. Quietly competent. The AI works in the background; the interface doesn't shout about it. |
+| **Calm** | Reduces anxiety, doesn't create it. No notification overload. No gamification. No clutter. |
+| **Sovereign** | Adult-to-adult relationship with users. You're in control. Nothing happens without your knowledge. |
+| **Precise** | Every word earns its place. No bloat in copy or UI. Dense information, not sparse. |
+| **Enduring** | Built to last. Not trendy. Not disposable. The kind of tool you'd use for 10 years. |
+
+### Voice and Tone
+
+**Write like:** A precise, thoughtful friend who respects your intelligence. No hype. No exclamation marks. No "revolutionary" or "game-changing." Plain declarative sentences.
+
+**Copy examples (right):**
+- "Capture anything. Synap figures out what it is."
+- "Your notes are in a PostgreSQL database you own."
+- "AI proposes changes. You approve or reject them."
+- "Nothing is ever lost. Nothing needs organizing."
+
+**Copy examples (wrong):**
+- "Supercharge your productivity! "
+- "The AI-powered workspace that changes everything."
+- "Revolutionary note-taking for the modern era."
+- "Initialize your workspace" (too technical)
+- "Your business brain" (too B2B)
+
+**Headline formula:** Two short declarative sentences, often a contrast or pair. Present tense. No adjectives unless essential.
+
+---
+
+## Visual Identity Direction
+
+### Overall aesthetic
+
+**Dark, warm, precise.** Not black. Not gray. A dark surface with warmth — like an aged leather notebook, a dark amber evening, a well-worn study. The app should feel like a place you want to spend time.
+
+Think: a library at night. Warm light on dark shelves. Rich but not loud. Intelligent but not cold.
+
+### Color philosophy
+
+**Background:** Very dark warm brown-black. Not pure `#000`. Closer to `#0e0c0b` or `#111009`. The warmth prevents the sterile "hacker terminal" feeling.
+
+**Surface:** Slightly lighter warm dark, for cards and panels. The layering should feel like depth, not contrast.
+
+**Text:** Off-white, never pure white. `#f5f0e8` — the color of good paper. Secondary text in warm gray.
+
+**Primary accent:** Amber/gold — `#d4a853` or similar. Warm, intelligent, not aggressive. Used sparingly for interactive elements, key highlights, the "Synap" brand mark.
+
+**AI accent:** Emerald green — `#10b981`. Used specifically for AI-generated content, AI actions, AI suggestions. Distinct from the primary. Makes AI activity instantly recognizable.
+
+**Borders:** Barely-there. `rgba(255,255,255,0.06)` — enough to define structure, not enough to distract.
+
+**No shadows.** Depth through layering and subtle borders, never drop shadows.
+
+### Typography
+
+**Headings: Fraunces** — A variable serif with optical size axes. Literary. Intelligent. Slightly unexpected for a tech product, which is exactly the point. It signals this is for *thinking*, not productivity theater.
+- Use the "optical size" variation for large display text (more condensed, elegant)
+- Use italic for emphasis on key phrases
+- Letter-spacing: slightly tight (−0.02em) for large sizes
+
+**Body: DM Sans** — Humanist sans-serif. Clean but warm. Highly readable at small sizes. Not the default grotesque. Feels considered.
+
+**Mono: JetBrains Mono** — For code, entity IDs, technical content. Clean, modern, slightly friendly.
+
+**Scale:** Generous. Big headings communicate confidence. Don't be afraid of a 96px hero headline.
+
+### Iconography
+
+Lucide icons — clean, consistent stroke weight. Never filled. 1.5px stroke. The icons should feel like sketches, not stamps.
+
+### Motion
+
+Minimal, purposeful, slow. The intelligence should feel *quiet*, not busy.
+
+- Entity creation: a gentle emergence — the card fades in, properties populate one by one
+- Graph connections: edges draw themselves at a pace that lets you follow them
+- AI activity: a subtle pulse or shimmer on the AI accent color, never a spinning loader
+- Navigation: crossfade at 200ms, no sliding panels that feel like a phone app
+- Never: bouncy springs, scale transforms on hover, anything that calls attention to itself
+
+---
+
+## The Screens That Matter Most
+
+These are the critical moments in the product story. Design these first.
+
+### 1. The Hero Moment (Landing Page)
+
+**Goal:** Communicate both promises in under 5 seconds.
+
+The hero should show — not just tell — what Synap does. Consider:
+- A split-second animation: raw input (a link, a voice note, a PDF) → auto-structured entity card with relationships
+- The headline in large Fraunces: "Never lose anything. / Never organize anything."
+- Dark surface. Warm. Calm.
+- One CTA: "Download Synap" (the primary action is to download the app)
+
+### 2. The Capture Moment
+
+**Goal:** Make "saving something" feel effortless and satisfying.
+
+Show the browser extension overlay: floating over a web page, minimal, one-click save. Then show the entity appearing in the app — classified, titled, related to existing knowledge. This is the "before/after" that closes the sale.
+
+### 3. The Knowledge Graph
+
+**Goal:** Create a desire to see your own knowledge represented this way.
+
+A force-directed graph of entities — not a diagram, not a flowchart, but an organic, living network. Clusters forming naturally. Click a node, see its connections. This is what you're building every time you save something. Make it beautiful enough that people want to have it.
+
+### 4. The Data Pod Dashboard (Account)
+
+**Goal:** Communicate ownership and control without anxiety.
+
+The account dashboard shows your pod: running, healthy, your domain, your region, your storage. Not a SaaS dashboard with usage meters and upgrade prompts — a server status board. Calm. Informational. Yours.
+
+### 5. The AI Entity Card
+
+**Goal:** Show intelligence without magic-washing.
+
+An entity card that shows: what the entity is, its auto-detected properties, its AI-generated relationships, and a small trail of the AI's reasoning ("This was linked to Project Apollo because it mentions the proposal from March"). Transparent. Trustworthy. Precise.
+
+---
+
+## Information Architecture
+
+### Landing Page Flow
+
+```
+Hero
+│   "Never lose anything. Never organize anything."
+│   Download CTA
+│
+├── How capture works
+│   (browser ext → Telegram → API → file drop)
+│   Visual: raw inputs becoming entity cards
+│
+├── How AI structures it
+│   (auto-classification, relationship detection, graph)
+│   Visual: entity graph building itself
+│
+├── Your infrastructure
+│   (data pod, PostgreSQL, EU/US, yours forever)
+│   Visual: a server — calm, clean, private
+│
+├── Explore your knowledge
+│   (graph view, table, kanban, calendar, search)
+│   Visual: same data, different views
+│
+├── Comparison
+│   (you organize vs. Synap organizes)
+│   Simple, honest table. Not a quadrant chart.
+│
+├── Pricing
+│   Solo / Pro / Team — honest prices, no fake free tier
+│   Beta Launch offer (first 101 users)
+│
+└── Final CTA
+    "Download Synap. Your knowledge, finally free."
+```
+
+### App Flow (for product screens design)
+
+```
+Desktop App (Electron)
+│
+├── Sidebar: Home · Chat · Library
+│
+├── Home (Bento Dashboard)
+│   Personalized widget grid. Recent entities, AI activity,
+│   quick capture, connections made today.
+│
+├── Library
+│   All entities, all views. Filter by type.
+│   Default: masonry feed of recent captures.
+│   Switch to: table, graph, kanban, calendar.
+│
+├── Chat (AI)
+│   Persistent conversation with access to all your entities.
+│   Ask questions about your own knowledge.
+│   AI proposes changes → you approve.
+│
+└── Entity Detail
+    Properties, relationships, linked views, document editor.
+    AI-generated relationship suggestions in sidebar.
+```
+
+---
+
+## Competitive Differentiation
+
+### The honest comparison
+
+| | Notion | Obsidian | Roam | **Synap** |
+|---|---|---|---|---|
+| Who organizes? | You | You | You | **AI** |
+| Where does data live? | Their cloud | Your files | Their cloud | **Your server** |
+| Relationships | Manual | Manual links | Manual links | **Auto-detected** |
+| Mobile capture | App | Plugin | App | **Telegram (instant)** |
+| AI knowledge | Import docs | Plugin | None | **Sees all entities** |
+| Custom AI models? | No | No | No | **Yes — any model** |
+| Developer API? | Limited | No | No | **Full tRPC + SDK + MCP** |
+| Extensible UI? | Sort of | Plugins | No | **Cell system — any app, any renderer** |
+
+The message: every other tool makes you do the work. Synap's AI does it for you, on infrastructure you actually own, with no lock-in to any vendor.
+
+### The axis that matters
+
+Don't use "connectivity vs sovereignty" as the positioning axes (too abstract). Use:
+
+**X-axis:** How much structure work you have to do (0 = none, AI handles it / 10 = all manual)
+**Y-axis:** Data ownership (0 = their cloud / 10 = yours, fully)
+
+On this chart:
+- Notion: 9 manual work, 0 ownership
+- Obsidian: 9 manual work, 10 ownership
+- Mem.ai: 4 manual work, 0 ownership
+- **Synap: 1 manual work, 10 ownership**
+
+No other product is in that corner.
+
+---
+
+## What to Design (Deliverables)
+
+### Priority 1 — Landing page
+1. Full landing page design (desktop + mobile) following the IA above
+2. Hero section with the capture animation concept
+3. Feature sections: capture methods, AI structuring, data pod
+4. Pricing cards with Beta offer treatment
+5. Comparison section (simple table, not quadrant)
+
+### Priority 2 — Core app screens
+1. Home dashboard (bento grid with widgets)
+2. Library view (masonry feed of entity cards)
+3. Graph view (knowledge graph, force-directed, beautiful)
+4. Entity detail page (with AI relationship suggestions)
+5. AI chat interface
+
+### Priority 3 — Capture moments
+1. Browser extension overlay (floating, minimal)
+2. Mobile Telegram capture flow
+3. Entity creation animation (raw input → structured card)
+
+### Priority 4 — Account / pod
+1. Account overview (pod status, billing)
+2. Provisioning flow (simplified — one button, then status)
+3. Download page
+
+---
+
+## Things to Avoid
+
+| Avoid | Because |
+|---|---|
+| Corporate blue / Notion purple | We're not a team productivity tool |
+| Neon / cyberpunk aesthetic | We're not a dev tool or a crypto product |
+| Illustration-heavy design | We're precise and data-driven, not whimsical |
+| Dark mode that's just black | Cold, not warm. Feels like a terminal. |
+| Excessive whitespace "minimalism" | Dense information is a feature. Power users want density. |
+| Gamification / streaks / badges | This is a serious tool for serious thinking |
+| Onboarding modals with steps 1-2-3 | Intimidating for someone who just wants to save a link |
+| "AI-powered" as a headline | Table stakes. Show it, don't say it. |
+| Exclamation marks | Ever. |
+| Claiming it's just a note-taking app | It's infrastructure for how you think and work |
+| AI that acts silently | Every AI action is visible, reversible, attributed |
+| One AI model lock-in | Any model, any provider, user's choice |
+| Complexity theater | The system is powerful but the UI should feel calm, not complicated |
+
+---
+
+## The Feeling
+
+When someone lands on the Synap website, they should feel:
+
+1. **Recognition** — "This is exactly the problem I have."
+2. **Relief** — "Someone finally built what I actually need."
+3. **Trust** — "This looks serious. These people understand the space."
+4. **Desire** — "I want my knowledge to look like that graph."
+5. **Confidence** — "My data is mine. This isn't a trap."
+6. **Ambition** — "I could build something with this."
+
+When they open the app for the first time:
+1. **Calm** — It's not overwhelming. It's dark, warm, focused.
+2. **Curiosity** — The graph is beautiful. I want to fill it.
+3. **Satisfaction** — I saved something and it just... appeared, structured, connected.
+4. **Power** — There are 22 apps in here. A graph view. A whiteboard. A terminal. A vault.
+
+When they've been using it for 3 months:
+1. **Dependence** (the good kind) — They don't want to go back.
+2. **Ownership** — "This is my knowledge. It's mine."
+3. **Fluency** — The AI understands them. The queries are instant. Nothing is lost.
+4. **Extension** — They've installed packages. Their AI knows their full context. Maybe they've written a custom cell.
+
+---
+
+## Summary Card
+
+```
+Product:     Synap
+Category:    AI second brain / sovereign knowledge infrastructure
+Promises:    Never lose anything. Never organize anything.
+Primary CTA: Download Synap
+Audience:    Knowledge workers, developers, AI power users
+Voice:       Precise. Calm. Adult. No hype.
+Aesthetic:   Dark, warm, intelligent. Library-at-night.
+Fonts:       Fraunces (headings) + DM Sans (body)
+Colors:      Dark warm black / Off-white / Amber / Emerald (AI)
+Feeling:     Relief. Trust. Ownership.
+NOT:         B2B SaaS. Productivity theater. Another Notion clone.
+```
+
+---
+
+*This document is the source of truth for all creative decisions on Synap.
+When in doubt, return to the two promises: never lose anything, never organize anything.*

@@ -1,0 +1,139 @@
+---
+title: "Pricing & Billing"
+description: "Token metering, quotas, tier limits, Stripe usage reporting."
+---
+
+# Intelligence Service — Pricing & Billing Architecture
+
+## Two Billing Modes
+
+The IS handles requests from two channels, billed differently:
+
+### 1. Included (Subscription)
+
+- **Source:** Browser app, Relay app
+- **Header:** `X-Synap-Channel: browser` or `X-Synap-Channel: relay`
+- **Billing:** Counted against monthly quota (1M tokens for Pod+AI subscribers)
+- **Enforcement:** IS returns 429 when quota exceeded
+- **No Stripe metering** — flat monthly subscription covers this
+
+### 2. Per-Token (API)
+
+- **Source:** `/v1/chat/completions` (OpenClaw, third-party)
+- **Header:** `X-Synap-Channel: api` (or missing = defaults to api)
+- **Billing:** Per-token via Stripe meters
+- **No monthly quota** — pay for what you use
+- **Stripe metering** — usage reported every 60s
+
+## Token Prices
+
+| Tier     | Model         | Our Cost  | User Pays | Margin |
+| -------- | ------------- | --------- | --------- | ------ |
+| free     | DeepSeek V3   | $0.014/1M | $0.05/1M  | ~3.5x  |
+| balanced | Kimi K2.5     | $0.15/1M  | $0.50/1M  | ~3.3x  |
+| advanced | Claude Sonnet | $3.00/1M  | $8.00/1M  | ~2.7x  |
+| complex  | Claude Opus   | $15.00/1M | $40.00/1M | ~2.7x  |
+
+With `synap/auto` routing, ~90% goes to free/balanced. Typical API user pays $5-15/mo.
+
+## Data Flow
+
+```
+Request arrives at IS
+  ↓
+enhanced-usage-tracking.ts:
+  1. Read X-Synap-Channel header
+  2. After response: log to usage_logs table
+  3. If channel == "api":
+     → inferModelTier(model) → free/balanced/advanced/complex
+     → reportBillableUsage() → POST to CP /webhooks/usage (fire-and-forget)
+  4. If channel == "browser"/"relay":
+     → Count against monthly quota only
+
+CP receives usage event:
+  ↓
+usage-accumulator.ts:
+  1. If api: accumulate in Redis (per customer, per tier, per month)
+  2. If included: increment included usage counter
+
+report-stripe-usage.ts (every 60s):
+  ↓
+  1. Drain accumulated API usage from Redis
+  2. Resolve Stripe customer ID
+  3. stripe.billing.meterEvents.create() for each tier
+  4. Clear Redis after success
+```
+
+## Model Tier Detection
+
+```typescript
+// In control-plane.ts
+function inferModelTier(model: string): ModelTier {
+  if (model.includes("deepseek")) return "free";
+  if (model.includes("kimi") || model.includes("moonshotai")) return "balanced";
+  if (model.includes("claude") && model.includes("opus")) return "complex";
+  if (model.includes("claude")) return "advanced";
+  return "balanced"; // default
+}
+```
+
+## Channel Detection
+
+The pod sets `X-Synap-Channel` before proxying to IS:
+
+| Proxy Route                               | Header Value    | Billing   |
+| ----------------------------------------- | --------------- | --------- |
+| `channels.ts` (Browser chat)              | `browser`       | Included  |
+| `external/openai-compat.ts` (`/v1/*`)     | `api`           | Per-token |
+| `external/chat.ts` (`/api/external/chat`) | `api`           | Per-token |
+| Missing header                            | `api` (default) | Per-token |
+
+Safe default: if header is missing, treat as billable.
+
+## Stripe Setup
+
+Create 4 meters in Stripe Dashboard:
+
+- `synap_tokens_free`
+- `synap_tokens_balanced`
+- `synap_tokens_advanced`
+- `synap_tokens_complex`
+
+Set env vars on CP:
+
+```
+STRIPE_METER_FREE=synap_tokens_free
+STRIPE_METER_BALANCED=synap_tokens_balanced
+STRIPE_METER_ADVANCED=synap_tokens_advanced
+STRIPE_METER_COMPLEX=synap_tokens_complex
+```
+
+## User-Facing Usage
+
+`GET /billing/usage` returns:
+
+```json
+{
+  "period": { "start": "2026-04-01", "end": "2026-04-30" },
+  "included": { "limit": 1000000, "used": 342000, "remaining": 658000 },
+  "api": {
+    "tokensUsed": 156000,
+    "estimatedCost": 2.34,
+    "byTier": { "free": { "tokens": 120000, "cost": 0.006 }, ... }
+  }
+}
+```
+
+## Key Files
+
+| File                                    | Repo    | Purpose                                           |
+| --------------------------------------- | ------- | ------------------------------------------------- |
+| `middleware/enhanced-usage-tracking.ts` | IS      | Channel detection + usage logging                 |
+| `clients/control-plane.ts`              | IS      | `reportBillableUsage()` to CP                     |
+| `config/models.ts`                      | IS      | Four-tier routing definitions                     |
+| `packages/pricing/src/token-pricing.ts` | CP      | Price constants + `calculateTokenCost()`          |
+| `services/billing/usage-accumulator.ts` | CP      | Redis accumulator (batch before Stripe)           |
+| `jobs/report-stripe-usage.ts`           | CP      | 60s cron → Stripe meter events                    |
+| `routes/billing.ts`                     | CP      | `POST /billing/usage-event`, `GET /billing/usage` |
+| `routers/external/openai-compat.ts`     | Backend | Sets `X-Synap-Channel: api`                       |
+| `routers/channels.ts`                   | Backend | Sets `X-Synap-Channel: browser`                   |

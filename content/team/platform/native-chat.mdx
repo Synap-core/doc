@@ -1,0 +1,645 @@
+---
+title: "Native Chat Design"
+description: "Native chat design spec for Relay and iOS/Android."
+---
+
+# Native Chat Design Specification
+
+> **Single source of truth for unified AI chat UI across Browser and Relay platforms.**
+
+---
+
+## 1. Overview
+
+### Goal
+Create a **unified AI chat experience** across Browser (Electron) and Relay (Expo/React Native) platforms. The design philosophy establishes a clear visual distinction between AI-generated content (flat, institutional) and user content (bubbled, personal).
+
+### Design Philosophy
+
+| Element | AI Messages | User Messages |
+|---------|-------------|---------------|
+| **Rendering** | Flat, no bubble | Rounded bubble |
+| **Background** | Transparent | `$primaryLight` |
+| **Avatar** | AI avatar (left) | User avatar (right) |
+| **Tone** | Institutional, authoritative | Personal, conversational |
+
+### Key Principles
+
+1. **Flat AI, Bubbly User** — AI messages blend into the background; user messages stand out
+2. **No Shadows** — Use subtle borders (`$borderColor`) for depth only
+3. **AI = Emerald** — `$ai` tokens exclusively for AI indicators, actions, and accents
+4. **Generous Spacing** — 6px base unit, whitespace creates premium feel
+5. **Token-First** — Never hardcode colors or spacing; always use theme tokens
+6. **Tamagui-Native** — Build with `YStack`, `XStack`, `SizableText` — never raw `View` or `Text`
+
+---
+
+## 2. Color Tokens (MANDATORY)
+
+**Never use hardcoded hex colors. Always use `$` tokens.**
+
+### AI Colors
+| Token | Value (Light) | Value (Dark) | Usage |
+|-------|---------------|--------------|-------|
+| `$ai` | `#10B981` (emerald-500) | `#10B981` | AI accent, send button when active, deep analysis toggle |
+| `$aiLight` | `rgba(16, 185, 129, 0.08)` | `rgba(16, 185, 129, 0.12)` | AI message hover, subtle AI backgrounds |
+| `$aiHover` | `#059669` | `#34D399` | AI button hover states |
+
+### User/Primary Colors
+| Token | Value (Light) | Value (Dark) | Usage |
+|-------|---------------|--------------|-------|
+| `$primary` | `#F4A460` (amber-400) | `#38BDF8` (cyan-400) | Primary actions, user message bubbles |
+| `$primaryLight` | `rgba(244, 164, 96, 0.1)` | `rgba(56, 189, 248, 0.15)` | User message bubble background |
+| `$primaryHover` | `#D97706` | `#22D3EE` | Button hover states |
+
+### Backgrounds
+| Token | Value (Light) | Value (Dark) | Usage |
+|-------|---------------|--------------|-------|
+| `$background` | `#FAFAF9` | `#020617` | Page/chat background |
+| `$backgroundSurface` | `#F5F4F1` | `#1E293B` | Input container, elevated surfaces |
+| `$backgroundStrong` | `#F5F4F1` | `#1E293B` | Strong emphasis surfaces |
+| `$backgroundHover` | `#EEECE8` | `rgba(255,255,255,0.05)` | Hover states |
+
+### Borders
+| Token | Value (Light) | Value (Dark) | Usage |
+|-------|---------------|--------------|-------|
+| `$borderColor` | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` | Default borders |
+| `$borderColorHover` | `rgba(0,0,0,0.1)` | `rgba(255,255,255,0.12)` | Hover borders |
+| `$borderColorFocus` | `#F4A460` | `#38BDF8` | Focus rings |
+| `$borderColorSubtle` | `rgba(0,0,0,0.04)` | `rgba(255,255,255,0.05)` | Subtle dividers |
+
+### Text
+| Token | Value (Light) | Value (Dark) | Usage |
+|-------|---------------|--------------|-------|
+| `$color` | `#1C1917` | `#F1F5F9` | Primary text (headings) |
+| `$colorSecondary` | `#57534E` | `#CBD5E1` | Body text |
+| `$muted` | `#78716C` | `#94A3B8` | Secondary text, timestamps |
+| `$mutedForeground` | `#A8A29E` | `#64748B` | Disabled text |
+
+### Semantic Colors
+| Token | Value | Usage |
+|-------|-------|-------|
+| `$success` | `#34D399` | Success states |
+| `$warning` | `#FBBF24` | Warning states |
+| `$error` | `#F87171` | Error states, failed sends |
+
+### Usage Rules
+
+```tsx
+// ❌ WRONG — Hardcoded colors
+<Text color="#10B981" />
+<View backgroundColor="rgba(244, 164, 96, 0.1)" />
+
+//  CORRECT — Theme tokens
+<Text color="$ai" />
+<View backgroundColor="$primaryLight" />
+```
+
+---
+
+## 3. Spacing Tokens (6px Base Unit)
+
+**Never use raw pixel values. Always use `$` tokens.**
+
+### Scale
+| Token | Value | Usage |
+|-------|-------|-------|
+| `$0.5` | 3px | Micro spacing |
+| `$1` | 6px | Tight spacing, small gaps |
+| `$2` | 12px | Standard element gaps |
+| `$3` | 18px | Bubble padding, comfortable spacing |
+| `$4` | 24px | Screen padding, section gaps |
+| `$5` | 30px | Large section padding |
+| `$6` | 36px | Extra large spacing |
+
+### Message Spacing
+| Context | Token | Value |
+|---------|-------|-------|
+| Between message groups (different sender) | `$4` | 24px |
+| Between clustered messages (same sender) | `$1` | 6px |
+| Message bubble padding | `$3` | 18px |
+| Screen edge padding | `$4` | 24px |
+| Input container padding | `$2` | 12px |
+
+### Usage Rules
+
+```tsx
+// ❌ WRONG — Raw pixels
+<YStack gap={24} padding={18} />
+
+//  CORRECT — Token values
+<YStack gap="$4" padding="$3" />
+```
+
+---
+
+## 4. Typography
+
+### Component
+**Always use `SizableText` from Tamagui/ui-system.** Never use raw `Text` from react-native.
+
+```tsx
+// ❌ WRONG — Raw Text
+import { Text } from 'react-native';
+<Text style={{ fontSize: 15 }}>Message</Text>
+
+//  CORRECT — SizableText
+import { SizableText } from 'tamagui';
+<SizableText size="$3">Message</SizableText>
+```
+
+### Size Scale
+| Token | Value | Usage |
+|-------|-------|-------|
+| `$0.5` | 11px | Timestamps, micro labels |
+| `$1` | 13px | Badges, metadata, hints |
+| `$2` | 14px | Compact content |
+| `$3` | 15px | **Message content (default)** |
+| `$4` | 17px | Emphasized content |
+| `$5` | 20px | Headers, titles |
+
+### Message Typography
+| Element | Size | Color | Weight |
+|---------|------|-------|--------|
+| Message content | `$3` (15px) | `$color` | 400 (normal) |
+| AI name/label | `$1` (13px) | `$ai` | 500 (medium) |
+| Username | `$1` (13px) | `$primary` | 500 (medium) |
+| Timestamp | `$0.5` (11px) | `$muted` | 400 (normal) |
+| Status badges | `$1` (13px) | varies | 500 (medium) |
+
+---
+
+## 5. Message Bubble Specifications
+
+### AI Messages (Flat Rendering)
+
+**Visual Characteristics:**
+- No bubble container
+- Transparent background (blends with `$background`)
+- Full-width content area
+- Left-aligned with avatar
+
+```tsx
+// AI Message Structure
+<YStack gap="$4"> {/* Message group gap */}
+  <XStack gap="$2" alignItems="flex-start">
+    {/* AI Avatar — left side */}
+    <AIAvatar size="$3" />
+    
+    {/* Content Column */}
+    <YStack flex={1} gap="$1">
+      {/* Header Row */}
+      <XStack alignItems="center" gap="$1">
+        <SizableText size="$1" color="$ai" fontWeight="500">Synap AI</SizableText>
+        <SizableText size="$0.5" color="$muted">12:34 PM</SizableText>
+      </XStack>
+      
+      {/* Message Content — FLAT, no bubble */}
+      <YStack>
+        <SizableText size="$3" color="$color">
+          This is the AI response content...
+        </SizableText>
+      </YStack>
+      
+      {/* Action Row — thumbs, copy, etc. */}
+      <XStack gap="$2">
+        <ActionIcon icon={<ThumbsUp />} variant="ghost" size="sm" />
+        <ActionIcon icon={<Copy />} variant="ghost" size="sm" />
+      </XStack>
+    </YStack>
+  </XStack>
+</YStack>
+```
+
+### User Messages (Bubble Rendering)
+
+**Visual Characteristics:**
+- Rounded bubble container
+- `$primaryLight` background
+- Right-aligned with avatar on right
+- Clear visual distinction from AI
+
+```tsx
+// User Message Structure
+<YStack gap="$4"> {/* Message group gap */}
+  <XStack gap="$2" alignItems="flex-start" justifyContent="flex-end">
+    {/* Content Column — right-aligned */}
+    <YStack flex={1} alignItems="flex-end" gap="$1">
+      {/* Header Row */}
+      <XStack alignItems="center" gap="$1">
+        <SizableText size="$0.5" color="$muted">12:35 PM</SizableText>
+        <SizableText size="$1" color="$primary" fontWeight="500">You</SizableText>
+      </XStack>
+      
+      {/* Message Bubble */}
+      <YStack
+        backgroundColor="$primaryLight"
+        padding="$3"
+        borderTopLeftRadius="$4"
+        borderTopRightRadius="$1"  {/* Notch on top-right */}
+        borderBottomLeftRadius="$4"
+        borderBottomRightRadius="$4"
+        maxWidth="80%"
+      >
+        <SizableText size="$3" color="$color">
+          This is my user message...
+        </SizableText>
+      </YStack>
+    </YStack>
+    
+    {/* User Avatar — right side */}
+    <UserAvatar size="$3" />
+  </XStack>
+</YStack>
+```
+
+### Border Radius (Clustering)
+
+Adjust border radius based on `groupPosition` to create visual clustering:
+
+| Position | Border Radius Values |
+|----------|---------------------|
+| `single` | All corners: `$4` (24px) |
+| `first` | Top: `$4`, Bottom: `$2` |
+| `middle` | All: `$2` (8px) |
+| `last` | Top: `$2`, Bottom: `$4` |
+
+```tsx
+// Dynamic radius based on position
+const getBorderRadius = (position: 'single' | 'first' | 'middle' | 'last') => {
+  const radii = {
+    single: { tl: '$4', tr: '$1', bl: '$4', br: '$4' },
+    first: { tl: '$4', tr: '$1', bl: '$2', br: '$4' },
+    middle: { tl: '$2', tr: '$2', bl: '$2', br: '$2' },
+    last: { tl: '$2', tr: '$4', bl: '$4', br: '$4' },
+  };
+  return radii[position];
+};
+```
+
+---
+
+## 6. Input Specifications
+
+### Pill-Shaped Input Container
+
+**Visual Characteristics:**
+- Fully rounded pill shape (`borderRadius="$round"` or 9999px)
+- `$backgroundSurface` background
+- `$borderColor` border
+- 1px border width
+
+```tsx
+<InputContainer
+  flexDirection="row"
+  alignItems="center"
+  backgroundColor="$backgroundSurface"
+  borderWidth={1}
+  borderColor="$borderColor"
+  borderRadius="$round"
+  paddingHorizontal="$3"
+  paddingVertical="$2"
+  gap="$2"
+>
+  {/* Input Field */}
+  <Input
+    flex={1}
+    placeholder="Ask anything..."
+    borderWidth={0}
+    backgroundColor="transparent"
+  />
+  
+  {/* Send Button */}
+  <SendButton variant="primary" size="sm" />
+</InputContainer>
+```
+
+### Chips Inside Input
+
+Render context chips, file attachments, and MCP selectors inside the pill:
+
+```tsx
+<XStack alignItems="center" gap="$1" flexWrap="wrap">
+  {/* Context Chip */}
+  <Badge variant="primary" size="sm" closable>
+    @Project Alpha
+  </Badge>
+  
+  {/* File Chip */}
+  <Badge variant="outline" size="sm" closable icon={<FileIcon />}>
+    document.pdf
+  </Badge>
+  
+  {/* MCP Chip */}
+  <Badge variant="ai" size="sm" dot>
+    Search
+  </Badge>
+  
+  {/* Actual Input takes remaining space */}
+  <Input flex={1} borderWidth={0} />
+</XStack>
+```
+
+### Send Button
+
+- **Inactive**: Neutral appearance (`$muted` or `$borderColor`)
+- **Active/Has Input**: `$primary` background with `$primaryButtonText`
+- **Shape**: Circular (`borderRadius="$round"`)
+- **Size**: `$8` (32px) or `$10` (40px)
+
+```tsx
+<IconButton
+  icon={<SendIcon />}
+  variant="primary"
+  size="sm"
+  circular
+  disabled={!hasContent}
+  backgroundColor={hasContent ? '$primary' : '$backgroundHover'}
+/>
+```
+
+### Deep Analysis Toggle
+
+- **Off**: Neutral appearance
+- **On**: `$ai` color accent (emerald)
+- **Position**: Inside input pill or adjacent
+- **Icon**: Sparkles/AI indicator
+
+```tsx
+<IconButton
+  icon={<SparklesIcon />}
+  variant="ghost"
+  size="sm"
+  color={isDeepAnalysis ? '$ai' : '$muted'}
+  onPress={toggleDeepAnalysis}
+/>
+```
+
+---
+
+## 7. Component Patterns
+
+### Layout Components
+
+**Always use Tamagui primitives:**
+
+```tsx
+import { YStack, XStack, ScrollView } from 'tamagui';
+
+// Vertical stack
+<YStack gap="$4" padding="$4">
+  {/* Content */}
+</YStack>
+
+// Horizontal stack
+<XStack gap="$2" alignItems="center">
+  {/* Content */}
+</XStack>
+
+// Scrollable area
+<ScrollView>
+  <YStack gap="$1">
+    {/* Messages */}
+  </YStack>
+</ScrollView>
+```
+
+### Forbidden Patterns
+
+```tsx
+// ❌ NEVER — View from react-native
+import { View } from 'react-native';
+<View style={{ padding: 20 }} />
+
+// ❌ NEVER — Text from react-native
+import { Text } from 'react-native';
+<Text style={{ fontSize: 14 }} />
+
+// ❌ NEVER — StyleSheet.create
+const styles = StyleSheet.create({
+  container: { padding: 24 },
+});
+
+// ❌ NEVER — Hardcoded values
+<YStack gap={24} padding={18} backgroundColor="#FFFFFF" />
+```
+
+### Required Patterns
+
+```tsx
+//  ALWAYS — Tamagui primitives
+import { YStack, XStack, SizableText } from 'tamagui';
+
+<YStack gap="$4" padding="$3" backgroundColor="$background">
+  <SizableText size="$3" color="$color">
+    Content
+  </SizableText>
+</YStack>
+
+//  ALWAYS — ui-system components
+import { Button, Badge, Card } from '@synap/ui-system';
+
+<Button variant="primary" size="md">
+  Action
+</Button>
+```
+
+---
+
+## 8. Platform-Specific Guidelines
+
+### Browser (Electron)
+
+**Capabilities:**
+- Full hover interactions
+- Right-click context menus
+- Keyboard shortcuts (Cmd/Ctrl+Enter to send)
+- Drag-and-drop file uploads
+- Rich text rendering (markdown, code blocks)
+
+**Patterns:**
+```tsx
+// Hover actions on messages
+<MessageContainer hoverStyle={{ backgroundColor: '$backgroundHover' }}>
+  {/* Actions visible on hover */}
+  <ActionRow opacity={0} $hover={{ opacity: 1 }}>
+    <ActionIcon icon={<Copy />} />
+    <ActionIcon icon={<ThumbsUp />} />
+  </ActionRow>
+</MessageContainer>
+
+// Keyboard handling
+useEffect(() => {
+  const handler = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      sendMessage();
+    }
+  };
+  window.addEventListener('keydown', handler);
+  return () => window.removeEventListener('keydown', handler);
+}, []);
+```
+
+### Relay (Expo/React Native)
+
+**Constraints:**
+- Touch-only interactions (no hover)
+- Swipe gestures for actions
+- Bottom-sheet for options
+- Keyboard avoiding view
+- Compact rendering for smaller screens
+
+**Patterns:**
+```tsx
+// Touch actions — long press for options
+<MessageContainer
+  onLongPress={() => showMessageOptions(message)}
+>
+  {/* Content */}
+</MessageContainer>
+
+// Swipe to reply
+<SwipeableRow
+  renderLeftActions={() => <ReplyAction />}
+  onSwipeableLeftOpen={() => startReply(message)}
+>
+  <MessageBubble />
+</SwipeableRow>
+
+// Keyboard handling
+<KeyboardAvoidingView
+  behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  keyboardVerticalOffset={headerHeight}
+>
+  <MessageList />
+  <InputArea />
+</KeyboardAvoidingView>
+
+// Compact avatar sizing
+<AIAvatar size="$2.5" /> {/* Slightly smaller on mobile */}
+```
+
+### Shared Components
+
+Create platform-specific wrappers around shared logic:
+
+```tsx
+// Shared message component
+interface MessageBubbleProps {
+  message: Message;
+  isAI: boolean;
+  groupPosition: 'single' | 'first' | 'middle' | 'last';
+}
+
+// Browser implementation
+export function BrowserMessageBubble(props: MessageBubbleProps) {
+  return (
+    <MessageBubbleBase
+      {...props}
+      actionMode="hover"
+      avatarSize="$3"
+    />
+  );
+}
+
+// Relay implementation
+export function RelayMessageBubble(props: MessageBubbleProps) {
+  return (
+    <MessageBubbleBase
+      {...props}
+      actionMode="touch"
+      avatarSize="$2.5"
+      swipeActions={['reply', 'react']}
+    />
+  );
+}
+```
+
+---
+
+## 9. Migration Checklist
+
+When implementing or refactoring chat UI, verify:
+
+### Color Compliance
+- [ ] No hardcoded hex colors (`#FFFFFF`, `#10B981`)
+- [ ] No `rgba()` literals in JSX
+- [ ] All colors use `$` tokens (`$ai`, `$primary`, `$background`)
+- [ ] AI features use `$ai` tokens exclusively
+- [ ] User bubbles use `$primaryLight` background
+
+### Spacing Compliance
+- [ ] No raw pixel values (`24`, `18`, `12`)
+- [ ] All spacing uses `$` tokens (`$1`, `$2`, `$3`, `$4`)
+- [ ] Message gaps follow clustering rules (`$1` clustered, `$4` groups)
+- [ ] Bubble padding uses `$3` (18px)
+- [ ] Screen padding uses `$4` (24px)
+
+### Component Compliance
+- [ ] No `View` from `react-native`
+- [ ] No `Text` from `react-native`
+- [ ] Use `YStack`, `XStack` for all layouts
+- [ ] Use `SizableText` for all text
+- [ ] No `StyleSheet.create`
+- [ ] All components from `@synap/ui-system` or Tamagui
+
+### Typography Compliance
+- [ ] Message content uses `size="$3"`
+- [ ] Timestamps use `size="$0.5"`
+- [ ] Badges use `size="$1"`
+- [ ] Usernames use `size="$1"` with `fontWeight="500"`
+
+### Architecture Compliance
+- [ ] AI messages rendered flat (no bubble)
+- [ ] User messages rendered in bubbles
+- [ ] Border radius follows clustering logic
+- [ ] Input is pill-shaped with internal chips
+- [ ] Send button is circular with proper active states
+
+---
+
+## 10. Quick Reference
+
+### Token Cheatsheet
+
+| Category | Tokens |
+|----------|--------|
+| **AI** | `$ai`, `$aiLight`, `$aiHover`, `$aiButtonText` |
+| **Primary** | `$primary`, `$primaryLight`, `$primaryHover`, `$primaryButtonText` |
+| **Background** | `$background`, `$backgroundSurface`, `$backgroundHover`, `$backgroundStrong` |
+| **Border** | `$borderColor`, `$borderColorHover`, `$borderColorFocus`, `$borderColorSubtle` |
+| **Text** | `$color`, `$colorSecondary`, `$muted`, `$mutedForeground` |
+| **Semantic** | `$success`, `$warning`, `$error`, `$info` |
+| **Glass** | `$glassBackground`, `$glassBorder` |
+
+### Spacing Cheatsheet
+
+| Token | Pixels | Common Usage |
+|-------|--------|--------------|
+| `$0.5` | 3px | Micro spacing |
+| `$1` | 6px | Clustered messages, tight gaps |
+| `$2` | 12px | Standard gaps, input padding |
+| `$3` | 18px | Bubble padding |
+| `$4` | 24px | Message groups, screen padding |
+| `$6` | 36px | Large sections |
+
+### Component Cheatsheet
+
+| For | Use |
+|-----|-----|
+| Layout | `YStack`, `XStack` from `tamagui` |
+| Text | `SizableText` from `tamagui` |
+| Buttons | `Button`, `IconButton` from `@synap/ui-system` |
+| Badges | `Badge` from `@synap/ui-system` |
+| Inputs | `Input`, `TextArea` from `@synap/ui-system` |
+| Cards | `Card` from `@synap/ui-system` |
+| Avatars | `AvatarGroup` from `@synap/ui-system` |
+
+---
+
+## Related Documentation
+
+- [CLAUDE.md](../../../synap-app/CLAUDE.md) — General frontend architecture
+- [TAMAGUI_BEST_PRACTICES.md](../../../synap-app/TAMAGUI_BEST_PRACTICES.md) — Tamagui patterns
+- [DESIGN_SYSTEM.md](../../../synap-app/DESIGN_SYSTEM.md) — Complete design system
+- [themes.ts](../../../synap-app/packages/core/ui-system/src/themes.ts) — Full token reference

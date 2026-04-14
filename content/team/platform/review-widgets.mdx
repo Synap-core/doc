@@ -1,0 +1,146 @@
+---
+title: "Platform Review: Widgets"
+description: "Widget system completeness and gaps."
+---
+
+# 01 — Widget System (Native + Iframe)
+
+> Updated 2026-03-25. Native widget runtime implemented.
+
+## Current State
+
+### Two-Tier Widget Architecture — IMPLEMENTED
+
+The widget system supports two renderer types. AI defaults to native; iframe is kept for quick throwaway HTML.
+
+```
+Tier 1: Native (default)        Tier 2: Iframe (sandbox)
+─────────────────────────       ─────────────────────────
+Real React components           Sandboxed HTML documents
+Shared externals (Grafana)      postMessage protocol
+Full theme + hooks + tRPC       Static config only
+Same React tree as host         Isolated DOM
+Proposal governance             Proposal governance
+```
+
+### Native Widgets (Shared Externals) — BUILT 2026-03-25
+
+AI writes JSX/TSX using platform packages. Backend compiles to IIFE bundle via esbuild. Browser loads at runtime via Blob URL `&lt;script>` injection. Widget runs in the same React tree as the host with full access to theme, hooks, data, and navigation.
+
+**Pipeline:**
+```
+AI calls generate_widget(rendererType: "native", source: JSX)
+  → Hub Protocol → checkPermissionOrPropose() → user approves
+  → compileWidgetSource(source) via esbuild → IIFE bundle
+  → widget_definitions table (source + bundleSource)
+  → WidgetRegistryProvider discovers rendererType: "native"
+  → loadNativeWidget(bundleSource) → Blob URL → CellRegistration
+  → cellRegistry.register() → renders like any built-in cell
+```
+
+**Shared Externals (available to all native widgets):**
+- `react`, `react-dom`, `react/jsx-runtime`
+- `@synap-core/ui-system` (Tamagui components + theme tokens)
+- `@synap/cell-runtime` (useCellContext, useCellRuntime, CellProps)
+- `@synap/client` (tRPC hooks with workspace scoping)
+- `zustand` (state management)
+- `lucide-react` (icons)
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| Shared externals registry | `synap-app/packages/core/cell-runtime/src/shared-externals.ts` |
+| Native widget loader | `synap-app/packages/core/cell-runtime/src/NativeWidgetLoader.ts` |
+| Widget compiler (esbuild) | `synap-backend/packages/api/src/utils/widget-compiler.ts` |
+| Dynamic registration | `synap-app/packages/core/cell-runtime/src/WidgetRegistryProvider.tsx` |
+| Startup wiring | `browser/electron/renderer/src/providers/browserCellSetup.ts` |
+| AI tool | `synap-intelligence-service/.../tools/workspace/generate-widget-tool.ts` |
+| AI skill file | `synap-intelligence-service/.../skills/native-widget.md` |
+| DB schema | `synap-backend/packages/database/src/schema/widget-definitions.ts` |
+| Hub Protocol router | `synap-backend/packages/api/src/routers/hub-protocol/widget-definitions.ts` |
+| DB migration | `synap-backend/packages/database/migrations-drizzle/0056_widget_native_columns.sql` |
+
+**Security model:**
+- AI-generated native widgets go through `checkPermissionOrPropose()` — user must approve
+- Marketplace packages reviewed and signed on control plane (`isVerified` flag)
+- User-created widgets are self-authored (same trust as any user code)
+- Future option: SES Compartments for capability restriction (not blocking)
+
+**What a native widget looks like:**
+```tsx
+import { YStack, Text, Badge } from '@synap-core/ui-system';
+import { useCellContext } from '@synap/cell-runtime';
+import { trpc } from '@synap/client';
+
+export default function TaskSummary({ config }: CellProps) {
+  const ctx = useCellContext();
+  const { data } = trpc.entities.list.useQuery({
+    profileSlug: (config?.profileSlug as string) ?? 'task',
+  });
+
+  return (
+    <YStack gap="$3" padding="$4">
+      <Text fontFamily="$heading" fontSize="$5">Active Tasks</Text>
+      <Badge variant="info">{data?.entities?.length ?? 0}</Badge>
+    </YStack>
+  );
+}
+```
+
+### Iframe Widgets (Sandbox) — FULLY BUILT (unchanged)
+
+Sandboxed HTML documents with postMessage protocol. Kept as Tier 2 for quick throwaway AI-generated visualizations and external embeds.
+
+**SynapWidget SDK (injected into every iframe):**
+```javascript
+window.SynapWidget = {
+  onInit(fn),       // Receive config + context
+  onUpdate(fn),     // Config changed
+  resize(h),        // Request height change
+  navigate(target), // Navigate host
+  toast(msg, level),// Show notification
+  error(msg)        // Report error
+}
+```
+
+**Key Files:**
+
+| Purpose | Path |
+|---------|------|
+| Iframe renderer | `synap-app/packages/core/cell-runtime/src/IframeWidgetCell.tsx` |
+| PostMessage protocol | `synap-app/packages/core/cell-runtime/src/iframe-protocol.ts` |
+| Config form auto-gen | `synap-app/packages/core/cell-runtime/src/WidgetConfigForm.tsx` |
+| Cell registry | `synap-app/packages/core/cell-runtime/src/registry.ts` |
+| Built-in catalog | `synap-app/packages/core/capabilities/src/widgets.ts` |
+
+## Remaining Gaps
+
+### Native Widgets
+1. **No E2E test yet** — Need to verify the full flow: AI generates JSX → proposal → approve → renders correctly in bento grid with real theme tokens and data
+2. **Compilation is synchronous** — `compileWidgetSource()` runs during the upsert mutation. Should move to pg-boss job for production (non-blocking)
+3. **No marketplace package format** — Native widgets are stored as source+bundle in DB. For marketplace distribution, need a package format with manifest, versioning, and CP hosting
+4. **No SES sandboxing** — Native widgets have full access to the React tree. If we want to restrict marketplace widgets (e.g., read-only data access), need SES Compartments or a scoped tRPC proxy
+5. **No hot-reload for development** — Widget source changes require re-upsert. A development mode with file watching would improve DX for widget authors
+
+### Iframe Widgets
+1. **No live data access** — Widget only gets static config at init. This is by design (security), but limits usefulness
+2. **No theme integration** — Widget HTML must hardcode colors. Could add CSS variable injection as enhancement
+3. **No component reuse** — Cannot use ui-system components. This is the main reason native exists
+
+## Decision Log
+
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-03-24 | Rejected "Enhanced Iframe" approach (CSS vars + data bridge + component CSS library) | Would create a parallel CSS system that drifts from ui-system. Approximate theme matching is never truly native. postMessage proxy adds latency. |
+| 2026-03-24 | Chose Grafana shared externals model over Module Federation | Simpler for Electron + Vite. No federation runtime needed. Platform deps are stable and small in number. |
+| 2026-03-24 | Server-side compilation (esbuild) over client-side (esbuild-wasm) | Keeps browser bundle small. Backend already has Node.js. Compilation only happens on upsert, not on every load. |
+| 2026-03-25 | Implemented full native widget pipeline | 14 files across 3 repos. Typechecks clean in all packages. |
+
+## What This Unlocks
+
+- **AI generates real product-quality widgets** — not HTML approximations
+- **Marketplace packages** can ship native widgets that look identical to built-in cells
+- **Template workspaces** can include custom dashboard widgets that use live data
+- **DevOps dashboard** widgets can query actual service health data via tRPC
+- **Widget ecosystem** where community-created widgets are first-class citizens

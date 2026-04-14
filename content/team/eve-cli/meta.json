@@ -1,0 +1,7 @@
+{
+  "title": "Eve",
+  "description": "Entity Creation System — CLI & sovereign stack (hestia-cli monorepo)",
+  "root": true,
+  "icon": "package",
+  "pages": ["index"]
+}

@@ -1,0 +1,411 @@
+---
+title: "Creating Apps"
+description: "How to create new Browser modules and Expo apps."
+---
+
+# Creating Apps on Synap Infrastructure
+
+Guide for developers and AI agents to create new applications that reuse Synap's shared packages. Covers both **Synap module apps** (inside the Browser) and **standalone apps** (Expo mobile, web).
+
+---
+
+## 1. Two Types of Apps
+
+### Synap Module (Browser App)
+
+Lives inside the Electron Browser. Registered in manifest. Has access to all workspace context.
+
+```
+synap-app/packages/apps/<app-name>/    ← Package with UI logic
+browser/electron/renderer/src/apps/    ← Browser integration wrapper
+```
+
+### Standalone App (Mobile / Web)
+
+Separate Expo or React app. Connects to a Synap pod via HTTP. Own navigation shell.
+
+```
+<app-name>-app/                        ← Top-level directory (or other/<app-name>/)
+```
+
+Both types share the same data layer packages.
+
+---
+
+## 2. Reusable Packages
+
+### Data Layer (the three-layer stack)
+
+| Package | Purpose | Used For |
+|---------|---------|----------|
+| `@synap-core/client` | tRPC client + TanStack Query + Socket.IO | All data fetching, real-time updates |
+| `@synap-core/hooks` | Composite React hooks (useEntity, useCreateEntity, useView, etc.) | React components that read/write data |
+| `@synap-core/stores` | Zustand stores (UI state, workspace state, view config) | Client-side state management |
+
+**Import pattern:** hooks → stores → client. Never skip layers.
+
+```typescript
+// In a component:
+import { useEntity, useCreateEntity } from '@synap-core/hooks';
+import { useUIStore } from '@synap-core/stores';
+// NEVER: import { trpc } from '@synap-core/client' directly in components
+```
+
+### Connectivity
+
+| Package | Purpose | When to Use |
+|---------|---------|-------------|
+| `@synap-core/pod-connect` | Pod discovery + handshake (shared/dedicated) | Standalone apps that need to connect to a pod |
+| `@synap-core/react` | Simplified SynapProvider + useSynap hook | External apps wanting minimal setup |
+| `@synap-core/sdk` | Low-level type-safe tRPC client factory | When you need raw tRPC without React |
+| `@synap-core/platform-sdk` | Control Plane context, feature flags, subscriptions | Apps that need CP awareness |
+
+### AI & Intelligence
+
+| Package | Purpose | When to Use |
+|---------|---------|-------------|
+| `@synap/hub-client` | Intelligence Hub streaming client (SSE) | Any UI that streams AI responses |
+| `@synap-core/agent-service` | Agent service hooks and utilities | Agent management UIs |
+
+### UI System
+
+| Package | Purpose | When to Use |
+|---------|---------|-------------|
+| `@synap-core/ui-system` | Tamagui components, tokens, themes | ALL UI — Button, Input, Badge, Card, Panel, etc. |
+| `@synap-core/cell-runtime` | Cell registry + CellRenderer | Rendering cells (views, widgets, entities) |
+| `@synap-core/capabilities` | Widget/view type manifest, contracts | Querying what cell types exist |
+
+**UI rules (always):**
+- Size tokens: `sm`, `md`, `lg` on Button, Input, Badge — never raw px
+- Theme tokens: `$primary`, `$muted`, `$borderColor` — never hardcoded hex
+- Space tokens: `$1` through `$24` — never raw numbers
+- Radius tokens: `$1`, `$2`, `$3`, `$round` — never hardcoded
+- No shadows — use subtle borders
+- AI features use `$ai` / `$aiLight` / `$aiHover` tokens
+
+### Types
+
+| Package | Purpose |
+|---------|---------|
+| `@synap-core/types` | Shared types (notifications, proactive, etc.) |
+| `@synap-core/proposal-types` | Proposal system types |
+| `@synap-core/api-types` | tRPC router type exports |
+
+### Feature Packages (optional, composable)
+
+| Package | What It Provides |
+|---------|-----------------|
+| `@synap-core/ai-chat` | Full AI chat interface with streaming |
+| `@synap-core/entity-views` | Entity detail, properties, relationships |
+| `@synap-core/document` | Document editor (Yjs collaborative) |
+| `@synap-core/proposals` | Proposal review UI |
+| `@synap-core/search` | Search interface + Typesense integration |
+| `@synap-core/capture` | AI capture pipeline (text → structured entities) |
+| `@synap-core/connectors` | Nango connector management UI |
+| `@synap-core/sidebar` | Sidebar navigation component |
+
+---
+
+## 3. Creating a Synap Module (Browser App)
+
+### Step 1: Create the package
+
+```bash
+mkdir -p synap-app/packages/apps/<app-name>/src
+```
+
+**`package.json`:**
+```json
+{
+  "name": "@synap-core/<app-name>",
+  "version": "0.1.0",
+  "private": true,
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@synap-core/ui-system": "workspace:*",
+    "@synap-core/client": "workspace:*",
+    "@synap-core/hooks": "workspace:*",
+    "@synap-core/stores": "workspace:*",
+    "lucide-react": "^0.555.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}
+```
+
+**`tsconfig.json`:**
+```json
+{
+  "extends": "@synap-core/tsconfig",
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+**`src/index.ts`:**
+```typescript
+export { MyApp } from './MyApp';
+export type { MyAppProps } from './MyApp';
+```
+
+**`src/MyApp.tsx`:**
+```typescript
+import React from 'react';
+import { YStack, Text } from '@synap-core/ui-system';
+
+export interface MyAppProps {
+  instance?: any;
+  app?: any;
+  isActive?: boolean;
+}
+
+export const MyApp: React.FC<MyAppProps> = ({ isActive }) => {
+  return (
+    <YStack flex={1} padding="$4">
+      <Text>My App</Text>
+    </YStack>
+  );
+};
+
+export default MyApp;
+```
+
+### Step 2: Register in pnpm-workspace.yaml
+
+```yaml
+packages:
+  # ... existing
+  - "synap-app/packages/apps/<app-name>"
+```
+
+### Step 3: Register in Browser manifest
+
+**`browser/electron/renderer/src/apps/manifest.ts`:**
+```typescript
+myApp: {
+  id: 'myApp',
+  name: 'My App',
+  icon: 'Sparkles',           // lucide-react icon name
+  category: 'productivity',
+  capabilities: { requiresPod: true, realtimeSync: true },
+  showInActivityBar: false,   // true = appears in sidebar
+  order: 30,
+  description: 'What this app does',
+  load: () => import('./MyAppWrapper'),
+},
+```
+
+**`browser/electron/renderer/src/apps/MyAppWrapper.tsx`:**
+```typescript
+import React from 'react';
+import { MyApp } from '@synap-core/my-app';
+
+const MyAppWrapper: React.FC<any> = (props) => <MyApp {...props} />;
+export default MyAppWrapper;
+```
+
+### Step 4: Install + verify
+
+```bash
+pnpm install
+pnpm --filter @synap-core/<app-name> type-check
+```
+
+---
+
+## 4. Creating a Standalone App (Expo Mobile)
+
+### Step 1: Initialize
+
+```bash
+npx create-expo-app <app-name>-app --template blank-typescript
+cd <app-name>-app
+```
+
+Or copy from `other/synap-life-feed/` as a template.
+
+### Step 2: Add to workspace
+
+In root `pnpm-workspace.yaml`:
+```yaml
+packages:
+  - "<app-name>-app"
+```
+
+### Step 3: Add Synap dependencies
+
+**`package.json`:**
+```json
+{
+  "dependencies": {
+    "expo": "~54.0.0",
+    "expo-router": "~4.0.0",
+    "react": "^19.1.0",
+    "react-native": "~0.81.0",
+
+    "@tamagui/core": "^1.140.0",
+    "@tamagui/config": "^1.140.0",
+
+    "@synap-core/client": "workspace:*",
+    "@synap-core/hooks": "workspace:*",
+    "@synap-core/stores": "workspace:*",
+    "@synap-core/pod-connect": "workspace:*",
+    "@synap/hub-client": "workspace:*",
+
+    "@tanstack/react-query": "^5.0.0",
+    "zustand": "^5.0.0"
+  }
+}
+```
+
+### Step 4: Set up providers
+
+**`app/_layout.tsx`:**
+```typescript
+import { TamaguiProvider } from '@tamagui/core';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { TRPCProvider } from '@synap-core/client';
+import { Slot } from 'expo-router';
+
+const queryClient = new QueryClient();
+
+export default function RootLayout() {
+  // Pod URL from auth flow / stored credentials
+  const podUrl = usePodUrl();
+
+  return (
+    <SafeAreaProvider>
+      <TamaguiProvider config={config} defaultTheme="dark">
+        <QueryClientProvider client={queryClient}>
+          <TRPCProvider podUrl={podUrl}>
+            <Slot />
+          </TRPCProvider>
+        </QueryClientProvider>
+      </TamaguiProvider>
+    </SafeAreaProvider>
+  );
+}
+```
+
+### Step 5: Pod connection flow
+
+```typescript
+import { connectToSharedPod, getSharedPodInfo } from '@synap-core/pod-connect';
+
+// 1. User authenticates with Control Plane (Better Auth)
+// 2. Get pod info
+const podInfo = await getSharedPodInfo(cpUrl, sessionToken);
+// 3. Handshake with pod
+const podSession = await connectToSharedPod(cpUrl, sessionToken);
+// 4. Store podUrl + podSession.token
+// 5. Pass to TRPCProvider
+```
+
+### Step 6: Use hooks normally
+
+```typescript
+import { useEntity, useCreateEntity } from '@synap-core/hooks';
+
+function PersonCard({ id }: { id: string }) {
+  const { data: person } = useEntity(id);
+  // Works identically to Browser app
+}
+```
+
+---
+
+## 5. Creating Feature Packages
+
+If your app has reusable feature logic, extract it into a feature package.
+
+```
+synap-app/packages/features/<feature-name>/
+├── package.json
+├── tsconfig.json
+└── src/
+    ├── index.ts          # Barrel exports
+    ├── components/       # UI components
+    ├── hooks/            # Feature-specific hooks
+    └── utils/            # Helper functions
+```
+
+**Rules:**
+- Feature packages depend on core packages only
+- Never import from other feature packages
+- Never import from app packages
+- Export everything through `src/index.ts`
+
+---
+
+## 6. Registering Cells
+
+If your app defines new cell types (for bento grids, panels, etc.):
+
+```typescript
+import { registerCell } from '@synap/cell-runtime';
+
+registerCell({
+  kind: 'my-widget',
+  displayName: 'My Widget',
+  category: 'data',  // core | data | ai | entity | communication | governance | content
+  component: MyWidgetComponent,
+  defaultSize: { w: 6, h: 4 },  // bento grid units (12-col)
+});
+```
+
+---
+
+## 7. Backend Extensions
+
+If your app needs new API endpoints:
+
+1. Create a new tRPC router in `synap-backend/packages/api/src/routers/&lt;name>.ts`
+2. Use `workspaceProcedure` for workspace-scoped operations
+3. Validate all inputs with Zod
+4. Register the router in the main app router
+5. Types flow automatically to `@synap-core/client` via tRPC
+
+If your app needs background jobs:
+1. Add workers in `synap-backend/packages/jobs/`
+2. Use pg-boss for scheduling
+3. Follow existing worker patterns
+
+---
+
+## 8. Dependency Graph
+
+```
+Your App (Browser module or standalone)
+  ├── @synap-core/ui-system        ← UI components + tokens
+  ├── @synap-core/hooks            ← Data hooks
+  │   ├── @synap-core/stores       ← State management
+  │   │   └── @synap-core/types    ← Shared types
+  │   └── @synap-core/client       ← tRPC + TanStack Query
+  │       └── @synap-core/api-types
+  ├── @synap/hub-client            ← AI streaming (optional)
+  ├── @synap-core/pod-connect      ← Pod auth (standalone only)
+  ├── @synap-core/cell-runtime     ← Cell rendering (optional)
+  └── @synap-core/feature-*        ← Feature packages (optional)
+```
+
+---
+
+## 9. Checklist
+
+Before shipping a new app:
+
+- [ ] Package builds: `pnpm --filter @synap-core/&lt;name> type-check`
+- [ ] No hardcoded colors, sizes, or spacing — all tokens
+- [ ] Three-layer data: hooks → stores → client (never skip)
+- [ ] No cross-feature imports (features → core only)
+- [ ] Cell registrations call `registerCell()` with correct metadata
+- [ ] Workspace added to `pnpm-workspace.yaml`
+- [ ] (Browser) Manifest entry in `manifest.ts`
+- [ ] (Standalone) Pod connection flow implemented
+- [ ] (Backend) Zod validation on all inputs
+- [ ] (Backend) Static Hono routes before dynamic `/:id` routes

@@ -1,0 +1,397 @@
+---
+title: "Relay Design"
+description: "UX design principles and visual design for Relay."
+---
+
+# Relay — Design Document
+
+**Status:** Pre-implementation — awaiting visual designs
+**Type:** Synap module + standalone mobile app (iOS/Android)
+**Focus:** Web3 professionals, event networkers, crypto ecosystem
+
+---
+
+## 1. Product Summary
+
+Relay is a relationship intelligence system. It passively captures interactions from channels you already use (Telegram, LinkedIn, phone), resolves them into unified person entities, and builds a living knowledge graph of your professional network.
+
+**Not a CRM.** No sales pipeline, no deal stages. This is a personal intelligence tool — a "second brain for people."
+
+**Core value:** Surface non-obvious connections. Before an event, know who to talk to and why. After an event, never lose a contact. Between events, stay aware of what your network is doing.
+
+---
+
+## 2. Dual Surface Architecture
+
+### As a Synap Module
+- Relay profiles, views, and cells register in the existing cell system
+- Feed appears as a bento widget on the dashboard
+- Person detail extends entity detail view
+- Graph is a view type in the view renderer
+- Works inside the Browser (Electron) app
+
+### As a Standalone Mobile App
+- React Native (Expo) + Tamagui
+- Shares `@synap-core/client`, `@synap-core/hooks`, `@synap-core/stores`
+- Own navigation shell, mobile-specific UX
+- Pod connectivity via `@synap-core/pod-connect`
+- AI via `@synap/hub-client`
+- Same data, different shell
+
+---
+
+## 3. Views
+
+### 3.1 Feed (Home)
+
+The primary view. A living, scrolling stream of network activity.
+
+**Feed item types:**
+
+| Type | Example | Source |
+|------|---------|--------|
+| Conversation | "12-min Telegram exchange with Leo about tokenomics" | Telegram sync |
+| Social signal | "Samir posted about DealEscrow milestone on LinkedIn" | LinkedIn monitor |
+| New encounter | "New person detected: 3 messages with @alice_dev in ETHGlobal group" | Telegram group analysis |
+| Reconnection nudge | "Haven't talked to Marie in 2 months — she just posted about needing a CTO" | AI inference |
+| Cluster alert | "3 people in your network are working on RWA tokenization this week" | AI pattern detection |
+| Event context | "ETHGlobal Cannes in 5 days — 7 people in your network attending" | Calendar + graph |
+
+**Behavior:**
+- Chronological by default
+- AI-prioritized highlights pinned at top (Phase 2)
+- Filterable by: person, source, event, topic, type
+- Each item links to Person Detail
+- Feed items are Synap entities — full event chain, time-travel, audit trail
+
+**Layout:**
+- Vertical scrolling card list (not grid)
+- Cards have: avatar/icon, title, summary, timestamp, source badge, action buttons
+- Swipe actions on mobile: archive, pin, remind later
+
+### 3.2 People (Network)
+
+All persons in your graph. Multiple view modes on the same data.
+
+**View modes:**
+- **Grid** (default) — Photo cards, name, role, last interaction date, top tags
+- **List** — Compact rows, sortable by name/recency/frequency
+- **Graph** — Force-directed network visualization (toggle, not separate view)
+
+**Filters:**
+- Tags/skills ("Solidity", "DeFi", "French-speaking")
+- Events ("met at ETHGlobal Prague")
+- Recency ("talked to in last 30 days")
+- Source ("from Telegram", "from LinkedIn")
+- Organization
+- AI query ("who knows compliance?")
+
+**Graph mode specifics:**
+- Force-directed layout (React Flow or d3-force)
+- Nodes: people (sized by interaction frequency), events (different color), topics (clusters)
+- Edges: weighted by recency and frequency
+- Click node → Person Detail in side panel
+- Filter applies to graph too — filter by event shows only that event's cluster
+
+### 3.3 Person Detail
+
+Unified profile for one person. Three-panel layout.
+
+**Panel 1 — Identity (top/header)**
+- Merged name, best available photo
+- All connected identities: Telegram handle, LinkedIn URL, phone, email
+- Current role / organization
+- Tags: skills, topics, how you met
+- AI one-liner: "Solidity dev at [Company], interested in privacy-preserving DeFi, met at ETHGlobal Prague"
+- Quick actions: message (opens Telegram/LinkedIn), call, add note
+
+**Panel 2 — Timeline (main body)**
+- Every interaction chronologically, across all channels
+- Telegram messages (AI-summarized sessions, expandable for full context)
+- LinkedIn interactions, call logs, event co-attendance
+- Manual notes and tags added by user
+- AI summaries per time period: "In Q1 2026, you discussed tokenomics and compliance across 4 conversations"
+
+**Panel 3 — Intelligence (sidebar/bottom)**
+- AI-inferred current focus areas
+- Shared interests / overlap with your projects
+- Potential reasons to reconnect
+- Mutual connections in your graph
+- "This person could help with..." / "You could help this person with..."
+- Strength score (interaction frequency + recency + depth)
+
+### 3.4 Events
+
+Past and upcoming events, people-centric.
+
+**Upcoming events:**
+- Event card: name, date, location, attendee count from your graph
+- "Prep briefing" button → AI generates: who's attending that you know, who you should meet (2nd-degree), conversation starters based on shared interests
+- Attendee list with quick tags
+
+**Past events:**
+- Same cards, but with: people met, conversations had, follow-ups pending
+- "Event recap" — AI summary of who you met and what you discussed
+
+**Sources:** Manual creation, Google Calendar sync (via Nango), Luma/lu.ma (future), Telegram event group detection
+
+### 3.5 Explore / Query
+
+Natural language search across the graph.
+
+**Input:** Search bar that understands natural language
+**Examples:**
+- "Who knows Rust and is in Paris?"
+- "People I met at ETHGlobal who work on DeFi"
+- "Who should I introduce to each other?"
+- "What's the strongest connection path between me and [person]?"
+- "Who haven't I talked to in 3 months?"
+
+**Results:** Ranked list of Person cards with explanation of why they match.
+
+### 3.6 Quick Capture (Floating Overlay)
+
+**Not a view — a persistent overlay accessible from any screen.**
+
+- Floating action button (FAB) on mobile / navbar button on desktop
+- Tap → slide-up capture sheet
+- Free text input: "Met Sarah at ETHGlobal, she's building a compliance tool for DAOs, works at LexDAO, knows Solidity"
+- Voice input: speak → transcribe → AI structures
+- AI extracts: Person (Sarah), Event (ETHGlobal), Project (compliance tool for DAOs), Organization (LexDAO), Skill (Solidity)
+- Creates/updates entities and relations automatically
+- Dismiss → collapses back
+
+---
+
+## 4. Navigation Structure
+
+### Mobile (4 tabs + FAB)
+
+```
+[Feed]  [People]  [+]  [Events]  [Explore]
+                   ^
+                  FAB (Quick Capture overlay)
+```
+
+### Desktop / Browser Module
+
+- Feed, People, Events, Explore as sidebar items or tabs
+- Quick Capture as navbar button → floating panel
+- Person Detail opens in side panel (consistent with Synap's three-tier nav)
+
+---
+
+## 5. Data Model
+
+### Extended Profiles
+
+Relay extends existing Synap profiles. No new database tables needed for core entities — everything is a Synap entity with properties.
+
+**Person profile extensions:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| telegramHandle | string | @username |
+| telegramChatId | string | Numeric chat ID |
+| linkedinUrl | string | Profile URL |
+| linkedinHeadline | string | Current headline |
+| twitterHandle | string | @handle |
+| farcasterFid | string | Farcaster ID |
+| lensHandle | string | Lens handle |
+| walletAddresses | array | ETH/SOL addresses |
+| sources | array | ["telegram", "linkedin", "manual"] |
+| lastInteractionAt | date | Most recent interaction |
+| interactionCount | number | Total interactions tracked |
+| strengthScore | number | AI-computed relationship strength (0-100) |
+| aiSummary | string | AI-generated one-liner |
+| focusAreas | array | AI-inferred current interests |
+
+**New profile types:**
+
+| Profile | Parent | Properties |
+|---------|--------|------------|
+| interaction | — | type (message/call/meeting/note), sourceChannel, participants (array), summary, rawContent, topics (array), extractedEntities (array), sentiment |
+| topic | — | name, description, relatedSkills (array), trendScore |
+| skill | — | name, category, proficiencySignals (array) |
+| need | — | description, urgency, matchedPersons (array), status (open/fulfilled) |
+
+### Relations (using existing relation_defs system)
+
+| Source | Relation | Target | Notes |
+|--------|----------|--------|-------|
+| person | met_at | event | With metadata: date, context |
+| person | works_on | project | Extracted from conversations |
+| person | has_skill | skill entity (or tag) | Extracted from LinkedIn + conversations |
+| person | affiliated_with | company | Current + past orgs |
+| person | discussed_with | person | Via interaction entity |
+| person | needs | need | AI-extracted |
+| interaction | between | person | Multiple edges per interaction |
+| interaction | happened_at | event | Optional context |
+| interaction | about | topic | AI-extracted |
+| person | knows | person | Mutual connection (from groups, intros) |
+
+### Entity Resolution
+
+Each Person entity has a `sources` array and identity fields (telegramHandle, linkedinUrl, phone, email). Resolution strategy:
+
+1. **Deterministic** — exact match on phone, email, or explicit user linking
+2. **Fuzzy** (Phase 2) — name similarity + contextual signals (same event, same Telegram group)
+3. **AI-assisted** (Phase 2) — confidence scoring on candidate matches
+4. **Human-in-the-loop** — ambiguous matches surface for manual confirm/reject
+
+Merges are non-destructive: original source entities preserved in event chain, merged entity gets all identities.
+
+---
+
+## 6. Connector Strategy
+
+### Phase 1 — Telegram (full pipeline)
+
+**Approach:** Telegram Bot API + user-initiated imports
+
+- User links Telegram account via existing `/link` flow
+- **Group scan:** Bot is added to groups → maps members, extracts person entities
+- **DM forwarding:** User forwards important conversations to bot → AI structures
+- **Telegram export:** User exports chat history (JSON) → upload to Relay → bulk processing
+- **Live capture:** Messages sent to bot processed in real-time (existing pipeline)
+
+**What exists:** Telegram bot fully functional, channel connections, message forwarding to AI, proposal inline buttons.
+
+**What's new:** Bulk message processing worker, group member extraction, conversation session detection and summarization.
+
+### Phase 1 — Google Contacts
+
+**Approach:** Nango sync (provider exists)
+
+- OAuth via Nango Connect UI
+- Sync contacts → create/update Person entities
+- Map: name, email, phone, company, notes
+- Dedup via entity_external_links
+
+**What exists:** Nango google-contacts provider configured, pull-sync pipeline in backend.
+
+### Phase 2 — LinkedIn (semi-manual)
+
+**Approach:** Paste URL → scrape public data → AI structures
+
+- User pastes LinkedIn profile URL
+- Backend fetches public profile data (or user pastes raw text)
+- AI extracts: name, headline, company, skills, recent posts
+- Attaches to existing Person entity or creates new one
+
+### Phase 2 — Google Calendar
+
+**Approach:** Nango sync (provider exists)
+
+- Sync calendar events → create Event entities
+- Extract attendees → link to Person entities
+- Pre-event briefings from attendee cross-reference
+
+### Future — Farcaster, Lens, Twitter/X, Email
+
+---
+
+## 7. AI Pipeline
+
+### Structuring (runs on every input)
+- **Quick capture text** → extract: people, events, topics, skills, projects, follow-ups
+- **Telegram messages** → session detection, summarization, entity extraction
+- **LinkedIn profile** → skill tags, focus areas, role extraction
+
+**Model:** DeepSeek V3 (bulk, low cost) or Kimi K2.5 (medium complexity)
+
+### Enrichment (runs periodically)
+- Person briefing generation (Panel 3 of Person Detail)
+- Strength score computation
+- Focus area inference from recent interactions
+- Need detection from conversation patterns
+- Topic clustering across network
+
+**Model:** Claude Sonnet (briefings, enrichment)
+
+### Query-time reasoning
+- Natural language graph queries
+- Connection suggestions ("who should meet who")
+- Pre-event intelligence briefings
+- Reconnection nudges
+
+**Model:** Claude Sonnet (queries) / Claude Opus (complex multi-hop reasoning)
+
+### Proactive intelligence (3-surface model — see docs-internal/FEED-SYSTEM.md)
+- **Event prep briefings** → proactive feed channel (isProactiveFeed: true) — substantive AI content the user reads
+- **Reconnection nudges** → notifications table — ephemeral nudge, "Reconnect with John", deep-link to entity
+- **Morning briefing / weekly digest** → proactive feed channel — cron workers via postProactiveMessage()
+- **Cluster alerts** (Phase 2) → proactive feed channel
+- Personal chat channel stays clean — IS responses only, zero automation output
+
+---
+
+## 8. Reuse Map
+
+| Relay Need | Synap Component | Status |
+|------------|----------------|--------|
+| Person/Contact/Company entities | Entity system + profiles | Exists — extend properties |
+| Event entities | Event profile | Exists |
+| Interaction history | Event chain (append-only) | Exists |
+| Entity relations (graph edges) | relations + relation_defs | Exists |
+| Connector OAuth + sync | Nango + pull-sync pipeline | Exists (partial) |
+| Telegram bot + messages | Channel gateway + webhook | Exists (full) |
+| AI processing | Intelligence Service (4-tier) | Exists — new prompt templates |
+| AI capture structuring | Capture pipeline (/api/structure) | Exists |
+| Data sovereignty | Pod architecture | Exists |
+| Real-time updates | Socket.IO via @synap-core/client | Exists |
+| Search | Typesense (full-text) + pgvector (semantic) | Exists |
+| Feed rendering | Cell system + masonry view | Exists — new cell types |
+| Person detail | Entity detail view | Exists — extend panels |
+| Graph visualization | React Flow (from flow view package) | Exists — new node types |
+| Mobile UI framework | Tamagui (cross-platform) | Exists |
+| Mobile pod connection | @synap-core/pod-connect | Exists |
+| Mobile data layer | @synap-core/hooks + stores + client | Exists |
+| Expo app skeleton | synap-life-feed (other/) | Exists (template) |
+
+---
+
+## 9. Build Phases
+
+### Phase 1 — Foundation (MVP)
+
+**Goal:** Telegram + Contacts import, basic person entities, feed + person view, quick capture, mobile app shell.
+
+- [ ] Extend person profile with Relay properties
+- [ ] Create interaction profile type
+- [ ] Create relation definitions (met_at, works_on, has_skill, etc.)
+- [ ] Telegram bulk import worker (export file processing)
+- [ ] Telegram group member extraction
+- [ ] Google Contacts Nango sync activation
+- [ ] AI entity extraction pipeline (capture → people + topics + skills)
+- [ ] Feed view (new cell type, chronological)
+- [ ] Person detail view (identity + timeline panels)
+- [ ] People grid/list view
+- [ ] Quick capture overlay (FAB + input sheet)
+- [ ] Mobile app shell (Expo + Tamagui + pod-connect)
+- [ ] Basic search (Typesense on person entities)
+
+### Phase 2 — Intelligence
+
+**Goal:** AI enrichment, LinkedIn, smart suggestions, entity resolution.
+
+- [ ] AI person briefings (Intelligence panel)
+- [ ] LinkedIn semi-manual enrichment
+- [ ] Fuzzy entity resolution + HITL merge UI
+- [ ] AI feed items: reconnection nudges, cluster alerts
+- [ ] Conversation session summarization
+- [ ] Natural language graph queries (Explore view)
+- [ ] Strength score computation
+- [ ] Google Calendar sync + Event view
+
+### Phase 3 — Full Graph
+
+**Goal:** Visual graph, passive monitoring, event intelligence, Web3 integrations.
+
+- [ ] Graph visualization (People view graph mode)
+- [ ] Pre-event intelligence briefings
+- [ ] Farcaster / Lens integration
+- [ ] Wallet address → on-chain activity correlation
+- [ ] "Connection suggestions" — AI recommends introductions
+- [ ] Community detection, bridge node identification
+- [ ] Export (JSON-LD, CSV)

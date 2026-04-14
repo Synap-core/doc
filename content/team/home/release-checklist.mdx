@@ -1,0 +1,164 @@
+---
+title: "Release Checklist"
+description: "Pre-release verification checklist."
+---
+
+# Browser Release Checklist
+
+**Goal:** Ship `pnpm dist:mac` and let users install with one command.
+
+```bash
+curl -fsSL https://api.synap.live/install | bash
+```
+
+---
+
+##  Done (code already merged)
+
+- [x] Webview renderer (Electron `&lt;webview>`, not iframe)
+- [x] UA spoofing: Chrome for most sites, Firefox for Google/Microsoft
+- [x] HTTP Basic Auth dialog
+- [x] Autofill + vault integration
+- [x] Secret detection in pages
+- [x] OAuth popup handling
+- [x] Extensions support (Chromium extensions)
+- [x] electron-builder config (DMG/NSIS/AppImage targets)
+- [x] macOS entitlements (hardened runtime, camera, mic, keychain)
+- [x] Auto-updater wired (GitHub Releases)
+- [x] App icons (`build/icon.icns`, `.ico`, `.png`)
+- [x] **[NEW]** Expanded Firefox UA to all `*.google.com` + `*.microsoft.com` (not just auth subdomains)
+- [x] **[NEW]** `navigator.webdriver` masked via webview preload (`electron/preload/webview-preload.ts`)
+- [x] **[NEW]** Certificate verification scoped: full Chromium verification in production, bypass only for localhost
+- [x] **[NEW]** CP API `/download/latest` + `/install` endpoints (`synap-control-plane-api/src/routes/download.ts`)
+- [x] **[NEW]** `GITHUB_TOKEN` wired in CP API for download rate-limit headroom (`env.ts` + `download.ts`)
+- [x] **[NEW]** `synap://` deep-link protocol registered (`main/index.ts` — macOS `open-url` + Windows `second-instance`)
+- [x] **[NEW]** autoUpdater events wired to renderer IPC (`updater:update-available`, `updater:update-downloaded`, `updater:install`)
+- [x] **[NEW]** Window state (size/position/maximized) persisted to `userData/window-state.json` and restored on next launch
+- [x] **[NEW]** `window.synap.updater` + `window.synap.deepLink` exposed in preload for renderer use
+- [x] **[NEW]** `UpdateBanner` component — bottom pill shown when update downloaded, "Restart & Install" / "Later" actions
+
+---
+
+## 🔴 You Need to Do
+
+### 1. GitHub repo — done 
+`Synap-core/browser-exec` created. No further action needed on the repo itself.
+
+### 2. Add GitHub Actions secrets (15 min)
+- Create `https://github.com/synap-live/synap-browser` (private or public)
+- This is where electron-builder uploads binaries and auto-updater checks for updates
+- Set it to match `electron-builder.yml`: `owner: synap-live`, `repo: synap-browser`
+
+Go to your **private source repo** → Settings → Secrets → Actions → New repository secret:
+
+| Secret name | Value | Required? |
+|-------------|-------|-----------|
+| `BROWSER_RELEASE_TOKEN` | PAT with `repo` scope on `Synap-core/browser-exec` | **Yes** — without this nothing publishes |
+| `APPLE_ID` | your@apple.com | For signed macOS |
+| `APPLE_APP_SPECIFIC_PASSWORD` | from appleid.apple.com | For signed macOS |
+| `APPLE_TEAM_ID` | 10-char team ID from developer.apple.com | For signed macOS |
+| `CSC_LINK` | `base64 -i "Developer ID.p12" \| pbcopy` | For signed macOS |
+| `CSC_KEY_PASSWORD` | .p12 password | For signed macOS |
+| `WIN_CSC_LINK` | base64-encoded Windows .p12 | Optional |
+| `WIN_CSC_KEY_PASSWORD` | Windows cert password | Optional |
+
+The workflow degrades gracefully: if signing secrets are absent it builds unsigned (works for internal testing).
+
+### 3. Apple Developer account — code signing (1–2 hours)
+Required for macOS users to open the app without Gatekeeper warning.
+
+```bash
+# What you need from developer.apple.com:
+APPLE_ID="your@apple.com"
+APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"   # appleid.apple.com → App-Specific Passwords
+APPLE_TEAM_ID="XXXXXXXXXX"                           # developer.apple.com → Membership
+CSC_LINK="/path/to/Developer-ID-Application.p12"    # downloaded from Keychain Access
+CSC_KEY_PASSWORD="your-cert-password"
+
+# Then:
+cd browser && APPLE_ID=... APPLE_APP_SPECIFIC_PASSWORD=... APPLE_TEAM_ID=... pnpm dist:mac
+```
+
+Without signing: users see "App can't be opened" Gatekeeper dialog. They can bypass with right-click → Open, but it's a bad first impression.
+
+### 3. Windows code signing certificate (optional for first release)
+- Purchase from DigiCert, Sectigo, or similar (~$300/year)
+- Without it: Windows Defender SmartScreen shows "Unknown publisher" warning
+- Can ship unsigned for beta; add later
+
+### 4. Generate a GitHub Personal Access Token for publishing
+```bash
+# Scope needed: repo (full)
+# Set as env var when running dist:
+GH_TOKEN=ghp_xxxx cd browser && pnpm dist:mac
+# electron-builder will auto-create the GitHub Release and upload assets
+```
+
+### 5. Deploy the CP API download routes
+The new `/install` and `/download/latest` routes are in:
+`synap-control-plane-api/src/routes/download.ts`
+
+Deploy your CP API and they'll be live at `https://api.synap.live/install`.
+
+### 6. Add a `GITHUB_TOKEN` env var to CP API (optional, prevents rate limiting)
+The `/download/latest` endpoint calls GitHub API to find the right asset.
+Public repos get 60 req/hour unauthenticated. For production:
+```env
+# In synap-control-plane-api/.env
+GITHUB_TOKEN=ghp_xxxx   # read-only, public_repo scope is enough
+```
+Then update `download.ts` to pass it in the fetch headers.
+
+---
+
+## Build Command (when above is done)
+
+```bash
+# macOS (signed + notarized):
+cd /Users/antoine/Documents/Code/synap/browser
+APPLE_ID=... APPLE_APP_SPECIFIC_PASSWORD=... APPLE_TEAM_ID=... \
+GH_TOKEN=ghp_xxxx \
+pnpm dist:mac
+
+# Outputs to browser/dist/:
+#   Synap-0.1.0.dmg           (Intel Mac)
+#   Synap-0.1.0-arm64.dmg     (Apple Silicon)
+#   Synap-0.1.0-mac.zip       (for auto-updater)
+#   Synap-0.1.0-arm64-mac.zip (for auto-updater)
+
+# All platforms (needs Docker + Wine on CI):
+GH_TOKEN=ghp_xxxx pnpm dist:all
+```
+
+---
+
+## Landing Page (next step)
+
+Add to your landing page:
+
+```html
+<!-- Direct download buttons -->
+<a href="https://api.synap.live/download/latest?platform=mac&arch=arm64">
+  Download for Apple Silicon
+</a>
+<a href="https://api.synap.live/download/latest?platform=mac&arch=x64">
+  Download for Intel Mac
+</a>
+<a href="https://api.synap.live/download/latest?platform=linux&arch=x64">
+  Download for Linux
+</a>
+
+<!-- One-liner for devs -->
+<code>curl -fsSL https://api.synap.live/install | bash</code>
+```
+
+---
+
+## Version bump before release
+
+Current version is `0.1.0`. Update before publishing:
+```bash
+cd browser && npm version patch   # 0.1.0 → 0.1.1
+# or
+npm version minor                  # 0.1.0 → 0.2.0
+```

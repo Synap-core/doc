@@ -1,0 +1,327 @@
+---
+title: Signal Feed Architecture
+description: RSSHub integration, feed classification, signal processing pipeline.
+---
+
+# Signal Feed - Architecture Reality Check
+
+**Status: Infrastructure complete, channel integration missing**
+
+## What We Built (Reality)
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| CP RSSHub proxy |  Done | `src/routes/rsshub-proxy.ts` |
+| RSSHub + Browserless Docker |  Done | Added to `docker-compose.prod.yml` |
+| `cmd_signal` CLI |  Done | Full management in `synap-cp` |
+| `signal_item` entity profile |  Done | In `ensure-system-profiles.ts` |
+| Signal schema (4 tables) |  Done | `packages/database/src/schema/signals.ts` |
+| Hub Protocol REST endpoints |  Done | 7 endpoints in `hub-protocol/signals.ts` |
+| Browser signal-feed app |  Done | `browser/electron/renderer/src/apps/signal-feed/` |
+| SignalFeedCell (frontend) |  Done | `packages/features/signal-feed/` |
+| IS classification service |  Stub | Keyword matching, not real AI |
+| IS memory integration |  Stub | Returns empty arrays |
+| Morning briefing cron | ❌ Missing | No pg-boss worker |
+| Channel integration | ❌ Missing | Signals don't post to channels |
+| Auto-linking to entities |  Partial | Table exists, no wiring |
+
+---
+
+## The Core Architectural Insight
+
+> **A feed IS a channel.** The `FEED` channel type already exists in our schema — it's for "AI proactively posts content, users read." Signal feeds should be `channelType: FEED` channels sourced from RSSHub.
+
+### Channel Type Refresher
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `PERSONAL` | AI assistant thread (user ↔ AI) | Chat with co-pilot |
+| `THREAD` | Context-linked conversation | Discussion on a project |
+| `FEED` | AI/AI-agent broadcasting | Morning briefing, weekly digest, signal feed |
+| `EXTERNAL` | Bidirectional external platform | Telegram bot, Slack |
+| `SUB_THREAD` | Child task spawned in parent | Branch conversation |
+
+Signal feeds belong in `FEED` channels. External integrations (Telegram, Slack) go in `EXTERNAL` channels.
+
+---
+
+## Two Feed Modes (Must Be Unified)
+
+### Mode 1: Frontend Polling (On-Demand)
+```
+User opens feed UI
+  → Frontend polls GET /api/hub/signals/feed
+  → Backend fetches from RSSHub via CP proxy
+  → Classifies with IS
+  → Returns ranked signal_items
+```
+**Current state**:  Implemented, no channel integration
+
+### Mode 2: Backend Proactive (Cron)
+```
+pg-boss worker runs (morning briefing, or every N hours)
+  → IS fetches RSSHub via CP proxy
+  → Classifies + summarizes
+  → Posts digest to user's FEED channel (or PERSONAL)
+  → Creates notification
+```
+**Current state**: ❌ Worker not built
+
+### These Are The Same Flow
+The frontend polling and backend proactive should share the same code path:
+```
+RSSHub fetch → IS classify → capture signal_item
+                                    ↓
+                    POST to channel (FEED type)
+                                    ↓
+                         Frontend polls channel messages
+```
+
+---
+
+## Missing: Channel Integration
+
+### What Should Happen on Signal Capture
+
+When a signal is captured (or batched), it should:
+
+1. **Create a `signal_item` entity** (already done )
+2. **Post a message to the user's signal feed channel** (MISSING)
+   - Channel: `channelType: FEED`, `scope: WORKSPACE`, `feedScope: USER`
+   - Created on first signal subscription
+3. **The message contains**: title, summary, link, topics, platform icon
+4. **Frontend reads from channel messages** (unified with other channel content)
+
+### Channel Schema for Signal Feeds
+
+```typescript
+// A signal feed channel
+{
+  id: uuid,
+  userId: string,           // Owner
+  workspaceId: uuid,        // Workspace scope
+  channelType: "FEED",      // Not THREAD, not EXTERNAL
+  scope: "WORKSPACE",
+  feedScope: "USER",        // Personal signal feed within workspace
+  
+  // Context: points to the signal source
+  contextObjectType: "signal_subscription",
+  contextObjectId: subscriptionId,  // Which subscription this feed is for
+  
+  // Title: "HN Frontpage Feed" / "r/programming Feed"
+  title: string,
+  
+  // Agent: IS posts to this channel
+  agentId: "orchestrator",
+  agentType: "orchestrator",
+}
+```
+
+### Message in Signal Feed Channel
+
+```typescript
+{
+  channelId: feedChannelId,
+  authorType: "AGENT",         // AI posted this
+  authorId: "orchestrator",
+  content: "...",              // Markdown summary
+  metadata: {
+    signalItemId: entityId,    // Links to signal_item entity
+    platform: "hackernews",
+    sourceRoute: "/hackernews/frontpage",
+    topics: ["ai", "startups"],
+    relevanceScore: 0.85,
+  }
+}
+```
+
+---
+
+## Architecture: Unified Feed System
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Control Plane                            │
+│  RSSHub (Docker) ← Browserless (Chrome)                     │
+│         ↓                                                    │
+│  CP Proxy API (/api/rsshub-proxy/*)                         │
+│  - Rate limited 100/hour per IP                             │
+│  - NO user data stored                                      │
+└─────────────────────────┬────────────────────────────────────┘
+                          │ Hub Protocol REST
+                          ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    Data Pod                                   │
+│                                                              │
+│  ┌──────────────┐    ┌───────────────────────────────────┐  │
+│  │  Hub Protocol │    │  Signal Feed System                │  │
+│  │  REST API    │    │                                   │  │
+│  │              │    │  1. Fetch (RSSHub via CP)         │  │
+│  │  /signals/*  │───▶│  2. Classify (IS, topic extract)  │  │
+│  │              │    │  3. Score (relevance to user)     │  │
+│  └──────────────┘    │  4. Capture (signal_item entity)  │  │
+│                      │  5. Post to FEED channel          │  │
+│                      │     (channel.messages table)       │  │
+│                      └───────────────────────────────────┘  │
+│                                    │                         │
+│                                    ▼                         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  Channel System                                      │   │
+│  │                                                       │   │
+│  │  PERSONAL ── AI conversation (user ↔ orchestrator)  │   │
+│  │       │                                              │   │
+│  │  FEED ───── Signal feeds (AI → user, read-only)     │   │
+│  │       │        - Morning briefing                    │   │
+│  │       │        - Weekly digest                       │   │
+│  │       │        - Signal subscriptions               │   │
+│  │       │                                              │   │
+│  │  EXTERNAL ── Telegram, Slack, etc.                  │   │
+│  │       │        (bidirectional, not feed)            │   │
+│  │                                                       │   │
+│  │  All share: channel.messages table                   │   │
+│  └──────────────────────────────────────────────────────┘   │
+│                                    │                         │
+│                                    ▼                         │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │  Frontend (unified channel UI)                       │   │
+│  │                                                       │   │
+│  │  useChannelMessages(channelId) ── same hook for      │   │
+│  │                                   all channel types   │   │
+│  │  Signal feed = FEED channel messages                │   │
+│  │  Morning briefing = FEED channel messages            │   │
+│  │  Telegram = EXTERNAL channel messages               │   │
+│  └──────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## What Needs to Be Built
+
+### 1. Signal Feed Channel Creation
+
+On `POST /signals/subscriptions` (subscribe to a topic/platform):
+- Create a `FEED` channel for this subscription if it doesn't exist
+- Channel `contextObjectType: 'signal_subscription'`
+- Channel `contextObjectId: subscriptionId`
+
+**File to modify**: `synap-backend/packages/api/src/routers/hub-protocol/signals.ts`
+
+### 2. Channel Message Posting on Capture
+
+On `POST /signals/capture` or batch capture:
+- After creating `signal_item` entity, post to the user's signal feed channel
+- Message `authorType: 'AGENT'`, `authorId: 'orchestrator'`
+- Message `metadata.signalItemId` links back to entity
+
+**File to modify**: `signals.ts` capture endpoint
+
+### 3. Morning Briefing pg-boss Worker
+
+Cron worker in `synap-control-plane-api/src/jobs/`:
+- Schedule: configurable (default 8am user local time)
+- Gathers user context
+- Fetches RSSHub via CP proxy
+- Classifies and summarizes
+- Posts to `PERSONAL` channel OR dedicated morning briefing `FEED` channel
+
+**File to create**: `src/jobs/signal-briefing.ts`
+
+### 4. IS Tool: `fetch_and_classify_signals`
+
+Already documented in IS but not fully wired:
+- `synap-intelligence-service/apps/intelligence-hub/src/tools/signal-tools.ts`
+- Should be called by the morning briefing worker
+- Also callable by orchestrator on-demand
+
+### 5. Frontend: Read from Channel Messages
+
+The `useChannelMessages` hook already exists and works for all channel types. The signal feed UI should:
+- Read from `FEED` channel messages instead of (or in addition to) `GET /signals/feed`
+- This unifies signal feed with morning briefing, weekly digest, all in one UI
+
+**File to modify**: `signal-feed` app and `SignalFeedCell`
+
+---
+
+## External Channels vs Signal Feeds
+
+| Aspect | Signal Feed (RSSHub) | External Channel (Telegram) |
+|--------|---------------------|----------------------------|
+| **Channel type** | `FEED` | `EXTERNAL` |
+| **Direction** | AI → User (broadcast) | Bidirectional |
+| **Source** | RSSHub via CP proxy | Webhook from platform |
+| **CP role** | Infrastructure (proxy only) | Webhook receiver + relay |
+| **User data** | In pod | In pod |
+| **Message author** | `AGENT` | `EXTERNAL` for incoming, `AGENT` for AI responses |
+
+---
+
+## Data Flow: Unified
+
+### Subscribe to Signal (User Action)
+```
+1. User subscribes to "AI news" on Hacker News
+2. POST /signals/subscriptions { topic: "ai", platform: "hackernews" }
+3. Backend creates signal_subscription record
+4. Backend creates FEED channel (type: FEED, contextObjectId: subscriptionId)
+5. IS schedules fetch job for this subscription
+```
+
+### Backend Fetches + Classifies (Proactive)
+```
+6. pg-boss worker fires (cron or event-driven)
+7. IS calls GET ${CP_URL}/api/rsshub-proxy/hackernews/frontpage
+8. IS classifies items with DeepSeek
+9. For each high-relevance item:
+   a. Creates signal_item entity
+   b. Posts message to FEED channel (authorType: AGENT)
+   c. Creates notification
+```
+
+### User Reads Feed (Frontend)
+```
+10. User opens signal feed UI
+11. useChannelMessages(feedChannelId) returns messages
+12. Each message shows: platform icon, title, summary, topics
+13. User can capture (→ signal_item entity) or dismiss
+```
+
+---
+
+## Files to Modify/Create
+
+### Backend
+- `synap-backend/packages/api/src/routers/hub-protocol/signals.ts` — post to channel on capture
+- `synap-backend/packages/api/src/routers/hub-protocol/channels.ts` — FEED channel type handling
+
+### Control Plane
+- `synap-control-plane-api/src/jobs/signal-briefing.ts` — new pg-boss worker
+
+### Intelligence Service
+- `synap-intelligence-service/apps/intelligence-hub/src/tools/signal-tools.ts` — wire up real DeepSeek
+
+### Frontend
+- `synap-app/packages/features/signal-feed/src/hooks/useSignalFeed.ts` — read from channel messages
+- `browser/electron/renderer/src/apps/signal-feed/` — update to use channel messages
+
+---
+
+## What Works Today
+
+1. **CP proxy** — `curl http://localhost:3001/api/rsshub-proxy/hackernews/frontpage` returns RSS
+2. **CLI** — `./synap-cp signal start/stop/status/health` all work
+3. **Hub Protocol** — All 7 endpoints exist and are callable
+4. **SignalFeedCell** — Renders in bento grid, fetches from `/api/hub/signals/feed`
+5. **Browser app** — Opens in sidebar, manual refresh works
+
+## What's Missing for Full Feature
+
+1. **Channel posting** — Signals go to DB but not to channel messages
+2. **Morning briefing worker** — No cron job running IS fetch
+3. **Real AI classification** — Stub uses keyword matching
+4. **Channel-based UI** — Signal feed reads from REST endpoint, not channel messages
+
+---
+
+*Last updated: 2026-04-12*

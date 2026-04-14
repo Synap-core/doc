@@ -1,0 +1,772 @@
+---
+title: "External Agent Integration"
+description: "How external agents integrate via Hub Protocol and API keys."
+---
+
+# External Agent Integration Guide
+
+> How to connect external AI services, domain-specific agents, and third-party APIs to the Synap intelligence system.
+>
+> Last updated: 2026-03-06
+>
+> **See also:** [AGENT_SYSTEM.md](./AGENT_SYSTEM.md) — internal agent classes, routing, and tool registry.
+
+---
+
+## Overview
+
+The Synap system exposes three integration patterns for connecting external intelligence:
+
+| Pattern                                            | Integration Point | Latency      | Persistence          | Complexity |
+| -------------------------------------------------- | ----------------- | ------------ | -------------------- | ---------- |
+| [A: Tool Wrapper](#pattern-a-tool-wrapper)         | Intelligence Hub  | Synchronous  | Per tool call        | Low        |
+| [B: Specialist Agent](#pattern-b-specialist-agent) | Intelligence Hub  | Synchronous  | Per dispatch         | Medium     |
+| [C: Async Webhook](#pattern-c-async-webhook)       | Backend REST      | Asynchronous | Persistent in thread | Low        |
+
+---
+
+## Architecture Context
+
+Understanding where each pattern plugs in:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Client (Frontend)                                                │
+└─────────────────────────────┬────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  Intelligence Hub  (Reasoning layer)                             │
+│                                                                  │
+│  ┌──────────────┐   ┌──────────────────────────────────────┐   │
+│  │ Orchestrator │──▶│ Tool Registry                        │   │
+│  │ Agent        │   │  search_unified · vector_search       │   │
+│  │              │   │  memory_search · graph_traverse       │   │
+│  │              │   │  dispatch_agent · remember_fact       │   │
+│  └──────────────┘   │  ⬡ [Pattern A] external_tool        │◀── Pattern A
+│                     │  ⬡ [Pattern B] dispatch → specialist │◀── Pattern B
+│                     └──────────────────────────────────────┘   │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │  /api/hub/*  (REST)
+                               ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  Synap Backend  (Data layer)                                     │
+│                                                                  │
+│  /api/hub/threads/:id/messages  ◀── Pattern C (direct inject)   │
+│  /api/hub/memory                ◀── Pattern C (store facts)      │
+│  /api/hub/entities              ◀── Pattern C (create entities)  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Pattern A: Tool Wrapper
+
+### What it is
+
+Wrap any external API as a **synchronous tool** that the orchestrator can call during a conversation. The external service is called inline, its result is returned to the LLM as a tool result, and the conversation continues.
+
+### When to use it
+
+- The external service responds **quickly** (< 10s)
+- The result is needed **immediately** to answer the user's question
+- Examples: web search (Perplexity/Brave), calculator (Wolfram Alpha), weather API, GitHub search, Notion page fetch, real-time pricing
+
+### How it works
+
+```
+User: "What's the current price of Stripe vs our competitor?"
+         │
+Orchestrator decides to call tool
+         │
+         ▼
+[Tool: perplexity_search] ──▶ Perplexity API ──▶ result
+         │
+Orchestrator synthesizes result into response
+         │
+         ▼
+User sees: "Stripe is $X/month, your competitor is $Y..."
+```
+
+### Is it already possible?
+
+**Yes — no backend changes needed.** Just add a file in `tools/` and register it.
+
+### Step-by-step implementation
+
+**1. Create the tool file**
+
+```typescript
+// apps/intelligence-hub/src/tools/context/perplexity-search.ts
+
+import { z } from "zod";
+import { defineTool } from "../base/tool.js";
+
+export const perplexitySearchTool = defineTool({
+  name: "perplexity_search",
+  category: "context" as const, // context = auto-execute, no approval
+  description:
+    "Real-time web search with AI synthesis. Use for current events, " +
+    "live data, competitor research, news, or any information not in the knowledge base.",
+
+  parameters: z.object({
+    query: z.string().describe("The search query"),
+    focus: z
+      .enum(["internet", "news", "academic", "youtube", "reddit"])
+      .default("internet")
+      .describe("Search focus area"),
+  }),
+
+  async execute(args) {
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "sonar", // or "sonar-pro" for deeper research
+        messages: [{ role: "user", content: args.query }],
+        search_domain_filter: [],
+        return_citations: true,
+        search_recency_filter: "month",
+      }),
+    });
+
+    if (!response.ok)
+      throw new Error(`Perplexity API error: ${response.status}`);
+
+    const data = (await response.json()) as {
+      choices: Array<{ message: { content: string } }>;
+      citations?: string[];
+    };
+
+    return {
+      answer: data.choices[0].message.content,
+      citations: data.citations ?? [],
+      source: "perplexity",
+    };
+  },
+});
+```
+
+**2. Register in tool-registry.ts**
+
+```typescript
+// apps/intelligence-hub/src/tools/tool-registry.ts
+
+import { perplexitySearchTool } from "./context/perplexity-search.js";
+
+export const toolRegistry = {
+  // ... existing tools ...
+  perplexity_search: perplexitySearchTool as Tool<unknown, unknown>,
+};
+```
+
+**3. Add to agent tool lists**
+
+```typescript
+// In getToolsForAgent():
+meta: [
+  ...existing,
+  "perplexity_search",  // Add to orchestrator
+],
+"knowledge-search": [
+  ...existing,
+  "perplexity_search",  // Add to knowledge agent
+],
+```
+
+**4. Add to orchestrator-agent.ts**
+
+```typescript
+tools: [
+  ...existing,
+  "perplexity_search",
+],
+```
+
+**5. Set environment variable**
+
+```env
+PERPLEXITY_API_KEY=pplx-...
+```
+
+### Data flow
+
+```
+Tool call: { query: "...", focus: "internet" }
+                    │
+         Perplexity API (HTTPS)
+                    │
+Tool result: { answer: "...", citations: [...] }
+                    │
+    LLM context window (as tool result JSON)
+                    │
+  AI synthesizes into conversation response
+```
+
+### Other tools you can build this way
+
+| Tool Name         | External API        | Category | Use case                            |
+| ----------------- | ------------------- | -------- | ----------------------------------- |
+| `brave_search`    | Brave Search API    | context  | Privacy-focused web search          |
+| `wolfram_compute` | Wolfram Alpha       | context  | Math, computation, unit conversion  |
+| `github_search`   | GitHub REST API     | context  | Code search, issue lookup           |
+| `notion_read`     | Notion API          | context  | Read pages from connected workspace |
+| `linear_issues`   | Linear API          | context  | Fetch dev team issues               |
+| `slack_send`      | Slack API           | action   | Send a message to a channel         |
+| `calendar_check`  | Google Calendar API | context  | Check availability                  |
+| `stripe_lookup`   | Stripe API          | context  | Check subscription/payment status   |
+
+---
+
+## Pattern B: Specialist Agent
+
+### What it is
+
+Register an **external AI service** as a **specialist agent type** that the orchestrator's `dispatch_agent` tool can delegate to. The orchestrator decides to hand off a sub-task; the external agent runs it; the result is posted back to the parent thread.
+
+### When to use it
+
+- The external service is a **full AI system** with its own reasoning loop
+- The task requires **domain expertise** (medical analysis, legal review, code review)
+- You want **dedicated child threads** for sub-tasks (audit trail per agent)
+- Examples: Perplexity as a research agent, a custom fine-tuned medical LLM, a code reviewer
+
+### How it works
+
+```
+User: "Analyze the legal risk in this contract and research case law"
+         │
+Orchestrator: "This needs legal expertise → dispatch_agent(legal, task)"
+         │
+         ▼
+dispatch_agent creates child thread (parentThreadId = main thread)
+         │
+         ▼
+[LegalAgent] runs against external LegalAI API
+         │
+         ▼
+Result posted to parent thread as system message
+         │
+         ▼
+Orchestrator sees result → synthesizes response for user
+         │
+         ▼
+User sees: "Here's the legal risk analysis..." + "[View legal research thread →]"
+```
+
+### Is it already possible?
+
+**Yes — the infrastructure is ready.** `dispatch_agent` already creates child threads and posts results back. You just need to add a new agent class and register it.
+
+### Step-by-step implementation
+
+**1. Create the specialist agent class**
+
+```typescript
+// apps/intelligence-hub/src/agents/specialist/perplexity-agent.ts
+
+import type { AgentContext, AgentResponse } from "../base/types.js";
+import { hubProtocol } from "../../clients/hub-protocol.js";
+
+export class PerplexityResearchAgent {
+  /**
+   * Run a deep research query via Perplexity's sonar-pro model.
+   * Used by dispatch_agent for web-backed research tasks.
+   */
+  async execute(context: AgentContext): Promise<AgentResponse> {
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "sonar-pro",
+        messages: [{ role: "user", content: context.message }],
+        return_citations: true,
+        search_recency_filter: "month",
+        max_tokens: 4000,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Perplexity error: ${response.status}`);
+    }
+
+    const data = (await response.json()) as {
+      choices: Array<{ message: { content: string } }>;
+      citations?: string[];
+    };
+
+    const content = data.choices[0].message.content;
+    const citations = data.citations ?? [];
+    const fullResponse =
+      citations.length > 0
+        ? `${content}\n\n**Sources:**\n${citations.map((c, i) => `[${i + 1}] ${c}`).join("\n")}`
+        : content;
+
+    return {
+      content: fullResponse,
+      aiSteps: [
+        {
+          id: "step-1",
+          type: "tool_call",
+          content: `Researching via Perplexity sonar-pro: "${context.message.slice(0, 80)}..."`,
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    };
+  }
+}
+```
+
+**2. Register in agent-registry.ts**
+
+```typescript
+// apps/intelligence-hub/src/agents/base/agent-registry.ts
+
+import { PerplexityResearchAgent } from "../specialist/perplexity-agent.js";
+
+export function getAgentForType(agentType: string) {
+  switch (agentType) {
+    case "research":
+      return new ResearchAgent();
+    case "research-web":
+      return new PerplexityResearchAgent(); // ← ADD
+    case "code":
+      return new CodeAgent();
+    // ... existing cases
+    default:
+      return new KnowledgeSearchAgent();
+  }
+}
+```
+
+**3. Add to dispatch_agent enum**
+
+```typescript
+// apps/intelligence-hub/src/tools/actions/dispatch-agent.ts
+
+const agentTypeEnum = z.enum([
+  "research",
+  "research-web", // ← ADD (Perplexity-backed)
+  "knowledge-search",
+  "code",
+  "writing",
+  "action",
+  "prompting",
+]);
+```
+
+**4. Update dispatch_agent description**
+
+```typescript
+description: "... 'research-web' for live internet research via Perplexity ...";
+```
+
+### Domain-specific specialist patterns
+
+**Medical agent** (connects to a medical LLM or RAG system):
+
+```typescript
+export class MedicalAgent extends BaseAgent {
+  constructor() {
+    super({
+      agentType: "knowledge-search",
+      systemPrompt: `You are a medical information specialist.
+        ALWAYS: cite peer-reviewed sources, note confidence levels, recommend consulting a physician.
+        NEVER: provide specific diagnoses, dosage recommendations, or treatment plans.
+        Use clinical terminology with lay explanations in parentheses.`,
+      tools: [
+        "search_unified",
+        "vector_search",
+        "get_document",
+        "memory_search",
+      ],
+      maxSteps: 6,
+    });
+  }
+}
+// Route to: medical LLM via OpenRouter: "google/medpalm-2"
+// Or: internal RAG over medical documents indexed in Typesense
+```
+
+**Code review agent** (connects to a specialized code model):
+
+```typescript
+// Override model in models.ts:
+code: "anthropic/claude-3.5-sonnet",    // or "deepseek/deepseek-coder-v2"
+```
+
+### Data flow
+
+```
+dispatch_agent(agentType: "research-web", task: "...")
+          │
+  Creates child thread { parentThreadId: currentThreadId }
+          │
+  ExternalAgent.execute({ message: task, threadId: childThreadId })
+          │
+  External API call (sync, waits for result)
+          │
+  hubProtocol.postMessage(parentThreadId, "system", result)
+          │
+  Returns: { success, response, childThreadId }
+          │
+  Orchestrator sees result → presents to user
+```
+
+### What data is shared
+
+The specialist agent receives an `AgentContext`:
+
+```typescript
+{
+  userId: string; // User who initiated
+  threadId: string; // Child thread ID (isolated sandbox)
+  parentThreadId: string; // Parent thread (for posting back)
+  workspaceId: string; // Workspace context
+  message: string; // The task to perform
+}
+```
+
+The specialist can read from the backend (search, get_document, memory) using `hubProtocol.*` methods, and write results back via `postMessage`.
+
+---
+
+## Pattern C: Async Webhook / External Push
+
+### What it is
+
+An **external system** proactively injects data into a thread by calling the backend REST API directly — **bypassing the hub entirely**. No AI reasoning loop is needed. The injected message appears in the thread and the user (or orchestrator on next turn) can act on it.
+
+### When to use it
+
+- The external agent runs **asynchronously** (minutes or hours)
+- You want to **push notifications** into threads (monitoring alerts, CI results, background analysis)
+- The external service has its **own AI loop** and just needs to report results
+- Examples: GitHub CI/CD bot, monitoring alert system, batch data pipeline, long-running analysis, scheduled reports
+
+### How it works
+
+```
+GitHub pushes a commit
+         │
+CI pipeline runs tests (5 minutes)
+         │
+         ▼
+External service calls:
+POST /api/hub/threads/{threadId}/messages
+  { role: "system", content: " CI passed: 247 tests in 3.2s", userId }
+         │
+Thread receives the system message
+         │
+         ▼
+User opens the thread — sees the CI result
+(or on next user message, orchestrator references it)
+```
+
+### Is it already possible?
+
+**Yes — fully implemented.** The endpoint `POST /api/hub/threads/:id/messages` exists and requires only a Hub Protocol API key with `hub-protocol.write` scope.
+
+### API reference
+
+**Endpoint:** `POST /api/hub/threads/:threadId/messages`
+
+**Authentication:** `Authorization: Bearer &lt;HUB_PROTOCOL_API_KEY>`
+
+**Body:**
+
+```json
+{
+  "role": "system",
+  "content": "Your message here",
+  "userId": "user-uuid"
+}
+```
+
+**Response:** `{ "success": true }`
+
+### Additional endpoints available to external agents
+
+| Endpoint                                | Purpose                                               |
+| --------------------------------------- | ----------------------------------------------------- |
+| `POST /api/hub/threads`                 | Create a new thread (for async agent's own workspace) |
+| `POST /api/hub/memory`                  | Store a fact in long-term memory                      |
+| `POST /api/hub/entities`                | Create an entity (fires event pipeline)               |
+| `PATCH /api/hub/entities/:id`           | Update an entity                                      |
+| `POST /api/hub/threads/:id/link-entity` | Link an entity to a thread                            |
+
+### Step-by-step implementation
+
+**1. Get an API key**
+
+The external service needs a Hub Protocol API key. Generate one from the backend:
+
+```bash
+POST /api/hub-protocol/keys
+{ "name": "my-ci-bot", "scopes": ["hub-protocol.read", "hub-protocol.write"] }
+```
+
+Or reuse the existing `HUB_PROTOCOL_API_KEY` if the external service is trusted.
+
+**2. Push a message**
+
+```python
+# Python example — works from any language
+import requests
+
+BACKEND_URL = "https://your-backend.com"
+API_KEY = "synap_hub_live_..."
+THREAD_ID = "thread-uuid-from-user"
+USER_ID = "user-uuid"
+
+response = requests.post(
+    f"{BACKEND_URL}/api/hub/threads/{THREAD_ID}/messages",
+    headers={
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "role": "system",
+        "content": " Analysis complete: Found 3 critical issues in the codebase.",
+        "userId": USER_ID,
+    },
+)
+```
+
+**3. Create entities + link to thread**
+
+```typescript
+// Node.js example
+const BACKEND_URL = process.env.SYNAP_BACKEND_URL;
+const API_KEY = process.env.HUB_PROTOCOL_API_KEY;
+
+// Create entity with analysis results
+const entityRes = await fetch(`${BACKEND_URL}/api/hub/entities`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    userId,
+    workspaceId,
+    type: "analysis_report",
+    title: "Security Scan Report — 2026-02-18",
+    properties: { severity: "medium", issueCount: 7, scanner: "semgrep" },
+  }),
+});
+const { entityId } = await entityRes.json();
+
+// Link to the user's active thread
+await fetch(`${BACKEND_URL}/api/hub/threads/${threadId}/link-entity`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ userId, entityId, relationshipType: "referenced" }),
+});
+
+// Post summary to thread
+await fetch(`${BACKEND_URL}/api/hub/threads/${threadId}/messages`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    role: "system",
+    content: `[Security Scanner] Found 7 issues (3 medium, 4 low). Report linked to thread.`,
+    userId,
+  }),
+});
+```
+
+**4. Store facts in memory**
+
+External agents can also enrich long-term memory:
+
+```typescript
+// Store a fact about the user's codebase
+const embeddingRes = await fetch(`${HUB_URL}/api/embeddings`, {
+  method: "POST",
+  headers: { "X-API-Key": process.env.HUB_API_KEY },
+  body: JSON.stringify({
+    text: "User's codebase uses React + TypeScript with strict mode",
+  }),
+});
+const { embedding } = await embeddingRes.json();
+
+await fetch(`${BACKEND_URL}/api/hub/memory`, {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    userId,
+    fact: "User's codebase uses React + TypeScript with strict mode enabled",
+    confidence: 0.95,
+    embedding,
+  }),
+});
+```
+
+### Data flow diagram
+
+```
+External System (CI, Monitor, Batch Job)
+          │
+          │  POST /api/hub/threads/:id/messages
+          │  Authorization: Bearer <HUB_PROTOCOL_API_KEY>
+          │
+          ▼
+Synap Backend REST (hub-protocol-rest.ts)
+  → Validates API key + scopes
+  → Inserts into conversation_messages
+  → Returns { success: true }
+          │
+          ▼
+Thread now has new system message
+          │
+     ┌────┴──────────────────────────┐
+     │                               │
+     ▼                               ▼
+User opens thread           Orchestrator's next turn
+Sees message immediately    Context includes the message
+```
+
+### Use cases
+
+| External System            | What it pushes              | Thread context              |
+| -------------------------- | --------------------------- | --------------------------- |
+| GitHub Actions             | Test results, deploy status | Dev "infrastructure" thread |
+| Monitoring (Datadog, etc.) | Alerts, anomalies           | "Ops alerts" thread         |
+| Batch ML pipeline          | Model training results      | Project research thread     |
+| Scheduled reports          | Daily metrics digest        | Business analytics thread   |
+| Medical lab results        | Lab report data             | Patient case thread         |
+| Legal document scanner     | Clause risk flags           | Contract review thread      |
+
+---
+
+## Comparison: Which Pattern to Use?
+
+| Criteria               | Pattern A: Tool         | Pattern B: Specialist       | Pattern C: Webhook     |
+| ---------------------- | ----------------------- | --------------------------- | ---------------------- |
+| **Trigger**            | Orchestrator decides    | Orchestrator dispatches     | External system pushes |
+| **Latency**            | Sync (< 10s)            | Sync (up to 60s)            | Async (any duration)   |
+| **AI involved?**       | No (just API call)      | Yes (agent reasoning)       | Optional (external)    |
+| **Child thread?**      | No                      | Yes (isolated)              | Can create one         |
+| **Result in context?** | Immediate (tool result) | Immediate + thread          | On next user message   |
+| **Integration point**  | Hub (tool registry)     | Hub (agent registry)        | Backend REST direct    |
+| **Example**            | Perplexity search       | Medical analysis agent      | CI/CD bot              |
+| **Complexity**         | Low (1 file)            | Medium (1 class + registry) | Low (HTTP POST)        |
+| **Already possible?**  |  Yes                  |  Yes                      |  Yes                 |
+
+---
+
+## Multi-Model Routing via OpenRouter
+
+All LLM calls in the hub route through OpenRouter. Adding a new model requires **2 lines**:
+
+```typescript
+// apps/intelligence-hub/src/config/models.ts
+
+const MODELS = {
+  // ... existing ...
+  perplexity: "perplexity/sonar-pro", // Web search built-in
+  gemini: "google/gemini-2.0-flash-exp:free", // Free, multimodal
+  llama: "meta-llama/llama-3.3-70b-instruct", // Open-source
+  deepseekR1: "deepseek/deepseek-r1", // Strong reasoning
+  codestral: "mistralai/codestral-latest", // Code specialist
+  grok: "x-ai/grok-2", // Grok
+};
+
+// Assign to agent types:
+export function getModel(agentType: AgentType, complexity: Complexity) {
+  if (agentType === "research") return openrouter(MODELS.perplexity); // Live web
+  if (agentType === "code") return openrouter(MODELS.codestral); // Code specialist
+  // ...
+}
+```
+
+This is Pattern B without needing a custom agent class — just a different model.
+
+---
+
+## Security Considerations
+
+### API Key Scoping
+
+- External agents should have **dedicated API keys** with minimum required scopes
+- `hub-protocol.read` only: monitoring agents, read-only analytics
+- `hub-protocol.read + hub-protocol.write`: agents that create entities or post messages
+- Keys are per-workspace in production (current implementation uses global "system" key)
+
+### Data Isolation
+
+- Pattern A/B: External tool calls happen in the hub's execution context — same user + workspace
+- Pattern C: External system must provide `userId` in the body — backend validates workspace membership
+- Child threads (Pattern B) are isolated: sub-agent can only write to its own threadId
+
+### Rate Limiting
+
+- Current: rate limiting is per API key (not per userId)
+- Recommendation: add per-userId rate limiting before exposing Pattern C to untrusted external agents
+
+---
+
+## Quick Reference
+
+### Environment Variables
+
+```env
+# Hub (Intelligence Hub)
+DATA_POD_URL=http://backend:4000
+HUB_PROTOCOL_API_KEY=synap_hub_live_...
+OPENROUTER_API_KEY=sk-or-...
+
+# Pattern A additions
+PERPLEXITY_API_KEY=pplx-...
+BRAVE_SEARCH_API_KEY=BSA...
+GITHUB_TOKEN=ghp_...
+
+# Pattern C — external systems use these to push to backend
+SYNAP_BACKEND_URL=https://api.yourapp.com
+SYNAP_HUB_API_KEY=synap_hub_live_...   # From backend /api/hub-protocol/keys
+```
+
+### Minimal Pattern C curl example
+
+```bash
+curl -X POST https://your-backend.com/api/hub/threads/THREAD_UUID/messages \
+  -H "Authorization: Bearer synap_hub_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "role": "system",
+    "content": " Analysis complete: 7 findings",
+    "userId": "user-uuid"
+  }'
+```
+
+### Hub base URL for Pattern A/B
+
+The hub itself has an embedding endpoint that external Pattern C agents can use to generate embeddings for memory storage (avoids needing an OpenAI key in the external agent):
+
+```bash
+POST http://intelligence-service:3001/api/embeddings
+X-API-Key: <HUB_API_KEY>
+{ "text": "fact to embed" }
+→ { "embedding": [0.01, ...], "dimensions": 1536 }
+```
+
+---
+
+_For architecture context, see [ARCHITECTURE.md](../ARCHITECTURE.md)._
+_For integration tests, see [tests/integration/](../tests/integration/)._

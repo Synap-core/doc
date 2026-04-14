@@ -1,0 +1,151 @@
+---
+title: "Chat Architecture"
+description: "Chat architecture unification across surfaces."
+---
+
+# Chat Architecture Unification Plan
+
+## Current State (Problem)
+
+```
+chat-interface/
+├── src/
+│   ├── components/     # Web components (ChatInput, MessageBubble, MessageList)
+│   │   ├── ChatInput.tsx        (851 lines)
+│   │   ├── MessageBubble.tsx     (16KB)
+│   │   └── MessageList.tsx      (21KB)
+│   ├── native/          # Native components (duplicated!)
+│   │   ├── ChatInputNative.tsx  (481 lines) - similar to ChatInput.tsx
+│   │   ├── MessageBubbleNative.tsx (17KB) - similar to MessageBubble.tsx
+│   │   └── MessageListNative.tsx (1KB) - simplified version
+│   ├── utils/
+│   └── hooks/
+└── package.json
+    └── dependencies: lucide-react (NOT lucide-react-native!)
+
+chat-app/  (uses chat-interface)
+├── src/
+│   ├── ChatApp.tsx (1097 lines - full app shell)
+│   ├── sidebar/
+│   ├── context-panel/
+│   └── floating/
+
+relay-app/  (uses chat-interface/native)
+└── app/(tabs)/chat.tsx
+```
+
+## Issues
+
+1. **Duplication**: Web and Native versions of ChatInput, MessageBubble, MessageList
+2. **Wrong icon library**: `ChatInputNative` imports from `lucide-react` instead of `lucide-react-native`
+3. **Inconsistent dependencies**: Web package uses `lucide-react`, native should use `lucide-react-native`
+4. **chat-app is web-only**: Full app features not available on Relay
+
+## Proposed Unified Architecture
+
+```
+chat-interface/
+├── src/
+│   ├── ChatInput.tsx          # Unified - works on web AND native
+│   ├── MessageBubble.tsx       # Unified - works on web AND native
+│   ├── MessageList.tsx         # Unified - works on web AND native
+│   ├── ChatInputNative.tsx     # DEPRECATED - re-exports ChatInput
+│   ├── MessageBubbleNative.tsx # DEPRECATED - re-exports MessageBubble
+│   ├── MessageListNative.tsx   # DEPRECATED - re-exports MessageList
+│   ├── platform/
+│   │   ├── web/               # Web-specific (textarea, scroll)
+│   │   └── native/            # Native-specific (TextInput, ScrollView)
+│   └── hooks/                  # Shared logic (useChatInput, etc.)
+│
+chat-app/  (FULL app - works on web AND native via conditional rendering)
+├── src/
+│   ├── ChatApp.tsx             # Unified - desktop layout on web, simplified on native
+│   ├── ChatSidebar.tsx         # Full sidebar (web), simplified (native)
+│   └── ...
+│
+relay-app/  (uses chat-app)
+└── app/(tabs)/chat.tsx        # Just imports ChatApp
+```
+
+## Implementation Steps
+
+### Phase 1: Fix Immediate Issues
+1. Fix `ChatInputNative` to use `lucide-react-native`
+2. Update `chat-interface/package.json` to include `lucide-react-native` as peer dependency
+
+### Phase 2: Unify Components
+1. Create unified `ChatInput` that:
+   - Uses Tamagui's `TextArea` (works on both platforms)
+   - Conditionally imports icons from correct package
+   - Shares all business logic via hooks
+
+2. Create unified `MessageBubble` that:
+   - Uses platform detection for animations
+   - Shares styling between platforms
+
+3. Create unified `MessageList` that:
+   - Uses Tamagui's `ScrollView` (works on both)
+
+### Phase 3: Re-exports for Backward Compatibility
+1. Make `native/` files re-export from unified `components/`
+2. Add deprecation warnings
+
+### Phase 4: Update Consumers
+1. Update `chat-app` to use unified components
+2. Update `relay-app` to use `chat-app` directly (or unified chat-interface)
+
+## Platform Detection Strategy
+
+```tsx
+// platform detection utilities
+import { Platform } from 'react-native';
+
+export const isWeb = Platform.OS === 'web';
+export const isNative = Platform.OS !== 'web';
+
+// Icon imports - use correct package per platform
+export const Icons = isWeb 
+  ? require('lucide-react')
+  : require('lucide-react-native');
+
+// TextInput - Tamagui handles this, but for custom:
+export const TextInputComponent = isWeb ? 'textarea' : TextInput;
+```
+
+## Tamagui Advantage
+
+Tamagui already abstracts most platform differences:
+- `YStack`, `XStack` → `View` (native) / `div` (web)
+- `SizableText` → `Text` (native) / `span` (web)
+- `Button` → works on both
+- `ScrollView` → works on both (has `os` prop for web/native behavior)
+
+The ONLY platform-specific things are:
+1. Icons (`lucide-react` vs `lucide-react-native`)
+2. Text input element (`&lt;textarea>` vs `&lt;TextInput>`)
+3. Animations (framer-motion on web, reanimated on native - optional)
+
+## Dependencies After Fix
+
+```json
+{
+  "@synap-core/chat-interface": {
+    "peerDependencies": {
+      "react": "^18.0.0 || ^19.0.0",
+      "react-native": ">=0.71.0",
+      "tamagui": "^1.0.0",
+      "lucide-react": ">=0.400.0",
+      "lucide-react-native": ">=0.400.0"
+    }
+  }
+}
+```
+
+## Success Criteria
+
+1.  Single `ChatInput` component works on web AND native
+2.  Single `MessageBubble` component works on web AND native
+3.  Single `MessageList` component works on web AND native
+4.  No code duplication between web/ native folders
+5.  `chat-app` can work on native (with simplified layout)
+6.  `relay-app` uses shared components without custom overrides

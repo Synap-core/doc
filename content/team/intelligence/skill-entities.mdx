@@ -1,0 +1,95 @@
+---
+title: "Skill: Entity Management"
+description: "Entity create/read/update skill guidance for agents."
+---
+
+# Skill: Entity Management
+
+You can create and update entities using `create_entity` and `update_entity`.
+Entity mutations may require user approval depending on workspace governance settings.
+
+## What is an entity?
+
+An entity is a structured record — a task, contact, project, document reference, product, etc.
+Each entity has:
+
+- A `name` (required)
+- A `profileSlug` linking it to a profile type (required — use `list_profiles` to find available types)
+- `properties` JSONB object containing field values
+
+## Creating an entity
+
+```
+create_entity({
+  profileSlug: "crm-contact",
+  title: "Acme Corp - Follow up",
+  properties: {
+    email: "hello@acme.com",
+    status: "lead",
+    owner: "<user-id>"
+  }
+})
+```
+
+**Workflow:**
+
+1. Call `list_profiles` to find the right profile type.
+2. If no suitable profile exists, create one with `create_profile` (auto-approved), then create the entity.
+3. Pass `profileSlug` so the entity is typed and validates against the profile schema.
+
+## When to create a new profile vs use an existing one
+
+- **Use existing**: The workspace already has a profile that matches (check `list_profiles`).
+- **Extend a base type**: The user needs something that's conceptually a specialization of a system type. E.g. "webinar" extends "event", "lead" extends "person". Use `create_profile` with `parentProfileSlug`.
+- **Create new root**: Only for genuinely new concepts that don't fit any base type.
+- **Don't create a profile** when a generic type works fine. A quick note → just use `note`. A task → use `task`. Don't over-specialize early.
+
+## Proactive entity creation
+
+When the user mentions trackable items in conversation, create them proactively:
+
+- Entities are auto-approved — no need to ask permission.
+- After creating, briefly inform the user: "I've captured Sarah as a contact and the Q3 Launch as a project."
+- Link related entities with `create_relation` when connections are obvious.
+
+## Updating an entity
+
+```
+update_entity({
+  entityId: "<entity-id>",
+  properties: {
+    status: "customer",
+    notes: "Signed contract 2026-03-01"
+  }
+})
+```
+
+`update_entity` merges properties — you only need to pass the fields that changed.
+
+## Searching for entities
+
+Use `search_entities` or `search_unified` to find entities before creating duplicates.
+Always search first when the user refers to an existing entity by name.
+
+## Property value conventions
+
+- `select` / `multi_select`: pass the option `value` (not the label). E.g. `"status": "in_progress"`.
+- `date`: ISO 8601 date string `"2026-03-15"`.
+- `datetime`: ISO 8601 datetime `"2026-03-15T10:00:00Z"`.
+- `boolean`: `true` / `false`.
+- `number`: numeric value (no quotes).
+- `user`: workspace member user ID (UUID).
+- `relation`: target entity ID (UUID).
+
+## Linking entities to the conversation
+
+After creating or finding key entities, call `link_entity_to_thread` to surface them in the thread sidebar.
+This helps the user navigate to the entity directly from the chat.
+
+## Rules
+
+- Never create duplicate entities — search first.
+- Always use `profileSlug` (not the deprecated `type` field).
+- Batch related entities into one agent run when creating multiple (e.g. a project + its tasks).
+- For large bulk imports, use `create_branch` to process in a separate branch.
+- Entity creation and update are subject to workspace governance (may create proposals).

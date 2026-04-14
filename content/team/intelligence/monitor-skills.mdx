@@ -1,0 +1,70 @@
+---
+title: "Monitor: Skills"
+description: "Skills monitoring — loaded skills, invocations, errors."
+---
+
+# Skills System
+
+Skills are **user-created, AI-generated tools** that extend what agents can do beyond their built-in capabilities. A skill is a JavaScript function stored in the database that agents can call exactly like any built-in tool.
+
+## Lifecycle
+
+```
+1. Request      → You ask an agent to "create a skill to calculate ROI"
+2. LLM Code Gen → Claude writes a JavaScript function body
+3. Validation   → Syntax checked via new Function(...)
+4. Storage      → Saved to the database with parameter schema
+5. Runtime Load → Fetched at agent startup, converted to Tool
+6. Execution    → Called by agents in sandboxed scope
+```
+
+## Structure
+
+Each skill has:
+
+| Field | Description |
+|-------|-------------|
+| `name` | Unique identifier — becomes the tool name agents call |
+| `description` | Tells the agent when and how to use this skill |
+| `code` | JavaScript function body |
+| `parameters` | Input schema: `{ paramName: "type" }` |
+| `category` | `action` (requires approval) or `context` (auto-executes) |
+| `executionMode` | `async` or `sync` |
+| `status` | `active`, `inactive`, or `error` |
+
+## Execution Sandbox
+
+Skills run in a sandboxed scope with access to:
+
+```javascript
+// Available in every skill:
+args        // Your validated input parameters
+context     // { userId, threadId, workspaceId, dataPodUrl }
+hubProtocol // Pre-authenticated backend REST client
+console     // Logging (output captured, not shown to user)
+```
+
+## Creating a Skill
+
+Tell any agent: _"Create a skill to [describe the capability]."_
+
+The agent uses `create_skill` to:
+1. Prompt Claude to write the function body based on your description
+2. Validate the generated code syntax
+3. Post to `/api/hub/skills/createSkill`
+4. Return the skill ID and generated code for your review
+
+You can also create skills directly from the form below.
+
+## Action vs Context
+
+- **`action`** — Modifies data, sends emails, calls write APIs. Requires user approval before running.
+- **`context`** — Read-only, returns data. Auto-executes without approval (calculations, lookups, formatting).
+
+## Tips
+
+- Start with a clear description — the LLM uses it to write better code and to know when to call the skill.
+- Use `context` for pure computation or read-only API calls.
+- Use `action` for anything that writes, sends, or modifies external state.
+- Inactive skills are not loaded but are preserved; reactivate at any time.
+- If a skill errors, check its `code` — you can edit and resubmit.

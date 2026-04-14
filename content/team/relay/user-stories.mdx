@@ -1,0 +1,131 @@
+---
+title: "User Stories"
+description: "Relay user stories and acceptance criteria."
+---
+
+# Relay — User Stories
+
+Organized by persona and priority. Each story follows: As a [persona], I want to [action], so that [outcome].
+
+---
+
+## Persona: Web3 Founder / Builder
+
+Core user. Attends 2-4 events per month, meets 20+ new people per event, active in 50+ Telegram groups, manages relationships across projects, investors, collaborators.
+
+### P0 — Must Have (Phase 1)
+
+**Capture & Import**
+
+- **US-01** As a user, I want to connect my Telegram account so that my existing conversations and contacts are automatically imported into my relationship graph.
+
+- **US-02** As a user, I want to quickly capture "I just met [name] at [event], we talked about [topic]" via text or voice so that I never lose a new contact.
+
+- **US-03** As a user, I want my phone contacts to sync automatically so that people I already know appear in my graph without manual entry.
+
+- **US-04** As a user, I want Telegram group memberships to be scanned so that I can see which contacts share groups with me (context for how I know them).
+
+**Browse & Find**
+
+- **US-05** As a user, I want to see all my contacts in a grid with their name, role, and tags so that I can quickly browse my network.
+
+- **US-06** As a user, I want to search my contacts by name, skill, or organization so that I can find specific people fast.
+
+- **US-07** As a user, I want to filter my contacts by how I met them (event, Telegram group, phone contact) so that I can segment my network by context.
+
+- **US-08** As a user, I want to see a person's full profile — all identities, interactions, and tags — in one view so that I have complete context before reaching out.
+
+**Feed**
+
+- **US-09** As a user, I want to see a chronological feed of interactions, new encounters, and AI insights so that I stay aware of network activity without checking each contact.
+
+- **US-10** As a user, I want feed items to link directly to the relevant person so that I can dive deeper with one tap.
+
+**Data Quality**
+
+- **US-11** As a user, I want the system to automatically merge contacts that are clearly the same person (same phone or email across sources) so that I don't have duplicates.
+
+- **US-12** As a user, I want to manually link two contacts ("this Telegram user is this phone contact") so that I can fix resolution errors.
+
+### P1 — Should Have (Phase 2)
+
+**Intelligence**
+
+- **US-13** As a user, I want AI-generated summaries of what I discussed with each person so that I can quickly recall conversation context before a follow-up.
+
+- **US-14** As a user, I want to see AI-inferred skills, interests, and focus areas for each contact so that I understand what they're currently working on without asking.
+
+- **US-15** As a user, I want reconnection nudges ("you haven't talked to X in 2 months, they just posted about needing Y") so that I maintain valuable relationships.
+
+- **US-16** As a user, I want to ask natural language questions about my network ("who knows Rust and is in Paris?") so that I can find the right person without manual filtering.
+
+**Events**
+
+- **US-17** As a user, I want to create events and tag contacts I met there so that I can organize my network by context.
+
+- **US-18** As a user, I want pre-event briefings ("you know 7 people attending, here's what to discuss with each") so that I'm prepared before arriving.
+
+- **US-19** As a user, I want my Google Calendar events synced so that co-attendees are automatically linked in my graph.
+
+**Enrichment**
+
+- **US-20** As a user, I want to paste a LinkedIn URL and have the profile data attached to an existing contact so that I enrich my contacts without manual data entry.
+
+- **US-21** As a user, I want the system to detect when multiple contacts are likely the same person (fuzzy matching) and suggest merges so that my graph stays clean.
+
+### P2 — Nice to Have (Phase 3)
+
+**Graph & Discovery**
+
+- **US-22** As a user, I want to see my network as a visual graph so that I can discover clusters, bridge nodes, and community structure.
+
+- **US-23** As a user, I want AI to suggest "you should introduce X to Y because..." so that I can be a better connector in my network.
+
+- **US-24** As a user, I want to see the strongest connection path between me and any person so that I know who can make an intro.
+
+**Web3 Specific**
+
+- **US-25** As a user, I want to attach wallet addresses to contacts so that I can see their on-chain activity alongside our relationship.
+
+- **US-26** As a user, I want Farcaster/Lens profiles linked to contacts so that my Web3 social graph is unified.
+
+**Privacy & Control**
+
+- **US-27** As a user, I want to exclude specific Telegram chats from being processed so that personal conversations stay private.
+
+- **US-28** As a user, I want to export my entire relationship graph (JSON/CSV) so that I maintain data sovereignty.
+
+---
+
+## Persona: Event Organizer / Community Lead
+
+Manages communities, runs events, needs to connect attendees, track who knows who.
+
+### P1
+
+- **US-29** As an organizer, I want to see which of my contacts are attending an upcoming event so that I can facilitate introductions.
+
+- **US-30** As an organizer, I want cluster detection across my network so that I can identify who bridges separate communities.
+
+---
+
+## Persona: Investor / BD
+
+Evaluates people and projects, needs to track conversations across deal flow.
+
+### P2
+
+- **US-31** As an investor, I want to see all interactions with a founder across every channel in one timeline so that I have full context for follow-ups.
+
+- **US-32** As an investor, I want to track which projects people are building and their progress over time so that I can spot opportunities early.
+
+---
+
+## Non-Functional Requirements
+
+- **NF-01** Initial Telegram import should process within 5 minutes for typical usage (< 500 contacts)
+- **NF-02** Quick capture should feel instant — AI preview appears within 1 second
+- **NF-03** Feed should load within 2 seconds
+- **NF-04** Person search should return results within 500ms
+- **NF-05** App should work offline for browsing cached contacts (sync when online)
+- **NF-06** All data stays in user's Synap pod — no third-party analytics or tracking

@@ -86,8 +86,8 @@ For production, consider:
 - Setting up proper backups
 - Configuring monitoring
 
-See [Production Deployment](./production.md) for details.
+See [Production Deployment](./production) for details.
 
 ---
 
-**Next**: See [Self-Hosted](./self-hosted.md) for manual setup.
+**Next**: See [Self-Hosted](./self-hosted) for manual setup.

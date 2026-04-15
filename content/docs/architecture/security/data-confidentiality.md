@@ -3,8 +3,6 @@ title: Data confidentiality
 description: Confidentiality model across storage, transport, and access boundaries.
 ---
 
-# Data confidentiality
-
 Synap confidentiality posture is based on sovereign deployment + scoped access.
 
 - own infrastructure and storage boundaries
@@ -14,4 +12,5 @@ Synap confidentiality posture is based on sovereign deployment + scoped access.
 See:
 
 - [Data sovereignty](/docs/architecture/concepts/data-sovereignty)
-- [Team security docs](/team/devops/security)
+- [Self-hosted deployment](/docs/architecture/deployment/data-pod/self-hosted)
+- [API keys and scoped access](/docs/integrate/integrations/api-keys)

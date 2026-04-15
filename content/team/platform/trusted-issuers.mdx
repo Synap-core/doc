@@ -1,0 +1,225 @@
+---
+title: Trusted Issuers
+description: Pod-level registry of external services authorized to act via signed JWTs.
+---
+
+# Trusted Issuers
+
+> **Canonical scope (team):** implementation lifecycle and runtime enforcement details.
+> Public-facing model: [/docs/architecture/security/trusted-issuers](/docs/architecture/security/trusted-issuers)
+>
+> **Related internal docs:** [Security](/team/platform/security) · [API keys](/team/platform/api-keys) · [Control Plane architecture](/team/control-plane/architecture)
+
+> **Canonical reference — updated 2026-04-14**
+> Covers the trusted-issuer registry: why it exists, how the lifecycle works, JWT verification flow, scope enforcement, and the admin approval UX.
+
+---
+
+## Background — the old model and why it broke
+
+The original CP-to-pod trust model was environment-variable driven. Every pod was expected to have `CONTROL_PLANE_URL` set at deploy time. The pod used that URL to fetch the CP's JWKS public key and verify incoming JWTs.
+
+This worked for managed pods where the CP URL was injected during provisioning, but it created two problems:
+
+1. **Self-hosted pods couldn't verify Synap Cloud JWTs** without knowing the CP URL in advance. An operator who wanted to connect a Raycast extension (or any other service that issues JWTs signed by Synap Cloud) had to pre-configure the URL themselves with no UI.
+2. **Any new external service** — an automation provider, a custom CP, a partner integration — required the pod operator to manually edit environment variables and restart. There was no runtime path to authorize a new JWT issuer.
+
+The trusted-issuers system replaces the single hard-coded `CONTROL_PLANE_URL` trust relationship with a database-backed registry that supports multiple issuers, lifecycle management, and admin review.
+
+---
+
+## The new model — Trusted Issuers registry
+
+The `trusted_issuers` table is the pod's allowlist of external services that may act via signed JWTs. Every entry is identified by the issuer's URL — the value of the `iss` claim in the JWTs it signs.
+
+Key properties of each issuer record:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | uuid | Internal primary key |
+| `issuerUrl` | text | The `iss` claim URL — always HTTPS. This is the identity. |
+| `displayName` | text | Human-readable name, derived from hostname if not supplied |
+| `status` | enum | `pending` \| `approved` \| `rejected` \| `revoked` |
+| `isBuiltIn` | boolean | `true` for Synap Cloud — cannot be revoked via UI |
+| `allowedScopes` | text[] | Ceiling of scopes this issuer may use |
+| `firstSeenAt` | timestamp | When the issuer first hit the pod |
+| `approvedAt` | timestamp | When an admin approved it |
+| `approvedBy` | uuid | Admin user who approved |
+
+**Built-in issuers**: Synap Cloud (`https://api.synap.live`) is seeded on every pod boot. It starts as `approved` with `isBuiltIn: true` and all scopes pre-granted. On self-hosted pods, seeding is conditional: if `CONTROL_PLANE_URL` is set in the environment that URL is used; if not, no built-in issuer is created (the pod starts fully dark).
+
+---
+
+## Lifecycle states
+
+```
+                    ┌──────────┐
+  first contact ──► │ pending  │
+                    └────┬─────┘
+                         │  admin approves (with scope selection)
+                    ┌────▼─────┐
+                    │ approved │ ◄── JWTs accepted, scopes enforced
+                    └────┬─────┘
+                         │  admin revokes
+                    ┌────▼─────┐
+                    │ revoked  │ ──► 403 on all subsequent JWTs
+                    └──────────┘
+
+           pending ──► rejected  (admin rejects outright)
+                            │
+                    ┌───────▼──────┐
+                    │  rejected    │ ──► 403
+                    └──────────────┘
+```
+
+**Pending**: An unknown issuer presented a JWT. The pod inserted a `pending` record and returned `202 ISSUER_PENDING_APPROVAL`. The JWT was not verified; the original request was rejected. An admin must review.
+
+**Approved**: The issuer's JWTs are accepted. Every JWT is verified against the JWKS at `{issuerUrl}/.well-known/jwks.json` and its scope is checked against `allowedScopes`.
+
+**Rejected**: The admin explicitly rejected the connection request. All subsequent JWTs from this issuer get a `403`. The record is kept for audit purposes.
+
+**Revoked**: A previously approved issuer was revoked. Equivalent to rejected for new requests. The record is preserved with the `revokedAt` timestamp.
+
+---
+
+## JWT verification flow
+
+When a request arrives at an endpoint protected by trusted-issuer verification (currently `POST /api/hub/setup/agent`), the following steps execute in order:
+
+1. **Decode without verifying** — extract the `iss` claim from the JWT header/payload. No signature check yet.
+
+2. **Validate the issuer URL** — `iss` must be an HTTPS URL. If it is not (bare string, `http://`, relative path), the request is rejected immediately with `400 INVALID_ISSUER`.
+
+3. **Look up the issuer** — query `trusted_issuers` where `issuerUrl = iss`.
+
+4. **Dispatch by status**:
+   - **Not found**: call `TrustedIssuerService.registerPending(issuerUrl)` to insert a `pending` record, return `202` with body `{ status: "ISSUER_PENDING_APPROVAL", adminUrl: "{podUrl}/admin/trusted-issuers" }`.
+   - **`pending`**: return `202` (same as above — idempotent).
+   - **`rejected`** or **`revoked`**: return `403 ISSUER_NOT_AUTHORIZED`.
+   - **`approved`**: proceed to verification.
+
+5. **Verify the signature** — fetch the JWKS from `{issuerUrl}/.well-known/jwks.json` (with in-process caching, 5-minute TTL). Verify the JWT signature against the matching key (`kid`). If verification fails, return `401 INVALID_TOKEN`.
+
+6. **Check expiry** — reject expired JWTs (`exp` claim), reject JWTs with `nbf` in the future.
+
+7. **Enforce scopes** — read the `scope` (or `scopes`) claim from the JWT payload. Intersect with `issuer.allowedScopes`. If the JWT requests a scope the issuer is not authorized for, return `403 SCOPE_NOT_ALLOWED`. The intersection (not the union) is used for the rest of the request — an issuer cannot escalate beyond what the admin granted.
+
+8. **Proceed** — attach the verified issuer and resolved scopes to the request context, continue to the endpoint handler.
+
+---
+
+## Scope assignment
+
+When an admin approves a pending issuer they select which scopes that issuer may use. This selection becomes the `allowedScopes` ceiling — even if the issuer later presents a JWT claiming broader scopes, the intersection with `allowedScopes` is what the pod honors.
+
+Available scopes:
+
+| Scope | What it permits |
+|---|---|
+| `setup.agent` | Provision agent users and API keys via `POST /api/hub/setup/agent` |
+| `hub-protocol.read` | Read entities, views, documents, search via Hub Protocol |
+| `hub-protocol.write` | Create/update/delete via Hub Protocol (subject to proposal governance) |
+| `data.read` | Direct entity/view read access outside Hub Protocol |
+| `data.write` | Direct entity/view write access outside Hub Protocol |
+| `provision` | Full pod provisioning (credentials push, IS configuration) |
+| `tier_update` | Push subscription tier changes to the pod |
+| `sync` | Event log replication (dual-pod sync, cross-pod sharing) |
+
+Synap Cloud's built-in issuer record is seeded with all scopes. Third-party issuers should be granted only what they need (principle of least privilege).
+
+---
+
+## The admin approval UX
+
+When an unknown issuer first contacts the pod, the pod inserts a `pending` record and returns a `202`. No notification is sent immediately (see Known gaps below).
+
+Admins review pending issuers at the pod admin panel: `/admin/trusted-issuers`.
+
+The page presents pending issuers as amber "connection request" cards — styled intentionally like a wallet transaction approval (MetaMask-style). Each card shows:
+
+- The issuer URL
+- The display name (derived from hostname, e.g., `api.synap.live` → "Synap Cloud")
+- `firstSeenAt` — when this issuer first tried to connect
+- A scope selector — multi-select of the available scopes listed above
+- **Approve** and **Reject** buttons. Rejection prompts for an optional reason stored on the record.
+
+Approved issuers appear in a separate "Active" list with a Revoke button. Built-in issuers (`isBuiltIn: true`) show a locked badge and cannot be revoked through the UI.
+
+Rejected issuers appear in a collapsed "Rejected" section — they can be re-approved if needed (status transitions from `rejected` → `approved` are permitted).
+
+---
+
+## Which endpoints are covered
+
+Not all incoming JWTs go through `TrustedIssuerService`. The table below shows which path each endpoint uses:
+
+| Endpoint | Auth path | Notes |
+|---|---|---|
+| `POST /api/hub/setup/agent` | `TrustedIssuerService.verify()` | Full registry lookup + 202 flow |
+| `POST /api/provision/connect` | `verifyCpJwt()` directly | OIDC-style `iss` discovery; `CONTROL_PLANE_URL` acts as optional allowlist |
+| `POST /api/provision/tier-update` | `verifyCpJwt()` directly | Same as above |
+| `POST /api/handshake` | `CONTROL_PLANE_URL` path | User SSO; different threat model — known gap, not migrated yet |
+
+`verifyCpJwt()` (in `packages/api/src/utils/jwks-client.ts`) does its own JWKS fetch and signature check. It does not consult `trusted_issuers`. The two systems coexist for now; the long-term direction is to migrate all JWT-bearing external endpoints through `TrustedIssuerService`.
+
+---
+
+## Startup seeding
+
+On every pod boot, `apps/api/src/startup-hooks.ts` calls `TrustedIssuerService.seedBuiltIn()`. This performs an upsert (conflict-ignore insert) for the Synap Cloud issuer:
+
+```typescript
+await db.insert(trustedIssuers)
+  .values({
+    issuerUrl: env.CONTROL_PLANE_URL ?? "https://api.synap.live",
+    displayName: "Synap Cloud",
+    status: "approved",
+    isBuiltIn: true,
+    allowedScopes: ALL_SCOPES,
+  })
+  .onConflictDoNothing();
+```
+
+If `CONTROL_PLANE_URL` is not set (self-hosted, no CP connection), the call is a no-op — no built-in issuer is seeded.
+
+The insert is idempotent: running it on an already-seeded pod has no effect. Changing `CONTROL_PLANE_URL` after initial seeding does not update the existing record — if the CP URL changes, an admin must manually update or re-seed via the admin panel.
+
+---
+
+## Key files
+
+| Concern | File |
+|---|---|
+| Schema | `packages/database/src/schema/trusted-issuers.ts` |
+| Service class | `packages/database/src/services/trusted-issuer-service.ts` |
+| tRPC router (admin) | `packages/api/src/routers/trusted-issuers.ts` |
+| Setup/agent endpoint | `packages/api/src/routers/hub-protocol-rest.ts` (`POST /api/hub/setup/agent`) |
+| Startup seeding | `apps/api/src/startup-hooks.ts` |
+| JWKS client (shared) | `packages/api/src/utils/jwks-client.ts` |
+| Admin panel page | `browser/electron/renderer/src/components/views/admin/TrustedIssuersPage.tsx` |
+
+---
+
+## Known gaps to address
+
+**1. The 202 loop problem**
+
+When a new issuer's connection is rejected with `202 ISSUER_PENDING_APPROVAL`, the original request has already timed out on the caller's side. The caller (e.g., a Raycast setup flow) must be manually retried after the admin approves. The `202` response includes an `adminUrl` field pointing at `/admin/trusted-issuers`, but there is no automatic redirect or callback.
+
+Future improvement: the `202` response could include a `redirect_uri` parameter. After the admin approves, the admin panel POSTs to `redirect_uri` to notify the originating client and prompt a retry automatically.
+
+**2. Revocation does not cascade to API keys**
+
+When an issuer is revoked, its `trusted_issuers` record is marked `revoked` and future JWTs are rejected. However, any API keys that were issued during a prior `POST /api/hub/setup/agent` call by that issuer remain valid until their own expiry. There is no cascade revoke.
+
+Future improvement: store a `trustedIssuerId` foreign key on `api_keys` rows created via `setup/agent`. On revoke, cascade to `api_keys.isActive = false` for all rows pointing at that issuer.
+
+**3. No admin notification on new pending issuer**
+
+When `registerPending` inserts a new `pending` row, no notification is sent to pod admins. Admins only discover pending requests by visiting the admin panel.
+
+Future improvement: call `NotificationService.create()` (type `system`, category `security`) when a new `pending` record is inserted. This surfaces the pending request in the pod's notification bell immediately.
+
+**4. `/api/handshake` is not migrated**
+
+The user SSO handshake endpoint still uses the `CONTROL_PLANE_URL` env-var path. Its threat model differs (it's a browser-initiated login, not a service-to-service call) so the migration is intentionally deferred, but it remains an inconsistency.

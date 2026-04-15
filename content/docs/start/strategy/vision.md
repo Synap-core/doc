@@ -62,7 +62,7 @@ The entire product surface is organized around three composable concepts. We cal
 
 **Views** are the visualization layer. A view is a lens on the entity graph — never a copy. Switch between Table, Kanban, Calendar, Bento, and Graph without moving data. Views are composable: embed a kanban inside a bento, anchor a view to an entity, create per-entity dashboards.
 
-**Channels** are the interaction layer. A channel is where humans and agents interact with and through entities. An `ai_thread` is a conversation. A `branch` is a fork. `entity_comments` are inline notes. An `a2ai` channel is agents talking to each other. Channels know what entities they're about.
+**Channels** are the interaction layer. A channel is where humans and agents interact with and through entities. The canonical public model is `thread`, `feed`, `external`, and `agent_collab`. Personal and branch behavior are modeled as `thread` attributes. Channels know what entities they're about.
 
 These three layers are independent but compose freely:
 - A channel can be anchored to a view (discuss what you're looking at)
@@ -92,9 +92,9 @@ Bento dashboards are the right abstraction for compound views. The gap to close:
 
 ### 3. External channel relay
 
-The external_import channel type has its DB schema. The missing piece is the relay infrastructure:
+The `external` channel model is in place. The missing piece is relay infrastructure:
 - Inbound: webhook receiver normalizes messages from external platforms
-- Outbound: Synap AI responses relayed back via the originating platform
+- Outbound: Synap responses can be relayed back when connector live-state capability is enabled
 - Priority: Telegram (1–3 days, free API) → Slack → WhatsApp (longer, Meta approval)
 
 ### 4. The browser as a workspace

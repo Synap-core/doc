@@ -3,18 +3,45 @@ title: "Platform"
 description: "Backend architecture, data model, channel system, security, and feed system."
 ---
 
-> **Per-project spaces:** Product- and surface-specific orientation (Synap App, **[Synap app packages](/team/synap-packages)**, Browser, Relay, Raycast, Eve) live under **[Team overview](/team/overview)**. This **Platform** section remains the home for **data pod** depth: Hub Protocol, entities, channels, feeds, security, and shared design-system contracts.
+# Platform
 
-The Synap data platform: Hub Protocol, entity profiles, channel system, feed architecture, design system, and all backend internals.
+Backend and data-platform source of truth for internal teams.
 
-## Key Areas
+## Purpose
+
+- Define Data Pod architecture and contracts.
+- Document platform governance (permissions, proposals, events).
+- Explain cross-service touchpoints with Control Plane and Intelligence Service.
+
+## Target users
+
+- Backend engineers
+- Platform and operations engineers
+- Product/ops teammates who need technical flow context
+
+## Main flows
+
+- [Golden flows](/team/platform/golden-flows) — canonical cross-service flows
+- [Event chain](/team/platform/event-chain) — mutation lifecycle and validation pipeline
+- [Channel system](/team/platform/channel-system) — communication model and trigger behavior
+
+## Key references
 
 | Area | Description |
 |------|-------------|
-| [AI Interaction](/team/platform/ai-interaction) | How AI agents interact with the backend |
-| [Hub Protocol](/team/platform/hub-protocol) | 76+ REST endpoints for IS↔Backend communication |
-| [Channel System](/team/platform/channel-system) | 7 channel types, AI triggers, personal channel |
-| [Feed System](/team/platform/feed-system) | 3-surface feed: personal chat, proactive, notifications |
-| [Property Def Scoping](/team/platform/property-def-scoping) | Three-layer scope: global, profile-base, workspace-overlay |
-| [Event Chain](/team/platform/event-chain) | Typed event registry, automation triggers |
-| [Design System](/team/platform/design-guidelines) | Tokens, components, patterns |
+| [Hub Protocol](/team/platform/hub-protocol) | Backend contracts used by IS and external agents |
+| [Permissions](/team/platform/permissions) | RBAC and approval model |
+| [Trusted issuers](/team/platform/trusted-issuers) | External JWT issuer allowlist and lifecycle |
+| [Entity profiles](/team/platform/entity-profiles) | Dynamic type system and property model |
+| [Property def scoping](/team/platform/property-def-scoping) | Global/profile/workspace layered schema behavior |
+| [Feed system](/team/platform/feed-system) | Signal, proactive, and notification feed architecture |
+
+## Dependencies
+
+- [Control Plane](/team/control-plane/index) for provisioning and management paths.
+- [Intelligence Service](/team/intelligence/index) for AI request execution and tooling contracts.
+
+## Related public docs
+
+- [/docs/architecture](/docs/architecture)
+- [/docs/integrate](/docs/integrate)

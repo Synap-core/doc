@@ -28,7 +28,7 @@ export function TeamSignInForm({ id }: { id?: string }) {
     try {
       const api = getSynapApiUrl();
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const callbackURL = `${origin}/team/overview`;
+      const callbackURL = `${origin}/team/home`;
       const res = await fetch(`${api}/auth/sign-in/email`, {
         method: 'POST',
         credentials: 'include',
@@ -45,7 +45,7 @@ export function TeamSignInForm({ id }: { id?: string }) {
         setError(typeof data.message === 'string' ? data.message : 'Sign in failed');
         return;
       }
-      window.location.href = '/team/overview';
+      window.location.href = '/team/home';
     } catch {
       setError(
         'Could not reach the API. For local dev, use Team without signing in, or check CORS / trustedOrigins on the API.'

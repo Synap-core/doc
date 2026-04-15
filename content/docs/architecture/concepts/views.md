@@ -3,8 +3,6 @@ sidebar_position: 3
 title: Views System
 ---
 
-# Views System
-
 > **Principle**: Separate **Declared Scope** (what the view *intends* to show) from **Query Results** (what typically matches).
 
 The Views System is the engine that queries, filters, and displays Entities. It is designed to be **stable** (no column jitter), **performant** (no heavy storage), and **flexible** (user overrides).

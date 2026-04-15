@@ -1,31 +1,40 @@
 ---
 title: Raycast
-description: Raycast extension — scope, users, and integration with the pod
+description: Raycast space home and structured draft tracks
 ---
 
-Team docs for a **Raycast** (macOS) extension surface, if/when shipped as its own command bundle.
+# Raycast
 
-## Source of truth elsewhere
+> **Status:** Draft. This area is intentionally incomplete until Raycast scope is finalized.
 
-The **browser extension** (Chrome MV3) lives in the **`synap-app`** monorepo: package under **`packages/apps/extension`**, with product/architecture notes in **`EXTENSION.md`** in that folder. Link that doc from here when the Raycast and browser stories should cross-reference each other.
+Use this space for internal scope, architecture constraints, and command design.
 
-## Why it exists
+## Purpose
 
-*To fill in:* Raycast-specific capture or command flows vs Browser and web.
+- Track Raycast integration strategy and shipping scope.
+- Document command architecture and backend interaction patterns.
+- Align Raycast work with platform and security constraints.
 
 ## Target users
 
-*To fill in:* builders, operators, internal dogfood.
+- Raycast integration engineers
+- Platform engineers reviewing integration contracts
+- Product and operations teammates evaluating rollout timing
 
-## User flow
+## Main flows
 
-*To fill in:* install, auth, primary commands, error states.
+- [Scope and status](/team/raycast/scope-and-status) — what is in or out of the current milestone
+- [Commands and flows](/team/raycast/commands-and-flows) — command-level UX and execution paths
+- [Integration model](/team/raycast/integration-model) — auth, data access, and service boundaries
 
-## Data flows
+## Read next
 
-*To fill in:* API usage, tokens, rate limits, what syncs to the pod.
+- **[Scope and status](/team/raycast/scope-and-status)**
+- **[Commands and flows](/team/raycast/commands-and-flows)**
+- **[Integration model](/team/raycast/integration-model)**
 
-## Guidelines
+## Dependencies
 
-- Align messaging with **[Home & vision](/team/home)**.
-- API contracts: **[Platform](/team/platform)** · public **[Build & integrate](/docs/integrate)**.
+- [Platform](/team/platform/index) for Data Pod contracts and security model.
+- [Intelligence Service](/team/intelligence/index) when commands invoke AI capabilities.
+- [Ops & marketing](/team/ops-marketing/index) for positioning and launch narratives.

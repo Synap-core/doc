@@ -1,22 +1,44 @@
 ---
 title: Synap Intelligence
-description: The agent and orchestration layer that runs on top of your Synap data pod
+description: Managed orchestration and policy layer for agents on top of your pod, with a bring-your-own option
 ---
 
-**Synap Intelligence** is the layer that lets AI **work with your entities, views, and channels** under **your governance** — not a generic chat API bolted onto a database.
+Synap Intelligence is not only a model endpoint.  
+It is the layer that lets AI **operate on pod data with governance**.
 
-Compared to a classic model provider, Synap Intelligence emphasizes:
+## What it adds on top of models
 
-- **Pod-native context** — agents read and act through the same APIs and permissions as your apps.
-- **Proposal-first mutations** — high-impact changes can be reviewed before they land (human in the loop).
-- **Hub Protocol** — one integration surface for external agents and tools (`/api/hub/*` on the data pod).
+- **Pod-native context**: agents use the same entity/view/channel model as user-facing apps
+- **Governed actions**: proposal-first mutation flow for operations requiring review
+- **Consistent integration contract**: Hub Protocol as the stable surface for agent/tool operations
+- **Operational controls**: access lifecycle, usage controls, and service-level management in hosted mode
 
-Use Synap with any model provider you choose; Intelligence is the **orchestration and policy** layer on top.
+## Managed Synap Intelligence vs your own service
 
-**Next steps (public docs):**
+| Option | Best for | Trade-off |
+|---|---|---|
+| **Managed Synap Intelligence** | teams that want fastest setup and lower ops burden | less runtime-level customization |
+| **Self-managed Intelligence Service** | teams that need custom runtime, hosting, and service internals | you own deployment, uptime, and service operations |
 
-- [Multi-agent concepts](../architecture/concepts/multi-agent-system)
-- [AI in the product model](../architecture/concepts/artificial-intelligence)
-- [Build agents](../integrate/development/ai/building-agents)
+Both options still rely on the same pod-centric model and governance principles.
 
-> **Content TBD** — add differentiation table (classic provider vs Synap Intelligence), safe diagrams, and links to Hub Protocol deep dives in **integrate** docs.
+## Public decision guide
+
+Use **managed Intelligence** when you want:
+
+- quick activation
+- minimal infra operations
+- predictable integration path with Synap Cloud
+
+Use **self-managed Intelligence Service** when you need:
+
+- custom deployment/runtime behavior
+- stricter control of hosting/network boundaries
+- deeper service-level customization
+
+## Continue
+
+- [Multi-agent concepts](/docs/architecture/concepts/multi-agent-system)
+- [AI concept model](/docs/architecture/concepts/artificial-intelligence)
+- [Build agents](/docs/integrate/development/ai/building-agents)
+- [Integration fundamentals](/docs/integrate/integrate-core)

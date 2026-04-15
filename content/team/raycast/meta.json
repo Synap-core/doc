@@ -3,5 +3,10 @@
   "description": "Raycast extension — quick capture and power-user flows",
   "root": true,
   "icon": "command",
-  "pages": ["index"]
+  "pages": [
+    "index",
+    "scope-and-status",
+    "commands-and-flows",
+    "integration-model"
+  ]
 }

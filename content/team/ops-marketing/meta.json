@@ -1,0 +1,13 @@
+{
+  "title": "Ops & marketing",
+  "description": "Positioning, target users, launch operations, and enablement assets",
+  "root": true,
+  "icon": "megaphone",
+  "pages": [
+    "index",
+    "positioning-and-icp",
+    "messaging-framework",
+    "launch-playbook",
+    "enablement-assets"
+  ]
+}

@@ -5,17 +5,19 @@
   "icon": "network",
   "pages": [
     "index",
+    "---Core Architecture---",
     "system-patterns",
-    "core-patterns",
-    "event-flow",
     "validation-policy",
     "permission-model",
     "hub-protocol-flow",
-    "ai-architecture",
-    "events",
-    "components",
-    "security",
+    "---Events---",
+    "events/index",
+    "---System Concepts---",
     "concepts",
-    "deployment"
+    "---Deployment---",
+    "deployment/overview",
+    "deployment/data-pod/self-hosted",
+    "deployment/data-pod/docker",
+    "deployment/data-pod/production"
   ]
 }

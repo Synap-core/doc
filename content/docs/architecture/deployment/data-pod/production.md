@@ -140,4 +140,4 @@ curl https://api.yourdomain.com/health
 
 ---
 
-**Next**: See [Database Setup](../infrastructure/database.md) for database setup details.
+**Next**: See [Database Setup](../infrastructure/database) for database setup details.

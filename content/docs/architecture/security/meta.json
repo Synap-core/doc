@@ -1,4 +1,4 @@
 {
   "title": "Security",
-  "pages": ["data-confidentiality"]
+  "pages": ["data-confidentiality", "trusted-issuers"]
 }

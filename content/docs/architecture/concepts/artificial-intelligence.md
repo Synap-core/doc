@@ -3,8 +3,6 @@ sidebar_position: 4
 title: Artificial Intelligence
 ---
 
-# Artificial Intelligence
-
 > **Philosophy**: AI in Synap is not just a chatbot; it is a **collaborator** that lives alongside your data, understanding context and capable of taking action.
 
 ## 1. The "Intelligence Service"

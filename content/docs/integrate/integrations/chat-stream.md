@@ -35,14 +35,14 @@ Response:
 [
   {
     "id": "ch_01hx...",
-    "type": "ai_thread",
+    "type": "thread",
     "name": "Personal AI",
     "isPersonal": true,
     "workspaceId": "ws_..."
   },
   {
     "id": "ch_02hy...",
-    "type": "ai_thread",
+    "type": "thread",
     "name": "Project Artemis – AI branch",
     "isPersonal": false,
     "workspaceId": "ws_..."
@@ -232,14 +232,14 @@ const answer = await streamChat('What tasks are overdue this week?');
 
 ## Persistent history
 
-When you omit `channelId`, the pod uses your **personal AI channel** — one permanent channel per user per workspace. Every message you send this way is saved to that channel, visible inside the Synap app, and included in the AI's context window on the next call.
+When you omit `channelId`, the pod uses your **personal thread** — a default `thread` with personal attributes. Every message you send this way is saved to that thread, visible inside the Synap app, and included in the AI's context window on the next call.
 
 This means you can:
 - Ask a follow-up without re-sending context: the AI already knows what you discussed
 - See the full conversation history in the Synap app under the Chat tab
 - Have the AI's memory compound over time (the pod runs session compaction automatically)
 
-If you want an isolated conversation that does not affect your main channel history, create a new `ai_thread` channel first and pass its ID.
+If you want an isolated conversation that does not affect your main channel history, create a new `thread` channel first and pass its ID.
 
 ---
 
@@ -280,7 +280,7 @@ Unknown `agentType` values fall back to the default orchestrator and log a warni
 ```typescript
 {
   query: string;          // required — your message
-  channelId?: string;     // omit to use personal AI channel
+  channelId?: string;     // omit to use personal thread
   workspaceId?: string;   // defaults to your key's workspace
   agentType?: string;     // defaults to "meta"
 }

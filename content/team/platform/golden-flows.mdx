@@ -1,0 +1,117 @@
+---
+title: "Golden flows"
+description: "Canonical cross-service user and data flows with implementation references"
+---
+
+# Golden flows
+
+This page defines the highest-value end-to-end flows across Data Pod, Intelligence Service, and Control Plane.
+
+## How to use this page
+
+- Keep each flow implementation-accurate.
+- Link every step to the canonical technical page.
+- Include ownership and monitoring signals.
+
+## Flow template
+
+### Flow name
+
+- Primary actor:
+- Trigger:
+- Primary outcome:
+- Services involved:
+
+#### Step-by-step sequence
+
+1. Service A receives input...
+2. Service B validates...
+3. Service C persists/emits...
+4. User-visible confirmation...
+
+#### Data contract touchpoints
+
+- Input payload:
+- Event names:
+- Storage write/read:
+
+#### Failure modes
+
+- Failure:
+- Detection:
+- Recovery:
+
+#### Source links
+
+- Architecture:
+- API/contract:
+- Runbook:
+
+---
+
+## Flow 1: User signup and pod readiness
+
+- Primary actor: end user
+- Trigger: account creation
+- Primary outcome: user lands in a ready workspace with required baseline entities/views
+- Services involved: frontend/app surface, Control Plane, Data Pod, auth provider
+
+### Step-by-step sequence
+
+1. User submits signup from surface.
+2. Auth provider validates identity and creates session.
+3. Control Plane or provisioning layer determines tenancy path.
+4. Data Pod initialization creates required workspace defaults.
+5. Frontend confirms readiness and redirects user into workspace.
+
+### Source links
+
+- Control plane provisioning: [/team/control-plane/pod-management](/team/control-plane/pod-management)
+- Data pod initialization: [/team/platform/provisioning-paths](/team/platform/provisioning-paths)
+- Frontend redirect and state handling: [/team/devops/frontend-connection](/team/devops/frontend-connection)
+
+---
+
+## Flow 2: AI request to validated mutation
+
+- Primary actor: user + AI agent
+- Trigger: AI action requiring data change
+- Primary outcome: governed, reviewable, and traceable mutation
+- Services involved: app surface, Intelligence Service, Data Pod event chain, proposal/governance layer
+
+### Step-by-step sequence
+
+1. User triggers AI action.
+2. Intelligence Service prepares mutation request.
+3. Data Pod permission check decides auto-approve vs proposal.
+4. If approved, executor applies mutation and emits completion event.
+5. UI updates state and shows action outcome/notification.
+
+### Source links
+
+- Permission/proposal policy: [/team/platform/permissions](/team/platform/permissions) and [/team/platform/proposals](/team/platform/proposals)
+- Event chain: [/team/platform/event-chain](/team/platform/event-chain)
+- AI integration contracts: [/team/intelligence/skill-hub-protocol](/team/intelligence/skill-hub-protocol)
+
+---
+
+## Flow 3: External connector sync into knowledge graph
+
+- Primary actor: external system + platform jobs
+- Trigger: webhook, polling cycle, or scheduled import
+- Primary outcome: external data normalized into entities/documents/relations
+- Services involved: connector layer, ingestion pipeline, Data Pod repositories/jobs, search/indexing
+
+### Step-by-step sequence
+
+1. Connector receives or fetches source data.
+2. Ingestion pipeline validates, maps, and deduplicates records.
+3. Data Pod writes via governed path.
+4. Indexing/search materialization updates read surfaces.
+5. UI exposes imported content in relevant views.
+
+### Source links
+
+- Connector architecture: [/team/platform/connectors](/team/platform/connectors)
+- Import pipeline: [/team/platform/import-pipeline](/team/platform/import-pipeline)
+- Entity/profile model: [/team/platform/entity-profiles](/team/platform/entity-profiles)

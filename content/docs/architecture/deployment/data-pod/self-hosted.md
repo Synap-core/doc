@@ -194,4 +194,4 @@ pm2 restart all
 
 ---
 
-**Next**: See [Docker Deployment](./docker.md) for easier setup.
+**Next**: See [Docker Deployment](./docker) for easier setup.

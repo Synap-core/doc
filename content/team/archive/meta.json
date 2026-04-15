@@ -1,0 +1,10 @@
+{
+  "title": "Archive",
+  "description": "Historical and superseded documents kept for reference",
+  "root": true,
+  "icon": "archive",
+  "pages": [
+    "index",
+    "relay-archive"
+  ]
+}

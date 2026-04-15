@@ -1,17 +1,25 @@
 {
   "title": "Team documentation",
   "pages": [
-    "overview",
+    "---Start Here---",
     "home",
+    "---Surfaces---",
     "synap-app",
     "synap-packages",
     "browser",
     "relay",
+    "---Agent Surfaces---",
     "raycast",
     "eve-cli",
     "intelligence",
+    "---Platform & Operations---",
     "control-plane",
     "platform",
-    "devops"
+    "devops",
+    "---Business & Governance---",
+    "go-to-market",
+    "ops-marketing",
+    "decisions",
+    "archive"
   ]
 }

@@ -36,7 +36,7 @@ export function SignIn() {
 
             <button
               className="w-full rounded-lg bg-fd-primary px-4 py-2.5 text-sm font-medium text-fd-primary-foreground transition-colors hover:bg-fd-primary/90"
-              onClick={() => redirectToLogin('/team/overview')}
+              onClick={() => redirectToLogin('/team/home')}
             >
               <Shield className="h-4 w-4 mr-2" />
               Sign in with Synap

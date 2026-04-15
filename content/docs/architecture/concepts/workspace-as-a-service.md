@@ -69,7 +69,7 @@ One pod can host many workspaces ("spaces") at the same time — a CRM space, a 
 
 This is possible because property definitions are **layered**: base fields belong to the profile globally, and each workspace can add overlay fields scoped to itself. Reads filter through the current workspace's lens at SQL level, so performance doesn't degrade as you add more spaces.
 
-See [Profile Schemas →](./profile-schemas.md) for the full model.
+See [Profile Schemas →](./profile-schemas) for the full model.
 
 ## What You Can Build
 

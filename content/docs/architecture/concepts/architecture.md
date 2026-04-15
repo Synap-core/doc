@@ -3,8 +3,6 @@ sidebar_position: 1
 title: Architecture
 ---
 
-# Architecture
-
 > **Synap** is a **Sovereign AI Workspace** — a Personal Data Operating System. We provide "Workspace as a Service" where the user owns a sovereign Data Pod.
 
 ## Core Principles
@@ -42,7 +40,7 @@ Synap is composable.
 ### 3. The Brain (Intelligence)
 *   External usage of the **Hub Protocol**.
 *   Can run locally (Ollama) or in the cloud (OpenAI/Anthropic).
-*   See [Artificial Intelligence](./artificial-intelligence.md).
+*   See [Artificial Intelligence](./artificial-intelligence).
 
 ## Data Flow Examples
 

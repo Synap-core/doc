@@ -3,5 +3,10 @@
   "description": "Web app (synap-app) — product context, flows, and guidelines",
   "root": true,
   "icon": "monitor",
-  "pages": ["index", "frontend-intelligence-integration"]
+  "pages": [
+    "index",
+    "status-and-scope",
+    "package-boundaries",
+    "frontend-intelligence-integration"
+  ]
 }

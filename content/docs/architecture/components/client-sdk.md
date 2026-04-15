@@ -3,8 +3,6 @@ title: Client SDK
 description: Client access patterns for querying and mutating Synap pods.
 ---
 
-# Client SDK
-
 Client SDK layers provide typed access to pod APIs.
 
 - query/read workflows

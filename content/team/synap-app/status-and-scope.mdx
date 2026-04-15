@@ -1,0 +1,29 @@
+---
+title: Status and scope
+description: What is active, deprecated, and where each frontend surface now lives
+---
+
+## Active scope in `synap-app`
+
+- shared frontend packages consumed across surfaces
+- extension-related implementation
+- integration-facing frontend runtime contracts
+
+## Deprecated / not primary
+
+- **Telegram app in this repo is deprecated** (do not position as target surface).
+- legacy standalone web assumptions are not product-primary.
+
+## Product-primary surfaces
+
+- Desktop primary: **[Browser](/team/browser)**
+- Team package map and ownership: **[Synap Packages](/team/synap-packages)**
+- Cross-system backend contracts: **[Platform](/team/platform)**
+
+## Decision rule
+
+When documenting user-facing flows:
+
+- if it is desktop product UX, document in Browser first
+- if it is package architecture, document in Synap Packages
+- if it is API/governance/data flow, document in Platform

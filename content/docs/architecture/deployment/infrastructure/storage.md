@@ -106,4 +106,4 @@ Configure lifecycle policies for:
 
 ---
 
-**Next**: See [Production Deployment](../data-pod/production.md) for complete setup.
+**Next**: See [Production Deployment](../data-pod/production) for complete setup.

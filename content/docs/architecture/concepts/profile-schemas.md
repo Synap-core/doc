@@ -3,8 +3,6 @@ sidebar_position: 3
 title: Profile Schemas
 ---
 
-# Profile Schemas
-
 > **One entity. Many spaces. Different lenses.**
 >
 > A Person in your Relay space looks different from the same Person in your Knowledge space — not because the data changed, but because each space attaches its own schema overlay on top of a shared base.
@@ -133,6 +131,6 @@ One Alice. Three lenses. No leaks.
 
 ## Cross-references
 
-- [Universal Entity Model →](./entities.md) — the broader "everything is an entity" foundation.
-- [Workspace as a Service →](./workspace-as-a-service.md) — how spaces are deployed as self-contained apps on your pod.
-- [Entity Connections →](./entity-connections.md) — how entities link to each other (orthogonal to schema layers).
+- [Universal Entity Model →](./entities) — the broader "everything is an entity" foundation.
+- [Workspace as a Service →](./workspace-as-a-service) — how spaces are deployed as self-contained apps on your pod.
+- [Entity Connections →](./entity-connections) — how entities link to each other (orthogonal to schema layers).

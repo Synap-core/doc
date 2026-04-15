@@ -40,7 +40,8 @@ const config = {
       { source: '/docs', destination: '/docs/start', permanent: true },
       { source: '/docs/overview', destination: '/docs/start', permanent: true },
       { source: '/docs/overview/:path*', destination: '/docs/start', permanent: true },
-      { source: '/team', destination: '/team/overview', permanent: true },
+      { source: '/team', destination: '/team/home', permanent: true },
+      { source: '/team/overview', destination: '/team/home', permanent: true },
 
       // Legacy team paths under /docs → /team
       { source: '/docs/home/:path*', destination: '/team/home/:path*', permanent: true },

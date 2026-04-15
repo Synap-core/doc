@@ -141,7 +141,7 @@ External services only request data that is strictly necessary for the requested
 
 ---
 
-**Next**: See [Hub and spoke](./hub-and-spoke.md) for how the pod connects to intelligence, and [Extending Synap](../../integrate/development/extending/overview.md) for integration patterns.
+**Next**: See [Hub and spoke](./hub-and-spoke) for how the pod connects to intelligence, and [Extending Synap](../../integrate/development/extending/overview) for integration patterns.
 
 ---
 

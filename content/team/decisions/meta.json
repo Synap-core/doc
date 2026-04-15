@@ -1,0 +1,11 @@
+{
+  "title": "Decisions",
+  "description": "Architecture and product decision records with rationale and impact",
+  "root": true,
+  "icon": "scale",
+  "pages": [
+    "index",
+    "adr-template",
+    "decision-log"
+  ]
+}

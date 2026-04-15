@@ -14,7 +14,7 @@ export default async function TeamLayout({ children }: { children: ReactNode }) 
   const session = await getServerSession();
 
   if (!session?.user) {
-    redirect(getServerLoginUrl('/team/overview'));
+    redirect(getServerLoginUrl('/team/home'));
   }
 
   return (
@@ -28,7 +28,7 @@ export default async function TeamLayout({ children }: { children: ReactNode }) 
             <span className="text-xs font-medium text-fd-muted-foreground">Team</span>
           </span>
         ),
-        url: '/team/overview',
+        url: '/team/home',
       }}
       links={[
         { text: 'Site home', url: '/', icon: <Home className="size-4" /> },

@@ -166,4 +166,4 @@ archive_command = 'cp %p /backup/wal/%f'
 
 ---
 
-**Next**: See [Storage Setup](./storage.md) for file storage configuration.
+**Next**: See [Storage Setup](./storage) for file storage configuration.

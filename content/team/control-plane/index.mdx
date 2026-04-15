@@ -5,9 +5,27 @@ description: "SaaS control plane — pod lifecycle, billing, IS integration, inf
 
 # Control Plane
 
-The CP is the SaaS brain — it provisions data pods, manages subscriptions via Stripe, orchestrates IS deployment, and provides the admin dashboard.
+The SaaS orchestration layer for pod lifecycle, account management, and multi-service coordination.
 
-## Key Areas
+## Purpose
+
+- Define provisioning lifecycle for pods and related services.
+- Document control-plane APIs, jobs, and infrastructure responsibilities.
+- Centralize operational procedures and incident paths for CP-managed systems.
+
+## Target users
+
+- Control Plane engineers
+- Infrastructure and operations teams
+- Product/ops teammates needing provisioning and tenancy context
+
+## Main flows
+
+- [Pod management](/team/control-plane/pod-management) — lifecycle actions and orchestration
+- [Pod install](/team/control-plane/pod-install) — setup path for deployed pods
+- [Operations guide](/team/control-plane/operations-guide) — day-2 operational procedures
+
+## Key references
 
 | Area | Description |
 |------|-------------|
@@ -17,3 +35,14 @@ The CP is the SaaS brain — it provisions data pods, manages subscriptions via 
 | [Pod Management](/team/control-plane/pod-management) | pod-agent commands, auto-update pipeline |
 | [Security Audit](/team/control-plane/audit) | Production readiness audit findings |
 | [Pod Installation](/team/control-plane/pod-install) | Step-by-step pod setup |
+
+## Dependencies
+
+- [Platform](/team/platform/index) for Data Pod contracts and validation model.
+- [Intelligence Service](/team/intelligence/index) for AI service deployment and integration points.
+- [DevOps](/team/devops/index) for shared runbook and reliability practices.
+
+## Related public docs
+
+- [/docs/cloud](/docs/cloud)
+- [/docs/architecture/deployment](/docs/architecture/deployment)

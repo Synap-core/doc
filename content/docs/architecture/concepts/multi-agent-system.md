@@ -66,7 +66,7 @@ Intent Analyzer
 - ✅ Parallel execution — agents run concurrently
 - ✅ Any agent can invoke any other agent as a tool
 - ✅ No central coordinator — routing is intent-based
-- ✅ Agent-to-agent async via A2AI channels (persistent, replayable)
+- ✅ Agent-to-agent async via `agent_collab` channels (persistent, replayable)
 - ✅ Governance at the Data Pod level, not the agent level
 
 ---
@@ -163,7 +163,7 @@ const researchAgent: Agent = {
 **How it works**:
 
 ```
-1. User sends message to ai_thread channel
+1. User sends message to a `thread` channel
    ↓
 2. Intent Analyzer runs:
    - What is the goal?
@@ -690,10 +690,10 @@ await synap.threads.createBranch({
 
 ## Next Steps
 
-- **[Tutorial: Build a Custom Agent](../tutorials/build-custom-agent)** - Step-by-step guide
-- **[Guide: Multi-Agent Workflows](../guides/by-feature/multi-agent-workflows)** - Advanced patterns
+- **[Build agents](/docs/integrate/development/ai/building-agents)** - Practical implementation path
+- **[Agents overview](/docs/integrate/agents)** - Integration and runtime surface
 - **[Branching Conversations](./branching-conversations)** - How agents work in branches
-- **[API Reference: Agents API](../../integrate/reference/agents-api)** - Complete API docs
+- **[API reference](/docs/integrate/reference/api-reference)** - Canonical public API surface
 
 ---
 

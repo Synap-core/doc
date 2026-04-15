@@ -1,0 +1,14 @@
+{
+  "title": "Go-to-market",
+  "description": "Positioning, launch execution, market analysis, and commercial packaging",
+  "root": true,
+  "icon": "megaphone",
+  "pages": [
+    "index",
+    "roadmap",
+    "planning-assets",
+    "launch-operations",
+    "market-and-analysis",
+    "openclaw-gtm"
+  ]
+}

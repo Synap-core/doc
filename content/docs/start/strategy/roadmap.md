@@ -43,7 +43,7 @@ _Last updated: March 2026_
 - **BentoAdapter auto-save**: internal `trpc.views.update` with 1.5s debounce when used as entity BentoRenderer (no external `onConfigChange`)
 
 ### Channels (2026 Q1)
-- **Channel types**: `ai_thread`, `branch`, `entity_comments`, `document_review`, `view_discussion`
+- **Channel architecture**: canonical public model aligned to `thread`, `feed`, `external`, `agent_collab`
 - **AI streaming**: SSE with `chunk`, `step`, `branch_decision`, `complete`, `error` events
 - **Branch management**: fork a conversation, explore alternatives, visual tree navigation
 - **Context items**: link entities or documents to a channel for AI grounding
@@ -68,7 +68,7 @@ _Last updated: March 2026_
 - **ZeroClaw integration**: one-click provision, Hub Protocol connection, status polling
 - **`@synap/agent-service`**: generic `useAgentServices()`, `ServiceChip`, `ServiceCard` components
 - **OpenClaw architecture**: Hub-and-spoke boundary defined, `synap-os` SKILL.md spec written
-- **A2AI channel type**: spec for agent-to-agent async communication
+- **`agent_collab` model**: spec for agent-to-agent async communication
 
 ### Data Model Consolidation (2026 Q1)
 - **Removed `documents.entityId` backlink**: reverse lookup now uses FK on `entities.documentId`
@@ -118,8 +118,8 @@ _Last updated: March 2026_
 
 ### OpenClaw Integration
 - Phase 1: Install `synap-os` SKILL.md → OpenClaw connects via Hub Protocol (1–2d)
-- Phase 2: A2AI channel type for async agent-to-agent messaging (2–3d)
-- Phase 3: External channel bridge — inbound webhooks → EXTERNAL_IMPORT → relay (3–4d)
+- Phase 2: `agent_collab` channels for async agent-to-agent messaging (2–3d)
+- Phase 3: External channel bridge — inbound webhooks → `external` → optional relay (3–4d)
 - Phase 4: Filesystem governance (user-scoped paths auto-approve, system paths propose)
 
 ### AI-Generated Widgets

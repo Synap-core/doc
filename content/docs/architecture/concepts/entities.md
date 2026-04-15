@@ -3,8 +3,6 @@ sidebar_position: 2
 title: Universal Entity Model
 ---
 
-# Universal Entity Model
-
 > **Vision**: One Data Model, Infinite Views.
 
 In Synap, everything is an **Entity**. Whether it's a task in a list, a node in a graph, or a card on a whiteboard, it is the same underlying data object rendered differently based on context.
@@ -123,7 +121,7 @@ This is why Synap can host three completely different workflows on the same unde
 - **Safe extension** — adding a field in your space can never affect another space. No schema migrations. No "will this break my other app?".
 - **Template composability** — install a new space template and its overlay fields slot in alongside your existing data. Your Person entities grow capabilities without losing identity.
 
-For the full technical model (how base vs. overlay defs are stored, how queries filter, how the write path tags new fields), see [Profile Schemas →](./profile-schemas.md).
+For the full technical model (how base vs. overlay defs are stored, how queries filter, how the write path tags new fields), see [Profile Schemas →](./profile-schemas).
 
 ---
 

@@ -140,8 +140,8 @@ const whiteboardView = {
 
 ## Next Steps
 
-- [Event sourcing explained](./event-sourcing-explained.md) — how events enable composability
-- [Hub and spoke](./hub-and-spoke.md) — how services and AI connect to the pod
+- [Event sourcing explained](./event-sourcing-explained) — how events enable composability
+- [Hub and spoke](./hub-and-spoke) — how services and AI connect to the pod
 - [Building Blocks](./building-blocks) — The entity and view primitives
 
 ---

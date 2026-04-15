@@ -3,5 +3,11 @@
   "description": "Electron app — onboarding, web capture, trust model, release ops",
   "root": true,
   "icon": "app-window",
-  "pages": ["index"]
+  "pages": [
+    "index",
+    "architecture",
+    "security",
+    "operations-and-release",
+    "capture-and-flows"
+  ]
 }

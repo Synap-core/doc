@@ -9,6 +9,26 @@ description: Entity Creation System — sovereign stack installer (CLI, organs, 
 
 ---
 
+## Purpose
+
+- Define Eve product scope and internal architecture narrative.
+- Document operator workflows for sovereign stack setup.
+- Align Eve positioning with platform, intelligence, and ops teams.
+
+## Target users
+
+- Eve CLI contributors
+- Infrastructure and operator-facing engineers
+- Operations and marketing teammates defining self-host positioning
+
+## Main flows
+
+- `eve` bootstrap and stack provisioning workflow
+- Brain/Arms composition and service lifecycle management
+- Operator troubleshooting and upgrade paths
+
+---
+
 ## Vision
 
 - **Sovereignty:** Your server, your data, optional fully local AI — no mandatory cloud.
@@ -24,7 +44,7 @@ description: Entity Creation System — sovereign stack installer (CLI, organs, 
 | Architecture (organs, compose, networking) | Documented in repo `hestia-cli/README.md` and `hestia-cli/docs/*` |
 | CLI (`eve` commands: `brain`, `arms`, `birth`, `status`, …) | In active development; some flows are aspirational in README — verify against `packages/eve-cli` before promising dates |
 | Relation to **pod `synap` script** | Backend deploy CLI (`synap-backend/synap`) remains the **Synap-only** Docker lifecycle; Eve is the **broader entity** stack (Brain + optional organs) |
-| Relation to **`@synap/cli`** | Agent bridge / OpenClaw init — different job; link from **[Build & integrate](/docs/integrate)** |
+| Relation to **`@synap/cli`** | Agent bridge / OpenClaw init — different job; link from **[Build & integrate](/docs/integrate/index)** |
 
 ---
 
@@ -53,12 +73,12 @@ node packages/eve-cli/dist/index.js status
 
 1. **Align naming** — Replace remaining “Hestia-only” user-facing strings with **Eve** where the product is the entity stack; keep historical docs labeled as legacy if kept.  
 2. **Truth table** — Ensure every `eve` subcommand in README matches shipped CLI.  
-3. **Public docs** — When stable, add a short public “Self-host with Eve” page under **[Use Synap](/docs/start)** that links here for internal depth.  
-4. **Team docs** — **[DevOps](/team/devops)** for generic pod setup; **this page** for Eve-specific stack and vision.
+3. **Public docs** — When stable, add a short public “Self-host with Eve” page under **[Use Synap](/docs/start/index)** that links here for internal depth.  
+4. **Team docs** — **[DevOps](/team/devops/index)** for generic pod setup; **this page** for Eve-specific stack and vision.
 
 ---
 
 ## Guidelines
 
-- Cross-link **[Platform](/team/platform)** (pod contracts), **[Intelligence](/team/intelligence)** (OpenClaw / agents), and public **[Getting started](/docs/start/getting-started)**.  
+- Cross-link **[Platform](/team/platform/index)** (pod contracts), **[Intelligence](/team/intelligence/index)** (OpenClaw / agents), and public **[Getting started](/docs/start/getting-started/index)**.  
 - Do not duplicate long service tables here — summarize and point to `hestia-cli/README.md`.

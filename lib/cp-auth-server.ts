@@ -53,7 +53,7 @@ export async function getServerSession(): Promise<Session | null> {
   }
 }
 
-export function getServerLoginUrl(returnPath = '/team/overview'): string {
+export function getServerLoginUrl(returnPath = '/team/home'): string {
   const callbackUrl = DOCS_URL ? `${DOCS_URL}${returnPath}` : returnPath;
   return `${getSynapApiUrl()}/auth/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`;
 }

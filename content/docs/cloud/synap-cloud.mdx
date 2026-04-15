@@ -1,18 +1,62 @@
 ---
 title: Synap Cloud
-description: Hosted services for identity, security, and provisioning — overview for users and evaluators
+description: Hosted control-plane services that remove operational complexity while keeping your pod-centric model
 ---
 
-**Product:** [synap.live](https://synap.live) · **Control plane API:** [api.synap.live](https://api.synap.live)
+**Product:** [synap.live](https://synap.live)
 
-Synap can run entirely on **your** infrastructure. When you use Synap’s hosted offering, optional **cloud services** sit in the middle so you do not have to operate everything on day one:
+Synap can be self-hosted end to end.  
+Synap Cloud exists for teams that want the Synap model **without** day-one ops burden.
 
-- **Identity & sessions** — sign-in, workspace membership, and secure session handling aligned with your pod.
-- **Security boundaries** — consistent authz checks between clients, agents, and your data pod.
-- **Provisioning** — creating and linking workspaces to pods without manual wiring.
+## Why Synap Cloud exists
 
-This is **not** a second product to learn: it is the **hosted control plane** described in product terms. Internal engineering details (APIs, multi-tenant model, runbooks) live in **team** documentation after sign-in.
+For most teams, the hard part is not only running containers. It is lifecycle operations around them:
 
-**Getting started:** sign up at **[synap.live](https://synap.live)** — see also **[Use Synap → Installation (Hosted)](/docs/start/getting-started/installation#hosted-synap-cloud)** for how this path fits next to Docker and self-host.
+- account and session management
+- pod creation and updates
+- subscription and plan transitions
+- integration onboarding (OAuth connectors, add-on services)
+- consistent policy/security boundaries between app, agents, and pod access
 
-> **Content TBD** — expand with customer-facing flows (sign up, invite, billing) and diagrams. Avoid naming internal codenames unless you intentionally align marketing and code.
+Synap Cloud handles these flows so users can move directly to capturing and operating data.
+
+## What Synap Cloud does (public view)
+
+- **Identity and access lifecycle**: managed sign-in/session and account lifecycle across Synap surfaces
+- **Pod lifecycle orchestration**: provisioning, updating, and operational workflows for hosted pods
+- **Commercial operations**: billing/subscription lifecycle for hosted plans
+- **Connector control plane**: managed OAuth session flow for external providers
+- **Optional managed add-ons**: e.g. managed OpenClaw onboarding path when available
+
+## What Synap Cloud does not replace
+
+- Your **data model** still lives in the pod (entities, views, channels).
+- Your integration surface for external tools remains **Hub Protocol** on the pod.
+- You can still choose self-hosting for full infrastructure control.
+
+## Typical usage path
+
+1. Create account on **synap.live**
+2. Provision and access your workspace/pod
+3. Connect providers and automation paths as needed
+4. Enable intelligence layer (managed or self-managed)
+
+## When to choose Cloud vs self-hosting
+
+Choose **Synap Cloud** when you want:
+
+- fastest onboarding
+- managed lifecycle operations
+- less operational overhead
+
+Choose **self-hosting** when you need:
+
+- full infrastructure sovereignty and custom ops control
+- custom networking/compliance constraints
+- fully internalized deployment pipelines
+
+## Continue
+
+- **[Installation options](/docs/start/getting-started/installation#hosted-synap-cloud)**
+- **[Synap Intelligence](/docs/cloud/intelligence)**
+- **[Build & Integrate](/docs/integrate)**

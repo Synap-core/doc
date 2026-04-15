@@ -1,17 +1,10 @@
 ---
 title: Incident Runbook
-description: "Common incidents: pod stuck, IS down, Stripe webhook failing, DNS mismatch. Step-by-step."
+description: "Entry point to the canonical incident response runbook."
 ---
 
-# Incident Runbook
+Use the canonical runbook:
 
-Use this runbook as the first-response map for production incidents.
+- **[Control Plane Incident Runbook](/team/control-plane/incident-runbook)**
 
-Priority incident classes:
-
-- Pod lifecycle failures (stuck provision/update/deprovision)
-- Intelligence Service downtime or degraded response
-- Billing/webhook failures (Stripe signal mismatch)
-- DNS, routing, or certificate misconfiguration
-
-For each class: confirm symptoms, isolate scope, execute rollback/safe mode, then file postmortem notes.
+This DevOps page is intentionally a short entrypoint so incident process stays centralized and consistent.

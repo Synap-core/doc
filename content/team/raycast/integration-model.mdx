@@ -1,0 +1,20 @@
+---
+title: Integration model
+description: How Raycast should connect to pod APIs, auth, and governance
+---
+
+## Contract baseline
+
+- read/write actions must use existing platform contracts
+- write operations remain permission/proposal governed
+- no custom bypass path for Raycast-only mutations
+
+## Auth and session
+
+- reuse existing auth/session patterns
+- do not introduce long-lived plaintext secrets in local logs or prompts
+
+## Related docs
+
+- team architecture contracts: **[Platform](/team/platform)**
+- public integration framing: **[Build & integrate](/docs/integrate)**

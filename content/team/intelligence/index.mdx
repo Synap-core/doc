@@ -5,17 +5,42 @@ description: "AI Agent Hub — OrchestratorAgent, PersonaAgent, skills, Hub Prot
 
 # Intelligence Service
 
-The IS is the AI brain of Synap. It hosts the OrchestratorAgent (co-founder, full tools) and PersonaAgent (domain expert), routes via Hub Protocol, and streams responses with Traefik sticky sessions.
+The AI execution layer for Synap (OrchestratorAgent, PersonaAgent, skills, runtime contracts, and operations).
 
-**Single source of truth:** long-form guides for agents, contracts, streaming, SDK, pricing, and external agents are maintained in **this team space** (`content/team/intelligence/**/*.mdx`). The old `synap-intelligence-service/docs/*.md` tree was removed; the service repo keeps **`ARCHITECTURE.md`**, **`INTERNAL_API.md`**, **`deploy/*`**, and **monitor `inline-help/*.md`** for clone-and-run workflows.
+## Purpose
 
-## Key Areas
+- Document how IS plans, executes, and returns AI actions.
+- Define Hub Protocol interactions and tool boundaries.
+- Provide runtime operations guidance (deploy, monitor, incident response).
+
+## Target users
+
+- Intelligence service engineers
+- Platform/backend engineers integrating AI workflows
+- Operations team handling runtime reliability
+
+## Main flows
+
+- [Agent system](/team/intelligence/agent-system) — orchestration and persona execution
+- [Skill Hub Protocol](/team/intelligence/skill-hub-protocol) — how AI tools reach Data Pod APIs
+- [Realtime streaming](/team/intelligence/realtime-streaming) — streamed responses and transport behavior
+
+## Key references
 
 | Area | Description |
 |------|-------------|
 | [Architecture](/team/intelligence/architecture) | Full IS architecture — agents, swarm, routing |
-| [Agent System](/team/intelligence/agent-system) | OrchestratorAgent, PersonaAgent, registry, session memory |
-| [Hub Protocol Skills](/team/intelligence/skill-hub-protocol) | How IS accesses backend data |
 | [Internal API](/team/intelligence/internal-api) | All IS REST endpoints |
 | [Deployment](/team/intelligence/deployment) | Docker Swarm, Traefik, autoscaler |
 | [Monitor](/team/intelligence/monitor-agents) | IS monitoring dashboard |
+
+## Dependencies
+
+- [Platform](/team/platform/index) for event chain, permissions, and data contracts.
+- [Control Plane](/team/control-plane/index) for provisioning and billing-aware runtime topology.
+- [DevOps](/team/devops/index) for operational runbooks.
+
+## Related public docs
+
+- [/docs/integrate/agents](/docs/integrate/agents)
+- [/docs/architecture](/docs/architecture)

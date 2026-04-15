@@ -778,10 +778,10 @@ for (const event of recentEvents) {
 
 ## Next Steps
 
-- **[Tutorial: Build Activity Timeline](../tutorials/activity-timeline)** - Event-based UI
-- **[Guide: Event-Driven Workflows](../guides/by-feature/event-workflows)** - Advanced patterns
-- **[API Reference: Events API](../../integrate/reference/events-api)** - Complete event API
-- **[What is Synap?](./what-is-synap)** - How events enable superpowers
+- **[Event catalog](/docs/integrate/reference/event-catalog)** - Canonical list of emitted events
+- **[Events API](/docs/integrate/reference/events-api)** - Event-oriented integration surface
+- **[Webhooks guide](/docs/integrate/integrations/webhooks-guide)** - Event-driven external automation
+- **[What is Synap?](/docs/start/concepts/what-is-synap)** - Product view of why events matter
 
 ---
 

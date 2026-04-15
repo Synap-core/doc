@@ -9,7 +9,6 @@ import {
   Smartphone,
   Terminal,
   FolderGit2,
-  LayoutTemplate,
   Network,
   Monitor,
   AppWindow,
@@ -106,19 +105,6 @@ export const spaces: SpaceConfig[] = [
   },
 
   // —— Team (auth) — matches Fumadocs team root tabs ——
-  {
-    id: 'team-overview',
-    title: 'Overview',
-    description: 'Team hub and links to every internal space',
-    icon: LayoutTemplate,
-    path: '/team/overview',
-    requireAuth: true,
-    category: 'team',
-    order: 9,
-    spaceSelectorActiveClass:
-      'border border-violet-500/30 bg-violet-500/14 text-fd-foreground dark:border-violet-400/35 dark:bg-violet-500/18',
-    spaceSelectorIconClass: 'text-violet-600 dark:text-violet-400',
-  },
   {
     id: 'home',
     title: 'Home & vision',

@@ -503,9 +503,9 @@ for (const suggestion of suggestions) {
 
 ## Next Steps
 
-- **[Tutorial: Build a Graph View](../tutorials/knowledge-graph-view)** - Visualize your data
-- **[Guide: Querying the Graph](../guides/by-feature/querying-graph)** - Advanced queries
-- **[API Reference: Graph API](../../integrate/reference/graph-api)** - Complete API docs
+- **[Entity connections](/docs/architecture/concepts/entity-connections)** - How graph links are represented
+- **[API reference](/docs/integrate/reference/api-reference)** - Query/mutation surface
+- **[Event catalog](/docs/integrate/reference/event-catalog)** - Graph-affecting event streams
 - **[Event Sourcing](./event-sourcing-explained)** - How it all works underneath
 
 ---

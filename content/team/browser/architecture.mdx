@@ -1,0 +1,25 @@
+---
+title: Architecture
+description: Browser trust model, process boundaries, and data movement
+---
+
+## Process model
+
+```text
+Main process (Node)      - windows, secure storage, updater, IPC router
+Renderer (React/Tamagui) - shell UI and product apps
+Webviews (untrusted)     - external websites in sandboxed contexts
+```
+
+## Boundary rules
+
+- keep `contextIsolation` enabled
+- avoid Node APIs in untrusted webviews
+- allowlist IPC channels and validate payloads
+- prefer sensitive pod calls through trusted paths
+
+## Integration points
+
+- platform contracts: **[Platform](/team/platform)**
+- package ownership: **[Synap App](/team/synap-app)**
+- agent/user experience coupling: **[Intelligence](/team/intelligence)**

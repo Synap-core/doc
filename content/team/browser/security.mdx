@@ -1,0 +1,23 @@
+---
+title: Security
+description: Hardening expectations and security release checks for Browser
+---
+
+## Core posture
+
+- sandbox external web content
+- block dangerous URL schemes
+- keep secrets in OS secure storage
+- avoid token exposure in renderer and logs
+
+## Release gates
+
+- IPC allowlist and schema validation reviewed
+- webview sandbox posture re-verified
+- updater integrity and publish target verified
+- pod URL and transport constraints validated
+
+## Cross-system references
+
+- operational controls: **[DevOps](/team/devops)**
+- pod security and provisioning context: **[Control Plane](/team/control-plane)**

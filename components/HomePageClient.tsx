@@ -79,14 +79,14 @@ export function HomePageClient() {
         }}
         links={[
           { text: 'Documentation', url: '/docs/start' },
-          { text: 'Team', url: '/team/overview', icon: <Server className="size-4" /> },
+          { text: 'Team', url: '/team/home', icon: <Server className="size-4" /> },
         ]}
       >
         <div className="container mx-auto flex flex-1 flex-col gap-12 px-4 py-10 md:gap-16 md:py-14">
           {isDev ? (
             <Callout type="warn" title="Development mode">
               Team routes use a <strong>mock session</strong> — open{' '}
-              <Link href="/team/overview" className="font-medium underline underline-offset-2">
+              <Link href="/team/home" className="font-medium underline underline-offset-2">
                 Team
               </Link>{' '}
               without API cookies. The sign-in form talks to the real API (needs CORS + trusted origins).
@@ -102,7 +102,7 @@ export function HomePageClient() {
             </h1>
             <p className="mt-4 text-pretty text-lg text-fd-muted-foreground">
               Public guides below. Internal runbooks and per-surface notes are in{' '}
-              <Link href="/team/overview" className="font-medium text-fd-foreground underline-offset-4 hover:underline">
+              <Link href="/team/home" className="font-medium text-fd-foreground underline-offset-4 hover:underline">
                 Team
               </Link>{' '}
               after sign-in.
@@ -196,7 +196,7 @@ export function HomePageClient() {
                   with your Synap account.
                 </p>
                 <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap">
-                  <Link href="/team/overview" className={homeUi.primaryCta}>
+                  <Link href="/team/home" className={homeUi.primaryCta}>
                     <Server className="size-4" aria-hidden />
                     Open Team docs
                   </Link>

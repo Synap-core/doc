@@ -15,21 +15,21 @@ sidebar_position: 1
 - Open source
 - Requires infrastructure management
 
-See [Self-Hosted Deployment](./data-pod/self-hosted.md)
+See [Self-Hosted Deployment](./data-pod/self-hosted)
 
 ### Docker Compose
 - One-command deployment
 - Includes PostgreSQL and MinIO
 - Perfect for development
 
-See [Docker Deployment](./data-pod/docker.md)
+See [Docker Deployment](./data-pod/docker)
 
 ### Production Cloud
 - Managed infrastructure
 - Scalable
 - High availability
 
-See [Production Deployment](./data-pod/production.md)
+See [Production Deployment](./data-pod/production)
 
 ---
 

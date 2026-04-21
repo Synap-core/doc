@@ -1,6 +1,14 @@
 ---
-title: "Skill: Hub Protocol"
-description: "Hub Protocol skill file — how IS accesses backend data."
+title: 'Skill: Hub Protocol'
+description: Hub Protocol skill file — how IS accesses backend data.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Skill: Synap Hub Protocol
@@ -95,10 +103,12 @@ Before creating any entity or document, call `search_entities` or `search_docume
 
 Pattern:
 
-```
+```yaml
+
 1. search_entities({ query: "Acme Corp", type: "contact" })
    → found: id = "abc-123"
    → use update_entity({ entityId: "abc-123", ... }) not create_entity
+
 ```
 
 ---

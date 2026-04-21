@@ -1,6 +1,14 @@
 ---
-title: "External Agent Integration"
-description: "How external agents integrate via Hub Protocol and API keys."
+title: 'External Agent Integration'
+description: How external agents integrate via Hub Protocol and API keys.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # External Agent Integration Guide
@@ -452,7 +460,8 @@ An **external system** proactively injects data into a thread by calling the bac
 
 ### How it works
 
-```
+```yaml
+
 GitHub pushes a commit
          │
 CI pipeline runs tests (5 minutes)
@@ -467,6 +476,7 @@ Thread receives the system message
          ▼
 User opens the thread — sees the CI result
 (or on next user message, orchestrator references it)
+
 ```
 
 ### Is it already possible?
@@ -640,7 +650,8 @@ Thread now has new system message
      ▼                               ▼
 User opens thread           Orchestrator's next turn
 Sees message immediately    Context includes the message
-```
+```bash
+
 
 ### Use cases
 
@@ -674,6 +685,7 @@ Sees message immediately    Context includes the message
 ## Multi-Model Routing via OpenRouter
 
 All LLM calls in the hub route through OpenRouter. Adding a new model requires **2 lines**:
+
 
 ```typescript
 // apps/intelligence-hub/src/config/models.ts

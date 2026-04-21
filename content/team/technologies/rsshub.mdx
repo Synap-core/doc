@@ -1,0 +1,128 @@
+---
+title: 'RSSHub'
+description: >-
+  What RSSHub is, why Synap uses it, how routes differ from plain RSS URLs, and
+  how Control Plane + Data Pod fetch feeds.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+**RSSHub** is an open-source **RSS feed generator**: it turns sites and APIs that do not expose a stable Atom/RSS feed into standard feeds (RSS 2.0, Atom, JSON Feed, etc.). Synap does **not** fork RSSHub; we **call** it (directly or via the **Control Plane proxy**) as infrastructure for **signal feeds** and **user-configured RSS sources**.
+
+Upstream: [RSSHub documentation](https://docs.rsshub.app/guide/). License: **AGPL-3.0** — treat compliance as a product/legal topic if you embed or redistribute (see [project LICENSE](https://github.com/DIYgod/RSSHub)).
+
+---
+
+## What problem RSSHub solves
+
+| Situation | Without RSSHub | With RSSHub |
+|-----------|----------------|-------------|
+| Site has no feed | Manual copy or scrapers | Route produces a feed URL you can poll |
+| Feed is poor (truncated, wrong order) | Live with it | Often a **route** can filter or reshape (depends on route) |
+| You need many niche sources | Many one-off integrations | One **instance** + documented **routes** |
+
+Synap’s Data Pod still needs **normalization, dedup, classification (IS), and delivery to channels**. RSSHub is only the **transport layer** that emits RSS-like XML/JSON from a path.
+
+---
+
+## Core concepts (routes vs “any URL”)
+
+### Plain RSS / Atom URL (direct fetch)
+
+- Example: `https://techcrunch.com/feed/`
+- The **publisher** already serves a feed. Synap can **`fetch()`** it (`direct` provider / `rss-fetcher` fallback).
+- **No RSSHub involved.**
+
+### RSSHub route
+
+- A **path on an RSSHub deployment**, not necessarily a “real website” feed.
+- Pattern: **`{origin}{route}[?query]`**
+  - `origin`: e.g. `https://rsshub.app` (public), your self-hosted `http://rsshub:1200`, or **Control Plane** (see below).
+  - `route`: e.g. `/github/trending/daily/javascript`, `/twitter/trending` (exact paths **change by RSSHub version** — always check [routes](https://docs.rsshub.app/) for your instance).
+  - **Query parameters**: output format (`format=rss|atom|json`), filters, access keys — see [Parameters](https://docs.rsshub.app/guide/parameters).
+
+**Mental model:** RSSHub is a **router**: `GET /some/route` returns generated feed XML. A “template” in Relay might store either:
+
+1. A **canonical site feed URL** (direct), or  
+2. A **logical URL** whose **path** is an RSSHub route when using CP/self-hosted RSSHub (see Synap wiring below).
+
+---
+
+## How Synap uses RSSHub (three layers)
+
+### 1. Control Plane — `api/rsshub-proxy`
+
+- **Purpose:** Rate-limited, provider-backed proxy so pods do not hammer public sites or a single RSSHub node blindly.
+- **Registration:** CP maintains a **feed provider registry** (default RSSHub + optional extra providers). See Control Plane routes under `rsshub-proxy` and `feed-providers`.
+- **Templates:** CP can expose a **template catalog** (e.g. `GET /api/feed-providers/templates`) for app onboarding — curated **names + URLs + tags**, not user PII.
+
+### 2. Data Pod — RSS fetch worker (`rss-fetcher`, feed jobs)
+
+- Env: `CP_RSSHUB_PROXY_URL` (e.g. `https://api.synap.live/api/rsshub-proxy`) or derive from `CONTROL_PLANE_URL` / `CP_URL` → `{origin}/api/rsshub-proxy`.
+- **Important:** When using the CP proxy path, the worker expects an **`rsshubRoute`** (path suffix) for RSSHub. If the route is **missing**, the code **falls back to direct HTTP fetch** of `source.url` (see `synap-backend/packages/jobs/src/fetchers/rss-fetcher.ts`). So storing only `https://rsshub.app/...` as a “generic URL” without a separate route field can behave like **direct** fetch to that host — understand which code path you hit.
+- Provider types in feed service: `direct` | `rsshub` | `cpproxy` | `custom` (`FeedServiceFactory`).
+
+### 3. Intelligence Service — not RSSHub itself
+
+- IS classifies and personalizes **already normalized items** (`classify_feed_items`, feed preference tools, `recommend_feed_sources` in IS). It does **not** host RSSHub.
+- IS “source lists” in tools may still be **plain RSS URLs** for recommendations; those can be **independent** of RSSHub unless the product explicitly chooses RSSHub routes.
+
+---
+
+## What you can “personalize”
+
+| Layer | What you can tune |
+|-------|-------------------|
+| **RSSHub (upstream)** | Instance env (cache, tokens for Twitter/GitHub/etc.), [access control](https://docs.rsshub.app/deploy/config), route-specific API keys. Many social routes **require credentials** or break when the site changes. |
+| **Synap CP proxy** | Which provider, rate limits, health — not end-user content. |
+| **Synap pod** | Feed config: sources list, schedule, dedup window, **IS relevance** thresholds, which **channel** receives posts. |
+| **Product UX** | Template presets (Relay), goals, persona — drives **which sources** and **how IS scores** items, not RSSHub’s HTML parsing. |
+
+---
+
+## Pitfalls (operations)
+
+- **AGPL** — network use may require offering source to users depending on deployment; ask legal for SaaS packaging.
+- **Public `rsshub.app`** — unofficial fair-use; for production, **self-host** or **CP proxy**.
+- **Twitter/X, LinkedIn** — routes are **fragile** (auth, layout). Expect breakage; have **direct RSS fallbacks** where possible.
+- **URL encoding** — query params must be correctly encoded ([Parameters](https://docs.rsshub.app/guide/parameters)).
+- **Chromium routes** — some feeds need Puppeteer; Docker image must include browser/chrome per RSSHub docs.
+
+---
+
+## Example routes (illustrative — verify on your RSSHub version)
+
+Use these as **ideas**, not guaranteed stable contracts:
+
+| Domain | Example path pattern (after origin) |
+|--------|-------------------------------------|
+| GitHub | `/github/trending/daily/javascript` |
+| Hacker News | `/hackernews` (front page — check docs) |
+| Reddit | subreddit-style routes under `/reddit/...` |
+| Twitter/X | `/twitter/trending`, `/twitter/user/:handle` (often needs tokens) |
+| Telegram | `/telegram/channel/:username` |
+| YouTube | channel/user routes under `/youtube/...` |
+
+Synap **template seeds** may reference public routes (e.g. trending); **validate** on the instance you run in staging.
+
+---
+
+## Related internal docs
+
+- **[Feed system](/team/platform/feed-system)** — pod + CP + IS pipeline.
+- **`synap-backend/docs/RSS-SETUP.md`** — env vars for `direct` / `rsshub` / `cpproxy`.
+- **Self-hosted RSSHub** — public doc: Data Pod self-hosted guide (optional RSSHub beside the pod).
+
+---
+
+## Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-04 | Initial team doc: RSSHub concepts + Synap integration map. |

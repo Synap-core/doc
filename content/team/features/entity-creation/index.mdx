@@ -1,0 +1,36 @@
+---
+title: 'Entity creation'
+description: 'Creating entities through UI forms, AI generation, Hub Protocol, and CLI'
+surfaces: ['browser', 'relay', 'studio', 'raycast', 'eve-cli']
+repos: ['synap-app', 'synap-backend', 'browser', 'relay-app']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Entity Creation
+
+Create entities through multiple entry points: UI forms (browser/studio/relay), AI-generated via chat, Hub Protocol REST endpoints, or CLI commands.
+
+## Creation paths
+
+| Path | Description |
+|------|-------------|
+| **UI Forms (Browser/Studio/Relay)** | Entity form with profile-based fields. Dynamic form generation from property definitions. Supports all 14 system profiles + custom profiles. Rich text for notes, status pickers for tasks, date pickers for events. |
+| **AI-assisted (Chat)** | User describes what they want in AI chat. OrchestratorAgent extracts entity type and properties, creates a proposal (for AI mutations), user approves, entity is created. |
+| **Hub Protocol REST** | External agents (OpenClaw, OpenClaw) POST to `/api/hub/entities` with entity data. Creates entities on behalf of authenticated agent users. |
+| **Eve CLI** | CLI commands for structured entity creation. Pipe-friendly for automation. Sovereign stack integration. |
+
+## Entity scoping
+
+- **Pod-wide** entities (note, task, project, event, person, contact, company, bookmark, website, article) — visible across all workspaces
+- **Workspace-scoped** entities (deal, file, capture, anchor + custom profiles) — scoped to creating workspace
+
+Scope is determined by `profile.entityScope` via `ProfileResolutionService.getEntityScope()`.
+
+## Key files
+
+- Entity profiles: [/team/platform/entity-profiles](/team/platform/entity-profiles)
+- Property definition scoping: [/team/platform/property-def-scoping](/team/platform/property-def-scoping)
+- Hub Protocol entities: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts`
+- Drizzle schema: `synap-backend/packages/database/src/schema/entities.ts`
+- Profile resolution: `synap-backend/packages/database/src/services/profile-resolution-service.ts`

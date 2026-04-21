@@ -1,6 +1,14 @@
 ---
-title: "File Upload & Import"
-description: "File handling, import pipeline, storage."
+title: 'File Upload & Import'
+description: 'File handling, import pipeline, storage.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # File Upload & Import System
@@ -26,7 +34,8 @@ No separate `files` table. Uses `entities` + `@synap/storage` (MinIO/R2).
 
 ### Upload Endpoint
 
-```
+```yaml
+
 POST /api/files/upload (multipart/form-data)
 Authorization: Kratos session cookie
 
@@ -37,14 +46,17 @@ Fields:
 
 Response:
   { entityId, fileName, mimeType, size, storageKey, previewUrl? }
-```
 
 ```
+
+```yaml
+
 GET /api/files/:entityId/url
 Authorization: Kratos session cookie
 
 Response:
   { url: "presigned-url", expiresAt: "ISO-8601" }
+
 ```
 
 ### Chat Attachments
@@ -76,7 +88,8 @@ The Intelligence Service receives file entities via `getThreadContext()` → `li
 
 ### Endpoint
 
-```
+```yaml
+
 POST trpc/import.submitBatch
 Authorization: Kratos session (workspace-scoped)
 
@@ -89,6 +102,7 @@ Input:
 
 Limits:
   5MB per file, 20MB total, 50 files max
+
 ```
 
 ### Type Detection & Processing

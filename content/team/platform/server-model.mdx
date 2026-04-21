@@ -1,6 +1,14 @@
 ---
-title: "Server Model"
-description: "Multi-server architecture: CP, IS, pods, shared pod model."
+title: 'Server Model'
+description: 'Multi-server architecture: CP, IS, pods, shared pod model.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Server Model — Architecture & User Flows
@@ -73,12 +81,14 @@ A user can buy multiple servers:
 **Who:** OpenClaw user, developer, self-hosted everything
 **Path:** OpenClaw → synap skill → self-hosted pod
 
-```
+```bash
+
 1. User has OpenClaw running on their machine
 2. Installs synap skill
 3. Runs: docker compose up (Synap pod on same server)
 4. Runs: ./setup-openclaw.sh
 5. Done — agent has structured memory
+
 ```
 
 **Cost:** Free
@@ -89,7 +99,8 @@ A user can buy multiple servers:
 **Who:** OpenClaw user who doesn't want to manage PostgreSQL
 **Path:** synap.live → subscribe → pod created → connect OpenClaw
 
-```
+```bash
+
 1. User visits synap.live, signs up
 2. Chooses "Pod" plan (€15/mo)
 3. CP provisions VPS, installs Synap, sends email
@@ -97,6 +108,7 @@ A user can buy multiple servers:
 5. Goes to Settings → API Keys → creates key
 6. Configures OpenClaw: SYNAP_POD_URL + SYNAP_HUB_API_KEY
 7. Done — managed pod, local OpenClaw
+
 ```
 
 **Cost:** €15/mo

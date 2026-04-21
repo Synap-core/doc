@@ -1,0 +1,715 @@
+---
+title: 'Code Anchors'
+description: 'Deep index of every major product area in the Synap monorepo — repo URLs, key files, architecture patterns, and cell registrations.'
+section: tech-matrix
+audience: developers
+version: 1.0+
+last_updated: '2026-04-20'
+tags: [code, navigation, monorepo, architecture]
+sidebar_position: 2
+hide_title: false
+toc: true
+---
+
+# Code Anchors
+
+A navigable index of every major product area in the Synap monorepo. Each section includes the repo URL, key source files with descriptions, architecture patterns, and — for UI-facing areas — cell registrations.
+
+**Monorepo root:** `./` (all paths are relative to `/Users/antoine/Documents/Code/synap/`)
+
+---
+
+## Browser (Electron App)
+
+**Repo:** `browser/`
+**Port:** 3000 (dev)
+**Surface:** Primary desktop experience
+
+### Architecture
+
+```
+Main process (Node) — windows, secure storage, updater, IPC router
+Renderer (React/Tamagui) — shell UI and product apps
+Webviews (untrusted) — external websites in sandboxed contexts
+```
+
+### Key Files
+
+### [browser] electron/main/index.ts — Main process entry point
+Bootstraps the Electron main process: app lifecycle, window creation, tray, auto updater, and connects to the renderer.
+
+### [browser] electron/main/connection/connection-manager.ts — Pod connection management
+Manages connections to Synap Data Pods. Handles failover, reconnection, and multi-pod scenarios.
+
+### [browser] electron/main/ipc/ipc-router.ts — IPC channel routing
+Routes IPC messages between main and renderer processes. Validates payloads and enforces security allowlists.
+
+### [browser] electron/main/window-manager.ts — Window lifecycle
+Creates, manages, and destroys application windows including multi-window support for tabs and popups.
+
+### [browser] electron/main/tabs/tab-manager.ts — Tab management
+Manages browser and app-level tabs, tab state, and tab persistence across sessions.
+
+### [browser] electron/main/tray.ts — System tray integration
+Electron system tray (macOS menu bar) with quick-access commands and connection status.
+
+### [browser] electron/main/app-window-ipc.ts — App-to-window IPC
+IPC handlers for app-window communication, enabling app switching and data flow between contexts.
+
+### [browser] electron/main/capture/capture-service.ts — Capture service
+Handles browser capture — saving content, images, and structured data from web pages.
+
+### [browser] electron/main/capture/capture-manager.ts — Capture orchestration
+Coordinates capture flows: scheduling, preprocessing, and pushing captured entities to the Data Pod.
+
+### [browser] electron/main/terminal/pty-manager.ts — Terminal PTY management
+Process terminal for the integrated Terminal app. Handles PTY allocation and IPC forwarding.
+
+### [browser] electron/main/terminal/terminal-ipc.ts — Terminal IPC
+IPC handlers for terminal commands, output streaming, and process management.
+
+### [browser] electron/main/quick-capture-window.ts — Quick capture popup
+Creates the quick-capture floating window (from menu bar or keyboard shortcut).
+
+### [browser] electron/main/cli/cli-config-manager.ts — CLI config management
+Manages local CLI configuration for dev and prod command integration.
+
+### [browser] electron/main/extensions/extension-manager.ts — Extension system
+Loads and manages browser extensions — plugin registry, lifecycle hooks, and sandbox enforcement.
+
+### [browser] electron/main/pod/pod-connection-manager.ts — Pod connection manager
+Handles authenticated connections to Synap Data Pods, managing tokens and pod discovery.
+
+### [browser] electron/main/security/biometric-auth.ts — Biometric authentication
+macOS/Windows biometric auth integration for secure unlock flows.
+
+### [browser] electron/main/security/credential-manager.ts — Credential storage
+Encrypted credential storage via Electron's secure credential APIs.
+
+### [browser] electron/main/security/anonymous-auth.ts — Anonymous session auth
+Handles anonymous/seed user authentication for trial and local spaces.
+
+### [browser] electron/main/synap-app/synap-app-view-manager.ts — App view manager
+Manages rendering of Synap product apps within Electron windows/shell.
+
+### [browser] electron/main/views/views-manager.ts — Views management
+Manages data views configuration, persistence, and rendering contexts.
+
+### [browser] electron/preload/index.ts — Preload script
+Context isolation bridge between main process and renderer. Exposes secure APIs to the renderer without exposing Node internals.
+
+### [browser] electron/preload/webview-preload.ts — Webview preload
+Sandboxed preload for external webview contexts.
+
+### [browser] electron/renderer/src/apps/manifest.ts — App manifest (single source of truth)
+Defines all 18 browser apps with metadata, lazy loaders, capabilities, and shortcuts. AppId is derived from this — do NOT manually maintain BuiltInAppId.
+
+### [browser] electron/renderer/src/apps/index.ts — App registry
+Aggregates built-in and registered apps from manifest.
+
+### [browser] electron/renderer/src/apps/registerApps.ts — App registration
+Runtime registration of app definitions into the app registry.
+
+### [browser] electron/renderer/src/apps/DashboardApp.tsx — Home dashboard
+Bento grid dashboard with widget cells, quick actions, and space overview.
+
+### [browser] electron/renderer/src/apps/LibraryApp.tsx — Library (Data + Views)
+Merged data + views surface with masonry default layout.
+
+### [browser] electron/renderer/src/apps/DataApp.tsx — Data explorer
+Search and explore your data with entity cards, filters, and bulk actions.
+
+### [browser] electron/renderer/src/apps/ViewsApp.tsx — Views page
+All views — tables, kanbans, calendars, and more.
+
+### [browser] electron/renderer/src/apps/IntelligenceApp.tsx — AI chat & studio
+AI chat, agents, and the studio — co-pilot for everything.
+
+### [browser] electron/renderer/src/apps/ChannelsApp.tsx — Channels
+All channels — AI threads, groups, external, and A2A communication.
+
+### [browser] electron/renderer/src/apps/ProposalsApp.tsx — Proposals
+Review and approve AI-proposed changes.
+
+### [browser] electron/renderer/src/apps/WorkflowsApp.tsx — Workflows
+Commands, automations, flow editor, and run history.
+
+### [browser] electron/renderer/src/apps/MarketplaceApp.tsx — Marketplace
+Browse and install packages — templates, automations, commands.
+
+### [browser] electron/renderer/src/apps/VaultApp.tsx — Vault
+Encrypted secrets vault for passwords and API keys.
+
+### [browser] electron/renderer/src/apps/SettingsApp.tsx — Settings
+Browser settings and preferences — profile configuration, entity scoping, appearance.
+
+### [browser] electron/renderer/src/apps/BrowserApp.tsx — Browser
+Web browser within Electron with tab management and webview handling.
+
+### [browser] electron/renderer/src/apps/CalendarApp.tsx — Calendar
+Calendar and events view.
+
+### [browser] electron/renderer/src/apps/FilesApp.tsx — Files
+File manager (incoming surface).
+
+### [browser] electron/renderer/src/apps/WhiteboardApp.tsx — Whiteboard
+Collaborative whiteboard with realtime sync (Yjs + Socket.IO).
+
+### [browser] electron/renderer/src/apps/DataStructureApp.tsx — Data Structure
+Entity profiles, relation types, and visual ERD.
+
+### [browser] electron/renderer/src/apps/RelayApp.tsx — Relay
+Relationship intelligence graph within the browser.
+
+### [browser] electron/renderer/src/apps/TerminalApp.tsx — Terminal
+Integrated terminal app with PTY support.
+
+### App sidebar (Activity Bar)
+
+4 apps are visible in the sidebar by default (manifest `showInActivityBar: true`):
+- **Dashboard** — Home
+- **Browser** — Globe
+- **Chat** — Sparkles
+- **Library** — Library (Data + Views merged)
+
+### Renderer hooks
+
+### [browser] electron/renderer/src/hooks/index.ts — Hook exports
+Barrel export of all renderer hooks.
+
+### [browser] electron/renderer/src/hooks/useConnectionFlow.ts — Pod connection flow
+Manages the multi-step pod connection flow: discovery, authentication, workspace selection.
+
+### [browser] electron/renderer/src/hooks/useDeepLinkHandler.ts — Deep link handling
+Processes deep links from OS and external apps.
+
+### [browser] electron/renderer/src/hooks/useFailoverIntegration.ts — Failover integration
+Handles fallback to local/IndexedDB when pod is unreachable.
+
+### [browser] electron/renderer/src/hooks/useBiometricAuth.ts — Biometric auth hook
+UI-side biometric authentication flow.
+
+### [browser] electron/renderer/src/hooks/useBrowserAIGate.ts — AI gate
+Controls AI feature access gating (workspace limits, entitlements).
+
+### [browser] electron/renderer/src/hooks/useBrowserCapture.ts — Browser capture hook
+Client-side capture operations in the renderer.
+
+### [browser] electron/renderer/src/hooks/usePodData.ts — Pod data hook
+Accesses data from the connected Data Pod.
+
+### [browser] electron/renderer/src/hooks/useWorkspaceContext.ts — Workspace context
+Provides workspace-scoped data access and context.
+
+### [browser] electron/renderer/src/hooks/useLibraryEntities.ts — Library entities hook
+Data access for the Library app.
+
+### Renderer lib
+
+### [browser] electron/renderer/src/lib/authOrchestrator.ts — Auth orchestrator
+Coordinates authentication flows across pod + control plane + local spaces.
+
+### [browser] electron/renderer/src/lib/authClient.ts — Auth client
+Thin client wrapper around Better Auth for the renderer.
+
+### [browser] electron/renderer/src/lib/queryPersister.ts — Query persister
+TanStack Query persister for offline/IndexedDB support.
+
+### [browser] electron/renderer/src/lib/podFetch.ts — Pod fetch
+Custom fetch wrapper with pod URL resolution and token injection.
+
+### Rendering & theme
+
+### [browser] electron/renderer/src/theme/browser-theme.ts — Browser theme
+Tamagui theme configuration specific to the Electron app context.
+
+### [browser] electron/renderer/src/theme/index.ts — Theme exports
+Barrel export for theme tokens.
+
+### Packages
+
+### [browser] electron/renderer/src/packages/bundled-packages.ts — Bundled packages
+Lists npm packages that the electron preload must bundle (synap-hooks, synap-client, synap-stores).
+
+---
+
+## Relay (Mobile App)
+
+**Repo:** `relay-app/`
+**Framework:** Expo (React Native)
+**Surface:** FIRST mobile app
+
+### Architecture
+
+Expo Router file-based routing with tab layout:
+- `(tabs)` — Home, Feed, Chat, People, Notes, Pipeline, Campaigns, Search, Settings, Highlights
+- Individual entity pages — `entity/[id].tsx`, `person/[id].tsx`, `note/[id].tsx`, `campaign/[id].tsx`, `automation/[id].tsx`
+- Onboarding flow — `onboarding.tsx` with sub-steps (feed preferences, campaign goals)
+- Studio — `studio/hooks.tsx`, `studio/guidelines.tsx`
+
+### Key Files
+
+### [relay-app] app.json — Expo app config
+App identifier, scheme, and build configuration.
+
+### [relay-app] app/_layout.tsx — Root layout
+Expo Router root layout — navigation container, providers, and global state setup.
+
+### [relay-app] app/(tabs)/_layout.tsx — Tab navigator
+Sets up the bottom tab bar with all tab routes.
+
+### [relay-app] app/(tabs)/home.tsx — Home tab
+Personal dashboard with quick actions and entity summaries.
+
+### [relay-app] app/(tabs)/feed.tsx — Feed tab
+Unified feed with AI-curated content, filters, and engagement actions.
+
+### [relay-app] app/(tabs)/chat.tsx — Chat tab
+AI chat interface for mobile.
+
+### [relay-app] app/(tabs)/search.tsx — Search tab
+Full-text + semantic search for entities across the workspace.
+
+### [relay-app] app/(tabs)/people.tsx — People tab
+Person entity listing and relationship management.
+
+### [relay-app] app/(tabs)/notes.tsx — Notes tab
+Note-taking with entity profile rendering.
+
+### [relay-app] app/(tabs)/pipeline.tsx — Pipeline tab
+Deal/project pipeline view.
+
+### [relay-app] app/(tabs)/campaigns.tsx — Campaigns tab
+Campaign management and status tracking.
+
+### [relay-app] app/(tabs)/highlights.tsx — Highlights tab
+Saved/promoted content curation.
+
+### [relay-app] app/(tabs)/settings.tsx — Settings tab
+App settings and workspace switching.
+
+### [relay-app] app/entity/[id].tsx — Entity detail
+Universal entity detail page that renders entity cards based on profile type.
+
+### [relay-app] app/person/[id].tsx — Person detail
+Person profile with contact details and relationship links.
+
+### [relay-app] app/note/[id].tsx — Note detail
+Note content with inline entity links.
+
+### [relay-app] app/campaign/[id].tsx — Campaign detail
+Campaign status, timeline, and actions.
+
+### [relay-app] app/automation/[id].tsx — Automation detail
+Automation configuration and status.
+
+### [relay-app] app/onboarding.tsx — Onboarding flow
+Multi-step onboarding with space creation and feature picks.
+
+### [relay-app] app/onboarding/connectors.tsx — Connector setup
+OAuth connector setup during onboarding (Nango integrations).
+
+### [relay-app] app/native-features.tsx — Native features showcase
+Platform-native features page (notifications, share extension, etc.).
+
+### [relay-app] app/invite.tsx — Invite flow
+Invite teammates to workspace.
+
+### [relay-app] app/ai-settings.tsx — AI settings
+Proactive AI preferences and nudge density controls.
+
+### [relay-app] app/security.tsx — Security settings
+Biometric unlock, pin, and security configuration.
+
+### [relay-app] android/ — Android build files
+Android-specific configuration, gradle files, and native modules.
+
+### [relay-app] ios/ — iOS build files
+iOS-specific configuration, Info.plist, and native modules.
+
+---
+
+## Synap App (Web Monorepo)
+
+**Repo:** `synap-app/`
+**Port:** 3000 (dev)
+**Structure:** pnpm monorepo with workspace packages
+
+### Architecture
+
+**Three-layer data pattern:**
+```
+React Component (synap-app/packages/)
+  → @synap/hooks (useEntity, useView, useChannel...)
+    → @synap/stores (Zustand workspace/UI state)
+      → @synap/client (tRPC + TanStack Query)
+```
+
+**Cell system layers:**
+- `@synap/capabilities` — manifest of cell types, widget types, and contracts (source of truth)
+- `@synap/cell-runtime` — registry singleton + CellRenderer dispatcher
+- Hosts: `BentoCellHost`, `PanelCellHost`, `PageCellHost`
+
+**Key directories:**
+- `packages/core/` — ui-system, capabilities, cell-runtime, view-renderer, entity-card, proposal-types, notifications
+- `packages/features/` — ai-chat, connectors, sidebar, onboarding
+- `packages/views/` — table, kanban, bento, calendar, timeline, graph, flow, etc.
+- `packages/apps/` — app compositions
+- `packages/synap-client/` — tRPC proxy, TanStack Query setup
+- `packages/synap-stores/` — Zustand workspace and UI state
+- `packages/synap-hooks/` — React hooks layer (useEntity, useView, etc.)
+
+### Key Files
+
+### [synap-app] packages/core/capabilities/src/manifest.ts — Cell manifest (source of truth)
+Defines all cell types, widget types, and contracts. 60+ built-in cells across ~80 registrations.
+
+### [synap-app] packages/core/view-renderer/ — View renderer
+Adapters that render cells inside view containers. Handles view-specific cell configuration.
+
+### [synap-app] packages/core/ui-system/ — Design system
+Tamagui tokens, colors, spacing, typography, and shared components.
+
+### [synap-app] packages/core/notifications/ — Notification system
+Unified Notification type with discriminated source, NotificationService, bell/toast/banner UI.
+
+### Cell registration packages
+
+| Package | # | Key Widgets |
+|---------|---|-------------|
+| `bento-widgets` | 22 | calendar, entity-card, stat-card, entity-gallery, iframe-embed, link-grid, entity-spotlight, reading-progress, capture-flow |
+| `intelligence` | 8 | service-status, usage, agents, proposals, recent-chats, skills, tasks, agent-detail |
+| `workflows` | 7 | workflow-list, automation-detail/flow/status, command-detail, trigger-button, run-history |
+| `core-widgets` | 6 | stat-card, section-header, quick-access, feed, inbox |
+| `entity-views` | 4 | entity-detail, document-editor, entity-relationships, entity-properties |
+| `proactive-ai` | 5 | morning-briefing, weekly-digest, health-check, insight, proactive-feed |
+| `channels` | 4 | channel, channel-navigator, channel-view, channel-feed |
+| `ai-action-cells` | 3 | ai-proposed-action, ai-doc-proposal, ai-workspace-proposal |
+| `views` | 6 | view-list, view-table, view-kanban, view-calendar, view-grid, view |
+| `ai-chat` | 2 | ai-chat, terminal-output |
+| `notifications` | 1 | notifications |
+| `search` | 1 | search |
+
+### Views packages
+
+16 view types defined, 12 implemented:
+
+| Type | Package | Status |
+|------|---------|--------|
+| `table` | `views/table` | Implemented |
+| `list` | `views/list` | Implemented |
+| `grid` | `views/grid` | Implemented |
+| `gallery` | `views/gallery` | Implemented |
+| `kanban` | `views/kanban` | Implemented |
+| `matrix` | `views/matrix` | Implemented |
+| `masonry` / `feed` | `views/masonry` | Implemented |
+| `calendar` | `views/calendar` | Implemented |
+| `flow` | `views/flow` | Implemented |
+| `bento` | `views/bento` | Implemented |
+| `branch_tree` | `views/branch_tree` | Implemented |
+| `whiteboard` | `views/whiteboard` | Implemented |
+| `timeline` | — | Not yet |
+| `graph` | — | Not yet |
+| `gantt` | — | Not yet |
+| `mindmap` | — | Not yet |
+
+---
+
+## Synap Backend (API Pod)
+
+**Repo:** `synap-backend/`
+**Port:** 4000 (dev)
+**Stack:** Hono, tRPC 11, Drizzle ORM, PostgreSQL/TimescaleDB
+
+### Architecture
+
+```
+tRPC router (Hub Protocol + tRPC) → services → repositories → Drizzle → PostgreSQL
+```
+
+**Three communication channels:**
+1. **tRPC** — Direct client-to-backend (300ms target, used by all frontend apps)
+2. **Hub Protocol REST** — Agent-to-backend REST endpoints (POST /api/hub/*, used by Intelligence Service and OpenClaw)
+3. **Socket.IO** — Realtime subscriptions (used by all apps for live updates)
+
+tRPC and Hub Protocol REST share the same tRPC routers but are routed differently: tRPC via `/trpc/*`, Hub Protocol via `/api/hub/*` (directly mounted, not proxying tRPC).
+
+### Key Files
+
+### [synap-backend] packages/api/src/routers/hub-protocol-rest.ts — Hub Protocol REST router
+21 sub-routers mounted at `/api/hub/*`. Handles ALL IS ↔ Backend communication. NOT `/trpc/hubProtocol.*`.
+
+### [synap-backend] packages/api/src/routers/ — tRPC routers directory
+All tRPC router definitions. Key routers:
+- `profiles.ts` — Profile CRUD and effective property resolution
+- `entities.ts` — Entity CRUD with `checkPermissionOrPropose()` gating
+- `views.ts` — View filter compilation + default columns (threads `workspaceId`)
+- `channels.ts` — Channel management and message operations
+- `proposals.ts` — Proposal lifecycle
+- `ai.ts` — AI integration endpoints (proactive posts, agent actions)
+
+### [synap-backend] packages/api/src/utils/permission-check.ts — Permission check
+`checkPermissionOrPropose()` — RBAC + DEFAULT_AUTO_APPROVE whitelist. Used for AI mutations and external connector syncs.
+
+### [synap-backend] packages/database/src/schema/ — Drizzle schema
+All database table definitions. Key schemas:
+- `entities` — Core entity table (JSONB properties, profile_id, workspace_id, documentId)
+- `profiles` — Entity profiles (14 system profiles + custom profiles)
+- `views` — View definitions (type, filters, config JSONB)
+- `view_filters` — View filter specifications
+- `channels` — Channel definitions with types
+- `channel_messages` — Messages within channels
+- `proposals` — Proposal lifecycle and governance
+- `property_defs` — Property definition schema with three-level workspace scoping
+- `workspace_members` — User↔workspace membership
+- `entities_relations` — Entity relationship edges
+- `documents` — Document content and associations
+- `ai_memory` — Agent session memory (session-scoped)
+
+### [synap-backend] packages/database/src/services/profile-resolution-service.ts — Profile resolution service
+`getEffectiveProperties(profileId, workspaceId)` — single source of truth for overlay property resolution. 60s TTL cache with `invalidateEntityScopeCache(slug)`.
+
+### [synap-backend] packages/database/src/utils/ensure-system-profiles.ts — System profile seeding
+Creates 14 default entity types: note, task, project, event, person, contact, company, deal, bookmark, website, article, capture, file, anchor.
+
+### [synap-backend] packages/jobs/ — pg-boss job workers
+27 workers + 3 proactive cron jobs. Key workers:
+- `ai-workers` — AI classification, proactive posts
+- `materializer` — Entity view materialization (create/update)
+- `proactive-cron` — Morning briefing, weekly digest, health check
+
+### [synap-backend] packages/realtime/ — Socket.IO + Yjs realtime
+WebSocket bridge, presence, collaborative editing sync.
+
+### [synap-backend] skills/synap/ — OpenClaw skill
+Unified OpenClaw skill for Synap integration. Install via `openclaw skill install synap`.
+
+### Other key files
+
+### [synap-backend] deploy/docker-compose.yml — Docker Compose (production)
+Full stack: backend, realtime, postgres, redis, minio, typesense, kratos, hydra, caddy, openclaw (profile: openclaw), rsshub/browserless (profile: rsshub), monitoring (profile: monitoring), pod-agent, updater.
+
+### [synap-backend] deploy/setup-openclaw.sh — OpenClaw setup script
+Runs `POST /api/hub/setup/agent` (PROVISIONING_TOKEN auth) to create agent user + API key.
+
+### [synap-backend] deploy/docker-compose.standalone.yml — Standalone compose
+Optional `--profile openclaw` profile for self-hosted OpenClaw.
+
+### [synap-backend] skills/synap-os/SKILL.md — OpenClaw OS skill
+`openclaw skill install https://raw.githubusercontent.com/synap-app/synap-backend/main/skills/synap-os/SKILL.md`
+
+### Migration files
+
+### [synap-backend] packages/database/migrations-drizzle/ — Drizzle migrations
+Notable migrations:
+- `0060_entity_scope_column.sql` — Entity scope (pod vs workspace)
+- `0065_property_defs_workspace_scope.sql` — Property defs three-level workspace scoping
+
+### OpenAI-compat endpoint
+
+### [synap-backend] packages/api/src/routes/openai-compat.ts — OpenAI-compat endpoint
+`POST /v1/chat/completions` — IS as AI provider for OpenClaw. Model aliases: `synap/auto`, `synap/free`, `synap/balanced`, `synap/advanced`, `synap/complex`.
+
+---
+
+## Intelligence Service
+
+**Repo:** `synap-intelligence-service/`
+**Port:** 3001 (dev)
+**Stack:** OrchestratorAgent + PersonaAgent, Hono, OpenRouter
+
+### Architecture
+
+Two-layer agent model:
+- **OrchestratorAgent** — Co-founder persona with full tool access
+- **PersonaAgent** — Domain expert personas with branch-only access
+
+Session-scoped memory: always on, 4h personal sessions / 30min other sessions, compaction engine.
+
+### Key Files
+
+### [intelligence-service] apps/intelligence-hub/src/agents/orchestrator-agent.ts — Orchestrator agent
+Full-tool-access agent. Core of the AI conversation flow.
+
+### [intelligence-service] apps/intelligence-hub/src/agents/persona-agent.ts — Persona agent
+Domain expert agent with scoped tool access. Handles branch conversations.
+
+### [intelligence-service] apps/intelligence-hub/src/agents/ — Agent directory
+Agent registry, agent lifecycle management, agent-to-agent communication.
+
+### [intelligence-service] apps/intelligence-hub/src/tools/ — Agent tools
+Tool registry for agents: entity operations, view rendering, channel messaging, proactive posting.
+
+### [intelligence-service] apps/intelligence-hub/src/skills/ — Agent skills
+Skill definitions for agents: entity management, view creation, document operations, workflow automation.
+
+### [intelligence-service] apps/intelligence-hub/src/ — Hub directory
+Hub protocol implementation, event sourcing, proposal integration.
+
+### [intelligence-service] apps/intelligence-hub/src/agents/ — Agents directory
+Agent definitions, agent registry, agent lifecycle hooks.
+
+### Proactive intelligence
+
+- **Cron workers**: morning briefing (15min), weekly digest (hourly), health check (daily)
+- **Hub Protocol**: `POST /proactive/post` (rate-limited: 3/hour, 10/day)
+- **Notification integration**: proactive messages create notification rows + chat messages
+
+---
+
+## Control Plane
+
+**Repos:** `synap-control-plane-api/` (REST API, port 3000) + `synap-control-plane-dashboard/` (React + Vite, port 5173)
+
+### Architecture
+
+- **API**: Hono REST API for pod provisioning, user management, and infrastructure orchestration
+- **Dashboard**: React app for admin operations — SharedPodsPage, incident management, monitoring
+
+### Key Files
+
+### [control-plane-api] — API routes
+- Pod provisioning and lifecycle management
+- CP↔Pod auth (ES256 asymmetric JWT via JWKS)
+- User and workspace management
+- Signal layer endpoints
+
+### [control-plane-dashboard] — Dashboard components
+- `SharedPodsPage` — Create, monitor tenants, evict, migrate
+- Incident management and SLO tracking
+- Infrastructure status dashboard
+- GHCR caching status
+
+---
+
+## Raycast Extension
+
+**Repo:** `raycast/`
+**Surface:** Raycast extension commands for Synap integration
+
+### Architecture
+
+Raycast extension that allows searching entities, creating entities, and interacting with the Data Pod directly from Raycast.
+
+### Key Files
+
+### [raycast] commands/ — Raycast commands
+Command definitions: search entities, create tasks, capture bookmarks, view channels.
+
+### [raycast] api/ — API client
+tRPC client wrapper for Raycast command execution. Handles workspace context and authentication.
+
+### [raycast] tools/ — Command utilities
+Helper utilities for command execution, result formatting, and EntityCard rendering.
+
+### [raycast] hooks/ — React hooks
+Raycast-specific hooks for command state, workspace selection, and data fetching.
+
+---
+
+## Eve CLI (Hestia)
+
+**Repo:** `synap-cli/`
+**Surface:** OpenClaw bridge CLI — `npx @synap/cli init`
+
+### Architecture
+
+Three-path CLI flow:
+1. **Existing OpenClaw** — Connects to existing OpenClaw installation
+2. **Fresh server** — Provisions new server with Synap stack
+3. **Laptop** — Local development setup with local-only mode
+
+### Key Files
+
+### [cli] src/index.ts — Main entry point
+CLI bootstrap, command routing, and argument parsing.
+
+### [cli] src/commands/ — CLI commands
+- `init` — Three-path setup flow
+- `connect` — Pod connection
+- `status` — OpenClaw and pod status check
+
+### [cli] src/tools/ — CLI utilities
+Environment detection, YAML config reading/writing, package validation, network checks.
+
+### [cli] src/hooks/ — Lifecycle hooks
+Pre/post setup hooks, environment variable injection, config validation.
+
+---
+
+## Code Anchor Index
+
+All source code paths below are relative to `/Users/antoine/Documents/Code/synap/` (monorepo root).
+
+### Browser (Electron)
+
+| File | Path |
+|------|------|
+| Main entry | `browser/electron/main/index.ts` |
+| Connection manager | `browser/electron/main/connection/connection-manager.ts` |
+| IPC router | `browser/electron/main/ipc/ipc-router.ts` |
+| Window manager | `browser/electron/main/window-manager.ts` |
+| Tab manager | `browser/electron/main/tabs/tab-manager.ts` |
+| App manifest | `browser/electron/renderer/src/apps/manifest.ts` |
+| App registry | `browser/electron/renderer/src/apps/registerApps.ts` |
+| Preload | `browser/electron/preload/index.ts` |
+| Theme | `browser/electron/renderer/src/theme/browser-theme.ts` |
+| Auth orchestrator | `browser/electron/renderer/src/lib/authOrchestrator.ts` |
+| Capture service | `browser/electron/main/capture/capture-service.ts` |
+| Biometric auth | `browser/electron/main/security/biometric-auth.ts` |
+| Terminal PTY | `browser/electron/main/terminal/pty-manager.ts` |
+
+### Synap App (Web)
+
+| File | Path |
+|------|------|
+| Cell manifest | `synap-app/packages/core/capabilities/src/manifest.ts` |
+| UI system | `synap-app/packages/core/ui-system/` |
+| Cell runtime | `synap-app/packages/core/cell-runtime/` |
+| View renderer | `synap-app/packages/core/view-renderer/` |
+| Entity card | `synap-app/packages/core/entity-card/` |
+| Proposal types | `synap-app/packages/core/proposal-types/` |
+| Notifications | `synap-app/packages/core/notifications/` |
+| AI chat | `synap-app/packages/features/ai-chat/` |
+| Hooks layer | `synap-app/packages/synap-hooks/` |
+| Stores | `synap-app/packages/synap-stores/` |
+| tRPC client | `synap-app/packages/synap-client/` |
+| Views package | `synap-app/packages/views/` |
+
+### Backend
+
+| File | Path |
+|------|------|
+| Hub Protocol REST | `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` |
+| Permission check | `synap-backend/packages/api/src/utils/permission-check.ts` |
+| Drizzle schema | `synap-backend/packages/database/src/schema/` |
+| Profile resolution | `synap-backend/packages/database/src/services/profile-resolution-service.ts` |
+| System profiles | `synap-backend/packages/database/src/utils/ensure-system-profiles.ts` |
+| Job workers | `synap-backend/packages/jobs/` |
+| Realtime | `synap-backend/packages/realtime/` |
+| Docker Compose | `synap-backend/deploy/docker-compose.yml` |
+| OpenClaw setup | `synap-backend/deploy/setup-openclaw.sh` |
+| OpenClaw skill | `synap-backend/skills/synap/SKILL.md` |
+
+### Intelligence Service
+
+| File | Path |
+|------|------|
+| Orchestrator agent | `synap-intelligence-service/apps/intelligence-hub/src/agents/orchestrator-agent.ts` |
+| Persona agent | `synap-intelligence-service/apps/intelligence-hub/src/agents/persona-agent.ts` |
+| Agent tools | `synap-intelligence-service/apps/intelligence-hub/src/tools/` |
+| Agent skills | `synap-intelligence-service/apps/intelligence-hub/src/skills/` |
+
+### Control Plane
+
+| File | Path |
+|------|------|
+| API | `synap-control-plane-api/` |
+| Dashboard | `synap-control-plane-dashboard/` |
+
+### OpenClaw
+
+| File | Path |
+|------|------|
+| CLI entry | `synap-cli/src/index.ts` |
+| CLI commands | `synap-cli/src/commands/` |

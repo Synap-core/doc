@@ -1,0 +1,58 @@
+---
+title: 'Pod updates & policies'
+description: >-
+  How Synap Cloud schedules and applies Data Pod updates, and what you can
+  control
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+When your pod runs on **Synap Cloud**, the hosted control plane can deliver new backend releases without you SSH-ing into servers. This page explains what you choose (policy), what happens automatically, and where limits apply.
+
+## Update policies
+
+Each registered pod has an **update policy** stored in the control plane:
+
+| Policy | Meaning |
+|--------|---------|
+| **Manual** | New versions are published to your pod only when you explicitly trigger an update (from the app or admin tooling). |
+| **Auto (latest)** | When a new release is registered (for example after CI publishes images), eligible pods can be included in a **rolling update** job so they move to the new version without a manual click. |
+| **Pinned** | Reserved for workflows where a pod should stay on a specific version until you change the pin (exact UX may evolve; ask support if you rely on this). |
+
+Changing policy does **not** by itself pull a new image; it changes **when** automatic triggers are allowed.
+
+## What “up to date” means
+
+The control plane compares your pod’s **reported current version** (a concrete release tag, for example a semver) with the **latest registered release** for the platform. If they match, the pod is considered **up to date**. If a newer tag exists, you will see an **update available** state in product surfaces that expose it.
+
+## How an update is applied (high level)
+
+1. The control plane enqueues a **rolling update** job (or a single-pod update for one tenant).
+2. The job signs a short-lived **JWT** and calls your pod’s **pod-agent** over HTTPS: `POST /api/pod-agent/command`.
+3. The pod-agent verifies the token using the control plane’s public keys (JWKS), then runs the update script (pull images, migrate, restart, health checks).
+4. The pod calls back to the control plane so the UI and records reflect **success or failure**.
+
+No SSH is required for this path. The pod-agent is designed to stay up even when application containers restart.
+
+## What you need on the network
+
+- Your pod must be reachable at its **public HTTPS URL** (custom domain or `https://<subdomain>.<Synap app domain>`).
+- The pod must be able to reach the control plane’s **JWKS** endpoint over HTTPS so the pod-agent can verify JWTs.
+
+If either direction is blocked (firewall, DNS, or TLS issues), updates may show as failed or unreachable in history until connectivity is restored.
+
+## Self-hosted pods
+
+If you run the Data Pod yourself, you are not required to use Synap Cloud’s rolling update pipeline. Typical options include the **`synap` CLI** (`update` flow) and your own CI. You can still **register** a self-hosted pod with the control plane for account and product features; update mechanics then follow the same HTTPS + pod-agent model when you opt into cloud-driven updates.
+
+## Related
+
+- **[Synap Cloud](/docs/cloud/synap-cloud)** — scope of hosted services
+- **[Deployment overview](/docs/architecture/deployment/overview)** — self-hosted and compose options
+- Team documentation (internal): [CP dashboard & update pipeline](/team/control-plane/cp-dashboard-updates) — architecture and operations detail

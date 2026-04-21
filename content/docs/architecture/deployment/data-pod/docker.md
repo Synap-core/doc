@@ -1,5 +1,14 @@
 ---
 sidebar_position: 2
+title: 'Docker'
+description: Documentation covering Docker
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Docker Deployment
@@ -87,6 +96,8 @@ For production, consider:
 - Configuring monitoring
 
 See [Production Deployment](./production) for details.
+
+For **public hostname, DNS, and optional tunnel** (when you cannot expose 80/443 directly), see [Tunnels and domains](./tunnels-and-domains).
 
 ---
 

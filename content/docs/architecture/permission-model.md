@@ -1,6 +1,14 @@
 ---
-title: Permission model
+title: 'Permission model'
 description: Workspace-scoped access and policy enforcement for users and agents.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 Permissions are enforced at the pod and workspace layers.

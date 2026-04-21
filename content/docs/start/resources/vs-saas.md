@@ -1,6 +1,14 @@
 ---
-title: Synap vs SaaS suites
-description: Cost, lock-in, and control tradeoffs versus hosted collaboration stacks.
+title: 'Synap vs SaaS suites'
+description: 'Cost, lock-in, and control tradeoffs versus hosted collaboration stacks.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap vs SaaS suites

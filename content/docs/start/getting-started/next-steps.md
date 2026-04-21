@@ -1,5 +1,14 @@
 ---
 sidebar_position: 4
+title: 'Next Steps'
+description: Documentation covering Next Steps
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Next Steps

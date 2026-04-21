@@ -1,0 +1,90 @@
+---
+title: 'Features & Flows'
+description: 'Cross-cutting features with end-to-end user flows, surface coverage, and code references'
+section: features
+audience: all-teams
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Features & Flows
+
+This section maps each Synap feature end-to-end across all product surfaces. For each feature, you'll find:
+
+- **What it does** — One-sentence capability summary
+- **Surface coverage** — Which products support this feature
+- **How it works** — End-to-end flow from trigger to outcome
+- **Architecture** — Key services and contracts involved
+- **Code links** — Relevant repos + source files
+- **Related features** — Cross-linked documentation
+
+---
+
+## Data Ingest
+
+How content enters Synap from external sources.
+
+| Feature | Description | Surfaces |
+|---------|-------------|----------|
+| [Capture](/team/features/capture) | Save web content, text, or media as structured entities | Browser, Relay, Raycast, Eve |
+| [Import](/team/features/import) | Bulk data import from CSV, JSON, Nango connectors, pod-to-pod | Browser, Studio, Platform |
+| [Search](/team/features/search) | Full-text (Typesense) + semantic (pgvector) search | All surfaces |
+
+## Data Organization
+
+How content is structured, organized, and visualized.
+
+| Feature | Description | Surfaces |
+|---------|-------------|----------|
+| [Entity Creation](/team/features/entity-creation) | Creating entities through UI, AI, Hub Protocol, CLI | All surfaces |
+| [Entity Profiles](/team/features/entities-profiles) | Dynamic type system — 14 system profiles + custom | Browser, Relay, Studio |
+| [Views](/team/features/views) | Named queries with rendering configs — 16 types defined | Browser, Relay, Studio |
+| [Feeds](/team/features/feeds) | Three-layer feed: signal, proactive, unified | Browser, Relay, Studio |
+
+## Communication
+
+How people and AI agents communicate.
+
+| Feature | Description | Surfaces |
+|---------|-------------|----------|
+| [Chat](/team/features/chat) | AI chat with OrchestratorAgent + PersonaAgents | Browser, Relay, Studio, Raycast |
+| [Channels](/team/features/channels) | Communication surfaces: ai_thread, branch, entity_comments, etc. | Browser, Relay, Studio |
+| [Notifications](/team/features/notifications) | Unified notification system — 27 registry types | Browser, Relay, Studio |
+
+## Intelligence
+
+AI-powered capabilities and autonomous operations.
+
+| Feature | Description | Surfaces |
+|---------|-------------|----------|
+| [Proactive AI](/team/features/proactive-ai) | Cron workers: morning briefing, digest, health check | Browser, Relay, Studio |
+| [Automations](/team/features/workflows) | Rule-based workflow execution via pg-boss | Browser, Studio |
+| [AI Workflows](/team/features/ai-workflows) | Multi-step AI orchestration with cell composition | Browser, Studio |
+| [Intelligence Orchestrator](/team/features/intelligence-orchestrator) | AI agent system, skills, Hub Protocol | All surfaces |
+
+## Infrastructure
+
+Cross-cutting platform capabilities.
+
+| Feature | Description | Surfaces |
+|---------|-------------|----------|
+| [Pod Sync](/team/features/pod-sync) | Pod-to-pod data replication with event log mirroring | Platform |
+| [Proposals & Governance](/team/features/proposals-governance) | AI mutation governance via proposal review | Browser, Relay, Studio |
+| [Onboarding](/team/features/onboarding) | Story-based onboarding with presets and feature picks | New users |
+
+---
+
+## How to read this section
+
+Each feature page links to the deep-dive documentation in:
+
+- **Product spaces** (`/team/browser/`, `/team/relay/`, etc.) — surface-specific documentation
+- **Platform space** (`/team/platform/`) — backend architecture and contracts
+- **Intelligence space** (`/team/intelligence/`) — AI agent system
+- **Tech Matrix** (`/team/tech-matrix/`) — repository code anchors and infrastructure
+
+This section is designed for product validation. For each feature, you can jump to the right level of detail: overview → surface coverage → architecture → source code.

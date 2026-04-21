@@ -1,6 +1,14 @@
 ---
-title: "Pages"
-description: "Relay screen inventory and navigation structure."
+title: 'Pages'
+description: Relay screen inventory and navigation structure.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Relay — Page Specifications
@@ -394,7 +402,8 @@ Each page described with layout, components, states, and interactions.
 - **Desktop:** Navbar button (+ icon)
 
 ### Layout (Bottom Sheet on Mobile)
-```
+```bash
+
 ┌──────────────────────────────────┐
 │  ─── (drag handle) ───          │
 │                                  │
@@ -421,6 +430,7 @@ Each page described with layout, components, states, and interactions.
 │                                  │
 │  [Confirm & Save]                │
 └──────────────────────────────────┘
+
 ```
 
 ### Behavior
@@ -443,7 +453,8 @@ Each page described with layout, components, states, and interactions.
 **Purpose:** Get data into the system immediately. The "wow" moment.
 
 ### Flow
-```
+```typescript
+
 1. Welcome → "Relay builds your relationship graph"
 2. Connect Telegram → OAuth / bot link
    → Immediate: import contacts, scan group memberships
@@ -453,6 +464,7 @@ Each page described with layout, components, states, and interactions.
 4. LinkedIn (optional) → "Paste your connections export URL" or skip
 5. First capture → Guided quick capture: "Who did you meet recently?"
 6. Done → Feed with first results appearing in real-time
+
 ```
 
 ### Key Moments

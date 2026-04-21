@@ -1,0 +1,57 @@
+---
+title: 'Feeds'
+description: 'Three-layer feed system — signal feed, proactive feed, and unified feed — aggregating insights across all surfaces'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Feeds
+
+The feed system aggregates information from multiple sources into a unified timeline that surfaces across all Synap surfaces. Three distinct feed layers feed into the unified feed.
+
+## Feed layers
+
+| Layer | Description |
+|-------|-------------|
+| **Signal Feed** | Real-time event stream from user/agent activities. Each user action (create, update, delete entity) emits a signal. 500ms batching for performance. Renders as timeline items in feeds. [More details](/team/platform/signal-feed-architecture) |
+| **Proactive Feed** | AI-generated insights posted to user's personal channel. Cron workers: morning briefing (15min), weekly digest (hourly), health check (daily). Rate-limited: 3/hour, 10/day. [More details](/team/platform/signal-feed-ai) |
+| **Unified Feed** | Composites signal feed + proactive feed + notifications + data sync events. Shown in: home dashboard (bento), relay mobile feed, and channel feeds. [More details](/team/platform/unified-feed) |
+
+## Feed flow
+
+1. **Event generation** — User creates/updates entity, AI processes, or external sync arrives
+2. **Signal emission** — Event logged to signal/feed table with 500ms batching
+3. **Proactive AI** — Cron-triggered intelligence review generates insights → posts to personal channel
+4. **Notification creation** — Feed items create notification rows (discriminated by source: proposal | proactive | system | data)
+5. **Feed rendering** — Cells render the unified feed in bento grids, relay mobile, studio channels
+
+## Proactive cells
+
+Five proactive cell types render in bento dashboards:
+
+| Cell | Purpose | Refresh |
+|------|---------|---------|
+| morning-briefing | Daily summary of overnight events | ~15min |
+| weekly-digest | Weekly review and trends | 1hr |
+| health-check | System health and sync status | 1hr |
+| insight | AI-generated connection insights | On-demand |
+| feed | Recent activity stream | Real-time |
+
+## Key files
+
+- Feed system: [/team/platform/feed-system](/team/platform/feed-system)
+- Signal feed architecture: [/team/platform/signal-feed-architecture](/team/platform/signal-feed-architecture)
+- Signal feed implementation: [/team/platform/signal-feed-impl](/team/platform/signal-feed-impl)
+- Signal feed AI: [/team/platform/signal-feed-ai](/team/platform/signal-feed-ai)
+- Unified feed: [/team/platform/unified-feed](/team/platform/unified-feed)
+- Notifications: [/team/platform/notifications](/team/platform/notifications)
+- Cell registrations: `@synap/capabilities` (proactive-ai package: 5 proactive cells)
+
+## Related features
+
+- [[capture]] — Captured content surfaces in feeds
+- [[notifications]] — Feed items create notification rows
+- [[proactive-ai]] — Proactive feed powered by AI cron workers
+- [[channels]] — Feed rendered in channel contexts

@@ -1,0 +1,40 @@
+---
+title: 'Search'
+description: 'Full-text search with Typesense and semantic search with pgvector'
+surfaces: ['browser', 'relay', 'studio', 'raycast', 'eve-cli']
+repos: ['synap-app', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Search
+
+Two-tier search: Typesense for full-text relevance ranking and pgvector for semantic/neural similarity search. Both are composited into a single search experience across all surfaces.
+
+## Architecture
+
+| Engine | Description |
+|--------|-------------|
+| **Typesense (Full-text)** | Primary search engine. Handles keyword matching, fuzzy search, faceted filtering, and relevance scoring. Documents are synced from PostgreSQL via async workers. **Key tables:** TypeSense index synced from entities, profiles, and custom indexes. **Triggers:** entity create/update/delete triggers reindexing. |
+| **pgvector (Semantic)** | Vector similarity search in PostgreSQL. Entities are embedded via the intelligence service and stored in the `entities` table vector column. Used for "find similar" and semantic queries. **Embedding model:** Configurable (supports multiple providers via intelligence service) |
+
+## Search flow
+
+1. **Query** — User types search query in any surface (browser search, Raycast command, CLI search)
+2. **Routing** — Frontend determines query intent (keyword vs semantic) and routes accordingly
+3. **Typesense query** — Full-text search with faceted filtering by entity type, date, tags
+4. **pgvector query** — Semantic similarity search (if enabled) for conceptual matches
+5. **Result composition** — Results from both engines are deduplicated and ranked
+6. **Presentation** — Results shown as entity cards in the search UI, filtered by workspace
+
+## Key files
+
+- Search API: `/api/search` in synap-team-docs (Next.js route for docs search)
+- Typesense sync: backend search indexing workers
+- pgvector: PostgreSQL vector extension, embedding generation in intelligence service
+- Frontend: search cell in `@synap/core/search`
+
+## Configuration
+
+- **VECTOR_SEARCH_ENABLED** env var — set `false` on shared pods to disable pgvector (Typesense-only mode)
+- **Typesense configuration** — Managed via docker-compose; index creation handled on startup

@@ -1,0 +1,53 @@
+---
+title: 'Capture'
+description: 'Web capture, mobile capture, browser extension, and desktop capture — saving content to Synap entities'
+surfaces: ['browser', 'relay', 'raycast', 'eve-cli']
+repos: ['synap-app', 'browser', 'relay-app', 'synap-raycast']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Capture
+
+Save any web content, text, or media into Synap as structured entities. The capture system preserves provenance and automatically enriches content with AI classification.
+
+## Surface coverage
+
+| Surface | Description |
+|---------|-------------|
+| **Browser & Extension** | Web page capture, selection capture, bookmark capture. Supports screenshots, full-page dumps, and selection extraction. AI auto-classifies into entity types. |
+| **Relay (Mobile)** | Native share sheet integration. Quick-capture flow for photos, URLs, text, and contacts. Supports deferred capture with image processing pipeline. |
+| **Raycast Extension** | Quick-capture commands for links, text snippets, and screenshots. Power-user workflows with hotkey triggers and clipboard-based capture. |
+| **Eve CLI** | Command-line capture with structured input. Pipe-based input for automated workflows. Sovereign stack integration. |
+
+## Capture flow
+
+1. **Trigger** — Browser extension, mobile share sheet, Raycast command, or Eve CLI
+2. **Enrich** — Content is fetched, metadata extracted, and AI classification applied
+3. **Validate** — If AI-assisted, proposal may be created for review; direct saves skip this
+4. **Persist** — Entity is created in PostgreSQL with full provenance chain
+5. **Notify** — User sees confirmation; proactive feed may surface insights
+
+## Architecture
+
+Capture goes through a multi-stage pipeline on the platform:
+
+1. **Content ingestion** — Raw content arrives via any surface (tRPC, Hub Protocol REST, or direct API)
+2. **Provenance tracking** — Source URL, timestamp, and capture method are recorded
+3. **AI enrichment** — OrchestratorAgent classifies entity type, extracts metadata, and suggests properties
+4. **Entity creation** — Drizzle ORM creates entity row in `entities` table with JSONB profile data
+5. **Reindex** — Typesense search index and pgvector embeddings are updated asynchronously
+
+## Key files
+
+- Capture pipeline: [/team/platform/capture-pipeline](/team/platform/capture-pipeline)
+- Import pipeline: [/team/platform/import-pipeline](/team/platform/import-pipeline)
+- Browser capture & flows: [/team/browser/capture-and-flows](/team/browser/capture-and-flows)
+- Cell rendering: `@synap/capabilities` (cell registrations for entity-card, entity-gallery)
+- Entity profile resolution: `ProfileResolutionService` in backend
+
+## Related features
+
+- [[import]] — Bulk import from various sources (CSV, JSON, external APIs)
+- [[search]] — Full-text and semantic search over captured content
+- [[feeds]] — Captured content surfaces in user's feed

@@ -1,6 +1,14 @@
 ---
-title: "Agents README"
-description: "Agent implementation guide and registry patterns."
+title: 'Agents README'
+description: Agent implementation guide and registry patterns.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Agents
@@ -9,7 +17,8 @@ All agents extend `BaseAgent`, which provides tool wrapping, AIStep tracking, pr
 
 ## Directory structure
 
-```
+```bash
+
 agents/
 ├── base/
 │   ├── agent.ts              # BaseAgent — all shared execution logic
@@ -42,6 +51,7 @@ agents/
 └── utils/
     ├── context-manager.ts    # assembleContext() — session + branch graph + entities
     └── entity-extraction.ts  # Entity extraction from text
+
 ```
 
 ## Routing

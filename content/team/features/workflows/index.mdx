@@ -1,0 +1,46 @@
+---
+title: 'Automations'
+description: 'Workflow automations — templates, triggers, executors, and the automation pipeline'
+surfaces: ['browser', 'studio']
+repos: ['synap-app', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Automations
+
+Automations execute predefined workflows triggered by events (entity create, schedule, external webhook). Built on pg-boss for job scheduling and the proposal system for governance.
+
+## Automation components
+
+| Component | Description |
+|-----------|-------------|
+| **Workflows App** | The workflows app in the browser drawer provides the UI for creating, managing, and monitoring automations. Lists all workflows, shows execution status, and provides a command interface for creating new ones. |
+| **Automation Executors** | Backend workers that execute automation steps. Can trigger entity updates, send notifications, post to channels, call external APIs, or invoke intelligence service actions. [More details](/team/platform/permissions) |
+| **Triggers** | Entity lifecycle triggers (create, update, delete), scheduled triggers (cron-based), and external triggers (webhooks, Nango connector sync). [More details](/docs/architecture/concepts/why-events) |
+| **Templates** | Pre-built automation templates for common workflows: task assignment, status updates, notification forwarding, entity duplication, cross-entity sync. |
+
+## Automation flow
+
+1. **Template selection** — User picks an automation template or creates from scratch
+2. **Trigger configuration** — User defines what event triggers the automation
+3. **Action chain** — Sequential steps: entity update, notification, external API call
+4. **Governance** — AI-triggered automations go through the proposal system
+5. **Execution** — pg-boss worker executes; success/failure tracked in run history
+6. **Feedback** — Results posted to personal channel and notification system
+
+## AI workflow automations
+
+Intelligence service skills include `skill-automations` — AI agents can create and manage automations through natural language. The automations skill provides:
+
+- Create automation from description
+- Suggest templates based on workspace patterns
+- Monitor and suggest improvements to existing automations
+
+## Key files
+
+- Workflows app: `browser/electron/renderer/src/apps/workflows`
+- pg-boss workers: `synap-backend/packages/jobs/`
+- Intelligence skills: `synap-intelligence-service/src/skills/`
+- Automation executor: backend automation module
+- Proposal system: [/team/platform/proposals](/team/platform/proposals)

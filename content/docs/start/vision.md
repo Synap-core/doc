@@ -1,6 +1,14 @@
 ---
 sidebar_position: 1
-title: Vision & Philosophy
+title: 'Vision & Philosophy'
+description: Documentation covering Vision & Philosophy
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 > **What this page is:** A readable **philosophy / narrative** snapshot—how we frame Synap in one sitting. The **full product vision** (mission, beliefs, direction) is the canonical doc at [Strategy → Vision](./strategy/vision.md).

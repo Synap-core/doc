@@ -1,84 +1,78 @@
 ---
-title: Eve
-description: Entity Creation System — sovereign stack installer (CLI, organs, Docker) aligned with Synap
+title: 'Eve CLI — North star'
+description: >-
+  Entity Creation System — sovereign installer for Synap and sidecars; vision,
+  docs map, and links to source.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
-**Eve** is our **Entity Creation System**: it turns a bare machine into a coherent, self-hosted “digital entity” — **Brain** (Synap data pod + DB + cache + local AI), **Arms** (OpenClaw), **Builder** (creation/deploy tooling), **Eyes** (RSS/RSSHub intake), **Legs** (Traefik, TLS, exposure). The user-facing CLI command is **`eve`**.
+**Eve** is Synap’s **Entity Creation System**: a **TypeScript CLI** (`eve`) and monorepo (**hestia-cli**) that turns a server into a coherent stack — **Brain** (Synap Data Pod + optional local inference), **Legs** (exposure: Traefik, tunnels), **Arms** (OpenClaw), **Eyes** (RSSHub), **Builder** (OpenCode / OpenClaude / deploy hooks). It is **not** a replacement for the Synap backend; it **orchestrates** installs and Docker sidecars alongside the official **`synap`** shell CLI.
 
-**Monorepo in this workspace:** `hestia-cli/` (package `packages/eve-cli`, build `pnpm run build:eve`). Product narrative and deep README also live next to the older **Project Hestia** doc tree under `hestia/` — **Eve is the current product name**; treat Hestia-named files as legacy unless updated.
-
----
-
-## Purpose
-
-- Define Eve product scope and internal architecture narrative.
-- Document operator workflows for sovereign stack setup.
-- Align Eve positioning with platform, intelligence, and ops teams.
-
-## Target users
-
-- Eve CLI contributors
-- Infrastructure and operator-facing engineers
-- Operations and marketing teammates defining self-host positioning
-
-## Main flows
-
-- `eve` bootstrap and stack provisioning workflow
-- Brain/Arms composition and service lifecycle management
-- Operator troubleshooting and upgrade paths
+This space is the **canonical internal narrative** for product vision, architecture, flows, and operations. **Long-form source mirrors** live in the repo ([**hestia-cli** on GitHub](https://github.com/Synap-core/hestia-cli)); this site adds structure, diagrams, and cross-links to **[Platform](/team/platform/index)**, **[Intelligence](/team/intelligence/index)**, **[DevOps](/team/devops/index)**, and **[Stack & tools](/team/technologies/index)**.
 
 ---
 
-## Vision
+## North star
 
-- **Sovereignty:** Your server, your data, optional fully local AI — no mandatory cloud.
-- **One coherent system:** Not a bag of unrelated installers; organs are wired to the same Docker network and mental model.
-- **Synap as Brain:** The Synap backend is the knowledge graph and API core; Eve is how operators **stand up** that stack (and friends) reproducibly.
+| Pillar | Intent |
+|--------|--------|
+| **Sovereignty** | Your machine, your data; optional fully local inference; no mandatory cloud for the core stack. |
+| **One system** | Organs share a **mental model** (`eve` commands, `eve-network`, secrets layout) — not a random bag of installers. |
+| **Synap as Brain** | The Data Pod (API, Hub, governance) is the **knowledge core**; Eve **stands it up** and wires **sidecars** and **operator tooling**. |
+| **Clarity of exposure** | **Synap public URL** (Caddy) vs **Eve Legs** (Traefik / tunnel) are **separate decisions** — documented in [User flows](/team/eve-cli/user-flows). |
 
 ---
 
-## Current state
+## Who this is for
+
+- **Eve / hestia-cli contributors** — packages, CLI UX, Docker compose.
+- **Operators & infra** — bootstrap, LXC, paths, `synap` delegation.
+- **GTM & ops** — positioning for self-host and “sovereign stack” messaging (align with **[Home & vision](/team/home/index)**).
+
+---
+
+## Doc map (read order)
+
+1. **[Vision](/team/eve-cli/vision)** — metaphor, organs, principles (condensed from repo north-star).
+2. **[Architecture](/team/eve-cli/architecture)** — packages, ports mental model, **interactive stack diagram**.
+3. **[User flows](/team/eve-cli/user-flows)** — three paths (`inference_only` / `data_pod` / `full`), setup order, `eve setup` vs `synap install`.
+4. **[Operations](/team/eve-cli/operations)** — `/opt/eve` vs `/opt/synap-backend`, LXC/Proxmox, Docker pitfalls, logs.
+5. **[Synap integration](/team/eve-cli/synap-integration)** — `SYNAP_REPO_ROOT`, `SYNAP_DEPLOY_DIR`, tarball vs git, `synap install` behavior.
+6. **[Repository & builds](/team/eve-cli/repository)** — monorepo layout, bootstrap, release bundles, where to open issues.
+
+**Related:** **[Stack & tools](/team/technologies/index)** — Ollama, Traefik, Docker-in-LXC, tunnels — **external references** and short internal notes.
+
+---
+
+## Repositories (canonical)
+
+| Repo | Role |
+|------|------|
+| [Synap-core/hestia-cli](https://github.com/Synap-core/hestia-cli) | **Eve CLI** monorepo (`@eve/cli`, `bootstrap.sh`, docs under `docs/`). |
+| [Synap-core/backend](https://github.com/synap-core/backend) | Synap **Data Pod** — `synap` script, `deploy/`, Docker images. |
+| [Synap-core/synap-cli](https://github.com/Synap-core/synap-cli) | Agent bridge / OpenClaw init — **different** from Eve; see **[Build & integrate](/docs/integrate/index)**. |
+
+---
+
+## Current state (honest)
 
 | Area | Status |
 |------|--------|
-| Architecture (organs, compose, networking) | Documented in repo `hestia-cli/README.md` and `hestia-cli/docs/*` |
-| CLI (`eve` commands: `brain`, `arms`, `birth`, `status`, …) | In active development; some flows are aspirational in README — verify against `packages/eve-cli` before promising dates |
-| Relation to **pod `synap` script** | Backend deploy CLI (`synap-backend/synap`) remains the **Synap-only** Docker lifecycle; Eve is the **broader entity** stack (Brain + optional organs) |
-| Relation to **`@synap/cli`** | Agent bridge / OpenClaw init — different job; link from **[Build & integrate](/docs/integrate/index)** |
+| `eve setup` three-path flow | Shipped; keep repo README + `docs/EVE_SETUP_PROFILES.md` as **detail** source. |
+| Organs (brain / legs / arms / eyes / builder) | Iterating; verify commands against `packages/eve-cli` before external promises. |
+| Public “Self-host with Eve” page | Future: short page under **Use Synap** linking here for depth. |
 
 ---
 
-## How to use (team / contributors)
+## Guidelines for contributors
 
-```bash
-cd hestia-cli
-pnpm install
-pnpm run build:eve
-# Example (see README for full flags):
-node packages/eve-cli/dist/index.js brain init --with-ai
-node packages/eve-cli/dist/index.js status
-```
-
-**Operators** (future scripted install): README describes `curl -fsSL https://eve.sh/install.sh | bash` and USB/bootstrap paths — confirm scripts exist and are published before external comms.
-
-**Further reading (in repo):**
-
-- `hestia-cli/docs/north-star.md` — principles  
-- `hestia-cli/docs/service-reference.md` — services and ports  
-- `hestia-cli/docs/architecture-decisions.md`, `technology-choices.md` — ADRs  
-
----
-
-## Next steps
-
-1. **Align naming** — Replace remaining “Hestia-only” user-facing strings with **Eve** where the product is the entity stack; keep historical docs labeled as legacy if kept.  
-2. **Truth table** — Ensure every `eve` subcommand in README matches shipped CLI.  
-3. **Public docs** — When stable, add a short public “Self-host with Eve” page under **[Use Synap](/docs/start/index)** that links here for internal depth.  
-4. **Team docs** — **[DevOps](/team/devops/index)** for generic pod setup; **this page** for Eve-specific stack and vision.
-
----
-
-## Guidelines
-
-- Cross-link **[Platform](/team/platform/index)** (pod contracts), **[Intelligence](/team/intelligence/index)** (OpenClaw / agents), and public **[Getting started](/docs/start/getting-started/index)**.  
-- Do not duplicate long service tables here — summarize and point to `hestia-cli/README.md`.
+- Prefer **this tree** for narrative and **hestia-cli** for exhaustive option lists and changelogs.
+- Flow diagrams: **[TeamDoc guidelines](/team/platform/teamdoc-guidelines)** — Mermaid for simple sequences; **React Flow** (`EveStackDiagram`, `SynapFlowDiagram`) for topology.
+- Cross-link **Hub Protocol** and pod contracts from **[Platform](/team/platform/index)** instead of duplicating.

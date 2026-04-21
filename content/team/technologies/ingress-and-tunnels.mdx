@@ -1,0 +1,48 @@
+---
+title: 'Ingress & tunnels'
+description: >-
+  Traefik, Caddy, and tunnel options (Pangolin, Cloudflare) in Synap vs Eve
+  layers.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Two layers (do not merge mentally)
+
+| Layer | Typical software | Who configures |
+|-------|------------------|----------------|
+| **Data Pod public URL** | **Caddy** (Synap deploy) | **`synap install`** / `.env` **`DOMAIN`** |
+| **Eve sidecars / gateway** | **Traefik** (Legs), optional **tunnel** | **`eve legs`**, **`eve setup`** tunnel prompts |
+
+Public **Synap** hostname ≠ automatic public **Eve** routes — see **[Eve — User flows](/team/eve-cli/user-flows)**.
+
+---
+
+## Components
+
+- **Caddy** — Synap’s edge for **:80 / :443** on the pod domain.
+- **Traefik** — Eve Legs patterns for **sidecar** routes (e.g. inference gateway), avoiding port clashes with Caddy.
+- **Pangolin / Cloudflare** — optional outbound tunnel story for **Legs** (product-specific wiring in **hestia-cli**).
+
+---
+
+## Control Plane (Synap Cloud) vs pod edge
+
+Managed pods are still fronted by **Caddy on the Data Pod** for TLS and routing. The **Control Plane** chooses an **exposure mode** during provisioning (`direct_dns` by default: A record to the server IP). Optional tunnel modes are modeled as **ExposureProvider** implementations and can emit **compose profiles** / **env vars** for pod-agent to apply after health checks — see **[Pod exposure orchestration](/team/control-plane/pod-exposure-orchestration)**.
+
+That is orthogonal to Eve’s Traefik/tunnel setup: CP does not configure Eve; it only targets the standard Synap Docker stack on the VPS.
+
+---
+
+## Upstream references
+
+- [Caddy](https://caddyserver.com/docs/)
+- [Traefik](https://doc.traefik.io/traefik/)
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/)
+- Pangolin — use project docs relevant to your installer version.

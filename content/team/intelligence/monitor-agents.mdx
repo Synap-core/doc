@@ -1,6 +1,14 @@
 ---
-title: "Monitor: Agents"
-description: "Agent monitoring dashboard — what data is shown and why."
+title: 'Monitor: Agents'
+description: Agent monitoring dashboard — what data is shown and why.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Agent System
@@ -22,7 +30,8 @@ The intelligence hub has **6 production agent types**, each with a specialized s
 
 Every agent turn follows the same pipeline, implemented in `base/agent.ts`:
 
-```
+```bash
+
 1. Assemble Context  (8s timeout — never blocks the user)
    ├── Thread messages  (3s abort)
    ├── Memory recall    (semantic top-10)
@@ -48,6 +57,7 @@ Every agent turn follows the same pipeline, implemented in `base/agent.ts`:
 
 5. Stream Response
    └── SSE events: step → content → proposal → complete
+
 ```
 
 ## Multi-Agent Dispatch

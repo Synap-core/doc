@@ -1,0 +1,52 @@
+---
+title: 'Entity profiles'
+description: 'Dynamic type system for entities — 14 system profiles + custom profiles with layered property schemas'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Entity Profiles
+
+Every entity in Synap has a profile type (note, task, person, etc.). Profiles contain property definitions that determine which fields the entity has. Profiles can be extended with custom properties per workspace.
+
+## System profiles (14)
+
+| Slug | Parent | Icon | Scope | Key Properties |
+|------|--------|------|-------|----------------|
+| `note` | — | file-text | pod | content, tags |
+| `task` | — | check-square | pod | status, priority, dueDate |
+| `project` | — | folder | pod | status, tags |
+| `event` | — | calendar | pod | startDate, endDate, location |
+| `person` | — | user | pod | email, phone |
+| `contact` | person | user-check | pod | + role |
+| `company` | — | building | pod | website, industry, employees |
+| `deal` | — | trending-up | workspace | stage, value, closeDate |
+| `bookmark` | — | bookmark | pod | url, domain, source |
+| `website` | bookmark | globe | pod | + favicon |
+| `article` | bookmark | newspaper | pod | + author, publishedAt |
+| `capture` | bookmark | camera | workspace | Quick capture target |
+| `file` | — | file | workspace | fileName, mimeType, fileSize |
+| `anchor` | — | pin | workspace | channelId, messageId |
+
+## Property schema layers
+
+Property definitions follow a three-layer schema model:
+
+| Layer | Scope | Description |
+|-------|-------|-------------|
+| **Layer 1: Global** (`profile_id=NULL, workspace_id=NULL`) | Visible in every workspace, for every profile. Set by system defaults. [More details](/team/platform/property-def-scoping) |
+| **Layer 2: Profile base** (`profile_id=SET, workspace_id=NULL`) | Visible in every workspace that uses this profile. Workspace-owned profiles keep `workspace_id=NULL`. [More details](/team/platform/property-def-scoping) |
+| **Layer 3: Workspace overlay** (`profile_id=SET, workspace_id=SET`) | Visible only in this workspace. Created when a workspace extends a pod-wide profile. [More details](/team/platform/property-def-scoping) |
+
+## Custom profiles
+
+Users can create custom entity types through the Profile Editor in Settings. Custom profiles can be set to pod-wide or workspace-scoped. The intelligence service auto-classifies incoming content into the appropriate profile type.
+
+## Key files
+
+- Ensure system profiles: `synap-backend/packages/database/src/utils/ensure-system-profiles.ts`
+- Profile resolution: `synap-backend/packages/database/src/services/profile-resolution-service.ts`
+- Property definition migration: `synap-backend/packages/database/migrations-drizzle/0065_property_defs_workspace_scope.sql`
+- Entity scope migration: `synap-backend/packages/database/migrations-drizzle/0060_entity_scope_column.sql`

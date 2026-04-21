@@ -1,6 +1,14 @@
 ---
-title: "OpenClaw Channel Interactions"
-description: "How OpenClaw agents interact through Synap channels."
+title: 'OpenClaw Channel Interactions'
+description: How OpenClaw agents interact through Synap channels.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # OpenClaw Channel Interactions — Architecture Map
@@ -43,11 +51,13 @@ Telegram → POST /webhooks/telegram (direct to Synap backend)
 
 ### Path 3: Hub Protocol A2AI (agent-to-agent)
 
-```
+```bash
+
 OpenClaw → POST /api/hub/threads/:threadId/messages (with autoRespond: true)
   → Synap IS receives, processes
   → Response written to thread
   → OpenClaw polls GET /api/hub/threads/:threadId/messages
+
 ```
 
 - Channel type: `AI_THREAD` or `BRANCH`

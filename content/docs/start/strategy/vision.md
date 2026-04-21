@@ -1,5 +1,14 @@
 ---
 sidebar_position: 1
+title: 'Vision'
+description: Documentation covering Vision
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 > **What this page is:** Synap's **official product vision**—mission, core beliefs, strategic priorities, and long-term direction. For a shorter, narrative **philosophy** read, see [Vision & Philosophy](../vision.md).

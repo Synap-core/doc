@@ -1,6 +1,14 @@
 ---
-title: "IS Architecture"
-description: "Full Intelligence Service architecture: agents, Hub Protocol, Swarm."
+title: 'IS Architecture'
+description: 'Full Intelligence Service architecture: agents, Hub Protocol, Swarm.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Intelligence Hub — Architecture, Capabilities & Roadmap
@@ -32,7 +40,8 @@ description: "Full Intelligence Service architecture: agents, Hub Protocol, Swar
 
 ## 1. System Overview
 
-```
+```bash
+
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Client (Web/Mobile/IDE Extension)                                    │
 │    POST /api/chat/stream  •  POST /api/orchestrate  •  SSE events    │
@@ -68,6 +77,7 @@ description: "Full Intelligence Service architecture: agents, Hub Protocol, Swar
 │  entities · documents · knowledge_facts · chat_threads              │
 │  conversation_messages · thread_entities · relations · proposals    │
 └──────────────────────────────────────────────────────────────────────┘
+
 ```
 
 **Key design principle:** The Intelligence Hub is **stateless** — it has no database of its own.
@@ -219,7 +229,8 @@ for workspace membership checks.
 
 ### Agent Execution Pipeline
 
-```
+```bash
+
 AgentContext: { userId, threadId, parentThreadId?, workspaceId, message, history? }
                     │
                     ▼
@@ -247,6 +258,7 @@ AgentContext: { userId, threadId, parentThreadId?, workspaceId, message, history
                     │
                     ▼
         AgentResponse: { content, aiSteps[], proposals[], branchDecision, requiresApproval }
+
 ```
 
 ### Context Caching Strategy
@@ -692,7 +704,8 @@ On approve: `PATCH /api/hub/proposals/:id` → entity created → event pipeline
 
 ### Chat Response Rendering Specification
 
-```
+```bash
+
 Message bubble layout:
 ┌──────────────────────────────────────────────────────┐
 │ AI Response Content (markdown rendered)               │
@@ -710,6 +723,7 @@ Message bubble layout:
 │   🌿 Research agent recommended for deep analysis     │
 │      [Open Research Thread]                           │
 └──────────────────────────────────────────────────────┘
+
 ```
 
 ---

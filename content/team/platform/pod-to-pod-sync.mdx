@@ -1,0 +1,96 @@
+---
+title: 'Pod-to-pod sync (replication)'
+description: >-
+  Event-log replication between Data Pods: CP pairing, workers, realtime hook,
+  observability, and roadmap.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+**Canonical (team)** for replication mechanics, ops, and extension points.  
+**Public counterpart:** [Pod replication & pairing](/docs/architecture/concepts/pod-replication) — buyer-friendly framing without implementation dump.
+
+---
+
+## 1. Product scope
+
+| Topic | Status |
+|-------|--------|
+| **Control Plane pair link** | Two pods per user: **primary ↔ replica** via `POST /pods/:id/link` (both `active`, neither already linked). |
+| **Pod setup** | CP calls each pod’s **`/api/sync/setup-peer`** with CP-signed JWT (`type: sync-setup`): directions, URLs, shared auth. |
+| **More than two pods** | Not first-class in CP UI. `sync_peers` can represent **multiple rows** for advanced/self-managed topologies. |
+
+---
+
+## 2. Architecture (runtime)
+
+<PodReplicationTeamDiagram />
+
+| Layer | Role |
+|-------|------|
+| **Realtime hook** | On `*.completed`, debounced batch → `POST` peer `/api/sync/receive`. On success → **`advanceOutboundSyncCursorAfterPushSuccess`** (`@synap/database`) so `sync_state` matches delivery. |
+| **sync-push** (pg-boss, **1 min**) | Cursor-based catch-up; same HTTP path; advances cursors on success. |
+| **sync-pull** (pg-boss, **1 min**) | Pull peers / bidirectional half → `GET /api/sync/pull` → local `materializeBatch`. |
+| **sync-push-supplementary** (**5 min**) | Non–event-log rows (see worker). |
+| **sync-push-files** (**10 min**) | Large blobs; event log still carries metadata. |
+
+**Registration:** `@synap/jobs` `registerAllWorkers()` + `packages/jobs/src/cron.ts` schedules.
+
+**Why two paths?** Realtime minimizes lag; **scheduled** workers close gaps after restarts, network blips, or backpressure (replica may signal **backpressure** → realtime pauses **without** advancing cursor; polling retries).
+
+---
+
+## 3. Data & consistency model
+
+- **Source of truth:** append-only **events**; replica applies **materializeBatch** + LWW where applicable.
+- **Idempotency:** Realtime + polling may **overlap**; receivers must tolerate duplicate event IDs (materialization is idempotent).
+- **Split-brain / generation:** Generation headers and peer tracking support **epoch** awareness (see `split-brain-service` / sync router).
+- **Workspace filtering:** `sync_peers.workspace_ids` can restrict which workspaces replicate.
+
+---
+
+## 4. Observability
+
+| Endpoint | Auth | Use |
+|----------|------|-----|
+| `GET /api/sync/health` | Optional Bearer (peer token) | Unauthenticated: count only. Authenticated: per-peer **status**, **errorCount**, **lastError**, **lastCursor**, **lastPushCursor**, **lastPullCursor**, **lastSyncAt**, **eventsProcessed**. |
+| `GET /api/sync/status` | CP JWT `sync-setup` or peer token | Same cursors + errors + intelligence readiness block for CP dashboards. |
+
+**Alerting:** `status=error`, `errorCount` near worker cutoff (default **10** consecutive failures), or **stale `lastSyncAt`** vs traffic.
+
+---
+
+## 5. Boundaries vs other “cross pod” topics
+
+- **[Cross-pod sharing](/team/platform/cross-pod-sharing)** — sharing **entities across different users/pods** (invites, frontend-mediated copy). Different problem from **same-owner replica**.
+- **CP [Pod management](/team/control-plane/pod-management)** — pod-agent **updates/suspend** over JWT; orthogonal to **sync** HTTP between pods.
+
+---
+
+## 6. Future extensibility / enhancements
+
+| Opportunity | Notes |
+|-------------|--------|
+| **N-way or hub mesh in CP** | Product + conflict story; UI for peer matrix; may need **vector clocks** or domain-specific merge for hot entities. |
+| **Richer conflict UX** | Surface `sync_conflicts` in-app; optional **manual merge** for high-value types. |
+| **Stricter ordering guarantees** | Per-workspace sequence numbers; **exactly-once** presentation layer (still at-least-once on wire). |
+| **Compression / batching tuning** | Adaptive batch sizes from backpressure metrics. |
+| **S3-aligned large file pipeline** | Already split **files** worker; could add **resumable multipart** and byte-range verification. |
+| **Browser failover** | CP exposes pair metadata for clients (`/pair`-style APIs); ensure docs stay aligned with **link-status** semantics. |
+
+---
+
+## 7. MDX diagrams (React Flow)
+
+This site ships **`SynapFlowDiagram`** (`@xyflow/react`) for **interactive** flow figures in MDX—zoom/pan, optional minimap—registered globally in `lib/mdx-components.tsx`.
+
+- **Generic:** `<SynapFlowDiagram nodes={...} edges={...} height={400} />` (nodes use `data.label` on default type).
+- **Presets:** `PodReplicationPublicDiagram`, `PodReplicationTeamDiagram` in `components/mdx/presets/`.
+
+**Guidelines:** see **[TeamDoc guidelines](/team/platform/teamdoc-guidelines)** § flow diagrams — prefer Fumadocs-first; use React Flow for **non-linear** topology; keep **mermaid** in GitHub / plain docs where interactivity is unnecessary.

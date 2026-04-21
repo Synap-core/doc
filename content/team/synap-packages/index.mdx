@@ -1,6 +1,16 @@
 ---
-title: Synap app packages
-description: Full map of the synap-app monorepo — packages, boundaries, and GitHub entry points
+title: 'Synap app packages'
+description: >-
+  Full map of the synap-app monorepo — packages, boundaries, and GitHub entry
+  points
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 The **`synap-app`** monorepo ([**Synap-core/synap-app** on GitHub](https://github.com/Synap-core/synap-app)) is the **shared frontend OS**: Tamagui UI, tRPC client, hooks, stores, view implementations, cells, and feature apps. **Primary user surface today is the Electron Browser**; `apps/web` and other apps are hosts or legacy shells that **reuse the same packages**.
@@ -156,9 +166,24 @@ Components use **`@synap-core/hooks`** → **`@synap-core/stores`** → **`@syna
 |----------------|----------|------|
 | [`packages/core/platform`](https://github.com/Synap-core/synap-app/tree/main/packages/core/platform) | `@synap-core/platform` | CP client: billing, pods, auth. |
 | [`packages/core/platform-sdk`](https://github.com/Synap-core/synap-app/tree/main/packages/core/platform-sdk) | `@synap-core/platform-sdk` | CP SDK + feature flags. |
+| [`packages/core/platform-flow`](https://github.com/Synap-core/synap-app/tree/main/packages/core/platform-flow) | `@synap-core/platform-flow` | Headless flow decisions for CP auth/provisioning states. |
+| [`packages/core/auth`](https://github.com/Synap-core/synap-app/tree/main/packages/core/auth) | `@synap-core/auth` | Canonical auth/session primitives (CP auth + pod handshake + shared-pod connect). |
+| [`packages/core/external-connect-client`](https://github.com/Synap-core/synap-app/tree/main/packages/core/external-connect-client) | `@synap-core/external-connect-client` | Headless external integration connect helpers (deeplink parsing, flow trace, CP handshake helper wrappers). |
 | [`packages/features/platform-auth`](https://github.com/Synap-core/synap-app/tree/main/packages/features/platform-auth) | `@synap-core/platform-auth` | Shared CP auth / provisioning UI. |
-| [`packages/core/pod-connect`](https://github.com/Synap-core/synap-app/tree/main/packages/core/pod-connect) | `@synap-core/pod-connect` | Pod handshake flows (landing, Telegram, Browser). |
+| [`packages/core/pod-connect`](https://github.com/Synap-core/synap-app/tree/main/packages/core/pod-connect) | `@synap-core/pod-connect` | Compatibility wrapper re-exporting shared-pod helpers from `@synap-core/auth` (legacy import path). |
 | [`packages/core/pod-failover`](https://github.com/Synap-core/synap-app/tree/main/packages/core/pod-failover) | `@synap-core/pod-failover` | Dual-pod health + failover UX. |
+
+---
+
+## Auth and external-connect boundaries (current rule)
+
+- **`@synap-core/platform-flow`**: pure decisions/state classification only (no transport).
+- **`@synap-core/auth`**: canonical CP + pod auth/session primitives, including shared-pod connect.
+- **`@synap-core/external-connect-client`**: integration-specific connect helpers that compose auth primitives and backend-owned contracts.
+- **`@synap-core/platform-auth`**: UI and host adapters only.
+- **`@synap-core/pod-connect`**: compatibility package; new implementations should import from `@synap-core/auth`.
+
+For details and migration guidance, see **[Auth & External Connect Package Boundaries](/team/synap-packages/auth-and-external-connect-boundaries)**.
 
 ---
 

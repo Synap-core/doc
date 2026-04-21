@@ -1,0 +1,56 @@
+---
+title: 'Synap integration'
+description: >-
+  How Eve delegates to synap install, env vars, tarball checkouts, and Hub vs
+  Eve routing.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Delegation model
+
+When **`SYNAP_REPO_ROOT`** points at a valid backend checkout (with **`synap`** script + **`deploy/docker-compose.yml`**), **`eve brain`** / **`eve setup`** runs:
+
+```text
+bash <repo>/synap install …
+```
+
+with:
+
+- **`cwd`** = **`SYNAP_REPO_ROOT`** (repository root)
+- **`SYNAP_DEPLOY_DIR`** = **`<repo>/deploy`**
+
+So **Synap’s** `get_deploy_dir()` resolves to the **deploy** folder even when the operator’s shell cwd is **`/opt/eve`**. **Eve state** (`.eve/`) is still written relative to **where `eve` was invoked**, not the Synap repo.
+
+---
+
+## Why Eve sets both `SYNAP_REPO_ROOT` and `SYNAP_DEPLOY_DIR`
+
+- **`SYNAP_REPO_ROOT`** — Unambiguous backend root for scripts and subprocesses.
+- **`SYNAP_DEPLOY_DIR`** — Ensures **`docker compose`** and **`synap`** always target **`…/deploy`** even if **`git`** metadata is missing (tarball extract).
+
+---
+
+## Tarball checkout (no `.git`)
+
+Archive extracts may lack **`.git`**. The **`synap install`** command must treat **`deploy/docker-compose.yml`** present at **`SYNAP_REPO_ROOT`** as “already have the tree” and **avoid** nested clones under **`$(pwd)/synap-backend`**. If you see clone errors into **`/opt/synap-backend/synap-backend`**, update the **`synap`** script from **backend** repo or use a **git clone** checkout.
+
+---
+
+## Intelligence Service vs Eve “AI routing”
+
+- **Synap backend** stores which Intelligence Service instance the pod uses — product configuration.
+- **Eve** stores **local tooling** preferences (OpenRouter, Anthropic, Ollama URLs) for OpenCode / CLI — **`eve ai sync`** may push **non-secret** policy to the workspace when supported. Consolidation rules: repo **`AI_ROUTING_CONSOLIDATION_ADR.md`**.
+
+---
+
+## References
+
+- **Backend** repo: [`synap-core/backend`](https://github.com/synap-core/backend) — **`synap`** script, **`deploy/`**.
+- **Eve** repo: [**hestia-cli**](https://github.com/Synap-core/hestia-cli) — **`packages/@eve/brain`**, **`runBrainInit`**.

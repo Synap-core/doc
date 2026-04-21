@@ -1,6 +1,14 @@
 ---
-title: "External Integrations"
-description: "External service integration design: Nango, webhooks, APIs."
+title: 'External Integrations'
+description: 'External service integration design: Nango, webhooks, APIs.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # External Integration Design — Options C, D, E
@@ -23,7 +31,8 @@ description: "External service integration design: Nango, webhooks, APIs."
 
 ## 1. Architecture Overview
 
-```
+```bash
+
 External Caller (Claude Code, custom agent, any HTTP client)
   │
   │  API key (Bearer sk_live_...)
@@ -47,6 +56,7 @@ External Caller (Claude Code, custom agent, any HTTP client)
         │
    isolated-vm sandbox
    (existing, unchanged)
+
 ```
 
 The pod backend is the single entry point. External callers never talk directly to IS. The pod validates, routes, and proxies.
@@ -72,7 +82,8 @@ curl -X POST https://mypod.synap.live/api/external/skills/sk_abc123/invoke \
 
 ### New API surface
 
-```
+```bash
+
 GET  /api/external/skills
      → List all active pod-scoped skills visible to the API key's user
      → Returns: [{ id, name, description, parameters, executionMode }]
@@ -83,11 +94,13 @@ POST /api/external/skills/:id/invoke
      → Body: { input?: Record<string, unknown>, workspaceId?: string }
      → Returns: { success, result?, error?, executionTimeMs }
      → Scope: skills.invoke
+
 ```
 
 ### Execution path (reusing what exists)
 
-```
+```bash
+
 POST /api/external/skills/:id/invoke
   1. Validate API key → get userId + scopes
   2. Check scope: skills.invoke
@@ -99,6 +112,7 @@ POST /api/external/skills/:id/invoke
      { skillId: id, userId, parameters: input }
      Header: X-API-Key: ${hubApiKey}
   8. Return result as-is
+
 ```
 
 No new IS code. No sandbox changes. Steps 1–5 are new; steps 6–8 are identical to the existing tRPC `skills.execute` procedure.
@@ -149,16 +163,19 @@ curl -X POST https://mypod.synap.live/api/external/chat/stream \
 ```
 
 Response is SSE:
-```
+```yaml
+
 data: {"type":"content","content":"You have 3 overdue tasks:\n"}
 data: {"type":"content","content":"1. Finish the proposal — due 2026-03-20\n"}
 data: {"type":"step","step":{"tool":"synap_search_entities","result":[...]}}
 data: {"type":"complete","data":{"channelId":"ch_abc","messageId":"msg_xyz"}}
+
 ```
 
 ### New API surface
 
-```
+```bash
+
 POST /api/external/chat/stream
      → Proxy to IS chat stream, auto-resolve personal channel
      → Body: { query, channelId?, workspaceId?, agentType? }
@@ -169,6 +186,7 @@ GET  /api/external/chat/channels
      → List channels the API key user can chat in (personal + workspace ai_threads)
      → Returns: [{ id, type, name, workspaceId }]
      → Scope: chat.stream
+
 ```
 
 ### Execution path

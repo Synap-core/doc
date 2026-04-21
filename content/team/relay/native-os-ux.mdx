@@ -1,6 +1,14 @@
 ---
-title: "Native OS UX Plan"
-description: "UX plan for share, spotlight, widgets, live activities."
+title: 'Native OS UX Plan'
+description: 'UX plan for share, spotlight, widgets, live activities.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Native OS — UX integration plan
@@ -202,7 +210,8 @@ Not blocking the iOS ship.
 
 ### Data flow
 
-```
+```yaml
+
 CaptureGestureButton starts voice → voice.isListening = true
         │
         ▼
@@ -216,6 +225,7 @@ User backgrounds app → notification stays, progress keeps updating
         │
         ▼
 voice.stop() → useLiveActivity(null) → Notifee cancelNotification
+
 ```
 
 ### What we need to build
@@ -257,7 +267,8 @@ Ship plan Sprint 2.
 
 ### Data flow
 
-```
+```typescript
+
 User taps Scan button in CaptureModal
         │
         ▼
@@ -271,6 +282,7 @@ Returns { text } → setText((prev) => prev + '\n' + text)
         │
         ▼
 User edits if needed → Send → AI structuring
+
 ```
 
 ### What we need to build
@@ -321,7 +333,8 @@ expo-linking resolves → CaptureModal opens
 
 For state display (Today's Captures widget — ships after Quick Capture):
 
-```
+```yaml
+
 Relay feed mutates (any capture, sync, delete)
         │
         ▼
@@ -332,6 +345,7 @@ sharedStorage['widget:todays-captures'] = JSON
         │
         ▼
 Widget timeline reload → widget reads shared storage → renders
+
 ```
 
 ### What we need to build
@@ -401,7 +415,8 @@ Same as #5 but with richer state payload.
 
 ### Data flow
 
-```
+```yaml
+
 "Hey Siri, new Relay note about..." → iOS App Intent target
         │
         ▼
@@ -419,6 +434,7 @@ Intent completes, Siri confirms "Note added"
         │
         ▼
 Next time Relay foregrounds: useIntentHandler fires, shows receipt toast
+
 ```
 
 ### What we need to build

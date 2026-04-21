@@ -1,5 +1,14 @@
 ---
 sidebar_position: 4
+title: 'Entity Connections'
+description: Documentation covering Entity Connections
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Entity Connections
@@ -160,21 +169,39 @@ type Connection = {
 
 ### API usage
 
+**In-app (tRPC):**
+
 ```typescript
-// Get everything connected to an entity (all three sources)
 const { connections } = await trpc.relations.getConnections.query({
   entityId: "entity_abc123",
 });
+```
 
-// Filtered to only property-based structural links
+**External agents / integrations (Hub Protocol REST):**
+
+```bash
+GET /api/hub/entities/{entityId}/connections?userId={userId}&workspaceId={wsId}
+# Scope: hub-protocol.read
+# Returns: { connections: [...], counts: { total, graph, structural, threads } }
+```
+
+The typed client wraps both paths — use `client.getConnections(entityId)` from `@synap/hub-rest-client`.
+
+Filtering patterns:
+
+```typescript
+// Property-based structural links only
 const structural = connections.filter(c => c.source === "property");
 
-// Filtered to semantic graph relations only
+// Semantic graph relations only
 const graph = connections.filter(c => c.source === "graph");
 
 // All threads that touched this entity
 const threads = connections.filter(c => c.source === "thread");
 ```
+
+> **Why prefer `getConnections` over `GET /relations` and `/graph/traverse`?**
+> The latter two only read the `relations` table. For system profiles (task.projectId, task.assignee, contact.companyId, deal.contactId), property links are auto-mirrored into relations, so everything shows up. But for **custom profiles with `entity_id` properties**, that auto-sync is not yet universal — links may exist only in the property index. `getConnections` reads from both sources in one call, so it never misses anything. See [Connection sync roadmap](../../contributing/guides/connection-sync-roadmap) for the consolidation plan.
 
 ---
 

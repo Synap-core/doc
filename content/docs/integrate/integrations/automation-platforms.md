@@ -1,5 +1,14 @@
 ---
 sidebar_position: 2
+title: 'Automation Platforms'
+description: Documentation covering Automation Platforms
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Automation Platforms: N8N vs Activepieces
@@ -371,7 +380,8 @@ Different purposes:
 
 ### Full Stack
 
-```
+```bash
+
 ┌──────────────────────────────────────┐
 │ Visual Tools Ecosystem               │
 │                                      │
@@ -390,6 +400,7 @@ Different purposes:
 │  LangGraph   Event      tRPC      │
 │   Agents    System       API      │
 └────────────────────────────────────┘
+
 ```
 
 **Complete ecosystem** for visual + code workflows

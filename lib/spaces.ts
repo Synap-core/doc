@@ -197,6 +197,19 @@ export const spaces: SpaceConfig[] = [
     spaceSelectorIconClass: 'text-emerald-600 dark:text-emerald-400',
   },
   {
+    id: 'technologies',
+    title: 'Stack & tools',
+    description: 'Docker, Ollama, Traefik, tunnels — references for self-host stacks',
+    icon: Network,
+    path: '/team/technologies',
+    requireAuth: true,
+    category: 'team',
+    order: 17,
+    spaceSelectorActiveClass:
+      'border border-stone-500/30 bg-stone-500/14 text-fd-foreground dark:border-stone-400/35 dark:bg-stone-500/18',
+    spaceSelectorIconClass: 'text-stone-600 dark:text-stone-300',
+  },
+  {
     id: 'intelligence',
     title: 'Intelligence',
     description: 'Agent hub, skills, IS deployment',
@@ -204,7 +217,7 @@ export const spaces: SpaceConfig[] = [
     path: '/team/intelligence',
     requireAuth: true,
     category: 'team',
-    order: 17,
+    order: 18,
     spaceSelectorActiveClass:
       'border border-teal-500/30 bg-teal-500/14 text-fd-foreground dark:border-teal-400/35 dark:bg-teal-500/18',
     spaceSelectorIconClass: 'text-teal-600 dark:text-teal-400',
@@ -217,7 +230,7 @@ export const spaces: SpaceConfig[] = [
     path: '/team/control-plane',
     requireAuth: true,
     category: 'team',
-    order: 18,
+    order: 19,
     spaceSelectorActiveClass:
       'border border-slate-500/30 bg-slate-500/14 text-fd-foreground dark:border-slate-400/35 dark:bg-slate-500/22',
     spaceSelectorIconClass: 'text-slate-600 dark:text-slate-300',
@@ -230,7 +243,7 @@ export const spaces: SpaceConfig[] = [
     path: '/team/platform',
     requireAuth: true,
     category: 'team',
-    order: 19,
+    order: 20,
     spaceSelectorActiveClass:
       'border border-blue-500/30 bg-blue-500/14 text-fd-foreground dark:border-blue-400/35 dark:bg-blue-500/18',
     spaceSelectorIconClass: 'text-blue-600 dark:text-blue-400',
@@ -243,7 +256,7 @@ export const spaces: SpaceConfig[] = [
     path: '/team/devops',
     requireAuth: true,
     category: 'team',
-    order: 20,
+    order: 21,
     spaceSelectorActiveClass:
       'border border-lime-500/30 bg-lime-500/14 text-fd-foreground dark:border-lime-400/35 dark:bg-lime-500/16',
     spaceSelectorIconClass: 'text-lime-600 dark:text-lime-400',

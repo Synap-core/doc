@@ -1,0 +1,4 @@
+{
+  "title": "Connect your AI",
+  "pages": ["index", "claude-code", "claude-desktop", "cursor", "raycast", "openclaw"]
+}

@@ -1,0 +1,174 @@
+---
+title: "External Source Integration"
+description: "How to integrate external sources (RSSHub, web scrapers, etc.) with Synap's Data Pod via Control Plane"
+section: features
+audience: developers|platform-engineers
+version: 1.0+
+last_updated: "2026-04-20"
+tags: [feature, integration, external-sources, control-plane, data-pod]
+sidebar_position: 1
+toc: true
+---
+# External Source Integration
+
+This guide shows how to integrate external data sources (like RSSHub, custom web scrapers, or APIs) with Synap's Data Pod through the Control Plane provisioning system.
+
+## Overview
+
+External sources allow you to bring data from outside Synap into your Data Pod for unified knowledge management. The integration follows this flow:
+
+```
+External Source (RSSHub/Web Scraper) 
+        → Control Plane (Provisioning & Scheduling) 
+        → Data Pod (Entity Storage & Indexing) 
+        → Intelligence Service (AI Processing & Insights)
+        → User Interface (Views, Feeds, Search)
+```
+
+## Key Components
+
+| Component | Role | Documentation |
+|-----------|------|---------------|
+| **External Source** | The data provider (RSSHub instance, web scraper API, etc.) | [External Sources Concept](/docs/integrate/external-sources) |
+| **Control Plane** | Manages provisioning, scheduling, and authentication | [Control Plane](/team/control-plane/index) |
+| **Data Pod** | Stores entities and manages the knowledge graph | [Platform](/team/platform/index) |
+| **Intelligence Service** | Processes and enriches incoming data | [Intelligence Service](/team/intelligence/index) |
+| **Feed System** | Delivers updates to users via personalized feeds | [Feed System](/team/platform/feed-system) |
+
+## Step-by-Step Integration Guide
+
+### 1. Prepare Your External Source
+
+Ensure your external source is accessible and provides data in a compatible format (JSON, RSS, etc.).
+
+Example RSSHub endpoint:
+```
+https://rsshub.example.com/weibo/user/username
+```
+
+### 2. Provision via Control Plane
+
+Use the Control Plane to create a new external source configuration:
+
+```bash
+# Via Eve CLI
+eve cp external-sources create \
+  --name "weibo-username" \
+  --url "https://rsshub.example.com/weibo/user/username" \
+  --type "rsshub" \
+  --schedule "*/15 * * * *" \
+  --auth-method "none" \
+  --workspace-id "your-workspace-id"
+```
+
+### 3. Configure Data Mapping
+
+Define how external data maps to Synap entities:
+
+```json
+{
+  "entityType": "bookmark",
+  "propertyMappings": {
+    "url": "{{ .Item.Link }}",
+    "title": "{{ .Item.Title }}",
+    "content": "{{ .Item.Description }}",
+    "tags": "{{ .Item.Tags | join \",\" }}",
+    "createdAt": "{{ .Item.Published }}"
+  }
+}
+```
+
+### 4. Set Up Processing Rules
+
+Optional: Configure AI processing, filtering, or enrichment:
+
+```json
+{
+  "aiProcessing": {
+    "enabled": true,
+    "skills": ["entity-classifier", "tag-suggester"],
+    "confidenceThreshold": 0.7
+  },
+  "filtering": {
+    "excludeKeywords": ["ad", "sponsored"],
+    "minContentLength": 50
+  }
+}
+```
+
+### 5. Monitor and Maintain
+
+Check integration health via:
+- Control Plane dashboard
+- Entity ingestion logs
+- Feed update metrics
+- Error alerts and dead letter queues
+
+## Architecture Details
+
+### Data Flow
+1. **Ingestion**: Control Plane scheduler triggers external source fetch
+2. **Transformation**: Data mapped to Synap entity schema
+3. **Validation**: Entities validated against profile constraints
+4. **Storage**: Valid entities written to Data Pod database
+5. **Indexing**: New entities indexed in Typesense for search
+6. **Notification**: Feed system generates update notifications
+7. **AI Enrichment**: Intelligence Service processes new entities
+
+### Failure Handling
+- **Retry Logic**: Exponential backoff for transient failures
+- **Dead Letter Queue**: Persistently failed items moved for inspection
+- **Circuit Breaker**: Temporarily disable unhealthy sources
+- **Alerting**: Notifications sent on repeated failures
+
+## Best Practices
+
+### Security
+- Use API keys or OAuth when available
+- Restrict external source IP ranges if possible
+- Validate and sanitize all incoming data
+- Run untrusted scrapers in isolated environments
+
+### Performance
+- Schedule updates during off-peak hours
+- Batch entity creation to reduce database load
+- Use incremental updates when supported by source
+- Monitor resource usage and adjust schedules
+
+### Maintenance
+- Document external source credentials securely
+- Regularly review source reliability and data quality
+- Update mappings when source format changes
+- Deprecate unused sources to reduce noise
+
+## Troubleshooting
+
+### Common Issues
+| Symptom | Likely Cause | Solution |
+|---------|--------------|----------|
+| No entities appearing | Source unreachable or auth failure | Check CP logs, verify credentials |
+| Delayed updates | Schedule misconfigured | Verify cron expression in CP |
+| Incorrect data mapping | Template syntax errors | Test mappings with sample data |
+| Duplicate entities | Missing deduplication keys | Ensure unique identifier mapping |
+| High resource usage | Too frequent scheduling | Increase interval or add batching |
+
+### Debug Commands
+```bash
+# Check external source status
+eve cp external-sources list --workspace-id <id>
+
+# View recent ingestion logs
+eve cp logs get --source-type external --limit 100
+
+# Test data mapping locally
+eve cp external-sources test-map \
+  --source-id <id> \
+  --sample-file sample-data.json
+```
+
+## Related Documentation
+- [Control Plane Provisioning Guide](/team/control-plane/provisioning)
+- [Data Pod Entity Model](/team/platform/entity-profiles)
+- [Feed System Architecture](/team/platform/feed-system)
+- [Intelligence Service Skills](/team/intelligence/skill-hub-protocol)
+- [Eve CLI Reference](/team/eve-cli/index)

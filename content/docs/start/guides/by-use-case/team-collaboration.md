@@ -1,5 +1,14 @@
 ---
 sidebar_position: 2
+title: 'Team Collaboration'
+description: Documentation covering Team Collaboration
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Team Collaboration Platform

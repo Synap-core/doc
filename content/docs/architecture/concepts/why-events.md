@@ -1,5 +1,14 @@
 ---
 sidebar_position: 4
+title: 'Why Events'
+description: Documentation covering Why Events
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Why Events Matter: AI Control & Data Sovereignty
@@ -107,13 +116,15 @@ Synap introduces a **two-stage approval model**:
 **Solution**: Every action is logged as an immutable event
 
 **Use Case**: Regulatory Compliance
-```
+```sql
+
 Auditor: "Show me all AI actions in Q4"
 
 Query: 
 SELECT * FROM events 
 WHERE source = 'ai-agent'
   AND timestamp >= '2024-10-01'
+
 ```
 
 **Result**: Complete, tamper-proof audit trail
@@ -175,7 +186,8 @@ Flow:
 - Disables AI entirely
 
 **Synap Approach**:
-```
+```bash
+
 1. AI reads email
    → entities.create.requested (type: 'task')
    
@@ -185,6 +197,7 @@ Flow:
    Option A: Approve → entities.create.validated → Task created
    Option B: Reject → Discarded, no task created
    Option C: Edit → Modify title/details → Approve
+
 ```
 
 **Result**: AI proposes, user approves, everyone happy
@@ -229,7 +242,8 @@ Google Calendar creates event
 **Context**: Two users want to share a project
 
 **Flow**:
-```
+```yaml
+
 User A: Shares project with User B
 
 1. User A: webhooks.deliver.requested
@@ -254,6 +268,7 @@ User A: Shares project with User B
 5. If User B changes mind:
    → Revoke access immediately
    → User A loses access
+
 ```
 
 **Result**: Privacy-preserving collaboration with dynamic consent

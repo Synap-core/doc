@@ -1,6 +1,14 @@
 ---
-title: Data pod
-description: Core backend surface for events, data, indexing, and realtime.
+title: 'Data pod'
+description: 'Core backend surface for events, data, indexing, and realtime.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 The data pod is the sovereign backend boundary of Synap.

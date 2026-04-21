@@ -1,5 +1,14 @@
 ---
 sidebar_position: 5
+title: Intelligence Registry
+description: Documentation covering Intelligence Registry
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Intelligence Registry

@@ -1,6 +1,14 @@
 ---
-title: "View Type: Kanban"
-description: "Kanban view skill guidance."
+title: 'View Type: Kanban'
+description: Kanban view skill guidance.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Skill: Kanban View
@@ -14,7 +22,8 @@ A kanban board groups entities into swimlane columns by a `select` field value.
 
 ## Full example
 
-```
+```yaml
+
 // Step 1: Create (or find) the profile
 create_profile({ name: "Task", slug: "task" })
 → profileId: "abc"
@@ -50,6 +59,7 @@ create_view({
     ]
   }
 })
+
 ```
 
 ## Config reference

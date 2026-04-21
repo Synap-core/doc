@@ -1,6 +1,14 @@
 ---
-title: "Agent Service SDK"
-description: "SDK for building and registering custom AI agents."
+title: 'Agent Service SDK'
+description: SDK for building and registering custom AI agents.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Building a Synap Agent Service
@@ -178,10 +186,12 @@ Primary endpoint. Receives an `AgentChatRequest` and returns an SSE stream.
 
 **Response:** SSE stream. Each event is a JSON line:
 
-```
+```yaml
+
 data: {"type":"content","content":"Hello!"}\n\n
 data: {"type":"step","step":{...}}\n\n
 data: {"type":"complete","data":{...}}\n\n
+
 ```
 
 **SSE event types:**
@@ -359,19 +369,24 @@ If you prefer not to use the SDK, implement these endpoints directly:
 
 ### Health check
 
-```
+```yaml
+
 GET /health → 200 { "status": "ok" }
+
 ```
 
 ### Specialisations
 
-```
+```yaml
+
 GET /api/specialisations → 200 { "specialisations": [...] }
+
 ```
 
 ### Chat stream (SSE)
 
-```
+```yaml
+
 POST /api/chat/stream
 X-API-Key: {your-api-key}
 Content-Type: application/json
@@ -381,21 +396,25 @@ Content-Type: application/json
 → 200 text/event-stream
 data: {"type":"content","content":"Hello"}\n\n
 data: {"type":"complete","data":{...}}\n\n
+
 ```
 
 ### Hub Protocol calls
 
-```
+```yaml
+
 POST {dataPodUrl}/api/hub-protocol/search
 Authorization: Bearer {dataPodApiKey}
 Content-Type: application/json
 
 { "query": "tasks", "workspaceId": "...", "userId": "..." }
+
 ```
 
 ### Registration
 
-```
+```yaml
+
 POST {podUrl}/trpc/intelligenceRegistry.register
 Authorization: Bearer {podHubApiKey}
 Content-Type: application/json
@@ -411,6 +430,7 @@ Content-Type: application/json
     "version":      "1.0.0"
   }
 }
+
 ```
 
 ---

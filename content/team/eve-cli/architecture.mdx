@@ -1,0 +1,66 @@
+---
+title: 'Architecture'
+description: >-
+  Eve CLI packages, Synap vs Eve boundaries, ports, and stack topology
+  (interactive diagram).
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Topology (interactive)
+
+<EveStackDiagram />
+
+**How to read it:** Traffic from the **internet** hits **Legs** (Traefik / tunnel) when you expose sidecars or routes. **Synap** owns **Caddy :80/443** and the **API :4000** path for the Data Pod. **Eve sidecars** (Ollama, inference gateway on **127.0.0.1:11435**, etc.) sit on **`eve-network`**. Optional **organs** (OpenClaw, RSSHub, Builder) attach after Brain/Legs basics — exact compose depends on profile.
+
+---
+
+## Synap vs Eve (boundary)
+
+| Layer | Owner | Notes |
+|-------|--------|------|
+| HTTPS for Pod API/auth | **Synap** (Caddy) | Public “pod domain” in `eve setup` configures **Synap** install. |
+| Inference gateway / Traefik for sidecars | **Eve** (Legs) | Does **not** replace Caddy on 80/443 for the Data Pod. |
+| Hub Protocol, proposals, workspace | **Synap backend** | Eve may sync **non-secret** provider routing into workspace JSON via `eve ai sync` (see repo ADR). |
+| Local tool preferences (OpenRouter, etc.) | **Eve secrets** | `.eve/secrets/secrets.json` — distinct from Synap internal IS routing. |
+
+---
+
+## Monorepo packages (hestia-cli)
+
+High level — authoritative tables live in the repo README.
+
+| Package | Responsibility |
+|---------|----------------|
+| `@eve/cli` | `eve` entrypoint, Commander + Clack |
+| `@eve/dna` | Setup profile schema, secrets, USB manifest |
+| `@eve/brain` | `runBrainInit`, Synap delegation, Ollama/Postgres/Redis helpers |
+| `@eve/legs` | Traefik, gateway, tunnel helpers |
+| `@eve/arms` | OpenClaw |
+| `@eve/eyes` | RSSHub, database UI runners |
+| `@eve/builder` | OpenCode / OpenClaude / deploy hooks |
+| `@eve/cli-kit` | Shared flags, JSON output |
+
+---
+
+## State on disk (operator mental model)
+
+| Path | Role |
+|------|------|
+| `.eve/setup-profile.json` | Last `eve setup` choices (profile, network hints, Synap install prefs). |
+| `.eve/secrets/secrets.json` | Merged secrets: `synap.*`, `ai.*`, `inference.*`, `builder.*`, `arms.*` |
+| `/opt/synap-backend` (typical) | Synap **backend** checkout — **`synap install`** runs with `cwd` = repo root and `SYNAP_DEPLOY_DIR` = `…/deploy`. |
+
+Paths under **`.eve/`** are relative to **where you ran `eve`** (often `/opt/eve`). They are **not** the Synap repo root.
+
+---
+
+## Technology stack (CLI layer)
+
+TypeScript (strict), Node 20+, pnpm workspaces, tsup/tsc, Vitest, Docker Compose. Details: **[Stack & tools — Docker](/team/technologies/docker-and-containers)** and repo `README.md`.

@@ -1,6 +1,14 @@
 ---
-title: "Capture Pipeline"
-description: "Unified AI capture pipeline across 7 surfaces."
+title: 'Capture Pipeline'
+description: Unified AI capture pipeline across 7 surfaces.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Capture Pipeline — Architecture & Integration Guide
@@ -51,7 +59,8 @@ Three pod-wide AI channels per user:
 
 ## 2. Flow
 
-```
+```bash
+
 User types text
   → Frontend calls backend: capture.structure({ text })
   → Backend calls IS: /api/structure (AI extraction)
@@ -68,6 +77,7 @@ Frontend shows review UI:
 Frontend calls backend: capture.execute({ entities, relations })
   → Backend batch-creates entities + relations
   → Returns: { created[], relations[] }
+
 ```
 
 ### Fallback Chain

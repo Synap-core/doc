@@ -1,6 +1,14 @@
 ---
 sidebar_position: 2
-title: Universal Entity Model
+title: 'Universal Entity Model'
+description: Documentation covering Universal Entity Model
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 > **Vision**: One Data Model, Infinite Views.

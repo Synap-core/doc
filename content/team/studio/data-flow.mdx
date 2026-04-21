@@ -1,0 +1,257 @@
+---
+title: 'Data Flow'
+description: Proposed unified section — Sources + Captures + Automations — for Studio.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Data Flow
+
+**Status:** Proposed · Phase 1 scoped · awaiting approval to build
+**Owner:** Studio
+**Related:** [Capture pipeline](/team/platform/capture-pipeline) · [Connectors](/team/platform/connectors) · [Signal feed architecture](/team/platform/signal-feed-architecture) · [Import pipeline](/team/platform/import-pipeline)
+
+---
+
+## Why this doc exists
+
+Today, data ingestion in Synap is spread across three distinct surfaces in the user's head: "imports," "connectors," and "feeds." Each has its own concept, its own UI (in Relay/Browser), its own mental model. Studio has none of them.
+
+The **backend is feature-complete**. What's missing is a unified Studio surface that treats the whole thing as one system: **data flowing in, AI structuring it, automations reacting to it.**
+
+---
+
+## The unified model
+
+Three roles, one primitive (a **Source**):
+
+```
+          ┌─────────────────────────────────────────┐
+          │  SOURCES                                │
+          │  Where data enters the pod              │
+          │                                         │
+          │  Static   · File upload → Import job    │
+          │  Pull     · Connector poll, RSS cron    │
+          │  Push     · Capture, share sheet, hook  │
+          └────────────────┬────────────────────────┘
+                           │ produces entities,
+                           │ messages, documents
+                           ▼
+          ┌─────────────────────────────────────────┐
+          │  CAPTURES                               │
+          │  Live stream of incoming items;         │
+          │  AI-structured, awaiting review         │
+          │  (or auto-filed if confidence high)     │
+          └────────────────┬────────────────────────┘
+                           │ event: entity.created
+                           │        message.sent
+                           ▼
+          ┌─────────────────────────────────────────┐
+          │  AUTOMATIONS                            │
+          │  Rules that react to new items.         │
+          │  Pre-seeded templates + user-built.     │
+          └─────────────────────────────────────────┘
+```
+
+This is not a new concept — it's the mental model the existing infrastructure already implements. Studio just makes it visible.
+
+---
+
+## Provider model (CP as catalog)
+
+Commercial Synap (what Studio targets) uses the **Control Plane as the source catalog**. Same pattern as Nango for OAuth connectors and as IS for intelligence.
+
+| Surface | OSS pod (self-hosted) | Studio / commercial |
+|---|---|---|
+| RSS / feeds | Env-var RSSHub (direct), DirectRSS (raw URL) | **Route through CP** — managed RSSHub, curated providers, caching, rate limits |
+| OAuth connectors | Self-hosted Nango or none | **Route through CP** — managed Nango, our OAuth apps |
+| AI intelligence | OSS fallback IS (future) | **Route through CP** — full IS |
+
+The CP is what turns a bare pod into the full Synap experience. Users never pick a RSSHub URL, a Nango instance, or an IS host — they connect their pod to CP and get curated providers.
+
+### Implications for the UI
+
+- **No "add RSSHub URL" field.** Instead: picker of curated source types (Twitter user, GitHub repo, Reddit sub, YouTube channel, RSS URL fallback).
+- **Source catalog is remote** — CP exposes (or will expose) `feeds.listAvailableProviders` and `connectors.providers`. Studio reads the list, renders cards. New providers appear without Studio changes.
+- **Self-hoster story**: same UI, fewer options. OSS pod shows only the direct-RSS-URL fallback. Curated providers are greyed or hidden with a "requires CP" note. Choose later.
+
+---
+
+## Studio surface spec
+
+New top-level sidebar section **Flow** in `lib/nav.ts`:
+
+```
+─── Flow ───────────
+  Sources
+  Captures     [3]      ← badge like Inbox
+  Automations
+```
+
+### `/flow/sources`
+
+Single page with three tabs:
+
+#### Connectors tab
+
+- Card grid from `trpc.connectors.providers` (CP-gated catalog)
+- Each card: provider icon, name, short description, connect/disconnect button
+- Click Connect → Nango Connect session → OAuth dance → status flips to active
+- Existing backend: `trpc.connectors.{providers, connections, session, disconnect}` — already wired
+- UI reuse: Relay has `ConnectorCard` + `OnboardingConnectors.tsx` — port the presentational layer to HeroUI, keep the logic
+
+#### Feeds tab
+
+- "Add source" button → modal with type picker from `trpc.feeds.listAvailableProviders` (new CP endpoint, ~1 day add)
+  - Type picker shows curated types (Twitter user, GitHub repo, Reddit sub, YouTube channel, RSS URL, Custom webhook)
+  - Each type has a small config form (username, repo path, URL, etc.)
+- List: active feeds per workspace, status, last-sync, volume
+- Trigger manual poll, pause, delete
+- Backend: `trpc.feeds.{listFeeds, triggerFeed, getFeedStatus, updateFeedConfig}` — exists; need a `listAvailableProviders` query
+
+#### Imports tab
+
+- File drop zone + picker
+- On file type detect, routes to the right flow:
+  - Telegram Desktop JSON → `trpc.import.telegramContacts`
+  - LinkedIn CSV → `trpc.import.linkedinContacts`
+  - vCard → `trpc.import.contactsVcard`
+  - Obsidian zip → `trpc.import.obsidianVault`
+  - Generic JSON/CSV/MD → `trpc.import.submitBatch`
+- Progress tracking via existing `ImportProgressSheet` pattern from Relay
+- UI reuse: port HeroUI versions of Relay's `TelegramImportFlow`, `LinkedInImportFlow`, `VCardImportFlow`
+
+### `/flow/captures`
+
+The unclassified-items triage inbox. Each row = one captured thing (clip, voice memo, scraped profile) **before** it becomes a typed entity.
+
+Data source: new `trpc.capture.listPending` query (or equivalent — check if `capture.structure` already exposes a queue). If not, small backend add.
+
+Row UI:
+- Raw content preview
+- AI-generated classification proposal ("Looks like a `person`, email and company extracted")
+- **Accept** → `capture.execute` → becomes an entity
+- **Edit** → inline tweak proposal before executing
+- **Reject** → archive
+- **Split** → create multiple entities from one capture
+
+Reuse `@synap-core/capture-pipeline` — already shared between Relay and Browser.
+
+Sidebar badge shows pending count (analogous to Inbox badge).
+
+### `/flow/automations`
+
+Two panes, one page.
+
+**Templates** (primary):
+- Grid of pre-seeded templates from a new `@synap-core/automation-templates` package (extracted from Relay's `relay-automations.ts`)
+- Each template: one-click "Install in this workspace" → `trpc.automations.create` + `activate`
+- Templates cover the 80% cases: enrich on create, daily digest, Slack notify, webhook fire, archive on close
+
+**Your rules**:
+- List of installed automations via `trpc.automations.list`
+- Toggle active/paused per row
+- See last run, trigger manually
+- Read-only detail view — clicking opens a panel showing the trigger + step chain
+
+**Out of scope for V1**: the full flow editor (node canvas). Defer until templates cover &lt;80% of use cases.
+
+---
+
+## Sidebar badge wiring
+
+Captures badge counts "pending" items. Lightweight query:
+- `trpc.capture.listPending({ limit: 0, returnCountOnly: true })` — or just `listPending().length` client-side
+- Invalidated on `entity.created` (newly-ingested entities are pending until triaged) via `useRealtimeSync`
+
+---
+
+## Phase plan
+
+**Phase 1 — Sources** · ~5 days
+Highest leverage. Unlocks real data in the pod.
+
+1. `/flow/sources` page shell with 3 tabs
+2. Connectors tab — port `ConnectorCard` to HeroUI, wire `trpc.connectors.*`
+3. Feeds tab — add `trpc.feeds.listAvailableProviders` to CP (~1 day), build add-source modal + list
+4. Imports tab — port 4 import flows to HeroUI
+5. Sidebar "Flow" section added to `lib/nav.ts`
+
+**Phase 2 — Captures** · ~3 days
+Where the "Never organize anything" pitch lives visibly.
+
+1. `/flow/captures` page
+2. `trpc.capture.listPending` endpoint if missing (~1 day)
+3. Row UI with accept/edit/reject/split
+4. Sidebar badge wiring
+5. Realtime invalidation on `entity.created`
+
+**Phase 3 — Automations** · ~4 days
+Templates-first.
+
+1. Extract templates → `@synap-core/automation-templates` package (~0.5 day)
+2. `/flow/automations` page with templates grid + your-rules list
+3. Install-template flow
+4. Toggle + trigger + run history
+5. Read-only detail panel
+
+Total ~2 weeks. All composition, minimal new backend.
+
+---
+
+## Reuse from existing packages
+
+| Package | What we reuse |
+|---|---|
+| `@synap-core/capture-pipeline` | `enrichProposals`, `mapToExecuteInput`, useStructureCapture hook |
+| `@synap-core/connectors` (may need creation) | Provider registry, ConnectorCard logic |
+| Relay `src/components/` | Import flow components (port to HeroUI) |
+| Relay `src/lib/relay-automations.ts` | 5 automation templates (move to shared package) |
+| `trpc.capture.*` / `trpc.connectors.*` / `trpc.feeds.*` / `trpc.import.*` / `trpc.automations.*` | All existing, no new routers needed (maybe 2 new queries) |
+
+---
+
+## Open decisions (need product call)
+
+1. **Captures vs Inbox** — they overlap. Captures = unclassified ingested items; Inbox = proposals + notifications. Could merge into one "Inbox" page with three tabs (Captures / Proposals / Notifications). **Current proposal: keep separate** because they need different badges and different action sets. Revisit if UX testing shows confusion.
+
+2. **Flow editor priority** — skip entirely for V1 (template-only), or ship a read-only visualization of templates so users understand what they're installing? **Current proposal: read-only visualization.** Not a full editor.
+
+3. **OSS pod UX for CP-gated providers** — hide entirely, or show greyed with "Requires CP subscription" tooltip? **Current proposal: hide curated, show RSS URL fallback only.** Cleaner on OSS; obvious upgrade path visible elsewhere.
+
+4. **Provider catalog endpoint on CP** — confirm whether `feeds.listAvailableProviders` exists or needs to be added. If added, it returns: `{ providers: [{ id, name, icon, category, configSchema, requiresCP, examples[] }] }`.
+
+---
+
+## What's NOT in scope
+
+- **Voice capture / audio ingestion** inside Studio. Covered by Relay. Studio shows resulting captures only.
+- **Live OCR / document scanning.** Relay native integration only for now.
+- **Outbound automations to provider actions** (send Slack, send email) beyond what the existing automation engine already supports.
+- **Custom RSSHub route builder.** Users pick from CP catalog; advanced users use the "RSS URL" fallback with a route they built elsewhere.
+
+---
+
+## Success criteria
+
+After Phase 1 ships, a new Studio user can:
+
+1. Connect Gmail in under 30 seconds (OAuth through CP)
+2. Subscribe to a Twitter user for their feed
+3. Upload a LinkedIn export and see 500+ contacts appear as entities in 2 minutes
+
+After Phase 2 ships:
+
+4. See AI-proposed classifications for every new captured item and triage them in bulk
+
+After Phase 3 ships:
+
+5. Install "Enrich new contacts with AI summary" in two clicks and see it run when a new person entity appears
+
+Total end-to-end: **first connection to first automated action in under 5 minutes.**

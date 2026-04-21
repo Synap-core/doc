@@ -1,0 +1,59 @@
+---
+title: 'Onboarding'
+description: 'Story-based onboarding flow — presets, feature picks, workspace creation, local vs pod setup'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app', 'browser', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Onboarding
+
+Story-based onboarding guides users through setting up their Synap workspace. 6 presets, 10 feature addons, and dual creation paths (pod or local).
+
+## Two onboarding flows
+
+| Flow | Description |
+|------|-------------|
+| **StoryOnboardingFlow** | Step-by-step guided flow: story cards → feature picks → name space → setup choice (pod/trial/local) → creating screen. **Presets:** second-brain · agent-fleet · startup-os · research-hub · blank · from-template [More details](/team/platform/universal-onboarding-north-star) |
+| **BrowserNewSpaceDialog** | Three-method dialog: Personalized Space (preset flow), Set up with AI, or From Template. Sub-step components support `embedded` prop for rendering inside the dialog. [More details](/team/browser/architecture) |
+
+## Preset configuration
+
+Each preset defines:
+
+- **Entity profiles** to create
+- **Views** to set up
+- **Sidebar items** (which apps appear)
+- **Bento layout** (initial dashboard widgets)
+- **Seed entities** (if any)
+
+## Feature addons
+
+10 feature addons across 4 categories:
+
+| Category | Addons |
+|----------|--------|
+| **Views** | Kanban board, Calendar, Timeline, Graph view |
+| **Tools** | Browser extension, Mobile app, File management |
+| **AI** | Proactive intelligence, AI capture, Knowledge graph |
+| **Collaboration** | Multi-user workspace, Shared views, Team channels |
+
+## Dual creation paths
+
+| Path | Description | When to use |
+|------|-------------|-------------|
+| **"On my Data Pod"** | tRPC `createFromDefinition` with workspace creation | Cloud/self-hosted pods |
+| **"Keep it local"** | IndexedDB persistence | Offline-first, privacy-first |
+
+## Space personalization
+
+Browser space personalization cells: preset selection, addon selection, space naming. Integration with `presets/` package in browser for mapping presets to workspace proposals.
+
+## Key files
+
+- Story onboarding: `synap-app` StoryOnboardingFlow
+- Presets and addon mapping: `browser/electron/renderer/src/components/onboarding/presets/`
+- `mergePresetAndAddons()` function: combines preset + selected addons → WorkspaceProposal
+- Universal onboarding north star: [/team/platform/universal-onboarding-north-star](/team/platform/universal-onboarding-north-star)
+- S-tier Definition of Done: [/team/platform/s-tier-definition-of-done](/team/platform/s-tier-definition-of-done)

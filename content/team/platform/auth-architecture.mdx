@@ -1,6 +1,14 @@
 ---
-title: "Auth Architecture"
-description: "Auth consolidation: Better Auth, API keys, CLI tokens."
+title: 'Auth Architecture'
+description: 'Auth consolidation: Better Auth, API keys, CLI tokens.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Authentication Architecture
@@ -38,7 +46,8 @@ JTI (JWT ID) replay protection is implemented: each handshake JWT has a unique J
 
 Three provisioning paths exist:
 
-```
+```bash
+
 [Shared Pod — auto at signup]
 
   CP signup complete
@@ -54,9 +63,11 @@ Three provisioning paths exist:
        ▼
   User opens Browser or Relay → app calls Kratos
   to issue a session → user is logged in
-```
 
 ```
+
+```bash
+
 [Dedicated Pod — triggered by app]
 
   CP provisions dedicated pod (Docker, VM)
@@ -72,9 +83,11 @@ Three provisioning paths exist:
        ▼
   Kratos identity created
   App calls Kratos session endpoint → user is logged in
-```
 
 ```
+
+```bash
+
 [CLI — was broken, now being fixed]
 
   npx @synap/cli init
@@ -91,6 +104,7 @@ Three provisioning paths exist:
   Agent user created on pod
   CLI calls POST /api/hub/setup/agent (PROVISIONING_TOKEN)
   → agent API key returned, stored in ~/.synap/config.json
+
 ```
 
 Note: the CLI fix creates an **agent** identity, not a human session. The CLI can then act as an AI agent but cannot act as the human user (no pod session, no tRPC user context).
@@ -296,7 +310,8 @@ Non-browser clients (CLI, scripts) cannot complete browser redirect flows. The s
 
 **Proposed flow for Synap:**
 
-```
+```yaml
+
   $ synap login --pod https://mypod.synap.live
 
   CLI calls: POST https://mypod.synap.live/auth/device/authorize
@@ -321,9 +336,11 @@ Non-browser clients (CLI, scripts) cannot complete browser redirect flows. The s
   CLI polls: POST https://mypod.synap.live/auth/device/token
              { device_code: "abc..." }
   every 5 seconds, waiting for authorization_pending to change
-```
 
 ```
+
+```bash
+
   [In the browser — user follows the URL]
 
   Browser → https://app.synap.live/auth/pod-connect?code=WXYZ-1234
@@ -349,6 +366,7 @@ Non-browser clients (CLI, scripts) cannot complete browser redirect flows. The s
 
   CLI stores token in ~/.synap/pod-session.json
   $ synap login done. Connected to mypod.synap.live as alice@example.com.
+
 ```
 
 **What this enables:**
@@ -497,11 +515,13 @@ This is the final cleanup. Prerequisite: Steps 2–4 are done so that no code pa
 
 Current severity: **Critical**. If `JWT_SECRET` is leaked (e.g., in a compromised `.env`, a log line, a debug endpoint), an attacker can compute the Kratos password for any user on any pod that uses the same `JWT_SECRET`. The attack is:
 
-```
+```yaml
+
 password = HMAC-SHA256(env.JWT_SECRET, target_email)
 POST /kratos/self-service/login (on target pod)
 { email: target_email, password: derived_password }
 → full session on target pod
+
 ```
 
 Mitigation timeline: Step 2 (remove deterministic passwords) is the immediate fix. Step 4 (OIDC) or Step 5 (Better Auth migration) permanently eliminates the attack surface.

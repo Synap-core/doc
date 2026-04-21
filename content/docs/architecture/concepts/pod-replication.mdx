@@ -1,0 +1,64 @@
+---
+title: 'Pod replication & pairing'
+description: >-
+  How two Synap Data Pods stay in sync, what Control Plane links, and what it
+  means for your data.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+This page is the **public** explanation of **pod pairing** and **replication**.  
+For engineers: the internal runbook lives in **[Pod-to-pod sync (team)](/team/platform/pod-to-pod-sync)** (authenticated).
+
+## Why replication exists
+
+Synap’s **Data Pod** stores your knowledge graph and event history. Some teams want **two copies** of that history—typically a **primary** pod they use day-to-day and a **replica** (backup, failover candidate, or regional copy).
+
+Replication is built on the **same event log** that powers the rest of Synap: changes become **completed events**, which can be shipped to another pod over HTTPS and **materialized** there. That keeps both sides aligned with the product’s core model: **events are the source of truth**.
+
+## What “pairing” means
+
+**Synap Cloud’s Control Plane** can link **two active pods** you own into a **single pair**: one **primary** and one **replica**.
+
+- Linking is **intentionally pair-shaped** (two pods per link), not an arbitrary mesh in the product UI.
+- The Control Plane issues credentials and calls each pod’s sync setup so both sides agree on **who pushes**, **who pulls**, and **shared secrets**.
+- Beyond this managed pair, advanced topologies would require **explicit configuration** on the pods themselves (team doc).
+
+<PodReplicationPublicDiagram />
+
+## What gets replicated
+
+At a high level:
+
+| Area | Typical behaviour |
+|------|-------------------|
+| **Event log** | Completed events are replicated continuously (fast path) and on a schedule (catch-up). |
+| **Workspace scope** | Peers can be limited to specific workspaces when configured. |
+| **Large files** | Binary payloads follow **separate scheduled sync** in addition to metadata in the event stream (team doc). |
+
+Exact tables and worker names are **implementation details**; the important idea is **metadata + payloads** are both accounted for, with **idempotent** apply on the replica so transient duplicates are safe.
+
+## Trust and boundaries
+
+- Replication is **between pods you configure** (and, for Cloud, pods in your account that you link). It is **not** a silent multi-tenant merge: peers authenticate with **shared secrets** and scoped roles.
+- **Conflict policy** is documented for operators as **last-write-wins** at the materialization layer, with audit hooks for conflicts—see the team page for depth.
+- If you need **stronger-than-LWW** semantics for specific entities, that is a **future product** discussion (custom merge rules, CRDTs for selected types, etc.).
+
+## What this does not solve (yet)
+
+- **Arbitrary N-way mesh** (three or more pods in one logical cluster) as a first-class Cloud UI.
+- **Interactive conflict resolution UI** for every field—today the system favours **automation and auditability** over manual merge screens.
+- **Guaranteed real-time latency SLAs**—the design uses a **fast path plus scheduled catch-up** so brief outages can heal without manual dumps.
+
+## Where to go next
+
+- [Data sovereignty](./data-sovereignty) — ownership and boundaries  
+- [Event sourcing explained](./event-sourcing-explained) — why the log matters  
+- [Architecture overview](./architecture) — how the pod fits in the system  
+- **Team:** [Pod-to-pod sync](/team/platform/pod-to-pod-sync) — workers, endpoints, observability, roadmap  

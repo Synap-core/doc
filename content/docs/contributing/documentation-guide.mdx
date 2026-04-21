@@ -1,0 +1,288 @@
+---
+title: "Documentation Contribution Guide"
+description: "Guidelines for contributing to Synap's documentation - standards, processes, and best practices"
+section: "contributing"
+audience: "developers|writers|contributors"
+version: "1.0+"
+last_updated: "2026-04-20"
+tags: [documentation, contributing, guidelines]
+sidebar_position: 2
+toc: true
+---
+# Documentation Contribution Guide
+
+Thank you for helping improve Synap's documentation! This guide outlines the specific standards and processes for contributing to our documentation.
+
+## Documentation Structure
+
+Synap's documentation is organized into several sections for different audiences:
+
+### Public Documentation (`/content/docs/`)
+- **`/architecture/`** - System architecture concepts and technical deep dives
+- **`/integrate/`** - Integration and development guides for builders
+- **`/start/`** - Getting started and introductory content for new users
+- **`/cloud/`** - Deployment and SaaS information
+- **`/tutorials/`** - Step-by-step guides (to be created)
+- **`/references/`** - Quick reference materials (to be created)
+- **`/api/`** - Automated API reference (to be created)
+
+### Team Documentation (`/content/team/`)
+- Separated by team/function (platform, intelligence, control-plane, etc.)
+- Internal team processes, specifications, and knowledge
+
+### Internal Design Docs (`/docs-internal/`)
+- Engineering specifications, architecture plans, and audit reports
+
+## Frontmatter Standards
+
+All MDX/MD files **must** include standardized frontmatter:
+
+```yaml
+---
+title: "Document Title"
+description: "Concise description (150-160 chars) for SEO and listings"
+section: "architecture|team|platform|integrate|tutorials|reference|api|start|cloud|contributing"
+audience: "users|developers|admins|internal"
+version: "1.0+"  # or specific version like "0.45.0+"
+last_updated: "2026-04-20"  # ISO date format (YYYY-MM-DD)
+tags: [api, tutorial, reference, concept, guide, getting-started]
+# Optional fields:
+# sidebar_position: 3  # For sidebar ordering (lower numbers higher in sidebar)
+# hide_title: false    # Set to true to hide title
+# toc: true            # Set to false to disable table of contents
+---
+```
+
+### Required Fields
+- `title`: Document title (always quote for consistency)
+- `description`: SEO description (150-160 characters recommended)
+
+### Recommended Fields
+- `section`: Primary documentation section (helps with organization)
+- `audience`: Target audience (helps with content targeting)
+- `version`: Synap version applicability (e.g., "1.0+", "0.45.0-0.50.0")
+- `last_updated`: ISO date (YYYY-MM-DD) - updated when significant changes made
+- `tags`: Array of relevant tags for filtering and related content
+
+## Code Standards
+
+### Code Blocks
+All code blocks **must** include language tags for proper syntax highlighting:
+
+```typescript
+// Correct: With language tag
+const example: string = "good";
+console.log(example);
+```
+
+```bash
+# Correct: With language tag
+pnpm install
+pnpm dev
+```
+
+```sql
+-- Correct: With language tag
+SELECT * FROM entities WHERE status = 'active';
+```
+
+### Incorrect Examples to Avoid
+``` 
+// INCORRECT: Missing language tag
+const example = "bad";
+```
+
+### Line Highlighting
+For tutorial code, you can highlight specific lines:
+
+```typescript{1,3-5}
+// Highlight lines 1 and 3-5
+const example: string = "highlighted";
+console.log(example);
+```
+
+## Content Guidelines
+
+### Writing Style
+- Use clear, concise language
+- Prefer active voice over passive
+- Write in second person ("you") when addressing the reader
+- Define acronyms on first use (e.g., "API (Application Programming Interface)")
+- Use present tense for current features, future tense for planned features
+- Avoid jargon when possible, or explain it when necessary
+
+### Document Structure
+- Start with a clear overview/summary (what, why, who)
+- Use progressive disclosure: simple concepts first, advanced later
+- Include code examples when explaining technical concepts
+- End with "See also" or "Next steps" sections when appropriate
+- Use callouts for important notes, warnings, or tips:
+  ```
+  :::tip
+  This is a helpful tip
+  :::
+  
+  :::warning
+  This is an important warning
+  :::
+  
+  :::info
+  This is additional information
+  :::
+  ```
+
+### File Organization
+- Use kebab-case for filenames and directories (e.g., `getting-started.mdx`)
+- Group related content in subdirectories
+- Keep files reasonably sized (split if >500 lines)
+- Use index.mdx files for directory landing pages
+- Place images in an `/assets/` subdirectory alongside the MDX file when needed
+
+## Documentation Types
+
+### Tutorials (How-to Guides)
+- **Purpose**: Teach users how to accomplish specific tasks
+- **Structure**:
+  1. Overview and prerequisites
+  2. Step-by-step instructions
+  3. Expected results/verification
+  4. Troubleshooting/common pitfalls
+  5. Next steps/related topics
+- **Examples**: "How to set up a new Data Pod", "How to create a custom cell"
+
+### Reference Documentation
+- **Purpose**: Provide accurate, detailed information for lookup
+- **Structure**:
+  - Clear, consistent organization
+  - Comprehensive parameter/option listings
+  - Type definitions and return values
+  - Error codes and troubleshooting
+  - Usage examples
+- **Examples**: API reference, configuration options, CLI commands
+
+### Concept Explanations
+- **Purpose**: Help users understand underlying principles
+- **Structure**:
+  - Clear definition/explanation
+  - Analogies and visualizations when helpful
+  - Trade-offs and design decisions
+  - Connections to related concepts
+  - Real-world use cases
+- **Examples**: "What is the Hub Protocol?", "How does entity scoping work?"
+
+### API Reference
+- **Purpose**: Document all public APIs for developers
+- **Structure** (auto-generated):
+  - Endpoint/method listings
+  - Request/response schemas
+  - Authentication requirements
+  - Rate limiting information
+  - Error codes and examples
+- **Note**: Should be generated from source code to prevent drift
+
+## Contribution Process
+
+### 1. Find an Opportunity
+- Look for missing documentation, outdated information, or unclear explanations
+- Check the "Documentation" label in GitHub issues
+- Consider areas you've recently worked on or learned about
+
+### 2. Fork and Clone
+```bash
+# Fork the synap-team-docs repository on GitHub first
+git clone https://github.com/your-username/synap-team-docs.git
+cd synap-team-docs
+```
+
+### 3. Create Branch
+```bash
+git checkout -b feat/docs-improve-[feature-name]
+# Example: git checkout -b feat/docs-improve-api-reference
+```
+
+### 4. Make Changes
+- Follow the standards in this guide
+- Test your changes locally: `pnpm dev`
+- Ensure all links work and images display correctly
+- Run documentation linter if available: `pnpm lint:docs`
+
+### 5. Commit Changes
+```bash
+git add .
+git commit -m "docs: add guide on X feature"
+# For fixes: git commit -m "docs: fix typo in Y guide"
+# For updates: git commit -m "docs: update Z documentation for v0.45"
+```
+
+### 6. Push and Create Pull Request
+```bash
+git push origin feat/docs-improve-[feature-name]
+# Then create PR on GitHub
+```
+
+### PR Requirements
+- Clear title starting with `docs:` prefix
+- Detailed description explaining what, why, and how
+- Link to any related issues or discussions
+- Screenshots for UI changes (if applicable)
+- Checklist of what was accomplished
+- Pass all CI checks
+
+## Local Development
+
+### Setup
+```bash
+cd synap-team-docs
+pnpm install
+```
+
+### Development Server
+```bash
+pnpm dev
+# Opens at http://localhost:3000
+# Changes update automatically with HMR
+```
+
+### Building for Production
+```bash
+pnpm build
+```
+
+### Preview Production Build
+```bash
+pnpm preview
+```
+
+## Link Validation
+
+Before submitting a PR, please verify:
+- All internal links work and point to existing files
+- External links use `target="_blank" rel="noreferrer"` (handled automatically)
+- Anchor links within files work correctly
+- No broken image references
+- Code blocks have proper language tags
+
+## Getting Help
+
+If you have questions:
+1. Check existing documentation for similar patterns
+2. Look at recent PRs for examples (look for `docs:` prefix)
+3. Ask in the #documentation channel on Discord
+4. Tag @documentation-maintainers in your PR
+5. For complex questions, start a GitHub Discussion
+
+## Documentation Maintenance
+
+### Keeping Documentation Current
+- When changing code, consider if documentation needs updating
+- For API changes, update the automated reference generator if needed
+- For feature changes, update relevant tutorials and guides
+- Remove deprecated content or mark it clearly
+
+### Documentation Reviews
+- All documentation changes should be reviewed by at least one team member
+- Look for: accuracy, clarity, completeness, and adherence to standards
+- Consider both technical accuracy and readability for target audience
+
+Thank you for contributing to Synap's documentation!
+Your help makes Synap more accessible and usable for everyone!

@@ -1,5 +1,14 @@
 ---
 sidebar_position: 5
+title: 'Multi Agent System'
+description: Documentation covering Multi Agent System
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Multi-Agent System
@@ -87,7 +96,8 @@ type AgentType = {
 
 **Built-in Agents**:
 
-```
+```bash
+
 🔍 Intent Analyzer
 ├─ Understands goals from free-form text
 ├─ Routes to relevant agents
@@ -129,6 +139,7 @@ type AgentType = {
 
 🛠️ Custom Agents
 └─ Domain-specific expertise, user-defined
+
 ```
 
 ---

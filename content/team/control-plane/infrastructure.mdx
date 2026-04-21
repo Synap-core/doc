@@ -1,6 +1,14 @@
 ---
-title: "Infrastructure"
-description: "Server map, Docker services, subdomains, observability."
+title: 'Infrastructure'
+description: 'Server map, Docker services, subdomains, observability.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Infrastructure
@@ -132,6 +140,14 @@ IS (intelligence-hub)
   → Data pod /api/hub/*            # Hub Protocol (read entities, messages, skills)
   → OpenRouter / OpenAI / Anthropic # LLM inference
   → Langfuse                       # LLM trace ingest
+
+Feed execution (managed pods, default path)
+  → Relay/Browser config feed templates/preferences
+  → pod `feeds.updateFeedConfig` + `feeds.triggerFeed`
+  → pod feed worker (`feed-rss-executor`)
+  → CP `/api/rsshub-proxy/*` (provider registry + cache + failover)
+  → pod receives items, calls IS classifier
+  → pod writes final feed messages to feed channels
 
 Prometheus (CP server)
   → control-plane:3000/metrics     # CP app metrics (bearer token auth)
@@ -267,6 +283,12 @@ The CP exposes prom-client metrics at `/metrics` (IS_METRICS_TOKEN bearer requir
 ./synap-cp signal start         # Start RSSHub + Browserless (Signal Feed)
 ```
 
+### Feed topology notes
+
+- **Managed pods (default):** CP proxy is the RSS ingress backbone.
+- **Self-hosted pods (optional):** can run RSSHub locally and use pod-side `rsshub` provider directly.
+- **Template-first mobile UX:** Relay should prefer curated template catalogs (Twitter/X, Reddit, LinkedIn, etc.) over raw URL input.
+
 ### IS CLI Commands
 
 ```bash
@@ -280,9 +302,11 @@ The CP exposes prom-client metrics at `/metrics` (IS_METRICS_TOKEN bearer requir
 ### Cross-Server Wiring (done once after install)
 
 After installing IS, the install script prints:
-```
+```bash
+
 METRICS_TOKEN=<hex>
 On the CP server run: ./synap-cp monitoring set-is-token
+
 ```
 
 This token is written to `monitoring/secrets/is_metrics_token` on the CP server and mounted into Prometheus so it can scrape `https://ai.synap.live/metrics`.

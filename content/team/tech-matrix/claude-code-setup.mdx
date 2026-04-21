@@ -1,0 +1,143 @@
+---
+title: 'Claude Code Setup'
+description: 'How the Synap team uses Claude Code for development — skills, subagents, and configuration patterns.'
+section: tech-matrix
+audience: developers
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Overview
+
+Claude Code is the primary AI development assistant for Synap. It is configured via the `.claude/` directory and the root `CLAUDE.md` file, which encode the project's architecture, conventions, and workflows into instructions that Claude Code follows during every session.
+
+## Root Configuration: CLAUDE.md
+
+The root `CLAUDE.md` is the single source of truth for Claude Code's understanding of the Synap codebase. It covers:
+
+- **Tech stack** — React, Tamagui, tRPC, Drizzle, Hono, Electron, Expo
+- **Multi-repo structure** — synap-app, synap-backend, synap-intelligence-service, browser, relay-app
+- **Architecture patterns** — Three-layer data (hooks → stores → client), Entity scoping, Cell system
+- **Key directories** — Where to find specific systems
+- **Commands** — Per-repo commands (no root-level scripts)
+- **Code conventions** — TypeScript strict, no `any`, design system tokens, Drizzle enums, Hono route ordering
+- **Git conventions** — Branch naming, commit conventions
+
+### Token Budget Management
+
+The `CLAUDE.md` file is ~1000 lines and contains essential but dense architectural knowledge. Claude Code loads it at the start of every session. Only information Claude actually references during a session counts against the token budget. The file is optimized to be skimmable while remaining complete.
+
+For long sessions where repeated lookups become wasteful, the team can create shorter focused reference files (e.g., `CLAUDE.TAMAGUI.md` for Tamagui-specific knowledge), though this is rarely needed.
+
+## .claude/ Directory Structure
+
+The `.claude/` directory sits at the root of the Synap monorepo and contains:
+
+```
+.claude/
+├── SKILLS.md              # Skill index
+├── skills/                # All team skills
+│   ├── add-feature/
+│   ├── bento-dashboard/
+│   ├── commit/
+│   ├── create-app/
+│   ├── create-skill/
+│   ├── plan/
+│   ├── pr-review/
+│   ├── product-check/
+│   ├── scaffold-package/
+│   ├── scaffold-project/
+│   └── ui-component/
+├── hooks/                  # Session hooks (optional)
+├── rules/                  # Coding rules (optional)
+└── settings.json           # Claude Code settings
+
+```
+
+## Skills
+
+Skills are the primary extensibility mechanism. Each skill provides structured instructions for a specific workflow. All skills load via `/` slash commands.
+
+### add-feature
+End-to-end guide for implementing a new Synap feature. Covers planning, package creation, backend API, frontend UI, cell registration, and testing. Use for any new feature from idea to deployment.
+
+### bento-dashboard
+Design and implement bento grid dashboards using Synap's cell system. Creates widget layouts, cell compositions, and dashboard configurations. Use for home dashboards, entity dashboards, or custom views.
+
+### commit
+Smart conventional commit with auto-detected scope from changed files. Analyzes diff, detects affected packages, and generates the commit message. Run with `/commit` after making changes.
+
+### create-app
+Create a new application on Synap infrastructure — either a Browser module (Electron app) or a standalone mobile/web app (Expo). Scaffolds full structure with proper package reuse, pod connectivity, and cell registrations.
+
+### create-skill
+Create a new Claude Code skill for the Synap project. Generates `SKILL.md` with proper frontmatter, instructions, and registers it in the project. Use when teaching Claude a new workflow or command.
+
+### plan
+Create a structured implementation plan for a Synap feature. Analyzes impact across repos, packages, cell system, agent layer, and data model before any code is written. Use before starting development.
+
+### pr-review
+Review code changes against Synap architecture conventions. Checks package boundaries, three-layer data, cell system, proposal governance, and type safety. Run before merging.
+
+### product-check
+Quick product alignment check for a feature, change, or decision. Verifies against Synap's North Star, emergent complexity model, roadmap, and architectural principles. Use before starting or after implementing a feature.
+
+### scaffold-package
+Create a new Synap monorepo package with proper structure, barrel exports, tsconfig, and package.json. Use when adding a new feature or library package. Ensures `@synap/[name]` naming and correct dependency graph.
+
+### scaffold-project
+Generate a complete `.claude/` folder configuration for any project. Interviews the user, then generates `CLAUDE.md`, agents, skills, hooks, rules, and settings.json. Use for onboarding Claude Code to new projects or restructuring configuration.
+
+### ui-component
+Create or update UI components, pages, screens, and views in Synap. Enforces Tamagui patterns, `@synap-core/ui-system` tokens, component reuse, and design system compliance. Use whenever building any UI element.
+
+## Agentic Subagents
+
+Claude Code can invoke subagents for focused tasks:
+
+### Explore Subagent
+For understanding unfamiliar code, tracing data flow, or investigating a bug. Runs a read-only analysis and returns findings. Use `/explore` with a description of what you want to understand.
+
+### General Subagent
+The default agent for coding tasks. Handles implementation, refactoring, testing, and debugging. This is the subagent used for most day-to-day development work.
+
+## Usage Patterns
+
+### Daily Development Workflow
+
+1. Run `/commit` after finishing a feature or fix to create a conventional commit with auto-detected scope
+2. Run `/pr-review` before pushing changes to verify architectural compliance
+3. Use subagents (`explore`, `general`) inline for code analysis and implementation
+
+### Starting a New Feature
+
+1. Start with `/plan` for scope and impact analysis
+2. Run `/product-check` to verify alignment with product direction
+3. Use `/scaffold-package` to create the package structure
+4. Use `/add-feature` to follow the end-to-end implementation guide
+5. Use `/ui-component` for any UI elements
+
+### Building UI
+
+Use `/ui-component` whenever creating or modifying UI — it enforces tokens, naming conventions, and component reuse from `@synap-core/ui-system`.
+
+### Dashboard Work
+
+Use `/bento-dashboard` for any bento grid layout work, including widget creation, cell composition, and dashboard configuration.
+
+### Creating New Skills
+
+When a workflow becomes repetitive, use `/create-skill` to encode it as a reusable skill for the team.
+
+## Best Practices
+
+- **Always use skills** — They encode project conventions that reduce architectural drift
+- **Run `/pr-review` before merging** — It catches three-layer violations, package boundary issues, and missing cell registrations
+- **Use `/product-check` early** — Aligning with the North Star before coding prevents rework
+- **Let `/commit` detect scope** — Manual scope specification is error-prone; the auto-detection reads the diff directly
+- **Explore before implementing** — For unfamiliar code areas, use the explore subagent to understand the existing pattern before writing code
+- **Check existing skills first** — Before creating a new skill, verify it doesn't already exist or that the existing skill covers your use case

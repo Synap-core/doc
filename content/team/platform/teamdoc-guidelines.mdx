@@ -1,6 +1,16 @@
 ---
-title: "TeamDoc Guidelines"
-description: "Canonical guidelines for Synap documentation stack, UI policy, and authoring standards."
+title: 'TeamDoc Guidelines'
+description: >-
+  Canonical guidelines for Synap documentation stack, UI policy, and authoring
+  standards.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 This is the canonical guideline for how we build documentation at Synap.
@@ -84,6 +94,15 @@ Avoid:
 
 - duplicated pages with same slug in `.md` and `.mdx` unless intentional
 - large custom JSX blocks when built-in Fumadocs components work
+
+### Flow diagrams: Mermaid vs React Flow
+
+- **Mermaid** (fenced code blocks) stays valid for **simple sequential** diagrams and for **GitHub-only** docs where the Next app does not render.
+- **Interactive topology** (zoom/pan, many nodes, non-linear layout) uses **`SynapFlowDiagram`** from `@xyflow/react`, registered in **`lib/mdx-components.tsx`**.
+- Prefer **preset wrappers** (e.g. `PodReplicationPublicDiagram`, **`EveStackDiagram`** for Eve + Synap stack) when the same graph is reused across pages; pass **`nodes` / `edges`** only for one-off diagrams.
+- Keep diagrams **read-only** (no user editing) unless we add an explicit builder product—defaults: no dragging, no new connections.
+
+Implementation reference: `components/mdx/SynapFlowDiagram.tsx`, presets under `components/mdx/presets/`.
 
 ## 5) Theming and Personalization
 

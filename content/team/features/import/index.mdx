@@ -1,0 +1,36 @@
+---
+title: 'Import'
+description: 'Bulk data import from external sources — CSV, JSON, Nango connectors, pod-to-pod sync'
+surfaces: ['browser', 'studio', 'platform']
+repos: ['synap-app', 'synap-backend', 'synap-raycast']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Import
+
+Import existing data into Synap from CSV files, JSON exports, external service connectors via Nango, or from other pods in a pod-to-pod sync scenario.
+
+## Import paths
+
+| Path | Description |
+|------|-------------|
+| **CSV Upload** | User uploads CSV files via the browser. Platform validates columns, maps to entity profiles, and creates entities. Supports batch creates with conflict resolution. |
+| **JSON Import** | Structured JSON import with schema validation. Used for programmatic data migration and API-based bulk creation. |
+| **Nango Connectors** | OAuth-based data pull from external services (Gmail, Slack, Notion, etc.). Nango handles token management; Synap pulls the data through Hub Protocol. |
+| **Pod-to-Pod Sync** | Event log replication between pods. Real-time hook (500ms batching) + polling fallback (60s). Bidirectional with LWW conflict resolution. |
+
+## Import flow
+
+1. **Source selection** — User chooses import method (file upload, connector, or API)
+2. **Schema mapping** — Platform attempts auto-mapping of columns/fields to entity profiles. User can review and correct.
+3. **Validation** — Each row is validated against target profile schema. Invalid rows are reported with error details.
+4. **Bulk creation** — Valid rows are batch-inserted via Drizzle. Events are emitted for each new entity.
+5. **Post-processing** — Search index updates, embeddings generated, and notifications sent.
+
+## Key files
+
+- Import pipeline: [/team/platform/import-pipeline](/team/platform/import-pipeline)
+- File upload: [/team/platform/file-upload](/team/platform/file-upload)
+- Nango connectors: [/team/platform/connectors](/team/platform/connectors)
+- Pod-to-pod sync: [/team/platform/pod-to-pod-sync](/team/platform/pod-to-pod-sync)

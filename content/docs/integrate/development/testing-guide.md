@@ -1,5 +1,14 @@
 ---
 sidebar_position: 3
+title: Testing Guide
+description: Documentation covering Testing Guide
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Testing Guide
@@ -599,7 +608,8 @@ it('should handle concurrent writes', async () => {
 
   expect(stored.length).toBe(10);
 });
-```
+```bash
+
 
 ---
 
@@ -626,6 +636,7 @@ it('should handle concurrent writes', async () => {
 ## Best Practices
 
 ### 1. Import Test Globals Explicitly
+
 
 ```typescript
 // ✅ Always import, even with globals: true

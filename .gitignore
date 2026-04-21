@@ -26,3 +26,5 @@ build/
 # Archives (never commit site backups into git)
 *.tar.gz
 *.zip
+.vercel
+.env*.local

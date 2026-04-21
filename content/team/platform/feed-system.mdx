@@ -1,6 +1,14 @@
 ---
-title: "Feed System"
-description: "3-surface feed model: personal chat, proactive feed, notifications."
+title: 'Feed System'
+description: '3-surface feed model: personal chat, proactive feed, notifications.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Feed System — Architecture, Rationale & Roadmap
@@ -19,6 +27,46 @@ The original design had one AI channel per user (`isPersonal: true`). Automation
 3. **Rate limiting interference.** The proactive rate limit (3/hr, 10/day) was tracking ALL messages in the personal channel, including user chat messages — misfire risks.
 
 The fix is a strict 3-surface model. One rule: **every write goes to exactly one surface.**
+
+---
+
+## Control Plane Feed Backbone (Default)
+
+For **managed/provisioned pods**, feed retrieval is centralized through the Control Plane RSS proxy:
+
+1. Pod feed worker executes (`feed-rss-executor`)
+2. Feed provider is typically `cpproxy` in `FeedServiceFactory`
+3. CP `rsshub-proxy` resolves healthy provider (default RSSHub + optional additional providers)
+4. Pod receives normalized RSS items
+5. Pod calls IS classification (`classify_feed_items`) for relevance + topics
+6. Pod publishes final feed messages to feed channel (`ChannelMessagePublisher` path)
+
+This keeps provider operations (health checks, failover, cache/rate-limit handling) centralized while preserving data sovereignty: CP proxies RSS transport, but feed decisions and message persistence stay in the pod.
+
+### Control Plane responsibility
+- Provider registry + health checks (`feed-provider-registry.ts`)
+- Default RSSHub provider bootstrap (`rsshub-proxy.ts`)
+- Routing/failover/caching across providers
+- Template catalog for app onboarding (`GET /api/feed-providers/templates`)
+
+### Pod responsibility
+- Feed config + schedules
+- Deduplication window + seen-url tracking
+- Relevance filtering + posting to user feed channels
+
+**See also:** **[RSSHub (external tech)](/team/technologies/rsshub)** — routes vs plain RSS URLs, pitfalls. **[Feed onboarding vision](/team/platform/feed-onboarding-vision)** — multi-app UX + Intelligence Service alignment.
+
+---
+
+## Self-Hosted RSSHub Path
+
+For **self-hosted pods**, you can bypass CP feed backbone and run RSSHub locally:
+
+- Run RSSHub near the pod (same host or LAN)
+- Set feed provider to `rsshub` (or `direct` for plain RSS URLs)
+- Point provider URL to local RSSHub endpoint
+
+This reduces dependency on Control Plane transport and gives infra teams full control of feed routing and caching policy.
 
 ---
 
@@ -45,7 +93,8 @@ Both channels are `ai_thread` type, pod-wide (no `workspaceId`), created lazily 
 
 ## Channel Schema
 
-```
+```bash
+
 channels table (both channels share this)
 ├── channelType: 'ai_thread'
 ├── userId: (owner)
@@ -57,6 +106,7 @@ channels table (both channels share this)
 
 Personal chat:   agentId="personal",  agentType="personal", metadata.isPersonal=true
 Proactive feed:  agentId="proactive", agentType="personal", metadata.isProactiveFeed=true
+
 ```
 
 ### Why pod-wide?
@@ -110,7 +160,8 @@ Personal identity doesn't change between workspaces. A reconnection nudge is rel
 
 ### Relay mobile app (`useFeed.ts`)
 
-```
+```bash
+
 Feed = [
   Source 1: entities.list { profileSlug: 'person' }    → encounters (paginated)
   Source 2: chat.listChannels → find isProactiveFeed=true
@@ -119,6 +170,7 @@ Feed = [
   Source 4: entities.list { profileSlug: 'campaign' }   → campaign activity
   Source 5: chat.listChannels → entity-linked channels  → recent interactions
 ]
+
 ```
 
 **Router note:** `trpc.notifCenter.*` is the automation notifications table. `trpc.notifications.*` is the legacy inbox (N8N external items — emails, calendar). The feed uses `notifCenter`.
@@ -268,7 +320,8 @@ Planned fix: see `EVENT-CHAIN.md` Phase 1-C (proactive.posted) and Phase 2-C (no
 
 ## Key Files
 
-```
+```bash
+
 Backend
 ├── packages/api/src/utils/personal-channel.ts          ensurePersonalChannel(), ensureProactiveFeedChannel()
 ├── packages/api/src/utils/proactive-channel-post.ts    postProactiveMessage() — posts to proactive feed
@@ -284,4 +337,5 @@ Relay mobile
 ├── relay-app/src/hooks/useFeed.ts                      Feed aggregator (5 sources)
 ├── relay-app/src/lib/relay-automations.ts              5 automation templates
 ├── relay-app/app/(tabs)/feed.tsx                       Feed screen
+
 ```

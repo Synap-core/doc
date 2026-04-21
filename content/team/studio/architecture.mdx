@@ -1,0 +1,120 @@
+---
+title: 'Architecture'
+description: 'Provider chain, state management, mappers, realtime wiring.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Studio Architecture
+
+## Provider chain
+
+All providers live in `app/providers.tsx`, nested in this order:
+
+```yaml
+
+NextThemesProvider           (theme persistence — synap-studio-theme)
+  HeroUIProvider             (design system runtime)
+    ToastProvider            (HeroUI toasts)
+    SynapProvider            (auth: CP + pod session)
+      StudioStoresSync       (mirror auth → @synap-core/stores)
+        StudioTRPCProvider   (tRPC + TanStack Query + mock-mode switch)
+          StudioSocketProvider (Socket.IO client, workspace-scoped)
+            RealtimeBridge   (@synap-core/hooks/useRealtimeSync)
+              ChannelsRealtimeBridge (Studio-local; supplements core)
+                StreamingBridge       (chat:stream / ai:step / errors)
+                  CommandPaletteProvider
+                    RegistryBoot      (cell / icon / plugin registry)
+                      {children}
+
+```
+
+Each layer has a single responsibility. Three that are Studio-specific worth calling out:
+
+- **`StudioStoresSync`** — mirrors the studio auth context into `@synap-core/stores.useWorkspaceStore`. This lets core hooks (`useRealtimeSync`, etc.) that read workspace-id via the store work in Studio even though Studio's auth is managed by its own `SynapProvider`.
+- **`ChannelsRealtimeBridge`** — `useRealtimeSync` predates our channel-sidebar queries. This bridge subscribes to `channel:*` socket events and invalidates `chat.listThreads / listFeeds / listExternalChannels / listAgentCollabChannels / getBranches` so the sidebar updates reactively.
+- **`StreamingBridge`** — subscribes to `chat:stream`, `ai:step`, `chat:stream:error`, `chat:message` events and feeds them into the streaming store. Completes the end-to-end AI round-trip UX.
+
+Full file: `synap-app/apps/studio/app/providers.tsx`.
+
+---
+
+## State management
+
+Two Zustand stores, deliberately small:
+
+### `stores/workspace.ts`
+
+UI state that survives route changes but not reloads (tabs, panel widths, side-panel state). Ephemeral; not synced to backend.
+
+### `stores/pinned.ts`
+
+User-pinned channel ids, persisted via `zustand/middleware/persist`. Keyed `studio-pinned-channels`. Consumed by `ChannelSidebar`'s "Pinned" section and `ChannelContextPane`'s star toggle.
+
+### `stores/streaming.ts`
+
+In-flight AI reply state, keyed by channelId. Holds `{ text, steps, error, done, lastSeq, startedAt }`. Cleared when `chat:message` lands. Kept separate from TanStack Query cache on purpose — cache patching per token destroys perf. See [Streaming](/team/studio/streaming) for the full story.
+
+**Shared core stores** (from `@synap-core/stores`):
+- `useWorkspaceStore` — active workspace id. Mirrored from SynapProvider by `StudioStoresSync`.
+- `useCollaborationStore` — presence, cursors. Read by core hooks.
+
+---
+
+## Mappers
+
+Backend shapes are richer than Studio needs. Three pure-function mappers translate:
+
+| File | Direction | Purpose |
+|---|---|---|
+| `lib/mappers/channel.ts` | `RouterOutputs["chat"]["listChannels"]` → `ChannelListItem` | Sidebar row shape |
+| `lib/mappers/message.ts` | `RouterOutputs["chat"]["getMessages"]` → `ChatMessage` | Chat bubble shape |
+| `lib/mappers/proposal.ts` | `RouterOutputs["proposals"]["list"]` → `UIProposal` | Proposal card + diff shape |
+
+All pure functions, zero react deps, unit-testable. Called from pages, never from components.
+
+---
+
+## Data flow (tRPC)
+
+`StudioTRPCProvider` creates the tRPC client with:
+1. `workspaceLink()` — injects `X-Workspace-Id` header from workspace store
+2. `httpBatchLink` pointed at `/trpc` — proxied to pod via Next middleware
+3. Session token in `X-Session-Token` header
+4. Mock-mode switch (when `isMockMode()` returns true, the mock link intercepts known paths)
+
+Realtime sync (`useRealtimeSync` + `ChannelsRealtimeBridge`) invalidates queries on socket events — no component needs to think about refetching.
+
+---
+
+## Routing
+
+Next.js 15 App Router. Route groups:
+
+- `app/login/` — public, pod picker + Kratos handshake
+- `app/design-system/` — public, live HeroUI showcase
+- `app/(app)/` — auth-gated by `AuthGuard` inside `WorkspaceLayout`
+  - `home/`, `channels/`, `documents/`, `agents/`, `tasks/`, `inbox/`, `graph/`, `entities/`
+  - `channels/layout.tsx` adds the `ChannelSidebar` — Discord-shaped 3-column layout only on channel routes
+
+Next 15 params are `Promise<{ ... }>`; pages use `React.use(params)`.
+
+---
+
+## Mock mode
+
+`lib/mockMode.ts` + `lib/mocks.ts` provide a tRPC link that intercepts known procedure paths and returns static data. Used for design-system page demos and for running the app without a pod. Not for production.
+
+---
+
+## Build quirks
+
+- **Turbopack blocked** — known panic in a `napi_next_api` crate. Scripts default to `--webpack`.
+- **pnpm hoisting** — root `.npmrc` hoists `@heroui/*` to `synap-app/node_modules/@heroui/` so Tailwind can scan them.
+- **workspace stores shim** — `@synap-core/stores` is a thin Zustand package (audited, no Tamagui transitive deps). Studio installs it directly.

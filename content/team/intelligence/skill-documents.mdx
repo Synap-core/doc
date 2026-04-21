@@ -1,6 +1,14 @@
 ---
-title: "Skill: Document Management"
-description: "Document skill — AI-assisted document editing and creation."
+title: 'Skill: Document Management'
+description: Document skill — AI-assisted document editing and creation.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Skill: Document Management
@@ -19,12 +27,14 @@ Create a document when the content has lasting value and should be findable late
 
 ## Creating a document
 
-```
+```yaml
+
 create_document({
   title: "Q1 Sales Summary",
   content: "# Q1 Sales Summary\n\n## Key metrics\n...",
   workspaceId: "<workspace-id>"
 })
+
 ```
 
 Content is Markdown. Use headings, lists, tables, and code blocks as appropriate.
@@ -34,7 +44,8 @@ Content is Markdown. Use headings, lists, tables, and code blocks as appropriate
 Always call `get_document` first to read the current content.
 Then call `update_document` with the full updated content (not a diff).
 
-```
+```yaml
+
 get_document({ documentId: "<doc-id>" })
 → { title, content: "..." }
 
@@ -42,6 +53,7 @@ update_document({
   documentId: "<doc-id>",
   content: "...(full updated content)..."
 })
+
 ```
 
 Do NOT send partial content — the update replaces the entire document body.

@@ -1,0 +1,49 @@
+---
+title: 'Views'
+description: 'Named queries with rendering configs — 16 view types, 12 implemented, rendering via cell system'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Views
+
+Views are named queries combined with rendering configurations. A view provides a specific lens over entity data — same data, different presentation.
+
+## View types (16 defined, 12 implemented)
+
+| Type | Status | Description |
+|------|--------|-------------|
+| Table | shipped | Traditional table view with columns, sorting, filtering. Default for entity lists. |
+| List | shipped | Compact list of entities with key properties shown inline. |
+| Grid | shipped | Grid of entity cards. Good for visual browsing. |
+| Gallery | shipped | Visual gallery with larger thumbnails. Great for websites, articles. |
+| Kanban | shipped | Board view grouped by status/priority. Drag-and-drop reordering. |
+| Matrix | shipped | Two-dimensional grid view (rows × columns). |
+| Masonry/Feed | shipped | Pinterest-style layout with variable-height cards. [More details](/team/platform/views) |
+| Calendar | shipped | Calendar view for event entities. Day/week/month views. |
+| Flow | shipped | Process/flow diagram view. Show entity relationships as diagrams. |
+| Bento | shipped | Bento grid dashboard layout. Customizable 12-col grid with cells. |
+| Branch tree | shipped | Tree view of conversation branches. |
+| Whiteboard | shipped | Canvas-based freeform layout. |
+| Timeline | planned | Timeline/chronological view of events and entities. |
+| Graph | planned | Knowledge graph visualization. |
+| Gantt | planned | Project timeline visualization. |
+| Mindmap | planned | Mind map layout for interconnected entities. |
+
+## How views work
+
+1. **Query** — Each view defines a filter query (entity type, tags, date range, status, etc.)
+2. **Filter compilation** — `ViewFilterCompiler` translates high-level filters to SQL
+3. **Data fetch** — tRPC or Hub Protocol executes query with workspace-scoped property resolution
+4. **Cell rendering** — View renders as a cell in the cell-runtime registry
+5. **Layout** — Bento grids compose multiple view cells with react-grid-layout
+
+## Key files
+
+- View renderer adapters: `synap-app/packages/core/view-renderer/`
+- View types: `synap-app/packages/views/[type]/` (table, kanban, bento, calendar, etc.)
+- Cell system: `@synap/capabilities` → `@synap/cell-runtime`
+- Filter compiler: `synap-backend` ViewFilterCompiler
+- Bento grid: `react-grid-layout` 12-col system

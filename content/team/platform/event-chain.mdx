@@ -1,6 +1,14 @@
 ---
-title: "Event Chain"
-description: "Typed event registry, delivery router, automation trigger system."
+title: 'Event Chain'
+description: 'Typed event registry, delivery router, automation trigger system.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Event Chain & Signal Routing
@@ -104,12 +112,14 @@ through a single routing layer that reads workspace delivery preferences.
 
 **IS-initiated signals** (Hub Protocol `/proactive/post`, automation outputs):
 
-```
+```yaml
+
 POST /api/hub/proactive/post
     └── routeSignal({ domain: "ai_insight", ... })   [packages/api/src/utils/delivery-router.ts]
            ├── deliverToFeed()    → proactive feed channel
            ├── deliverToChat()    → personal chat channel
            └── deliverToNotification() → NotificationService.create()
+
 ```
 
 **Cron-initiated signals** (morning briefing, weekly digest, health check):

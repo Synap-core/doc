@@ -1,6 +1,14 @@
 ---
-title: "IS Overview (Internal)"
-description: "Internal intelligence service overview and design notes."
+title: 'IS Overview (Internal)'
+description: Internal intelligence service overview and design notes.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Intelligence Service — Architecture & Integration Guide
@@ -24,7 +32,8 @@ This document covers:
 
 ## 1. Provisioning Flow
 
-```
+```bash
+
 User subscribes (Stripe)
   → CP creates: subscription + data_pod + intelligenceAccess
   → Pod reaches "ready" state
@@ -39,6 +48,7 @@ User activates AI (Browser Settings / Relay Settings / CLI)
   → CP relays key to pod: POST /api/provision/register-intelligence
   → Pod stores encrypted (AES-256-GCM) in intelligence_services table
   → Pod starts using IS for all AI operations
+
 ```
 
 ### Re-provisioning (Frontend-Driven)

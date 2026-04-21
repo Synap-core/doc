@@ -1,5 +1,14 @@
 ---
 sidebar_position: 2
+title: Direct Plugins
+description: Documentation covering Direct Plugins
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Direct Plugins

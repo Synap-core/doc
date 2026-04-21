@@ -1,6 +1,14 @@
 ---
 sidebar_position: 3
-title: Views System
+title: 'Views System'
+description: Documentation covering Views System
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 > **Principle**: Separate **Declared Scope** (what the view *intends* to show) from **Query Results** (what typically matches).

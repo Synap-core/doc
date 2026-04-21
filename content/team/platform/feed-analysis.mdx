@@ -1,6 +1,14 @@
 ---
-title: "Feed Architecture Analysis"
-description: "Analysis of feed architecture trade-offs and decisions."
+title: 'Feed Architecture Analysis'
+description: Analysis of feed architecture trade-offs and decisions.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Unified Feed Architecture - Comprehensive Analysis
@@ -31,7 +39,8 @@ The unified feed system has been successfully implemented across all repositorie
 
 ### 1.1 System Architecture
 
-```
+```bash
+
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         CONTROL PLANE                               │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
@@ -105,11 +114,13 @@ The unified feed system has been successfully implemented across all repositorie
 │                              │                                      │
 │  useChannelMessages(channelId) - Same hook for ALL channels         │
 └─────────────────────────────────────────────────────────────────────┘
+
 ```
 
 ### 1.2 Data Flow: RSS Feed Execution
 
-```
+```sql
+
 1. CRON triggers every minute
    └─→ feed-scheduler queries channels WHERE type='feed' AND due
 
@@ -133,6 +144,7 @@ The unified feed system has been successfully implemented across all repositorie
    └─→ useChannelMessages poll/new messages
    └─→ FeedCell renders with platform icons, relevance badges
    └─→ CrossFeedChips show "Also in: Other Feed"
+
 ```
 
 ### 1.3 Data Flow: Proactive Feed (Morning Briefing)

@@ -1,0 +1,99 @@
+---
+title: 'Connect your AI'
+description: >-
+  One page to connect any AI surface — Claude Code, Claude Desktop, Cursor,
+  Raycast, OpenClaw — to your Synap data pod. Skills, MCP, API keys.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: 1
+hide_title: false
+toc: true
+---
+
+# Connect your AI
+
+Give any AI direct access to your Synap data pod. Pick your tool, run one command, done.
+
+---
+
+## Pick your surface
+
+| Tool | What you get | Setup | Guide |
+|---|---|---|---|
+| **Claude Code** | Agent skills | 3 steps, ~2 min | [Claude Code →](./claude-code) |
+| **Claude Desktop** | Skills + MCP | 3 steps, ~3 min | [Claude Desktop →](./claude-desktop) |
+| **Cursor** | MCP | 2 steps, ~2 min | [Cursor →](./cursor) |
+| **Raycast** | Raycast extension with AI tools | 3 steps, ~3 min | [Raycast →](./raycast) |
+| **OpenClaw** | Full agent runtime + skills | 1 command | [OpenClaw →](./openclaw) |
+| **Other** | OpenAI-compat, Hub Protocol, custom | Varies | [Custom integration →](../../integrations/overview) |
+
+---
+
+## The short version
+
+```bash
+npx @synap-core/cli connect --target=claude-code
+# or: --target=claude-desktop, cursor, raycast, openclaw
+```
+
+The CLI:
+1. Asks for your pod URL (defaults to `http://localhost:4000` for local pods)
+2. Provisions an API key (or accepts an existing one)
+3. Drops the skills where your tool expects them
+4. Writes the MCP config if the tool supports it
+5. Tells you what to do next
+
+You can skip the CLI and do it manually — every guide has a manual path too.
+
+---
+
+## What "connecting" actually means
+
+Synap exposes three integration primitives. Every AI surface uses one or more:
+
+**1. Skills** — Markdown files (+ optional scripts) your AI reads to learn how to use Synap. Three skills ship:
+
+- `synap` — core data operations: read, write, link, search, remember
+- `synap-schema` — extend the data model (new profiles, new properties)
+- `synap-ui` — build views, dashboards, bento layouts
+
+Skills live in your AI's skills directory (`~/.claude/skills/` for Claude Code) and load progressively — only when the user asks something the skill is about.
+
+**2. MCP** — The Model Context Protocol endpoint at `{pod}/mcp`. Your AI calls it over HTTP/JSON-RPC to invoke Synap tools directly. Authenticated with an API key. Works with Claude Desktop, Cursor, and any MCP-capable client.
+
+**3. API key** — A bearer token bound to an agent user in your pod. Scoped (`hub-protocol.read`, `hub-protocol.write`, `mcp.read`, `mcp.write`). Issued via the CLI (`synap connect`) or manually at `POST /api/hub/setup/agent`.
+
+Skills + MCP + API key = any AI can use Synap as its sovereign memory.
+
+---
+
+## Governance applies everywhere
+
+Every write through any of the five surfaces above passes through the same proposal layer. Auto-approved actions go straight through; destructive or schema-shaping actions queue for your review.
+
+- Auto-approved by default: `entity.create`, `entity.update`, `relation.create`, `document.create`, `view.create`, `profile.create`, `property_def.create`, `memory.*`
+- Always proposal-gated: `entity.delete`, `entity.archive`, `workspace.create`, `view.update`
+
+Your AI never silently mutates your pod. See [governance](../../../architecture/security/governance) for the full model.
+
+---
+
+## Don't see your tool?
+
+Three fallback paths:
+
+- **OpenAI SDK consumers** — point `OPENAI_BASE_URL` at `{pod}/v1` and use `synap/auto`, `synap/free`, `synap/balanced`, `synap/advanced`, or `synap/complex` as the model. [Chat stream guide](../../integrations/chat-stream).
+- **Custom agents** — call Hub Protocol REST directly at `/api/hub/*`. [SDK guide](../../integrations/sdk-direct).
+- **Automation platforms** (n8n, Zapier, Make) — use skill invocation or webhooks. [Automation platforms](../../integrations/automation-platforms).
+
+---
+
+## Next steps
+
+- [API keys reference](../../integrations/api-keys) — scopes, rotation, security
+- [Skills architecture](../skills) — the three skills, files, and progressive disclosure
+- [MCP endpoint reference](../mcp) — protocol details, exposed tools
+- [Governance model](../../../architecture/security/governance) — how proposals work

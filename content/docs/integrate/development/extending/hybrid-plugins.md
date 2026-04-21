@@ -1,5 +1,14 @@
 ---
 sidebar_position: 4
+title: Hybrid Plugins
+description: Documentation covering Hybrid Plugins
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Hybrid Plugins

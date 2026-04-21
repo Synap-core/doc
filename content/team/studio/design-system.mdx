@@ -1,0 +1,150 @@
+---
+title: 'Design System'
+description: 'HeroUI conventions in Studio — tokens, patterns, rules.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Studio Design System
+
+## Library & tokens
+
+- **HeroUI v2** (`@heroui/react`) — the one and only component library.
+- **Tailwind v3** — utility classes, HeroUI plugin generates semantic tokens.
+- **next-themes** — light/dark persisted to `synap-studio-theme` localStorage key.
+- **Fraunces** — headings (`font-heading`)
+- **DM Sans** — body (default `font-sans`)
+
+Live catalog: `/design-system` route (2,400-line showcase with theme toggle).
+
+---
+
+## Semantic tokens (required)
+
+**Always** use these Tailwind classes — **never hardcoded hex**:
+
+### Text
+`text-foreground` · `text-foreground/70` · `text-foreground/50` · `text-foreground/40`
+
+### Surfaces
+`bg-background` · `bg-content1` · `bg-content2` · `bg-default-100`
+
+### Borders
+`border-divider` · `border-primary/30` (hover/focus)
+
+### Semantic colors
+`text-primary` · `text-success` · `text-warning` · `text-danger`
+`bg-primary/10` (subtle fill), `bg-success/10`, etc.
+
+### AI-specific
+**`color="success"` / `text-success` / `bg-success/10` for every AI surface.** Emerald in both themes. This is the constant cue "this is the AI speaking."
+
+---
+
+## Rules
+
+1. **No hardcoded hex.** Ever.
+2. **No shadows.** Use `border border-divider` for elevation.
+3. **`onPress`, not `onClick`.** HeroUI `Button` uses `onPress`.
+4. **Icons from `lucide-react`** only. Size 14–18px, `strokeWidth={1.75}`.
+5. **Space scale**: Tailwind numeric (`p-4`, `gap-3`). No custom px values except rare absolute positioning.
+6. **Border radius**: `rounded-md` (6px), `rounded-lg` (8px), `rounded-xl` (12px), `rounded-2xl` (16px), `rounded-full` (pills).
+7. **Headings** use `font-heading` class (Fraunces). Body stays sans (DM Sans, default).
+
+---
+
+## Components to prefer
+
+| Need | Use | Don't use |
+|---|---|---|
+| Button | `Button` with `variant="light|solid|bordered|flat|ghost"` | raw `<button>` |
+| Surface | `Card` with `shadow="none"` + `border border-divider` | ad-hoc divs |
+| Input | `Input` or `Textarea` from `@heroui/react` | raw `<input>` |
+| Chip / badge | `Chip size="sm" variant="flat" color="..."` | custom spans |
+| Menu | `Dropdown` / `DropdownMenu` / `DropdownItem` | custom portals |
+| Modal | `Modal` / `ModalContent` / `ModalHeader/Body/Footer` + `useDisclosure` | raw dialog |
+| Tabs | `Tabs` with `variant="underlined"` (default) or `"solid"` (segmented) | nav links |
+| Loading | `Skeleton` (wrappable) + `Spinner` | ad-hoc pulse |
+| Overlay | `Tooltip` (hover) + `Popover` (click) | custom tooltips |
+
+---
+
+## Component patterns
+
+### Card with skeleton
+
+```tsx
+<Card shadow="none" className="border border-divider bg-content1">
+  <CardBody className="p-4">
+    {isLoading ? <Skeleton className="h-4 w-2/3" /> : <Content />}
+  </CardBody>
+</Card>
+```
+
+### Section header
+
+```tsx
+<p className="text-[10px] uppercase tracking-widest text-foreground/40 font-medium">
+  Label
+</p>
+```
+
+### Interactive row
+
+```tsx
+<div className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-content2 transition-colors">
+  {/* content */}
+</div>
+```
+
+### Primary action button
+
+```tsx
+<Button color="primary" startContent={<Plus size={15} strokeWidth={1.75} />} onPress={handle}>
+  New thing
+</Button>
+```
+
+---
+
+## Empty states
+
+Always three parts: icon in a circle, headline, sub-text.
+
+```tsx
+<div className="flex flex-col items-center justify-center py-20 text-center">
+  <div className="w-12 h-12 rounded-full bg-default-100 flex items-center justify-center mb-4">
+    <Icon size={20} strokeWidth={1.5} className="text-foreground/40" />
+  </div>
+  <p className="text-[15px] text-foreground font-medium mb-1">Headline</p>
+  <p className="text-sm text-foreground/60">Sub-text + next action.</p>
+</div>
+```
+
+---
+
+## Anti-patterns
+
+- Using `shadow-md`, `shadow-lg` — never. Use borders.
+- `className="text-white"` / `text-black` — never. Use `text-foreground`.
+- `color="primary"` on Chip for AI context — use `success` (emerald) instead.
+- Hardcoded rgba for borders — use `border-divider`.
+- `<Button onClick={...}>` — HeroUI Button exposes `onPress`, keep consistent.
+
+---
+
+## Themes
+
+Two themes, both shipped:
+- **Light** — amber primary, cyan secondary, emerald success.
+- **Dark** (default) — cyan primary, amber secondary, same emerald success.
+
+AI surfaces are the one cross-theme constant: emerald success.
+
+Theme toggle is shown on login + design-system pages (via `components/ThemeToggle.tsx`); could be surfaced in settings later.

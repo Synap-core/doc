@@ -1,0 +1,71 @@
+---
+title: 'Repository & builds'
+description: >-
+  hestia-cli monorepo layout, bootstrap, release bundles, and where to
+  contribute or file issues.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Canonical repository
+
+**[github.com/Synap-core/hestia-cli](https://github.com/Synap-core/hestia-cli)** — pnpm monorepo; published **`@eve/cli`** binary **`eve`**.
+
+**Synap Data Pod** (separate repo): **[github.com/synap-core/backend](https://github.com/synap-core/backend)**.
+
+---
+
+## What lives in the repo vs team docs
+
+| Content | Location |
+|---------|----------|
+| Option-by-option **`eve setup`** reference, ports tables | **`docs/EVE_SETUP_PROFILES.md`**, **`README.md`** |
+| North-star prose (full metaphor) | **`docs/north-star.md`** (repo); **[Vision](/team/eve-cli/vision)** (condensed here) |
+| ADRs (AI routing, architecture) | **`docs/*.md`** |
+| Changelog | **`CHANGELOG.md`** |
+
+**Team docs** (**this space**) add **IA**, **diagrams**, and **cross-links** — they should not drift from the repo; when in doubt, **repo wins** for flags and behavior.
+
+---
+
+## Developer workflow
+
+```bash
+git clone https://github.com/Synap-core/hestia-cli.git
+cd hestia-cli
+pnpm install
+pnpm -r run build
+pnpm --filter @eve/cli exec eve --help
+```
+
+Pre-push hooks (if enabled) and CI should run **`pnpm -r run build`** and manifest checks — see repo **`.githooks`** and **`.github/workflows`**.
+
+---
+
+## Operator install (server)
+
+**`bootstrap.sh`** (raw on `main`) installs OS deps, Docker, Node, pnpm, clones **hestia-cli**, builds, and runs **`eve setup`** (unless `--no-setup`). See **`README.md`** for non-interactive examples and **canonical URLs**.
+
+Release **bundles** (prebuilt runtime) may be published as GitHub **Releases** — check repo **`.github/workflows`** for **`release`**.
+
+---
+
+## Related CLI
+
+| Project | Role |
+|---------|------|
+| **[synap-cli](https://github.com/Synap-core/synap-cli)** | Agent bridge / OpenClaw **`init`** — not Eve. |
+| **Backend `synap`** | Data Pod **only** — invoked by Eve for **`data_pod`** / **`full`**. |
+
+---
+
+## Contributing
+
+- **Issues / PRs:** **hestia-cli** for Eve CLI; **backend** for `synap install` / compose.
+- **Doc fixes:** Prefer updating **repo `docs/`** for behavior truth, then **mirror or summarize** here for navigation.

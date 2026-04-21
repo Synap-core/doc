@@ -1,6 +1,14 @@
 ---
-title: "Realtime Integration"
-description: "Socket.IO, Yjs CRDTs, collaboration architecture."
+title: 'Realtime Integration'
+description: 'Socket.IO, Yjs CRDTs, collaboration architecture.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Realtime Integration Guide
@@ -260,9 +268,11 @@ Whiteboards use Yjs for CRDT sync. Content is persisted server-side to **MinIO**
 
 ### Room naming
 
-```
+```yaml
+
 Room name: "whiteboard-{documentId}"
 Example:   "whiteboard-aab9b236-c960-46dc-a0fd-2b7a09fa67ee"
+
 ```
 
 The `documentId` comes from `view.documentId` (not `view.id`). Get it from `views.get` tRPC response.

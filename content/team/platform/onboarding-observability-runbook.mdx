@@ -1,0 +1,38 @@
+---
+title: 'Onboarding observability runbook'
+description: >-
+  Phase 7 — correlation, logs, and first-response steps for onboarding and IS
+  orchestration.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Onboarding observability runbook
+
+## Correlation
+
+- Prefer a single **`onboardingSessionId`** (or client-generated UUID) propagated: **client → pod → IS** in headers or payload for server-side joins.
+
+## Logs (what to search)
+
+- **Pod:** onboarding-related tRPC or REST handlers (when implemented); channel and memory writes.
+- **IS:** tool invocations for feed, memory, entity creation; `composeUniversalOnboardingPrompt` usage in agent traces.
+
+## Common issues
+
+| Symptom | Check |
+|---------|--------|
+| User sees empty templates | Client analytics `onboarding.session.*`; CP template catalog health |
+| IS replies generic | Prompt not using `composeUniversalOnboardingPrompt` with correct `app` |
+| Memory duplicated | Session id collision; scope (workspace vs user) |
+
+## SLO ideas (tune per environment)
+
+- Onboarding **session complete** rate vs **start** (weekly).
+- p95 time to **primary goal** first artifact (feed running, bento seeded, project created).

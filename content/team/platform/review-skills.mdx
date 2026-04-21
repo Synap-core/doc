@@ -1,6 +1,14 @@
 ---
-title: "Platform Review: Skills"
-description: "Skills system completeness and gaps."
+title: 'Platform Review: Skills'
+description: Skills system completeness and gaps.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # 06 — AI Skills & Behavioral Templates
@@ -165,12 +173,14 @@ interface SkillTrigger {
 
 Connect skills to the automation system:
 
-```
+```yaml
+
 Entity created (profileSlug: 'book', status: 'finished')
   → Automation trigger fires
   → Action: execute skill 'book-reflection'
   → AI starts conversation in personal channel:
     "I see you finished reading '{bookTitle}'. What did you think about it?"
+
 ```
 
 Implementation path:

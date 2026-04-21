@@ -1,0 +1,47 @@
+---
+title: 'Proposals & governance'
+description: 'Governance layer — proposal system for AI mutations, RBAC, approval workflows, timeline tracking'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Proposals & Governance
+
+The governance layer keeps humans in the loop when AI agents and external connectors mutate data. Direct user mutations go through tRPC/Drizzle normally. AI mutations and external syncs go through `checkPermissionOrPropose()`.
+
+## Proposal flow
+
+| Step | Description |
+|------|-------------|
+| **Proposal creation** | When an AI agent or external connector needs to mutate data, `checkPermissionOrPropose()` is called. It either auto-approves (if in DEFAULT_AUTO_APPROVE whitelist) or creates a proposal for user review. |
+| **Proposal review** | Proposals appear in the "Proposals" tab of the browser app. Users see what was changed, who requested it, and can approve/reject. Timeline tracking shows the full history. |
+
+## Proposal types
+
+The proposal system manages:
+
+| Type | Description | Auto-approved? |
+|------|-------------|----------------|
+| `entity_update` | AI-created entity changes | Depends on scope |
+| `entity_create` | AI-generated new entities | When DEFAULT_AUTO_APPROVE applies |
+| `workspace_proposal` | Multi-entity workspace changes | Always requires approval |
+| `doc_proposal` | Document modifications | When DEFAULT_AUTO_APPROVE applies |
+| `proactive_action` | AI-suggested structural improvements | Always requires approval |
+
+## Governance principles
+
+1. **Direct user mutations** → tRPC/Drizzle (no proposal)
+2. **AI mutations** → `checkPermissionOrPropose()` → proposal → approval → mutation
+3. **External connector syncs** → `checkPermissionOrPropose()` → proposal → approval → mutation
+4. **Default auto-approve whitelist** → `DEFAULT_AUTO_APPROVE` config for low-risk mutations
+5. **RBAC** → Role-based access control on proposal actions
+
+## Key files
+
+- Permission check: `synap-backend/packages/api/src/utils/permission-check.ts`
+- Proposal types: `@synap-core/proposal-types` (ProposalWithRequest, buildRequestFromProposal, UniversalProposal)
+- Proposals tab: `browser/electron/renderer/src/apps/proposals`
+- AI action cells: 3 kinds (ai-proposed-action, ai-doc-proposal, ai-workspace-proposal) in `@synap/ai-action-cells`
+- Proposal review: [/team/platform/proposals](/team/platform/proposals)

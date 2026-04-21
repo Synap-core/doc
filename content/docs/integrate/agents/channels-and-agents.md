@@ -1,6 +1,14 @@
 ---
-title: Channels and agents
+title: 'Channels and agents'
 description: How agents operate in channel contexts and branch workflows.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 Channels are the primary interaction surface for humans and agents. The canonical public channel model is `thread`, `feed`, `external`, and `agent_collab`.

@@ -1,0 +1,72 @@
+---
+title: 'Auth & External Connect Package Boundaries'
+description: >-
+  Canonical separation of concerns for platform-flow, auth, platform-auth,
+  pod-connect, and external-connect-client
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Purpose
+
+This page defines the canonical boundaries for connection/auth packages after external-connect consolidation.
+
+## Current package model
+
+### `@synap-core/platform-flow`
+- Pure flow/decision logic for CP/pod/provisioning states.
+- No HTTP transport, no credential handling, no UI.
+
+### `@synap-core/auth`
+- Canonical auth/session primitives:
+  - CP sign-in/session handling
+  - Pod handshake/direct login/session headers
+  - Shared-pod connect helpers (migrated from `@synap-core/pod-connect`)
+- Owns low-level auth mechanics and token/session lifecycle.
+
+### `@synap-core/external-connect-client`
+- Headless integration connect helpers:
+  - Deeplink parse/build
+  - FlowId extraction/trace URL helpers
+  - CP handshake helper wrappers for integration flows
+- Uses backend-owned contracts; does not redefine backend policy.
+
+### `@synap-core/platform-auth`
+- UI/components/hooks/adapters for host apps.
+- Should orchestrate via `platform-flow` + `auth` + `external-connect-client`, not duplicate logic.
+
+### `@synap-core/pod-connect`
+- Compatibility wrapper package.
+- Re-exports shared-pod helpers from `@synap-core/auth`.
+- New code should import shared-pod connect helpers from `@synap-core/auth`.
+
+## Contract ownership rule
+
+- Backend is the source of truth for issuance/verification outcomes.
+- Client packages consume backend-owned contracts and helper surfaces.
+- Avoid local duplication of outcome enums and error models in app surfaces.
+
+## What this means for contributors
+
+- Adding a new integration connect flow:
+  1. Add/adjust backend contracts and endpoints first.
+  2. Reuse `@synap-core/external-connect-client` for shared orchestration.
+  3. Keep UI concerns in host-specific adapters or `@synap-core/platform-auth`.
+
+- Updating shared-pod login/bootstrap behavior:
+  - Change `@synap-core/auth`.
+  - Keep `@synap-core/pod-connect` as compatibility only.
+
+## Migration status
+
+- External connect helpers centralized in `@synap-core/external-connect-client`.
+- Shared-pod connect moved into `@synap-core/auth`.
+- `@synap-core/pod-connect` now compatibility re-export.
+- Admin UI, Browser auth path, and Raycast connect path updated to shared helper usage.
+

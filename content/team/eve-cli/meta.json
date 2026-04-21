@@ -1,7 +1,15 @@
 {
   "title": "Eve",
-  "description": "Entity Creation System — CLI & sovereign stack (hestia-cli monorepo)",
+  "description": "Entity Creation System — CLI, sovereign stack, and operator flows (hestia-cli)",
   "root": true,
   "icon": "package",
-  "pages": ["index"]
+  "pages": [
+    "index",
+    "vision",
+    "architecture",
+    "user-flows",
+    "operations",
+    "synap-integration",
+    "repository"
+  ]
 }

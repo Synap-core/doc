@@ -1,6 +1,14 @@
 ---
-title: Relay User Flows
-description: Capture flow, morning flow, space switcher, automation templates.
+title: 'Relay User Flows'
+description: 'Capture flow, morning flow, space switcher, automation templates.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Relay — User Flows
@@ -88,7 +96,8 @@ Detailed step-by-step flows for core user journeys.
 
 **Trigger:** User just left a conference session, met someone interesting
 
-```
+```bash
+
 ┌─────────────────┐
 │  Any screen      │
 │  Tap FAB [+]     │
@@ -142,6 +151,7 @@ Detailed step-by-step flows for core user journeys.
 │  "New: Sarah     │
 │   from ETHGlobal"│
 └─────────────────┘
+
 ```
 
 **Duration:** &lt;30 seconds
@@ -421,11 +431,13 @@ Detailed step-by-step flows for core user journeys.
 
 **Post-event capture:**
 
-```
+```bash
+
 1. At event: tap FAB, voice capture 3 new contacts
 2. Evening: open Person Detail for each
    → Review AI extractions, add manual notes
    → Tag all with event name
 3. Next day: feed shows "3 new contacts from ETHGlobal"
    → AI already extracted skills and topics from names + context
+
 ```

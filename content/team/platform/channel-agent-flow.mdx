@@ -1,6 +1,14 @@
 ---
-title: "Channel-Agent Flow"
-description: "How AI agents receive and process channel messages."
+title: 'Channel-Agent Flow'
+description: How AI agents receive and process channel messages.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Channel → Agent Flow — Backend
@@ -121,7 +129,8 @@ Created via `trpc.chat.createA2AIChannel`. No human required as author. Used for
 
 ## 5. `sendMessage` Flow
 
-```
+```yaml
+
 Client → trpc.chat.sendMessage({ channelId, content, agentType?, ... })
   │
   ├── Resolve session (getOrCreate active session for channelId)
@@ -138,6 +147,7 @@ Client → trpc.chat.sendMessage({ channelId, content, agentType?, ... })
   ├── Stream IS response back to client (SSE)
   ├── Insert assistant message (with sessionId)
   └── Update session stats (last_activity_at, token_count, message_count)
+
 ```
 
 ### Key: `agentType` forwarding

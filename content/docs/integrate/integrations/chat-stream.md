@@ -1,5 +1,14 @@
 ---
 sidebar_position: 3
+title: 'Chat Stream'
+description: Documentation covering Chat Stream
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Option D — Stream AI chat
@@ -66,7 +75,8 @@ curl -X POST https://YOUR_POD.synap.live/api/external/chat/stream \
 
 The response is a stream of newline-delimited SSE frames. Each frame is prefixed with `data: `:
 
-```
+```yaml
+
 data: {"type":"step","step":{"tool":"search_entities","result":{"count":4}}}
 
 data: {"type":"content","content":"You have 4 overdue tasks this week:\n\n"}
@@ -80,6 +90,7 @@ data: {"type":"content","content":"3. **Call Alice re: contract** — due Thursd
 data: {"type":"content","content":"4. **Update board deck** — due Friday\n"}
 
 data: {"type":"complete","data":{"channelId":"ch_01hx...","messageId":"msg_abc..."}}
+
 ```
 
 ---

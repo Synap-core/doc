@@ -1,5 +1,14 @@
 ---
 sidebar_position: 3
+title: Remote Plugins
+description: Documentation covering Remote Plugins
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Remote Plugins
@@ -22,12 +31,14 @@ sidebar_position: 3
 
 ## How It Works
 
-```
+```bash
+
 Your Service ←─────HTTP────── Data Pod
      │                            │
      ├─ Register capabilities     │
      ├─ Receive webhook calls     │
      └─ Call back with results ───┘
+
 ```
 
 1. **Build your service** (any tech stack)

@@ -1,0 +1,105 @@
+---
+title: 'Pages'
+description: 'Route-by-route inventory of Studio — what''s wired, what''s stubbed.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Studio Pages
+
+All under `app/` using Next 15 App Router.
+
+## Public routes
+
+| Route | File | What it does |
+|---|---|---|
+| `/login` | `app/login/page.tsx` | CP sign-in → pod picker → Kratos handshake |
+| `/design-system` | `app/design-system/page.tsx` | 2,400-line live HeroUI showcase, theme toggle |
+| `/` | middleware | Redirects to `/home` |
+
+## Auth-gated routes (`app/(app)/...`)
+
+Wrapped by `WorkspaceLayout` (primary sidebar, main area, right panel container).
+
+### Home
+
+`/home` → `app/(app)/home/page.tsx`
+
+- Greeting: time-aware, pulls `userName` from `useAuth()`
+- Status line: `{completed} tasks completed · {updates} updates · {decisions} needed`
+- 3 status cards: In progress / Done / Upcoming (from entities.list filtered to tasks + events)
+- Quick-ask composer → resolves personal channel, sends, routes to `/channels/[id]`
+- "Your AI worked overnight" proposals stack (`proposals.list` status=pending)
+- Agenda rail (events filtered to today + tomorrow)
+
+### Channels
+
+Nested under `app/(app)/channels/` with its own layout that renders `ChannelSidebar` + content.
+
+| Route | File | Status |
+|---|---|---|
+| `/channels` | `page.tsx` | Welcome + recent activity |
+| `/channels/[id]` | `[id]/page.tsx` | Full detail: ContextPane + BranchesPane + ChatView (streaming, @mention, branch-from-message) |
+| `/channels/dm/[agentType]` | `dm/[agentType]/page.tsx` | Resolver — calls `getPersonalThread` + `router.replace` to real channel |
+
+Full story: [Channels](/team/studio/channels).
+
+### Documents
+
+| Route | File | Status |
+|---|---|---|
+| `/documents` | `page.tsx` | Grid with filter tabs + search + "New document" modal |
+| `/documents/[id]` | `[id]/page.tsx` | Tiptap editor + tabbed right rail (AI proposals with diff + approve/reject ⇄ embedded ChannelPane) + 800ms debounced save + inline editable title |
+
+### Agents
+
+| Route | File | Status |
+|---|---|---|
+| `/agents` | `page.tsx` | Hero default + specialist grid + `AgentOnboardingModal` |
+| `/agents/[id]` | `[id]/page.tsx` | 4 tabs: Overview (live) / Tools (mocked) / Automations (mocked) / Activity (mocked). Model selection intentionally hidden — IS handles routing. |
+
+### Tasks
+
+`/tasks` → list / board / table view toggle, `entities.list` filtered to `profileSlug: "task"`, optimistic done-toggle via `entities.update`, "New task" modal.
+
+### Inbox
+
+`/inbox` → merged `proposals.list` (status=pending) + `notifications.list` (status=unread), inline approve/reject/dismiss, batch mark-read.
+
+### Graph
+
+`/graph` → reagraph WebGL canvas (Force / Radial / Tree layouts), `entities.list` seed + `graph.getSubgraph`, Top entities rail + legend + orphan toggle, node click → `/entities/[id]`.
+
+### Entities
+
+`/entities/[id]` → profile-accented header with inline-editable title + description + summary properties grid + right rail (Discussion via `ChannelPane` / Properties as JSONB list) + horizontally-scrolling "Related" from `graph.getNode`.
+
+---
+
+## Still stubbed / missing
+
+- **`/settings/*`** — scaffolded "Coming soon" page for integrations.
+- **`/calendar`, `/people`, `/notes`** — sidebar nav items exist; pages don't.
+- **`/flow/*`** — proposed at [Data Flow](/team/studio/data-flow). Not built.
+- **`/admin`** — a button in the user area links to `{podUrl}/admin` (external pod admin UI). No in-Studio admin panel.
+
+---
+
+## Layout structure
+
+```
+WorkspaceLayout (app/(app)/layout.tsx)
+├─ primary Sidebar           (nav sections + user area)
+├─ ContentTabs (optional)    (tab state from workspace store)
+├─ <main> {children}         (route content)
+│   └─ ChannelSidebar + content (only on /channels/*)
+└─ RightPanel (optional)     (slide-out from the right)
+```
+
+Route groups (`(app)/`) exist only to compose the auth guard + workspace layout without affecting the URL.

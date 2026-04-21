@@ -1,0 +1,43 @@
+---
+title: 'Docker & containers'
+description: 'Docker Compose, nested Docker in LXC/Proxmox, and common runc/sysctl failures.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Role in Synap / Eve
+
+- **Synap Data Pod** — `docker compose` under **`backend/deploy/`** (services: api, realtime, postgres, caddy, …).
+- **Eve** — additional compose stacks and **`eve-network`** for sidecars (Ollama, Traefik gateway, etc.).
+
+---
+
+## Nested Docker (LXC / Proxmox CT)
+
+Running Docker **inside** an unprivileged CT often requires **nesting** and sometimes **privileged** mode. Typical symptom:
+
+`error during container init: open sysctl net.ipv4.ip_unprivileged_port_start … permission denied`
+
+That is **not** fixed by Synap `.env` — it is **CT/host configuration**. Enable **nesting** (e.g. Proxmox: CT options → Features → Nesting), consult current Proxmox + Docker docs.
+
+**Internal:** [Eve — Operations](/team/eve-cli/operations).
+
+---
+
+## Upstream references
+
+- [Docker Engine](https://docs.docker.com/engine/)
+- [Docker Compose](https://docs.docker.com/compose/)
+- [Proxmox LXC + Docker](https://pve.proxmox.com/wiki/Linux_Container) (verify version-specific notes)
+
+---
+
+## Compose project names
+
+Synap deploy may set **`COMPOSE_PROJECT_NAME`** (e.g. `synap-backend`) — container names in logs depend on it. Always **`cd` to the correct `deploy/`** before `docker compose` commands.

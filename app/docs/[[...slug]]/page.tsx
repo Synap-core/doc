@@ -6,8 +6,10 @@ import {
   DocsDescription,
 } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
-import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { mdxComponents } from '@/lib/mdx-components';
 import type { Metadata } from 'next';
+
+export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ slug?: string[] }>;
@@ -19,17 +21,18 @@ export default async function Page({ params }: Props) {
   if (!page) notFound();
 
   const MDX = page.data.body;
+  const toc = Array.isArray(page.data.toc) ? page.data.toc : [];
 
   return (
     <DocsPage
-      toc={page.data.toc}
+      toc={toc}
       full={page.data.full}
       lastUpdate={page.data.lastModified}
     >
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
-        <MDX components={defaultMdxComponents} />
+        {MDX ? <MDX components={mdxComponents} /> : <p>Loading...</p>}
       </DocsBody>
     </DocsPage>
   );

@@ -1,4 +1,4 @@
 {
   "title": "Data pod",
-  "pages": ["docker", "self-hosted", "production"]
+  "pages": ["docker", "self-hosted", "production", "tunnels-and-domains"]
 }

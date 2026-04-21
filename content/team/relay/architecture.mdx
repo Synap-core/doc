@@ -1,6 +1,14 @@
 ---
-title: "Relay Architecture"
-description: "3-surface feed model, data flow, store structure."
+title: 'Relay Architecture'
+description: '3-surface feed model, data flow, store structure.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Relay — Technical Architecture
@@ -13,7 +21,8 @@ How Relay maps to existing Synap infrastructure. What to reuse, what to build, w
 
 ### Synap Module (synap-app)
 
-```
+```typescript
+
 synap-app/packages/features/relay/
 ├── src/
 │   ├── index.ts                    # Barrel export + cell registrations
@@ -69,6 +78,7 @@ synap-app/packages/features/relay/
 │       └── graph-layout.ts
 ├── package.json
 └── tsconfig.json
+
 ```
 
 ### Standalone Mobile App

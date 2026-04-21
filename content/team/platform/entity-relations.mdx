@@ -1,6 +1,14 @@
 ---
-title: "Entity Relations"
-description: "Entity relationships, profile inheritance, relation model."
+title: 'Entity Relations'
+description: 'Entity relationships, profile inheritance, relation model.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Entity Relations — Architecture, State & Roadmap
@@ -17,7 +25,8 @@ description: "Entity relationships, profile inheritance, relation model."
 
 Synap has two orthogonal ways to link entities. Use the right one for the right job.
 
-```
+```bash
+
 ┌──────────────────────────────┬────────────────────────────────────────────────────────┐
 │     STRUCTURAL LINKS         │           SEMANTIC RELATIONS                           │
 ├──────────────────────────────┼────────────────────────────────────────────────────────┤
@@ -29,6 +38,7 @@ Synap has two orthogonal ways to link entities. Use the right one for the right 
 │ No metadata                  │ JSONB metadata (status, scores, timestamps)            │
 │ Not traversable by graph     │ Powers the knowledge graph + IS graph tools            │
 └──────────────────────────────┴────────────────────────────────────────────────────────┘
+
 ```
 
 **Rule of thumb:**  
@@ -153,12 +163,14 @@ await trpc.relations.update.mutate({
 
 REST endpoints in `hub-protocol-rest.ts`:
 
-```
+```sql
+
 GET  /relations?userId&workspaceId&entityId&type   — fetch relations for entity
 POST /relations                                     — create relation (proposal-aware)
      body: { userId, workspaceId, sourceEntityId, targetEntityId, type, metadata, reasoning? }
      returns: { status: 'created'|'proposed', id, proposalId? }
 DELETE /relations/:relationId                      — delete
+
 ```
 
 ### IS Tools
@@ -243,13 +255,15 @@ await trpc.relations.update.mutate({
 
 Campaign entity links to Person entities via `target_contact` relation. The relation metadata stores the contact's pipeline status:
 
-```
+```yaml
+
 Campaign ──target_contact──▶ Person
                     metadata: {
                       status: 'not_reached' | 'reached' | 'interested' | 'converted',
                       reached: boolean,
                       reachedAt?: ISO string
                     }
+
 ```
 
 ### Workspace automations (`relay-automations.ts`)
@@ -317,7 +331,8 @@ These flows don't exist yet in the Relay UI. Any screen creating an entity shoul
 
 ## Key Files
 
-```
+```sql
+
 Backend
 ├── packages/database/src/schema/relations.ts              Table schema
 ├── packages/database/src/schema/relation-defs.ts          Type catalog schema
@@ -343,4 +358,5 @@ Browser / synap-app
 ├── synap-app/packages/features/entity-links/src/hooks/useEntityConnections.ts
 ├── synap-app/packages/features/entity-links/src/components/EntityLinkPicker.tsx
 └── synap-app/packages/synap-hooks/src/useRelationships.ts
+
 ```

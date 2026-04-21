@@ -1,5 +1,14 @@
 ---
 sidebar_position: 1
+title: 'Overview'
+description: Documentation covering Overview
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Connect AI to your data pod
@@ -55,6 +64,14 @@ For building real apps. `@synap/sdk` gives you typed tRPC access to every proced
 Best when you are **building something**: a custom UI, an LLM pipeline where you manage context yourself, a sync integration, or a script that reads Synap data and feeds it into a separate model.
 
 [Read the SDK and direct API guide →](./sdk-direct)
+
+---
+
+## Feed templates for Relay
+
+For mobile onboarding, Synap Relay uses a template-first feed flow (curated sources + goal + cadence), then pushes configuration to the pod feed worker.
+
+[Read feed templates guide →](./feed-templates)
 
 ---
 

@@ -1,0 +1,59 @@
+---
+title: 'Vision & principles'
+description: >-
+  Eve as a sovereign digital entity — organs, metaphor, and product principles
+  aligned with Synap.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Vision statement
+
+Eve turns a **bare server** into a **coherent digital entity**: self-hosted infrastructure with specialized **organs** (Brain, Arms, Eyes, Legs, Builder), each owning a domain of capability. Synap’s **Data Pod** is the **Brain** — memory, API, governance — not “one more container.”
+
+> A server is not only hardware; it is the **body** for that entity. Eve is the **installer and orchestrator** that wires the organs to the same Docker network and secret layout.
+
+---
+
+## Design principles
+
+1. **Sovereignty** — Operator controls the machine, data residency, and whether cloud models are used at all for local tooling.
+2. **Organic composition** — Services are **organs**: same network (`eve-network`), shared secrets patterns, predictable ports for sidecars vs Synap’s Caddy.
+3. **Synap-centric** — Hub, proposals, and pod contracts remain **authoritative** in the backend; Eve does not fork Synap semantics.
+4. **Explicit exposure** — Public **Synap** URL vs **Eve Legs** (Traefik / tunnel) are **separate** user choices (see [User flows](/team/eve-cli/user-flows)).
+5. **Recoverable setup** — `.eve/setup-profile.json` and `.eve/secrets/` are inspectable; scripted paths stay reproducible.
+
+---
+
+## The five organs (metaphor)
+
+| Organ | Role | Typical tech (see [Stack & tools](/team/technologies/index)) |
+|-------|------|----------------------------------------------------------------|
+| **Brain** | Memory, reasoning, API — **Synap Data Pod** | PostgreSQL, Redis, Caddy, API, Hub |
+| **Arms** | Actions, tools, MCP | OpenClaw |
+| **Builder** | Create / deploy / codegen | OpenCode, OpenClaude, optional Dokploy |
+| **Eyes** | Intake, feeds | RSSHub |
+| **Legs** | Exposure, routing, reachability | Traefik, Pangolin / Cloudflare tunnels |
+
+Eve’s CLI maps these to **`eve brain`**, **`eve arms`**, **`eve builder`**, **`eve eyes`**, **`eve legs`** — see [Architecture](/team/eve-cli/architecture).
+
+---
+
+## What Eve is not
+
+- **Not** a second Hub or auth system — identity and governance stay in Synap.
+- **Not** a replacement for **`synap install`** — Eve **delegates** full Data Pod installs to the official **`synap`** script when using `data_pod` / `full` profiles.
+- **Not** the same as **[synap-cli](https://github.com/Synap-core/synap-cli)** (OpenClaw bridge / agent init) — complementary tooling.
+
+---
+
+## Alignment with Synap platform
+
+- **[Platform](/team/platform/index)** — entity model, Hub, channels.
+- **[Intelligence](/team/intelligence/index)** — Intelligence Service vs local Ollama (routing is layered; see [Synap integration](/team/eve-cli/synap-integration)).

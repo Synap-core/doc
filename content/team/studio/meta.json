@@ -1,0 +1,19 @@
+{
+  "title": "Studio",
+  "description": "Next.js web app — channels, documents, agents, data flow",
+  "root": true,
+  "icon": "layout-dashboard",
+  "pages": [
+    "index",
+    "---Architecture---",
+    "architecture",
+    "channels",
+    "streaming",
+    "---Product---",
+    "pages",
+    "data-flow",
+    "---Engineering---",
+    "packages",
+    "design-system"
+  ]
+}

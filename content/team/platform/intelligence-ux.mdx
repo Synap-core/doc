@@ -1,6 +1,14 @@
 ---
-title: "Intelligence UX & Capabilities"
-description: "Intelligence features, UX patterns, tool capabilities."
+title: 'Intelligence UX & Capabilities'
+description: 'Intelligence features, UX patterns, tool capabilities.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Intelligence UX & Capabilities
@@ -79,11 +87,13 @@ The Intelligence App is the primary AI surface. It is accessible from the worksp
 
 ### Tab structure
 
-```
+```bash
+
 ┌─────────────────────────────────────────────────────────────┐
 │  Overview │ Channels │ Commands │ Agents │ Services          │
 │                                    [ServiceChip] [?]         │
 └─────────────────────────────────────────────────────────────┘
+
 ```
 
 **Tab purposes:**
@@ -109,7 +119,8 @@ The Intelligence App is the primary AI surface. It is accessible from the worksp
 
 ### Journey 1 — First-time user: "I want to chat with AI"
 
-```
+```bash
+
 1. Open Intelligence app
    → Default tab: Channels
    → If no AI service connected: empty state "Your AI team awaits"
@@ -123,6 +134,7 @@ The Intelligence App is the primary AI surface. It is accessible from the worksp
    → Proposals appear inline if AI needed to do something
 
 3. Continue conversation or create new thread
+
 ```
 
 ### Journey 2 — User wants to invoke a specific agent
@@ -144,7 +156,8 @@ Type message in Channels:
 
 ### Journey 3 — Power user: "I want to create a reusable prompt"
 
-```
+```bash
+
 1. Channels tab → Commands tab
 2. Click "Create command"
 3. Fill in: Title + Prompt template
@@ -153,11 +166,13 @@ Type message in Channels:
 5. Run: click Run button → parameter form (if template has variables)
 6. AI executes → result opens in new thread in Channels
 7. Re-run any time from Commands tab or ⌘K palette
+
 ```
 
 ### Journey 4 — Admin: "I want to connect OpenClaw for shell/browser tools"
 
-```
+```bash
+
 1. Services tab → see "Connected Services" section
 2. See "OpenClaw" add-on card with "Activate" button
    (or navigate to Settings → Available Connections)
@@ -172,11 +187,13 @@ Type message in Channels:
    → Approve MCP tools: click "Approve" button
 7. AI agents can now call OpenClaw tools (shell, browser, filesystem, messaging)
 8. Optional: Set OpenClaw as active service or route specific capabilities to it
+
 ```
 
 ### Journey 5 — Admin: "I want to add a custom MCP server"
 
-```
+```bash
+
 Settings → Intelligence → MCP Servers section:
 1. Click "Add server"
 2. Choose transport: HTTP or stdio
@@ -188,6 +205,7 @@ Settings → Intelligence → MCP Servers section:
 5. Optional: Click "Test" (HTTP only) → pings /tools/list endpoint
    → Success: "Connected — 12 tools available"
 6. AI agents in this workspace now have access to those tools on next request
+
 ```
 
 ### Journey 6 — User: "I want to understand AI actions before they happen"

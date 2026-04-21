@@ -1,11 +1,21 @@
 ---
-title: "Cross-Pod Sharing"
-description: "Sharing entities and data across pod boundaries."
+title: 'Cross-Pod Sharing'
+description: Sharing entities and data across pod boundaries.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Cross-Pod Entity Sharing
 
 **Status:** Phase 0 implemented (intra-pod scoping). Phase 1 planned (frontend-mediated). Phase 2+ future roadmap.
+
+**Related (different problem):** [Pod-to-pod sync](/team/platform/pod-to-pod-sync) covers **same-owner replica** pairing (Control Plane **primary ↔ replica** and event-log replication), not “send an entity to another user’s pod.”
 
 ---
 
@@ -128,7 +138,8 @@ The ledger (a lightweight L2 or a purpose-built Synap chain) acts as:
 
 ### How cross-pod sharing works without CP
 
-```
+```yaml
+
 Alice wants to share with Bob:
 
 1. Alice's pod signs a capability token:
@@ -144,6 +155,7 @@ Alice wants to share with Bob:
 4. Transfer is recorded on-chain with both signatures
 
 No CP in the path. No central trust authority.
+
 ```
 
 ### Why a blockchain and not just HTTPS + key pinning

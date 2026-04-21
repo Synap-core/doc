@@ -1,0 +1,47 @@
+---
+title: 'Channels'
+description: 'Communication surfaces — ai_thread, branch, entity_comments, document_review, view_discussion, direct, external_import'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Channels
+
+Channels are structured communication surfaces linking data, users, AI agents, and external services into a unified interaction surface.
+
+## Channel types
+
+| Type | Description |
+|------|-------------|
+| **ai_thread** | AI conversation threads. AI triggers only on ai_thread and branch channels. The OrchestratorAgent is active here. |
+| **branch** | Project-scoped conversation branches. AI also triggers on branches. Used for parallel discussions per project/task. |
+| **entity_comments** | Conversations attached to specific entities. Users discuss a particular entity directly from its detail view. |
+| **document_review** | Review threads for documents. Multi-party review with inline comments and approval tracking. |
+| **view_discussion** | Discussions on specific views. Team conversations attached to a table/kanban view context. |
+| **direct / external_import** | Direct messaging and external service import channels. |
+
+## Channel architecture
+
+Each channel has:
+- **Type** (enum) — determines what content appears and whether AI can post
+- **Workspace scope** — channels belong to workspaces, not individual users
+- **Message chain** — messages are event-sourced with full history
+- **Realtime updates** — Socket.IO pushes new messages to subscribed clients
+- **Yjs CRDTs** — Collaborative editing support for shared documents
+
+## Personal channel
+
+Every user has one personal channel that serves as their "inbox" for:
+- Proactive AI messages
+- System notifications  
+- Data sync confirmations
+- Proposal actions
+
+## Key files
+
+- Channel system: [/team/platform/channel-system](/team/platform/channel-system)
+- Channel-agent flow: [/team/platform/channel-agent-flow](/team/platform/channel-agent-flow)
+- Hub Protocol channels: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts`
+- Channel types: `@synap-core/types` (NotificationCategory discrimination)

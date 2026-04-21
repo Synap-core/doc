@@ -5,6 +5,7 @@
   "icon": "brain",
   "pages": [
     "index",
+    "tool-matrix-onboarding",
     "---",
     "Architecture",
     "architecture",

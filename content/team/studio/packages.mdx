@@ -1,0 +1,97 @@
+---
+title: 'Packages'
+description: 'What Studio reuses from @synap-core/*, what''s Studio-local.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Packages — Reuse Map
+
+Studio is intentionally thin. Most logic lives in shared packages; Studio composes them with HeroUI.
+
+## Shared packages used
+
+| Package | Used for | File paths (examples) |
+|---|---|---|
+| `@synap-core/client` | tRPC client + types, Socket.IO manager, AppRouter types | `StudioTRPCProvider`, `StudioSocketProvider`, every tRPC call |
+| `@synap-core/hooks` | `useRealtimeSync` (cache invalidation on domain events) | `RealtimeBridge` |
+| `@synap-core/stores` | `useWorkspaceStore` (active workspace id) | `StudioStoresSync`, `ChannelsRealtimeBridge` |
+| `@synap-core/auth` | CP sign-in, Kratos handshake, session | `SynapProvider`, `lib/auth.ts` |
+| `@synap-core/types` | Entity, Channel, Proposal, Workspace, etc. | All mappers + route param types |
+| `@synap-core/api-types` | `AppRouter` type export, `RouterOutputs`, `RouterInputs` | Every typed tRPC hook |
+| `@synap-core/proposal-types` | Proposal shape shared with Relay/Browser | `components/proposals/types.ts` (adapter) |
+
+### Version note
+
+`@synap-core/api-types` on npm lags the live backend for a few procedures (`chat.resolveAiChannel`, `chat.getPersonalThread`, `chat.getBranches`, `chat.createChannel`, `chat.listThreads / listFeeds / listExternalChannels / listAgentCollabChannels`, `documents.listInWorkspace / getInWorkspace`, `graph.getNode`). Studio uses narrow `(trpc.x as any).y.useQuery(...)` casts with eslint-disable comments on these — 7 total. All clear when the types package publishes 1.14+.
+
+---
+
+## Studio-local modules
+
+### State
+- `stores/workspace.ts` — tabs + panel UI state (not persisted to backend)
+- `stores/pinned.ts` — pinned channel ids (localStorage-persisted)
+- `stores/streaming.ts` — in-flight AI message state per channel (see [Streaming](/team/studio/streaming))
+
+### Providers
+- `SynapProvider` — auth owner
+- `StudioStoresSync` — mirrors auth → core workspace store
+- `StudioTRPCProvider` — direct tRPC setup avoiding `@synap-core/client` provider coupling
+- `StudioSocketProvider` — passes pod URL, workspace, user to `SocketIOProvider`
+- `RealtimeBridge` — wraps `useRealtimeSync` as a provider
+- `ChannelsRealtimeBridge` — supplementary socket handler for channel sidebar queries
+- `StreamingBridge` — socket handler for AI stream events
+- `CommandPaletteProvider` — ⌘K
+- `RegistryBoot` — cell + icon + plugin registry boot (scaffolded)
+
+### Mappers
+`lib/mappers/` — three pure functions: `channel.ts`, `message.ts`, `proposal.ts`. Convert backend shapes to Studio UI shapes.
+
+### Shared UI blocks (Studio-local, could extract later)
+- `components/channel/` — ChannelPane, ChannelContextPane, ChannelBranchesPane, BranchPurposePopover
+- `components/chat/` — ChatView, MessageList, MessageBubble, MessageComposer, StreamingMessage, ToolCallCard
+- `components/proposals/` — ProposalCard, ProposalDiff, ProposalList
+- `components/entities/` — EntityChip, EntityCardCompact
+- `components/agents/` — AgentOnboardingModal
+- `components/documents/` — DocumentEditor (Tiptap), NewDocumentButton
+- `components/tasks/` — NewTaskButton
+- `components/graph/` — KnowledgeGraphCanvas (reagraph wrapper)
+- `components/EditableText.tsx` — click-to-edit, generic
+
+---
+
+## What's NOT used from the monorepo
+
+Deliberately:
+- `@synap-core/ui-system` — Tamagui-based. Studio uses HeroUI.
+- `@synap-core/cell-runtime` — pulls Tamagui. Studio has a local `lib/cellRegistry.ts` stub.
+- `@synap-core/view-renderer` — Tamagui-based. Studio has its own `components/views/` now.
+- `@synap-core/property-renderer` — Tamagui-based. Not needed; we render properties ad-hoc.
+
+Studio's shim for transitive type-check — if an imported `@synap-core/hooks` mutation reaches `@synap-core/property-renderer` (Tamagui), tsc doesn't traverse it because `moduleResolution: bundler` + skipLibCheck handle it. Covered in more depth at [Architecture](/team/studio/architecture).
+
+---
+
+## External deps worth calling out
+
+| Package | Role |
+|---|---|
+| `@heroui/react` | Design system |
+| `next-themes` | Theme persistence |
+| `@tanstack/react-query` | Data layer (via tRPC) |
+| `zustand` | State stores (local + re-exports for core) |
+| `framer-motion` | Micro-animations |
+| `lucide-react` | Icon set |
+| `@tiptap/react` + starter-kit + link + placeholder | Document editor |
+| `reagraph` | Knowledge graph canvas (dynamic import, SSR-off) |
+| `socket.io-client` | Realtime transport |
+| `superjson` | tRPC transformer |
+
+No Tamagui. No Radix directly. No custom CSS-in-JS runtime.

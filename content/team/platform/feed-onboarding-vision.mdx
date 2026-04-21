@@ -1,0 +1,128 @@
+---
+title: 'Feed onboarding vision & Intelligence Service alignment'
+description: >-
+  Current state, target UX across Relay/Browser/content apps, and how IS tools,
+  memory, and pod feeds connect — planning doc.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+This page **complements** **[Feed system](/team/platform/feed-system)** and **[RSSHub](/team/technologies/rsshub)**. It captures **product direction** and **current implementation anchors** for multi-app feed onboarding, **not** a shipped feature checklist.
+
+**Parent north star:** **[Universal onboarding](/team/platform/universal-onboarding-north-star)** — Relay’s default primary goal is **feed** inside the broader cross-app onboarding model.
+
+---
+
+## Goals (north star)
+
+1. **First-run value:** Any Synap client (Relay, Browser, future “content” surfaces) can propose **one or more feeds** aligned to the user’s job (e.g. **lead discovery**, **ecosystem trends**) without pasting raw URLs first.
+2. **Shared brain:** Onboarding captures **workspace context** (project, ICP, geography, stage) into **durable memory** and **structured entities** (projects, tasks, people) where appropriate — not only chat history.
+3. **Intelligence Service as orchestrator:** Specialized **tools + prompts** (not generic chat only) drive **questions**, **feed recommendations**, and **downstream actions** per app profile.
+4. **Honest transport:** **RSSHub** (via CP or self-host) supplies many **routes**; **plain RSS** supplies others. The UX should hide this split while engineers document **route vs URL** clearly (see RSSHub page).
+
+---
+
+## Current state (snapshot)
+
+### Data Pod
+
+- RSS ingestion: **`feed-rss-executor`**, **`rss-fetcher`** (CP proxy + direct fallback), channel posting, dedup, events.
+- Feed config stored per **feed channel** / automation — not yet a single global “user feed profile” API for all clients (see **[Feed system](/team/platform/feed-system)** for truth).
+
+### Control Plane
+
+- **RSSHub proxy** + optional **template catalog** for curated sources (app onboarding).
+
+### Relay app
+
+- **Template-first** sources, **goals** (e.g. startup leads, market intelligence), **frequency** — preferences persisted locally / synced per product rules.
+- **Fix applied:** recommendations query must **run** with default persona/interests so templates always load (see implementation notes in repo).
+
+### Intelligence Service (`synap-intelligence-service`)
+
+- **Tools registered** include: `classify_feed_items`, `generate_feed_digest`, `get_feed_preferences`, `update_feed_preferences`, `recommend_feed_sources`, `personalize_feed_content` (see `tool-registry.ts`).
+- **Prompts:** `agents/prompts/feed-prompts.ts`, `recommend-feed-sources.ts` (large static URL lists for marketing/tech personas — **not** RSSHub-aware by itself).
+- **Workers:** e.g. morning briefing pulls **signals** and posts to **proactive feed** — parallel track to user RSS channels.
+
+### Gaps (honest)
+
+- **No unified “onboarding agent”** productized across Browser/Relay with the same state machine.
+- **IS feed recommendations** are **not yet** tightly coupled to **CP template IDs** or **RSSHub route** metadata end-to-end.
+- **Memory + campaigns + entities** from feed onboarding are **aspirational** — require explicit **Hub/memory** writes and **proposal** flows where AI mutates data.
+
+---
+
+## Target UX (by surface)
+
+### Relay (relationship / network)
+
+**Default feed concepts (example):**
+
+| Feed | Intent |
+|------|--------|
+| **Lead radar** | Investors, hiring, partnerships, deal flow — tuned by ICP + geography from onboarding. |
+| **Ecosystem pulse** | Trends in the user’s sector (newsletters, GitHub, niche subs) — tuned by “space” and tech stack. |
+
+**Onboarding should capture:** role, company stage, markets, competitors, preferred languages, **risk tolerance** for noisy sources.
+
+**Outputs:** feed channels + optional **campaign** entities (sequences, reminders) + **person** suggestions from articles.
+
+### Browser / knowledge workspace
+
+**Default feed concepts:**
+
+| Feed | Intent |
+|------|--------|
+| **Inspiration / peers** | Similar creators, cited articles, format examples (for writing). |
+| **Topic radar** | Newsletters + blogs aligned to **themes** the user commits to. |
+
+**Outputs:** **guidelines** entities, **content pillars**, **memory** entries for voice/tone.
+
+### Shared
+
+- **Two-layer disclosure:** (1) **Templates** — “Add Reddit Startups”; (2) **Power** — “Advanced: RSSHub route or raw URL” (Browser more than Relay).
+- **Explain relevance:** Link to IS classification + user goal (already directionally in Relay copy).
+
+---
+
+## Intelligence Service shape (recommended)
+
+| Layer | Role |
+|-------|------|
+| **Tools** | Keep `classify_feed_items`, preference getters/setters, digest; evolve `recommend_feed_sources` to accept **template IDs**, **goal**, **locale**, **CP catalog version**. |
+| **Prompts** | Separate **system** prompts per **app profile** (`relay_lead_onboarding`, `browser_creator_onboarding`) — not one generic “feed” prompt. |
+| **Memory** | Write structured **FeedOnboardingProfile** chunks after confirmed user answers (scope: workspace or user per policy). |
+| **Agents** | Optional thin **orchestrator** that calls tools in order: interview → recommend sources → summarize → propose entities (via pod proposals). |
+
+This is **design intent**; implementation tickets should reference concrete routers and **proposal governance**.
+
+---
+
+## Documentation roadmap (team space)
+
+1. **RSSHub** — **[done](/team/technologies/rsshub)** under **Stack & tools**.
+2. **Next external tech pages** (same section): e.g. **pgvector**, **Typesense**, **Inngest/pg-boss**, **Ory**, **MinIO** — short “what / why / how Synap uses.”
+3. **Feed system** — keep **operational** truth in **[Feed system](/team/platform/feed-system)**; avoid duplicating env vars here.
+4. **Intelligence** — add or extend **[Intelligence](/team/intelligence/index)** with **tool matrix** (feed vs chat vs proactive) when stable.
+
+---
+
+## Open questions
+
+- **Canonical feed profile:** single pod table vs per-app local prefs — needs architecture decision.
+- **RSSHub vs direct:** product rule for when templates store **route** vs **full URL** (see RSSHub page and `rss-fetcher` behavior).
+- **Compliance:** AGPL + third-party ToS for social routes in managed offering.
+
+---
+
+## Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-04 | Initial vision doc: multi-app feed onboarding + IS alignment. |

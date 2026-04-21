@@ -1,0 +1,53 @@
+---
+title: 'Intelligence orchestrator'
+description: 'AI orchestration system — OrchestratorAgent, PersonaAgents, skills, Hub Protocol, session memory'
+surfaces: ['browser', 'relay', 'studio', 'raycast', 'eve-cli']
+repos: ['synap-backend', 'synap-intelligence-service']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# AI Orchestrator
+
+The Intelligence Service provides the AI backbone. OrchestratorAgent manages overall conversation flow, while Personas handle domain-specific tasks. All communication goes through the Hub Protocol.
+
+## Agent types
+
+| Type | Description |
+|------|-------------|
+| **OrchestratorAgent** | "Co-founder" persona with full tool access. Routes requests to specialists, manages conversation flow, has access to all skills (entities, views, workspace, automations, documents). Full system prompt + all tools available via Hub Protocol. [More details](/team/intelligence/agents-read) |
+| **PersonaAgent** | Domain experts: Skill Agent, Provider Agent, Project Agent, Task Agent, Person Agent. Branch-scoped — only active in their branch. Specific tool access based on domain. [More details](/team/intelligence/agents-read) |
+| **Tool System** | Each agent can invoke tools: entity CRUD, view management, document editing, search, file operations, notification sending, automation creation. [More details](/team/intelligence/internal-api) |
+| **Skills** | Modular capabilities: entities, views, documents, automations, workspace, hub-protocol, widgets. Skills define the contract between agents and platform. [More details](/team/intelligence/skill-hub-protocol) |
+
+## Communication protocol
+
+All IS ↔ Backend communication uses the **Hub Protocol REST** (`/api/hub/*`):
+
+- **Bearer token** authentication
+- **21 sub-routers**: entities, views, channels, chats, proposals, feeds, notifications, etc.
+- **NOT tRPC** — tRPC is for direct frontend access; Hub Protocol is for external AI agents
+- OpenAI-compatible endpoint at `POST /api/hub/memory` — embedding optional (zero-vector fallback)
+
+## Session memory
+
+Session-scoped memory is always on:
+- **Personal sessions**: 4-hour window with compaction engine
+- **Other sessions**: 30-minute window
+- Compaction preserves key facts while reducing token count
+
+## External agents (OpenClaw)
+
+OpenClaw acts as an external AI agent:
+- Uses Hub Protocol REST for all operations
+- Self-hosted via `deploy/setup-openclaw.sh`
+- Creates `agent` user + API key on the pod
+- Model aliases: `synap/auto`, `synap/free`, `synap/balanced`, `synap/advanced`, `synap/complex`
+
+## Key files
+
+- Intelligence service: [/team/intelligence/index](/team/intelligence/index)
+- Hub Protocol REST: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts`
+- Agent SDK: [/team/intelligence/agent-sdk](/team/intelligence/agent-sdk)
+- OpenClaw skill: [/team/platform/openclaw-skill](/team/platform/openclaw-skill)
+- Agent OS template: `synap-backend/templates/agent-os.json`

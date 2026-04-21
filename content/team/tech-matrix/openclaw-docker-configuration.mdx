@@ -1,0 +1,179 @@
+---
+title: 'OpenClaw Docker Configuration'
+description: 'Docker Compose configuration for OpenClaw integration — the openclaw profile, provisioning flow, skill installation, and agent setup.'
+section: tech-matrix
+audience: developers
+version: 1.0+
+last_updated: '2026-04-20'
+tags: [docker, openclaw, agent, infrastructure]
+sidebar_position: 3
+hide_title: false
+toc: true
+---
+
+# OpenClaw Docker Configuration
+
+This page covers Docker Compose configuration for OpenClaw integration with Synap Data Pods. OpenClaw runs as an **optional profile** in the main compose stack.
+
+## Profile-based activation
+
+OpenClaw is not part of the base compose stack. It runs under a Docker Compose profile named `openclaw`:
+
+```bash
+# Self-hosted — activate OpenClaw profile
+docker compose --profile openclaw up -d openclaw
+
+# Cloud-managed — the Control Plane auto-activates this during provisioning
+```
+
+The `profiles: ["openclaw"]` directive on the `openclaw` service means it's ignored unless explicitly requested with `--profile openclaw`. This keeps the base stack lightweight and allows operators to choose whether to run OpenClaw.
+
+## Docker Compose service definition
+
+The OpenClaw service is defined in `synap-backend/deploy/docker-compose.yml`:
+
+### [synap-backend] deploy/docker-compose.yml — OpenClaw service block
+
+```yaml
+openclaw:
+  container_name: openclaw
+  image: ghcr.io/openclaw/openclaw:latest
+  restart: unless-stopped
+  volumes:
+    - openclaw_config:/root/.openclaw
+    - openclaw_workspace:/root/openclaw/workspace
+  environment:
+    - SYNAP_POD_URL=${SYNAP_POD_URL:-http://backend:4000}
+    - SYNAP_HUB_API_KEY=${OPENCLAW_HUB_API_KEY}
+    - SYNAP_AGENT_USER_ID=${SYNAP_AGENT_USER_ID}
+    - SYNAP_WORKSPACE_ID=${SYNAP_WORKSPACE_ID}
+    - OPENCLAW_MODEL=anthropic/claude-sonnet-4-6
+    - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  ports:
+    - "18789:18789"
+  networks:
+    - synap-net
+  profiles:
+    - openclaw
+```
+
+### Service details
+
+| Setting | Value | Purpose |
+|---------|-------|---------|
+| `container_name` | `openclaw` | Static container name for predictable referencing within `synap-net` |
+| `image` | `ghcr.io/openclaw/openclaw:latest` | GitHub Container Registry image from the OpenClaw project |
+| `restart` | `unless-stopped` | Auto-restart on crash or host reboot, unless manually stopped |
+
+### Volumes
+
+| Volume | Mount | Purpose |
+|--------|-------|---------|
+| `openclaw_config` | `/root/.openclaw` | Persistent OpenClaw configuration, skills, memory stores |
+| `openclaw_workspace` | `/root/openclaw/workspace` | Workspace data — synced entities, local copies, cached data |
+
+Both are Docker named volumes declared in the compose file's `volumes:` section.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SYNAP_POD_URL` | `http://backend:4000` | URL of the Data Pod API (resolves via Docker DNS when openclaw and backend share `synap-net`) |
+| `SYNAP_HUB_API_KEY` | *(required)* | Hub Protocol API key bound to the OpenClaw agent user — **injected by the provisioning flow** |
+| `SYNAP_AGENT_USER_ID` | *(required)* | Agent user ID for Hub Protocol attribution and RBAC on the Data Pod |
+| `SYNAP_WORKSPACE_ID` | *(required)* | Workspace scope for this agent |
+| `OPENCLAW_MODEL` | `anthropic/claude-sonnet-4-6` | AI model used by OpenClaw |
+| `ANTHROPIC_API_KEY` | *(required)* | API key for the model provider |
+
+## Provisioning flow (cloud-managed pods)
+
+When a pod is provisioned through the Control Plane, the OpenClaw profile is activated automatically:
+
+1. The CP calls `POST /api/hub/setup/agent` (auth via `PROVISIONING_TOKEN`)
+2. This creates an agent user with an API key
+3. The `SYNAP_HUB_API_KEY`, `SYNAP_AGENT_USER_ID`, and `SYNAP_WORKSPACE_ID` env vars are populated
+4. The CP then runs `docker compose --profile openclaw up -d openclaw`
+
+The setup script is located at:
+
+### [synap-backend] deploy/setup-openclaw.sh — OpenClaw provisioning script
+
+```bash
+#!/bin/sh
+# Runs POST /api/hub/setup/agent to create agent user + API key
+# Auth: PROVISIONING_TOKEN header
+# Then starts the openclaw compose profile
+```
+
+This script is the bridge between the Control Plane and the local pod: it provisions the agent credentials and activates the container.
+
+## Skill installation
+
+After provisioning, install the Synap OpenClaw skill:
+
+```bash
+# Install the OS-level skill
+openclaw skill install https://raw.githubusercontent.com/synap-app/synap-backend/main/skills/synap-os/SKILL.md
+
+# Or the unified hub protocol skill
+openclaw skill install synap
+```
+
+The skill enables OpenClaw to:
+- Query and mutate entity profiles on the Data Pod via Hub Protocol REST (`/api/hub/*`)
+- Read/write channel messages
+- Access the knowledge graph
+- Manage proposals and governance
+
+Two skill variants exist:
+- **`synap`** — Unified OpenClaw skill, installs from the local `synap-backend/skills/synap/SKILL.md` file
+- **`synap-os`** — OS-level skill from the raw GitHub URL, includes the knowledge graph + message relay + A2A + governance patterns
+
+## Self-hosted setup
+
+For self-hosted operators who want OpenClaw:
+
+```bash
+# 1. Fill in the required env vars in your .env
+# SYNAP_POD_URL (optional — defaults to http://backend:4000)
+# OPENCLAW_HUB_API_KEY (required — Hub Protocol key)
+# SYNAP_AGENT_USER_ID (required — agent user ID)
+# SYNAP_WORKSPACE_ID (required — workspace scope)
+# OPENCLAW_MODEL (optional — model name, e.g. anthropic/claude-sonnet-4-6)
+# ANTHROPIC_API_KEY (required — model API key)
+
+# 2. Start the openclaw profile
+docker compose --profile openclaw up -d openclaw
+
+# 3. Install the skill
+openclaw skill install https://raw.githubusercontent.com/synap-app/synap-backend/main/skills/synap-os/SKILL.md
+```
+
+**Note:** If you're running in `SHARED_POD_MODE=true` mode, OpenClaw is still available — the shared pod's backend service is the same image, just running as a single Data Pod for multiple users.
+
+## Network configuration
+
+OpenClaw connects to the Data Pod via `synap-net` (bridge network). It accesses the backend at `${SYNAP_POD_URL:-http://backend:4000}` which resolves via Docker DNS to the `backend` service container.
+
+The OpenClaw gateway port `18789` is published for external access — this is used by SSH health checks and the OpenClaw CLI.
+
+## Dependencies
+
+OpenClaw has no `depends_on` directive — Docker Compose starts services within the same compose file in parallel. The openclaw container will fail to start initially if the backend or kratos is not yet ready, but the `restart: unless-stopped` policy ensures it automatically retries. The first successful startup requires:
+
+- `backend` (port 4000) — API and Hub Protocol endpoints
+- `kratos` (port 4433) — authentication (for agent user validation)
+- `postgres` — user lookup and RBAC
+
+## Profiles summary
+
+| Profile | Services | Use case |
+|---------|----------|----------|
+| *(default)* | backend, realtime, postgres, redis, minio, typesense, kratos, hydra, caddy, pod-agent, updater | Base Data Pod — no AI agents |
+| `openclaw` | + openclaw | Self-hosted OpenClaw agent |
+| `rsshub` | + rsshub, browserless | RSS feed aggregation |
+| `monitoring` | + dozzle, prometheus, grafana, alertmanager | Observability stack |
+| `canary` | + backend-canary | Update validation before production rollout |
+| `cloudflare-tunnel` | + cloudflared | Cloudflare Tunnel exposure |
+
+Only profiles explicitly listed in the command are activated. Run `docker compose config --profile openclaw` to see the merged compose output with all profiles.

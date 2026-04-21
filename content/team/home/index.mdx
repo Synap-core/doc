@@ -1,6 +1,14 @@
 ---
-title: "Home"
-description: "Synap product vision, strategy, and team resources"
+title: 'Home'
+description: 'Synap product vision, strategy, and team resources'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 import { Card, Cards } from 'fumadocs-ui/components/card';
@@ -19,6 +27,9 @@ import {
   Terminal,
   Users,
   Smartphone,
+  Share2,
+  List,
+  Zap,
 } from 'lucide-react';
 
 # Welcome to the Synap team portal
@@ -28,27 +39,127 @@ Your hub for product vision, roadmap, development resources, and collaboration. 
 **Internal map:** [Product & surface index](/team/home/synap-products) lists every repo and where it appears in public vs team docs.
 
 <div className="not-prose my-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-  <a
-    href="/team/platform/index"
-    className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-  >
-    <Layers className="size-5 shrink-0" />
-    Platform
-  </a>
-  <a
-    href="/team/intelligence/index"
-    className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-  >
-    <Brain className="size-5 shrink-0" />
-    Intelligence
-  </a>
-  <a
-    href="/team/control-plane/index"
-    className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-  >
-    <Server className="size-5 shrink-0" />
-    Control plane
-  </a>
+  <div className="space-y-4">
+    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Application Spaces</h3>
+    <div className="flex flex-wrap gap-2">
+      <a
+        href="/team/browser/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Smartphone className="size-5 shrink-0" />
+        Browser & Extensions
+      </a>
+      <a
+        href="/team/relay/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Smartphone className="size-5 shrink-0" />
+        Relay (Mobile)
+      </a>
+      <a
+        href="/team/studio/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Eye className="size-5 shrink-0" />
+        Studio
+      </a>
+      <a
+        href="/team/raycast/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Target className="size-5 shrink-0" />
+        Raycast
+      </a>
+    </div>
+  </div>
+  
+  <div className="space-y-4">
+    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Platform Services</h3>
+    <div className="flex flex-wrap gap-2">
+      <a
+        href="/team/platform/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Layers className="size-5 shrink-0" />
+        Data Pod
+      </a>
+      <a
+        href="/team/intelligence/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Brain className="size-5 shrink-0" />
+        Intelligence Service
+      </a>
+      <a
+        href="/team/control-plane/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Server className="size-5 shrink-0" />
+        Control Plane
+      </a>
+      <a
+        href="/team/technology/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Server className="size-5 shrink-0" />
+        Technologies
+      </a>
+    </div>
+  </div>
+  
+  <div className="space-y-4">
+    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Developer Tools</h3>
+    <div className="flex flex-wrap gap-2">
+      <a
+        href="/team/eve-cli/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Terminal className="size-5 shrink-0" />
+        Eve CLI
+      </a>
+      <a
+        href="/team/synap-packages/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Layers className="size-5 shrink-0" />
+        Synap Packages
+      </a>
+      <a
+        href="/team/devops/index"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Terminal className="size-5 shrink-0" />
+        DevOps
+      </a>
+    </div>
+  </div>
+  
+  <div className="space-y-4">
+    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Featured Workflows</h3>
+    <div className="flex flex-wrap gap-2">
+      <a
+        href="/team/features/external-sources"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Share2 className="size-5 shrink-0" />
+        External Sources
+      </a>
+      <a
+        href="/team/features/feeds"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <List className="size-5 shrink-0" />
+        Feeds & Filtering
+      </a>
+      <a
+        href="/team/features/ai-workflows"
+        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
+      >
+        <Zap className="size-5 shrink-0" />
+        AI Workflows
+      </a>
+    </div>
+  </div>
 </div>
 
 <Callout type="info" title="Internal documentation">
@@ -81,6 +192,12 @@ Your hub for product vision, roadmap, development resources, and collaboration. 
     title="Relay (mobile)"
     description="Mobile app architecture."
     href="/team/relay/index"
+  />
+  <Card
+    icon={<Target className="size-4" />}
+    title="Go-to-market"
+    description="Launch execution, market analysis, and planning assets."
+    href="/team/go-to-market/index"
   />
 </Cards>
 
@@ -215,6 +332,8 @@ Your hub for product vision, roadmap, development resources, and collaboration. 
 *Requires authentication.*
 
 <TeamSpacesGrid />
+
+Archive and historical pages are available in [/team/archive/index](/team/archive/index).
 
 ## Related public documentation
 

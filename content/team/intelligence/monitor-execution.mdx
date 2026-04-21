@@ -1,6 +1,14 @@
 ---
-title: "Monitor: Execution Cycles"
-description: "Execution cycle tracking and visualization."
+title: 'Monitor: Execution Cycles'
+description: Execution cycle tracking and visualization.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Execution Cycles
@@ -11,7 +19,8 @@ Each agent follows a **deterministic execution cycle** implemented in `BaseAgent
 
 Implemented in `apps/intelligence-hub/src/agents/base/agent.ts`.
 
-```
+```bash
+
 ┌─────────────────────────────┐
 │        User Message         │
 └──────────────┬──────────────┘
@@ -50,6 +59,7 @@ Implemented in `apps/intelligence-hub/src/agents/base/agent.ts`.
     ┌──────────▼──────────┐
     │   Stream Response   │  ← SSE events to client
     └─────────────────────┘
+
 ```
 
 ## Per-Agent Variations

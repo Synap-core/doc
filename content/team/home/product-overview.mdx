@@ -1,6 +1,14 @@
 ---
-title: "Product Overview"
-description: "High-level product overview for all audiences."
+title: 'Product Overview'
+description: High-level product overview for all audiences.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap — Product Overview & Vision 2026
@@ -30,13 +38,15 @@ Synap is the single data layer underneath all of it. Not another SaaS app — an
 
 Every surface in Synap reduces to three composable concepts:
 
-```
+```bash
+
 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
 │   Entities  │   │    Views    │   │  Channels   │
 │             │   │             │   │             │
 │  Your data  │◄──│  Any lens   │◄──│ Interaction │
 │  One model  │   │  on data    │   │  & AI       │
 └─────────────┘   └─────────────┘   └─────────────┘
+
 ```
 
 **Entities** are the data layer. A task, a contact, a meeting note, a CRM deal — they are all entities in the same graph. Typed by profiles, related by edges, stored in PostgreSQL. The entity graph is the source of truth for everything.
@@ -74,7 +84,8 @@ The analogy isn't cosmetic. It guides decisions: apps don't own data (they query
 
 Every deployment of Synap is a **data pod** — a fully self-contained backend instance.
 
-```
+```bash
+
 ┌────────────────────────────────────────────────┐
 │                   Data Pod                      │
 │  ┌──────────┐  ┌──────────┐  ┌────────────┐    │
@@ -89,6 +100,7 @@ Every deployment of Synap is a **data pod** — a fully self-contained backend i
 │  │  documents · profiles · proposals · events │ │
 │  └────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────┘
+
 ```
 
 Every pod runs identical open-source code. Synap Cloud provisions and operates the pod; self-hosted pods use the same Docker images.
@@ -392,7 +404,8 @@ Hub Protocol API keys auto-brand every request: `source: "intelligence"`, `isHub
 
 This is the core safety primitive:
 
-```
+```bash
+
 AI calls hubProtocol.createEntity
   → checkPermissionOrPropose(ctx)
       → if action in autoApproveFor[]:
@@ -403,6 +416,7 @@ AI calls hubProtocol.createEntity
           → user sees proposal in inbox
           → approve → worker executes
           → deny   → proposal closed, reason logged
+
 ```
 
 Default `autoApproveFor` whitelist: `["search.*", "memory.recall", "entity.read", "document.read", "context.*"]`. Glob patterns supported. Configurable per workspace.
@@ -413,12 +427,14 @@ Every AI decision is logged. The audit trail is immutable.
 
 External connectivity in Synap follows three distinct patterns. Understanding which is which prevents confusion:
 
-```
+```bash
+
 ┌──────────────────────────────────────────────────────────────────┐
 │  1. Intelligence Services       │  What AI brain handles requests │
 │  2. External Channels           │  Where conversations come from  │
 │  3. Tool Protocols (MCP)        │  What tools AI can use          │
 └──────────────────────────────────────────────────────────────────┘
+
 ```
 
 **1. Intelligence Services** — swap the AI brain
@@ -566,10 +582,12 @@ Each pod is a separate database. No shared multi-tenant database. Users on diffe
 
 Synap is event-sourced. Every state change emits an immutable event before any database mutation.
 
-```
+```yaml
+
 {table}.{action}.{phase}
 e.g.:  entities.create.completed
        proposals.approve.completed
+
 ```
 
 The `events` table is the audit log:

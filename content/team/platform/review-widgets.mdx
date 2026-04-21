@@ -1,6 +1,14 @@
 ---
-title: "Platform Review: Widgets"
-description: "Widget system completeness and gaps."
+title: 'Platform Review: Widgets'
+description: Widget system completeness and gaps.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # 01 — Widget System (Native + Iframe)
@@ -13,7 +21,8 @@ description: "Widget system completeness and gaps."
 
 The widget system supports two renderer types. AI defaults to native; iframe is kept for quick throwaway HTML.
 
-```
+```bash
+
 Tier 1: Native (default)        Tier 2: Iframe (sandbox)
 ─────────────────────────       ─────────────────────────
 Real React components           Sandboxed HTML documents
@@ -21,6 +30,7 @@ Shared externals (Grafana)      postMessage protocol
 Full theme + hooks + tRPC       Static config only
 Same React tree as host         Isolated DOM
 Proposal governance             Proposal governance
+
 ```
 
 ### Native Widgets (Shared Externals) — BUILT 2026-03-25
@@ -28,7 +38,8 @@ Proposal governance             Proposal governance
 AI writes JSX/TSX using platform packages. Backend compiles to IIFE bundle via esbuild. Browser loads at runtime via Blob URL `&lt;script>` injection. Widget runs in the same React tree as the host with full access to theme, hooks, data, and navigation.
 
 **Pipeline:**
-```
+```bash
+
 AI calls generate_widget(rendererType: "native", source: JSX)
   → Hub Protocol → checkPermissionOrPropose() → user approves
   → compileWidgetSource(source) via esbuild → IIFE bundle
@@ -36,6 +47,7 @@ AI calls generate_widget(rendererType: "native", source: JSX)
   → WidgetRegistryProvider discovers rendererType: "native"
   → loadNativeWidget(bundleSource) → Blob URL → CellRegistration
   → cellRegistry.register() → renders like any built-in cell
+
 ```
 
 **Shared Externals (available to all native widgets):**

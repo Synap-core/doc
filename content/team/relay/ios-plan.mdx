@@ -1,6 +1,14 @@
 ---
-title: "iOS Plan"
-description: "Next-gen iOS implementation plan."
+title: 'iOS Plan'
+description: Next-gen iOS implementation plan.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Relay — Next-Gen iOS Capabilities Plan
@@ -181,7 +189,8 @@ Recommendation: start with **`expo-share-intent`** for a 1-day MVP (payload arri
 ### Implementation plan
 
 **MVP (1 day):**
-```
+```yaml
+
 app.json plugins:
   ["expo-share-intent", {
     "iosActivationRules": { "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
@@ -189,6 +198,7 @@ app.json plugins:
                             "NSExtensionActivationSupportsImageWithMaxCount": 5 }
   }]
 src/hooks/useShareIntentHandler.ts   // routes incoming payload to CaptureModal
+
 ```
 
 **Power (3 days total):**

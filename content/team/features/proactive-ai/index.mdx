@@ -1,0 +1,64 @@
+---
+title: 'AI & Proactive Intelligence'
+description: 'Proactive AI layer — cron workers, insight generation, morning briefing, weekly digest, health checks'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app', 'synap-backend', 'synap-intelligence-service']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Proactive Intelligence
+
+AI doesn't just react — it posts proactively into the user's personal channel. Five cron workers generate insights, briefings, and health checks on schedule.
+
+## Cron workers
+
+| Worker | Frequency | Description |
+|--------|-----------|-------------|
+| **Morning Briefing** | ~15 min after midnight | "Good morning" summary of overnight events, upcoming tasks, recent activity |
+| **Weekly Digest** | Hourly (accumulates) | Compiles weekly trends, project milestones, and AI-generated recommendations |
+| **Health Check** | Daily | System health, sync status, pod connections, connector statuses |
+| **Insight Generation** | On-demand | AI analyzes entity relationships, surfaces connections, suggests improvements |
+| **Nudge Delivery** | Per schedule | User-configured reminders and nudges based on proactive preferences |
+
+## User preferences
+
+Proactive AI behavior is controlled via `workspace.settings.proactiveAi` (JSONB):
+
+```jsonc
+{
+  "enabled": true,
+  "nudgeDensity": "balanced", // "low" | "balanced" | "high"
+  "schedules": {
+    "morningBriefing": true,
+    "weeklyDigest": true,
+    "healthCheck": true,
+    "insights": true
+  }
+}
+```
+
+## Rate limits
+
+- Hub Protocol `POST /proactive/post`: max 3/hour, 10/day per agent
+- Prevents AI spam while maintaining meaningful proactive interaction
+
+## Proactive cells in bento
+
+Proactive intelligence renders as interactive cells in bento dashboards:
+
+| Cell | Purpose | Status |
+|------|---------|--------|
+| morning-briefing | Daily overview card | Active |
+| weekly-digest | Weekly trends card | Active |
+| health-check | System health status | Active |
+| insight | AI-suggested connections | Active |
+| feed | Recent activity stream | Active |
+
+## Key files
+
+- Feed system: [/team/platform/feed-system](/team/platform/feed-system)
+- Signal feed AI: [/team/platform/signal-feed-ai](/team/platform/signal-feed-ai)
+- Intelligence service: [/team/intelligence/index](/team/intelligence/index)
+- Agent system: [/team/intelligence/agent-system](/team/intelligence/agent-system)
+- Cron infrastructure: pg-boss workers in `synap-backend/packages/jobs/`

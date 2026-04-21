@@ -1,4 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "buildCommand": "cd synap-team-docs && npm run build",
+  "installCommand": "cd synap-team-docs && npm install",
+  "outputDirectory": "synap-team-docs/.next"
 }

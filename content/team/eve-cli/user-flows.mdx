@@ -1,0 +1,65 @@
+---
+title: 'User flows'
+description: >-
+  Three setup paths, eve setup vs synap install, exposure semantics, and
+  scripted flags.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## The three paths (`eve setup`)
+
+Eve organizes installation around **three product paths** (CLI profiles):
+
+1. **Inference only** (`inference_only`) — Local **Ollama** + **Traefik**-secured gateway (**no** Synap Data Pod).
+2. **Synap only** (`data_pod`) — **Data Pod** via official **`synap install`**; Eve can add **other organs** later without bundling Ollama in this profile.
+3. **Both** (`full`) — Data Pod **first**, then Ollama on **`eve-network`** + same gateway pattern (no host publish on **11434** for Ollama in the documented layout).
+
+---
+
+## Order of operations (recommended)
+
+1. **Secrets / profile** — Run `eve setup` (or prepare `.eve/secrets/secrets.json`) so Synap URL + Hub API key fields exist where needed.
+2. **Builder** (if you use codegen deploy) — `eve builder init` so OpenCode / OpenClaude share Hub `.env` + skills.
+3. **Legs / tunnel / RSSHub / OpenClaw** — After Brain surface is stable.
+
+---
+
+## Public exposure semantics (critical)
+
+- **Synap domain** in the wizard configures the **Data Pod** public URL (Caddy, API, auth) — “where users sign in to the pod.”
+- **Eve Legs** (Traefik, tunnel hostname) is a **separate** layer for **sidecar** and gateway routes. A public Synap domain does **not** automatically expose every Eve service.
+- Documented in depth in repo **`docs/EVE_SETUP_PROFILES.md`**.
+
+---
+
+## `eve setup` vs `eve init`
+
+- **`eve setup`** — Full guided wizard (profiles, AI foundation, network, Synap options, optional tunnel).
+- **`eve init`** — **Alias** that forwards to **`eve setup`** unless you pass an explicit **`--synap-repo`** for legacy direct brain flows — **one mental model**: prefer **`eve setup`**.
+
+---
+
+## `eve` vs `synap` scripts
+
+- **`synap`** (in **backend** repo) — Installs **Synap Data Pod** Docker stack (`deploy/docker-compose.yml`).
+- **`eve`** — Installs/orchestrates **Eve** sidecars and **calls** `synap install` when profile is `data_pod` or `full`. See [Synap integration](/team/eve-cli/synap-integration).
+
+---
+
+## Scripted / CI examples
+
+Non-interactive patterns (`--yes`, `--profile`, `--domain`, `--synap-repo`, tunnel flags) are kept current in **hestia-cli** `README.md` and **`docs/EVE_SETUP_PROFILES.md`**. Use **`eve setup --dry-run`** or **`eve --json setup --dry-run`** for plans without side effects.
+
+---
+
+## Related
+
+- **[Operations](/team/eve-cli/operations)** — where logs live, LXC constraints.
+- **[Platform golden flows](/team/platform/golden-flows)** — product-level journeys (if linked from platform).

@@ -1,5 +1,14 @@
 ---
 sidebar_position: 1
+title: 'Api Reference'
+description: Documentation covering Api Reference
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # API Reference

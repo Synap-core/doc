@@ -1,6 +1,14 @@
 ---
-title: Synap vs Obsidian
-description: Tradeoffs across local knowledge workflows, collaboration, and structure.
+title: 'Synap vs Obsidian'
+description: 'Tradeoffs across local knowledge workflows, collaboration, and structure.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap vs Obsidian

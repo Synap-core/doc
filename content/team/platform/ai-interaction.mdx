@@ -1,6 +1,14 @@
 ---
-title: "AI Interaction Architecture"
-description: "How AI agents interact with the backend data layer."
+title: 'AI Interaction Architecture'
+description: How AI agents interact with the backend data layer.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # AI Interaction Architecture
@@ -49,7 +57,8 @@ This is not a hierarchy. Synap's IS and external agents like OpenClaw are **peer
 
 ## 2. Architecture Overview
 
-```
+```bash
+
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          SYNAP WORKSPACE                                  │
 │                                                                            │
@@ -75,6 +84,7 @@ This is not a hierarchy. Synap's IS and external agents like OpenClaw are **peer
                     │  Connects TO Synap via: Hub Protocol                    │
                     │  Exposes tools TO Synap via: MCP server at /mcp         │
                     └─────────────────────────────────────────────────────────┘
+
 ```
 
 **Key components:**
@@ -108,22 +118,26 @@ Intelligence Hub → GET {dataPodUrl}/api/hub/entities/:id
 
 External agents (OpenClaw, any MCP client, custom scripts) can interact with Synap data by authenticating with a Hub Protocol API key. Every write goes through governance. Every read is either auto-approved (in the whitelist) or creates a proposal.
 
-```
+```yaml
+
 OpenClaw → POST {podUrl}/api/hub/threads/:threadId/messages
          → Bearer openclaw-hub-api-key
          → autoApproved if "a2ai.*" in workspace autoApproveFor
          → else: creates Proposal → user sees in Inbox → approves/rejects
+
 ```
 
 ### Layer 3 — Outbound: Synap IS → External Tools (MCP)
 
 When OpenClaw registers as an intelligence service, it provides an `mcpEndpoint` (`http://openclaw:18789/mcp`). The backend injects this into the `mcpServers` array sent to Intelligence Hub on every `sendMessage` call. The Intelligence Hub connects to OpenClaw's MCP server and gains access to its full tool library:
 
-```
+```yaml
+
 User types → sendMessage → resolveIntelligenceService
            → mcpServers includes { id: "openclaw", url: "http://openclaw:18789/mcp" }
            → Intelligence Hub connects to MCP
            → LLM can now call: openclaw_shell, openclaw_browser, openclaw_send_telegram, ...
+
 ```
 
 This is automatic. No special prompt engineering needed. The LLM sees the available tools and uses them contextually.
@@ -244,7 +258,8 @@ An A2AI channel is an asynchronous message bus between AI agents. It has no requ
 
 ### Message Flow
 
-```
+```bash
+
 1. User creates A2AI channel via trpc.chat.createA2AIChannel
    → title, topic, visibility, participants
 
@@ -268,6 +283,7 @@ An A2AI channel is an asynchronous message bus between AI agents. It has no requ
 6. OpenClaw polls for response:
    GET {podUrl}/api/hub/threads/:threadId/messages?since=ISO_TIMESTAMP&limit=20
    → returns new messages since last poll
+
 ```
 
 ---
@@ -296,14 +312,17 @@ When OpenClaw registers as an intelligence service with an `mcpEndpoint`, the In
 
 These are **opposite directions** and serve different purposes:
 
-```
+```bash
+
 OpenClaw → Hub Protocol → Synap    (writing data INTO the workspace)
 Synap AI → MCP Client  → OpenClaw  (CALLING tools that do things in the world)
+
 ```
 
 ### Provisioning Flow
 
-```
+```yaml
+
 Control Plane: POST /openclaw/provision
 └─ Validate pod exists
 └─ Generate Hub Protocol API key (scope: hub-protocol.read + hub-protocol.write)
@@ -322,6 +341,7 @@ POST /openclaw/register (self-hosted path, or after cloud provisioning)
    └─ mcpEndpoint: "{openclawUrl}/mcp"
 └─ Create Hub API key: POST {podUrl}/trpc/apiKeys.create
 └─ Return: { serviceId, url, hubApiKey, skillInstallCommand }
+
 ```
 
 ### What OpenClaw Enables
@@ -360,7 +380,8 @@ Telegram ← OpenClaw (outbound relay) ← relayToExternalChannel ← assistant 
 
 1. A Telegram message arrives at OpenClaw's webhook
 2. OpenClaw (instructed by the `synap` skill) calls the Hub Protocol REST endpoint directly:
-   ```
+   ```yaml
+
    POST {podUrl}/api/hub/threads/:threadId/messages
    {
      agentUserId, workspaceId,
@@ -369,7 +390,8 @@ Telegram ← OpenClaw (outbound relay) ← relayToExternalChannel ← assistant 
      senderName: "Alice",
      content: "Hey, can you check that report?",
    }
-   ```
+   
+```
 3. Backend finds the existing EXTERNAL_IMPORT channel (by `externalSource + externalChannelId`)
    — if none found, returns `{ status: "no_channel" }` → OpenClaw then calls `createExternalChannel` to propose creating a new one
 4. Message inserted into channel with `role: USER, authorType: EXTERNAL`
@@ -388,11 +410,13 @@ if (channel.channelType === ChannelType.EXTERNAL_IMPORT &&
 
 `relayToExternalChannel` resolves the active OpenClaw service and calls:
 
-```
+```yaml
+
 POST {openclawEndpoint}/v1/chat/completions
 Headers: x-openclaw-session-key: tg_chat_1234567
          x-openclaw-platform: telegram
 Body: { messages: [{ role: "assistant", content: "Here is the report..." }] }
+
 ```
 
 OpenClaw recognizes the session key, looks up the Telegram chat, and delivers the message.
@@ -807,7 +831,8 @@ Service registers with mcpEndpoint set
 
 `workspace.settings.mcpServers` is an array of `McpServerConfig` objects stored in the JSONB settings column. Two new tRPC procedures manage it:
 
-```
+```yaml
+
 trpc.workspaces.getMcpServers({ workspaceId })
   → McpServerConfig[]
 
@@ -815,6 +840,7 @@ trpc.workspaces.updateMcpServers({ workspaceId, servers: McpServerConfig[] })
   → { count: number }
   — requires editor+ role
   — uses JSONB merge: settings || '{"mcpServers": [...]}'::jsonb
+
 ```
 
 The frontend (Intelligence Settings → MCP Servers section) provides:

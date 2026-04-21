@@ -1,6 +1,16 @@
 ---
-title: AI agents & external tools
-description: Connect OpenClaw, scripts, and other agents to your pod via Hub Protocol and the Synap CLI
+title: 'AI agents & external tools'
+description: >-
+  Connect OpenClaw, scripts, and other agents to your pod via Hub Protocol and
+  the Synap CLI
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # AI agents & external tools

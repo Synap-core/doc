@@ -1,6 +1,14 @@
 ---
-title: "Monitor: Tools"
-description: "Tool monitoring — registered tools, usage, errors."
+title: 'Monitor: Tools'
+description: 'Tool monitoring — registered tools, usage, errors.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Tools System
@@ -56,7 +64,8 @@ Multi-agent orchestration.
 
 ## Execution Flow
 
-```
+```bash
+
 LLM calls tool
     ↓
 Category = "context" or "memory"?
@@ -64,6 +73,7 @@ Category = "context" or "memory"?
   NO  → proposalMode enabled?
     YES → Return { proposed: true, description, args }
     NO  → Execute immediately (admin / direct mode)
+
 ```
 
 ## Defining a Tool in Code

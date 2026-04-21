@@ -1,0 +1,52 @@
+---
+title: 'S-tier Definition of Done'
+description: >-
+  Release checklist for features touching onboarding, pod, IS, or cross-app UX —
+  Phase 0 quality gate.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# S-tier Definition of Done
+
+Use this as a **minimum bar** before merging features that affect user trust, data, or first-run experience. Adjust per PR size.
+
+## Engineering
+
+- [ ] `pnpm typecheck` / `tsc --noEmit` passes for touched packages.
+- [ ] No new `any` in public APIs without justification.
+- [ ] New routes or Hub Protocol handlers have **authZ** considered (workspace membership, session).
+- [ ] AI mutations that change durable data use **proposal** or documented exception.
+
+## UX
+
+- [ ] Copy reviewed for clarity; no dead-end empty states for **default** flows.
+- [ ] Loading and error states are visible (no silent failure for primary actions).
+
+## Security & privacy
+
+- [ ] Secrets not logged; env vars documented for ops.
+- [ ] PII handling noted if imports, memory, or feed content are involved.
+
+## Observability
+
+- [ ] Meaningful log context (`userId`, `workspaceId`, `sessionId` where applicable).
+- [ ] Analytics event names align with [Onboarding analytics events](/team/platform/onboarding-analytics-events) when onboarding-related.
+
+## Documentation
+
+- [ ] User-facing behavior change reflected in team or public docs when behavior is user-visible.
+
+---
+
+## Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-04 | Initial DoD for S-tier / universal onboarding roadmap. |

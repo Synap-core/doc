@@ -1,6 +1,14 @@
 ---
-title: "Android Plan"
-description: "Next-gen Android implementation plan."
+title: 'Android Plan'
+description: Next-gen Android implementation plan.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Relay — Next-Gen Android Capabilities Plan
@@ -194,7 +202,8 @@ Recommendation: **`expo-share-intent`** (same package as iOS share). One config 
 
 ### Implementation plan
 
-```
+```yaml
+
 app.json plugins:
   ["expo-share-intent", {
     "iosActivationRules": { ... },
@@ -206,6 +215,7 @@ app.json plugins:
   }]
 
 src/hooks/useShareIntentHandler.ts  # same hook as iOS, routes to CaptureModal
+
 ```
 
 **Effort:** 0.5 days on Android (on top of the iOS share work). **Priority: P0.**
@@ -345,7 +355,8 @@ Recommendation: use **`@notifee/react-native`** for the main notification UI + a
 
 ### Implementation plan
 
-```
+```bash
+
 modules/relay-live-updates/
   android/src/main/java/com/synap/relay/liveupdates/
     LiveUpdatesModule.kt
@@ -355,6 +366,7 @@ modules/relay-live-updates/
   src/index.ts                     # shared API for iOS + Android
 
 src/hooks/useRecordingActivity.ts  # same hook as iOS, but calls the Android path on Android
+
 ```
 
 Data contract (shared with iOS):

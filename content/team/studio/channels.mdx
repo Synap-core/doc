@@ -1,0 +1,138 @@
+---
+title: 'Channels'
+description: Discord-shaped UX · channel-per-object · branches · pins.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Channels in Studio
+
+## The invariant
+
+**Users never create channels.** Every channel is materialized by an addressable thing:
+
+| Context | Channel is... |
+|---|---|
+| Agent | Canonical personal DM per (user, agentType) |
+| Entity (task, person, project, …) | Resolved via `resolveAiChannel({ family: "context", contextObjectType, contextObjectId })` |
+| Document | Same resolver, `contextObjectType: "document"` |
+| Branch | User-initiated from a parent channel (with purpose) |
+| Feed | Scheduled source (RSS, proactive brief, etc.) |
+| External | Connector-backed (Gmail, Slack, …) |
+
+There is no "New channel" button. The sidebar removed it intentionally. See the [Data Flow](/team/studio/data-flow) spec for how external channels get materialized from Sources.
+
+---
+
+## The Discord-shaped sidebar
+
+`components/layout/ChannelSidebar.tsx` — 260px left rail, only shown on `/channels/*` routes (via `app/(app)/channels/layout.tsx`).
+
+```
+[Channels]
+[Find a channel…]
+
+▼ PINNED                   (from stores/pinned.ts)
+▼ AGENTS                   (6 DMs from DEFAULT_AGENTS)
+    @ Aria · Co-founder
+    @ Sage · Researcher ...
+▼ CONVERSATIONS            (threads grouped by contextObjectType)
+    ▸ Documents (12)
+    ▸ Tasks (8)
+    ▸ Projects (3)
+    ▸ People (14)
+    ▸ Views, Entities, Other
+▼ MULTI-AGENT
+▼ FEEDS
+▼ EXTERNAL
+```
+
+### Agent rows
+
+Each of `DEFAULT_AGENTS` (orchestrator / research / writing / knowledge-search / action / prompting) renders as a row. If a personal thread already exists for that agentType (resolved from `listThreads`), the row links directly. Otherwise it links to `/channels/dm/[agentType]` — a resolver page that calls `getPersonalThread({ agentType })` and redirects to the resolved channel id.
+
+### Conversations grouping
+
+Threads are grouped client-side by `contextObjectType` using `lib/channels/grouping.ts`. Groups collapse independently. Auto-expands on search.
+
+### Search
+
+Client-side filter across all sections. Sections with zero matches hide automatically during search.
+
+---
+
+## Channel detail composition
+
+`app/(app)/channels/[id]/page.tsx` stacks three components:
+
+1. **`ChannelContextPane`** — channel title, type chip, agent chip (if AI thread), linked-object pill (document / entity with open link), pin toggle, branch trigger, copy link, more menu.
+2. **`ChannelBranchesPane`** — collapsible chips for child branches; "New branch" trigger uses `BranchPurposePopover`.
+3. **`ChatView`** with `showHeader={false}` — messages + composer + @mention picker + branch-from-message hover + streaming bubble.
+
+---
+
+## Branch model
+
+- **From the context pane** or **branches pane** → opens `BranchPurposePopover`, user types purpose, creates via `chat.createChannel({ parentChannelId, branchPurpose, inheritContext: true })`.
+- **From a specific message** → hovers the message, clicks branch icon, creates with `branchedFromMessageId` and default purpose "Exploration".
+
+Backend `createChannel` handles the actual persistence; Studio just provides three entry points.
+
+---
+
+## @mention-to-route
+
+The composer's `@` button opens a Dropdown over `DEFAULT_AGENTS`. Picking one:
+1. Inserts `@AgentName ` into the draft
+2. Stores `agentHandle` state
+3. Next send passes `agentHandle` to `chat.sendMessage` → backend routes the reply to that agent
+
+A chip "Sending to @Aria" appears above the composer with a ✕ to clear.
+
+---
+
+## Pinned channels
+
+`stores/pinned.ts` — Zustand slice, persisted to localStorage as `studio-pinned-channels`. Two hooks:
+- `usePinnedStore(s => s.channelIds.includes(id))` → is this channel pinned?
+- `usePinnedStore(s => s.toggle)` → toggle pin state
+
+Consumers:
+- `ChannelContextPane` star button
+- `ChannelSidebar` "Pinned" section
+
+No backend persistence today — pins live per-device, per-browser. Could be promoted to a backend setting if requested.
+
+---
+
+## Embeddable `ChannelPane`
+
+`components/channel/ChannelPane.tsx` renders any channel inline anywhere. Two usage modes:
+
+```tsx
+// Direct id
+<ChannelPane channelId="c-abc" />
+
+// Resolve by context
+<ChannelPane resolve={{
+  family: "context",
+  contextObjectType: "document",
+  contextObjectId: docId,
+}} />
+```
+
+Used today in `/documents/[id]` and `/entities/[id]` tabbed right-rails, alongside an "AI proposals" tab.
+
+---
+
+## What's not done
+
+- **Multi-agent rooms** visual treatment is minimal — just a sidebar section, no dedicated detail pane.
+- **Branch merge / prune UI** — backend supports `mergeBranch` + `pruneEmptyBranch` but there's no UI.
+- **Reactions / presence / typing indicators** in messages — all hooks exist in `@synap-core/hooks`, not wired yet.

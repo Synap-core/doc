@@ -1,5 +1,14 @@
 ---
 sidebar_position: 5
+title: 'Events Api'
+description: Documentation covering Events Api
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Events API

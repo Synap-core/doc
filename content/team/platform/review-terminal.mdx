@@ -1,6 +1,14 @@
 ---
-title: "Platform Review: Terminal Bridge"
-description: "Terminal bridge / CLI integration review."
+title: 'Platform Review: Terminal Bridge'
+description: Terminal bridge / CLI integration review.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # 04 — AI Remote Execution (Terminal Bridge)
@@ -103,13 +111,15 @@ AI can't read Docker/systemd logs from the pod. No tool to:
 **Track A: Pod Command Execution (Hub Protocol)**
 For AI agents to run commands on the data pod:
 
-```
+```yaml
+
 AI Agent → execute_command tool
   → Hub Protocol POST /api/hub/terminal/execute
   → Backend: checkPermissionOrPropose()
     → If auto-approved: execute in sandboxed shell
     → If proposal: notify user, wait for approval
   → Response: { stdout, stderr, exitCode, duration }
+
 ```
 
 **Track B: Browser Terminal Widget (Electron IPC)**

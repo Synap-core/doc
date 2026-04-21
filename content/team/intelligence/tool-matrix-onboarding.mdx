@@ -1,0 +1,36 @@
+---
+title: 'IS tools — onboarding & feed alignment'
+description: >-
+  Mapping Intelligence Service tools to universal onboarding goals (Phase 3 /
+  8).
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# IS tools — onboarding & feed alignment
+
+**Purpose:** Show which **tools** the orchestrator should call by **primary goal** (`@synap-core/onboarding-core`). Keep in sync with `synap-intelligence-service/.../tools/tool-registry.ts`.
+
+| Primary goal (app default) | Primary tools | Notes |
+|---------------------------|---------------|--------|
+| `feed` (Relay) | `classify_feed_items`, `recommend_feed_sources`, `get_feed_preferences` / `update_feed_preferences`, feed trigger via pod | RSS transport is pod; IS classifies |
+| `home_bento` (Browser) | Widgets / workspace proposal tools (when wired), `get_feed_preferences` optional | Bento seeding may be pod tRPC |
+| `project` (Content) | Entity / project creation via Hub + proposals | Governance for mutations |
+| `import` | Import pipeline + entity tools | PII review |
+| `template` | Workspace template install, pack proposals | Multi-agent OS templates |
+
+**Prompts:** `agents/prompts/universal-onboarding/` — `composeUniversalOnboardingPrompt`.
+
+---
+
+## Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-04 | Initial matrix stub for S-tier roadmap. |

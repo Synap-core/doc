@@ -1,0 +1,156 @@
+---
+title: 'Ollama Docker Setup'
+description: 'Docker Compose configuration for self-hosted Ollama inference integration with Synap intelligence service.'
+section: tech-matrix
+audience: developers
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Overview
+
+Synap uses Ollama for local/self-hosted LLM inference, enabling fully private AI operations without external API calls. Docker Compose is the recommended deployment method for both development and production.
+
+## Docker Compose Configuration
+
+```yaml
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  ollama-data:
+```
+
+### Key Configuration
+
+- **`OLLAMA_HOST=0.0.0.0`** — Binds to all interfaces, required for container-to-container communication on the same Docker network
+- **`OLLAMA_KEEP_ALIVE=24h`** — Keeps models loaded in memory to avoid cold-start latency on each inference call
+- **Volume mount `/ollama`** — Persists downloaded models across container restarts. Models are stored here, not in the ephemeral container filesystem
+
+## Model Selection
+
+Choose models based on the task and available hardware:
+
+| Model | Parameters | Minimum RAM | Recommended For |
+|-------|-----------|-------------|-----------------|
+| `llama3.2` | 3B | 4GB | General assistant, fast local inference |
+| `llama3.2` | 11B | 8GB | Balanced quality/speed |
+| `mistral` | 7B | 8GB | Code generation, technical tasks |
+| `qwen2.5` | 7B | 8GB | Multilingual, reasoning |
+| `deepseek-r1` | 7B | 8GB | Complex reasoning, planning |
+| `llama3.1` | 70B | 48GB | High-quality general purpose (GPU required) |
+
+Pull models via:
+
+```bash
+docker exec ollama ollama pull llama3.2:3b
+```
+
+## GPU Support
+
+### NVIDIA GPUs
+
+Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html). Add the GPU device reservation to the Compose file (shown above). Verify with:
+
+```bash
+docker exec ollama nvidia-smi
+```
+
+### macOS (Apple Silicon)
+
+GPU support is automatic via Metal — no extra configuration needed. Docker Desktop on Mac handles the passthrough transparently.
+
+### No GPU
+
+Ollama falls back to CPU inference. Performance will be significantly slower, especially for larger models. A model like `llama3.2:3b` is the practical minimum on CPU-only hardware.
+
+## Integration with Synap Intelligence Service
+
+### Environment Variables
+
+The intelligence service connects to Ollama via these environment variables:
+
+```bash
+# synap-intelligence-service/.env
+INTELLIGENCE_SERVICE_EMBEDDING_PROVIDER=ollama
+INTELLIGENCE_SERVICE_EMBEDDING_MODEL=nomic-embed-text:latest
+INTELLIGENCE_SERVICE_LLM_PROVIDER=ollama
+INTELLIGENCE_SERVICE_LLM_MODEL=llama3.2:3b
+INTELLIGENCE_SERVICE_EMBEDDING_BASE_URL=http://ollama:11434
+INTELLIGENCE_SERVICE_LLM_BASE_URL=http://ollama:11434
+```
+
+### Embedding Model
+
+The intelligence service uses a separate embedding model for semantic search and vector operations. The recommended embedding model is `nomic-embed-text` — it is lightweight and produces high-quality embeddings:
+
+```bash
+docker exec ollama ollama pull nomic-embed-text:latest
+```
+
+### Docker Networking
+
+Ollama runs on the shared Synap Docker network. The base URL uses the **service name** (`http://ollama:11434`), not `localhost`, because the intelligence service runs in a separate container.
+
+### Health Check
+
+Add a health check to ensure Ollama is ready before dependent services start:
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:11434"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+```
+
+Then set the intelligence service to depend on it:
+
+```yaml
+  intelligence-service:
+    depends_on:
+      ollama:
+        condition: service_healthy
+```
+
+### Agent Mode
+
+Set the intelligence service to use Ollama by configuring `intelligenceServiceId` and model aliases. The Hub Protocol REST endpoint proxies Ollama calls, so agents (OpenClaw, persona agents) use the same `POST /v1/chat/completions` interface as external APIs.
+
+Model aliases (configured in the intelligence service) map Synap model names to Ollama model IDs:
+
+```
+synap/free → llama3.2:3b
+synap/balanced → llama3.2:11b
+synap/complex → deepseek-r1:7b
+```
+
+## Troubleshooting
+
+- **Out of memory**: Reduce model size or increase container memory limits via `deploy.resources.limits.memory`
+- **Slow inference**: Enable GPU support or switch to a smaller model
+- **Connection refused**: Verify Ollama is running and the base URL uses the correct container service name
+- **Models not persisting**: Ensure the `ollama-data` volume is mounted and not being pruned by `docker volume prune`

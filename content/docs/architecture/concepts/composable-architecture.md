@@ -1,5 +1,14 @@
 ---
 sidebar_position: 4
+title: 'Composable Architecture'
+description: Documentation covering Composable Architecture
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Composable Architecture
@@ -38,7 +47,8 @@ sidebar_position: 4
 
 **AI is another assembler** — it reads entities and proposes new combinations:
 
-```
+```bash
+
 User: "Create a project plan for the launch"
 
 Action Agent:
@@ -51,6 +61,7 @@ Action Agent:
    - Tasks → belong to Project
    - Notes → linked to relevant tasks
 4. All proposals wait for human approval
+
 ```
 
 Unlike humans using views, AI uses the **Hub Protocol** — it never writes directly. It proposes. The Data Pod decides whether to execute.
@@ -65,7 +76,8 @@ Most AI systems either:
 
 Synap uses **Proposals** — AI creates draft changes that pause in a validation queue:
 
-```
+```yaml
+
 1. AI → hubProtocol.createEntity()
 2. Data Pod → checkPermissionOrPropose()
        → if auto-approve whitelist: execute immediately
@@ -73,6 +85,7 @@ Synap uses **Proposals** — AI creates draft changes that pause in a validation
 3. User → Reviews in inbox
 4. User → Approves → entity created
    User → Rejects → proposal closed, reason logged
+
 ```
 
 This is **only possible** because of event sourcing:

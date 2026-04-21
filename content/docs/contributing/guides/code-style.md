@@ -1,5 +1,13 @@
 ---
-sidebar_position: 1
+title: Code Style
+description: Documentation covering Code Style
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Code Style Guide

@@ -1,0 +1,40 @@
+---
+title: 'Onboarding & memory security checklist'
+description: 'Phase 6 — authZ, secrets, PII, third-party stance for universal onboarding.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Onboarding & memory security checklist
+
+Use for PRs that touch **onboarding**, **feed import**, **memory writes**, or **workspace templates**.
+
+## Authentication & authorization
+
+- [ ] Endpoints require valid **session** or **API key** with documented scope.
+- [ ] **Workspace-scoped** actions verify `workspace_members` (or equivalent).
+- [ ] **Pod-wide** channels respect existing channel membership rules.
+
+## Secrets
+
+- [ ] No API keys or tokens in client bundles or logs.
+- [ ] Connector / RSSHub credentials only in server env or CP config.
+
+## PII & imports
+
+- [ ] Import flows (LinkedIn, files, chats) document **retention** and **deletion** path.
+- [ ] Memory storage avoids raw secrets; redact where possible.
+
+## Third-party & OSS
+
+- [ ] RSSHub / connector use complies with license and target site ToS ([RSSHub](/team/technologies/rsshub)).
+
+## Review
+
+- [ ] Security-sensitive changes get explicit review before production rollout.

@@ -1,6 +1,14 @@
 ---
-title: "Monitor: Memory"
-description: "Session memory monitoring and inspection."
+title: 'Monitor: Memory'
+description: Session memory monitoring and inspection.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Memory System
@@ -50,11 +58,13 @@ Facts are stored in the `knowledge_facts` table (PostgreSQL + pgvector):
 
 ## API Reference
 
-```
+```sql
+
 POST   /api/hub/memory           Store a fact (auto-embeds)
 GET    /api/hub/memory           Keyword search by relevance
 POST   /api/hub/memory/search    Semantic search (cosine distance)
 DELETE /api/hub/memory/:id       Remove a specific fact
+
 ```
 
 ## Tips

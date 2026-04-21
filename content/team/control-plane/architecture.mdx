@@ -1,6 +1,14 @@
 ---
-title: "CP Architecture"
-description: "Full CP API: pod lifecycle, billing, IS integration, 26 routers."
+title: 'CP Architecture'
+description: 'Full CP API: pod lifecycle, billing, IS integration, 26 routers.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Control Plane — Architecture & User Journeys
@@ -194,7 +202,8 @@ The CP exposes **26 route modules**:
 
 ## 5. Pod Status State Machine
 
-```
+```bash
+
 [Trial signup OR Stripe checkout completed]
          |
          v
@@ -254,6 +263,7 @@ Side states:
   rolling_back ← update failed, reverting
   restoring    ← restore-pod job running
   deleting     ← deprovision job running (admin-triggered)
+
 ```
 
 ### Warm Pool

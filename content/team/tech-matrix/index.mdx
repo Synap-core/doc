@@ -1,0 +1,52 @@
+---
+title: 'Tech Matrix'
+description: 'Navigating the bridge between Synap documentation and source code — the map from feature docs to actual repos and running services.'
+section: tech-matrix
+audience: developers
+version: 1.0+
+last_updated: '2026-04-20'
+tags: [navigation, docs, architecture, devops]
+sidebar_position: 1
+hide_title: false
+toc: true
+---
+
+# Tech Matrix
+
+The **Tech Matrix** is the navigation layer between Synap's product documentation and our actual codebase. It exists because architecture docs explain *what* and *why*, but engineers need to know *where* the code lives.
+
+## Why it exists
+
+- **Feature docs ↔ source code gap** — `/docs` and `/team` pages describe systems, but finding the actual implementation requires memorising repo names and directory structures. The tech matrix closes this gap.
+- **Onboarding** — new engineers can trace from high-level product intent → architecture docs → source files → running services in a single consistent path.
+- **Multi-repo complexity** — 8 repos, 60+ packages, 200+ services. The matrix imposes a stable index on that complexity.
+
+## How to use it
+
+The tech matrix is structured as a set of pages that link in three directions:
+
+1. **Product docs** — `/docs` (public) and `/team` (internal) describe features and architecture. From any page, follow links to the matching code-anchors section for the repo URL and key files.
+2. **Code anchors** — `/team/tech-matrix/code-anchors` lists every major product area with its repo, key files, and architecture patterns. Each file reference can serve as a clickable anchor.
+3. **Infrastructure** — Docker, CLI, and agent setup pages (`openclaw-docker-configuration`, `ollama-docker-setup`, `claude-code-setup`) cover the operational side of running and building Synap.
+
+## Navigation map
+
+| Page | What it covers | Who it's for |
+|------|---------------|--------------|
+| **[Code Anchors](/team/tech-matrix/code-anchors)** | Every repo, key files, architecture patterns, cell registrations | Engineers navigating source code |
+| **[OpenClaw Docker](/team/tech-matrix/openclaw-docker-configuration)** | Docker Compose OpenClaw profile, provisioning, skill install | DevOps and self-hosters |
+| **[Ollama Docker](/team/tech-matrix/ollama-docker-setup)** | Self-hosted inference, model selection, volume mounts | Engineers running local inference |
+| **[Claude Code Setup](/team/tech-matrix/claude-code-setup)** | `.claude/` structure, skills, agent configs | Developers using Claude Code |
+
+## Quick links
+
+- Repository index (monorepo root): `/Users/antoine/Documents/Code/synap/`
+- Public docs: `/docs`
+- Team docs: `/team`
+- Control plane dashboard: `https://cp.synap.live` (internal)
+
+## Related pages
+
+- [DevOps — Start here](/team/devops/start-here) — local dev setup, docker-compose, environment management
+- [Platform — Cell system](/team/platform/cell-system) — the universal rendering layer
+- [Intelligence — Architecture](/team/intelligence/architecture) — agent system and skills

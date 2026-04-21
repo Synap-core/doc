@@ -1,5 +1,14 @@
 ---
 sidebar_position: 3
+title: 'Knowledge Graph'
+description: Documentation covering Knowledge Graph
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Knowledge Graph Model

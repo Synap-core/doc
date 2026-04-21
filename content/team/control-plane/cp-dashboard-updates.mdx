@@ -1,0 +1,97 @@
+---
+title: 'CP dashboard & pod update pipeline'
+description: >-
+  Admin dashboard, update-status API, rolling-update job, pod-agent contract,
+  fixes and future work.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Control Plane: dashboard updates & rolling-update pipeline
+
+This document is the **team reference** for how pod updates are triggered from the **control plane API**, how the **admin dashboard** reflects state, and how that relates to **pod-agent** and **pg-boss** jobs. It complements [Pod management](/team/control-plane/pod-management), which covers the HTTP/JWT model end to end.
+
+## Product boundaries
+
+| Surface | Role |
+|---------|------|
+| **synap-control-plane-api** | Admin routes (`/admin/pods/...`), user routes (`/pods/...`), webhooks (GitHub release → `image_releases`), `triggerRollingUpdate` → pg-boss `rolling-update` job |
+| **synap-control-plane-dashboard** | Pod detail: update policy control, “Version & updates”, manual **Update** action, refresh of update status |
+| **synap-backend `deploy/pod-agent`** | Stateless JWT verification, `update-pod.sh`, callback to CP |
+| **External connect / provision connect** | Establishes trust and config between CP and pod for **provisioning and Hub/IS flows**; it does **not** replace the pod URL used for `POST .../api/pod-agent/command` (that remains the pod’s public HTTPS origin from `customDomain` or `subdomain` + `APP_DOMAIN`) |
+
+## Update policy (database)
+
+Stored on `data_pods.update_policy`: `manual` | `auto_latest` | `pinned`.
+
+- **GitHub webhook** (new image): loads pods with `auto_latest` and passes the **concrete tag** from the webhook into `triggerRollingUpdate`.
+- **User-initiated** `POST /pods/:id/trigger-update`: resolves **`image_releases` where `is_latest`**, compares to `current_version`, then enqueues rolling update with that **tag** (not the string `"latest"`).
+- **Admin dashboard** `POST /admin/pods/:id/action` with `action: "update"`: must follow the same **resolved tag** semantics when no explicit `targetVersion` is sent (see “Canonical behavior” below).
+
+## Canonical behavior (post-fix)
+
+### Single source of truth for `pod_updates` rows
+
+The **`rolling-update`** handler calls **`triggerPodUpdate`** once per pod. That function:
+
+1. Inserts a **`pod_updates`** row (`pending` → `in_progress` / `failed` / completed via callback).
+2. Signs JWTs (`type: "update"`, `targetVersion`, `updateId`, `nonce`, `callbackUrl`, `callbackJwt`).
+3. `POST https://{pod}/api/pod-agent/command` with `Authorization: Bearer` and `X-JWKS-URL: https://api.{APP_DOMAIN}/.well-known/jwks.json`.
+
+**Do not** insert an extra `pod_updates` row in the admin `update` action before enqueueing the job. Doing so created a **duplicate pending row** that never transitioned, which made the dashboard and history look broken.
+
+### Resolved `targetVersion` vs literal `"latest"`
+
+Fleet and user flows pass a **concrete tag** from `image_releases`. The admin action should **resolve** the latest tag when the operator does not pass an explicit `targetVersion` (or passes `"latest"`), so that:
+
+- `data_pods.target_version` and history rows stay consistent with semver-style tags.
+- `is_up_to_date` logic (compare `current_version` to latest tag) stays aligned with what was requested.
+
+Explicit `targetVersion` in the admin action body remains supported for **pinning or rolling to a specific tag**.
+
+### Concurrency
+
+If the pod is already in **`updating`** or **`rolling_back`**, the admin path should return **409** to avoid overlapping jobs.
+
+## Admin API (reference)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/admin/pods/:id/update-status` | `currentVersion`, `latestVersion` (from `is_latest` release), `isUpToDate`, `updatePolicy`, `recentUpdates` |
+| `PATCH` | `/admin/pods/:id/update-policy` | Body `{ updatePolicy }` |
+| `POST` | `/admin/pods/:id/action` | Body `{ action: "update", targetVersion?: string }` → enqueue `rolling-update` |
+
+User-facing parallel: `POST /pods/:id/trigger-update` (ownership checked) resolves latest tag before enqueue.
+
+## Dashboard (synap-control-plane-dashboard)
+
+**Pod detail page** loads update status on mount and should **refresh** after a successful **Update** action (not only the main pod `load()`), and **poll** update status on a modest interval so “Version & updates” does not stay stale while the main pod poll refreshes other fields.
+
+Silent `catch` on `fetchPodUpdateStatus` avoids toast spam when the network blips; operators can still use the **refresh** control on the section.
+
+## Failure modes (support & engineering)
+
+| Symptom | Likely cause |
+|---------|----------------|
+| **Recent update** stuck `pending` (orphan row) | Historical duplicate insert before job; new runs should only have rows created in `triggerPodUpdate` |
+| **rejected** / **unreachable** | Pod HTTPS not reachable from CP, wrong host, JWT verification failed (JWKS fetch), pod-agent down, or Caddy not routing `/api/pod-agent/*` |
+| Policy changed but **no auto update** | Pod not `auto_latest`, or webhook not firing, or `rolling-update` filter skipped (already on target version, or status `updating`) |
+
+## Future extensibility
+
+- **Admin UI**: show resolved `targetVersion` before confirm; optional **force** re-pull same tag (for support).
+- **Pinned policy**: UI to set `target_pinned_tag` if we add a column; webhook and rolling-update filters already conceptually support “only these tags”.
+- **Observability**: metrics on `triggerPodUpdate` outcomes (`triggered` / `rejected` / `unreachable`) per pod provider.
+- **Idempotency**: pass `updateId` from API into job payload if we ever need a single stable id across enqueue and UI (today the job owns the id).
+
+## Related
+
+- [Pod management](/team/control-plane/pod-management) — diagram, JWT, commands
+- [Infrastructure](/team/control-plane/infrastructure) — hostnames and services
+- [Public: Pod updates & policies](/docs/cloud/pod-updates) — customer-facing summary

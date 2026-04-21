@@ -1,6 +1,16 @@
 ---
-title: OpenClaw
-description: Connect OpenClaw to Synap backend with Hub Protocol, the synap skill, and provisioning flows.
+title: 'OpenClaw'
+description: >-
+  Connect OpenClaw to Synap backend with Hub Protocol, the synap skill, and
+  provisioning flows.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 OpenClaw is an external agent runtime. Synap backend is the sovereign data/governance layer.  

@@ -1,0 +1,42 @@
+---
+title: 'Pod sync'
+description: 'Pod-to-pod data replication — event log replication, file/doc sync, workspace-scoped filtering'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Pod-to-Pod Sync
+
+Sync data between independent Synap pods. Real-time replication with LWW conflict resolution for multi-pod setups. Used by shared pod migration (free → dedicated) and pod-to-pod sharing scenarios.
+
+## How it works
+
+| Component | Description |
+|-----------|-------------|
+| **Event log replication** | Real-time hook (500ms batching) + polling fallback (60s). Event chain is replicated from source pod to destination pod. Bidirectional with Last-Writer-Wins conflict resolution. |
+| **Workspace-scoped** | Only workspace-scoped data is replicated. Pod-wide entities pass through unchanged. Users can access multiple workspaces. |
+| **File/doc sync** | Files and documents are synced via base64 encoding in the POST sync endpoint. Supports large file transfers. |
+| **Control plane signals** | CP manages the pair relationship: create, health-check, and tear-down of sync pairs. |
+
+## Sync lifecycle
+
+1. **Pair creation** — Admin creates sync pair in Control Plane dashboard
+2. **Initial sync** — Historical data syncs (entity scan + diff)
+3. **Real-time replication** — Event log tailing from both pods
+4. **Ongoing health checks** — Periodic connection verification
+5. **Conflict resolution** — LWW (Last Writer Wins) with entity-scoped timestamps
+
+## Use cases
+
+- **Free to paid migration**: Export workspace from shared pod to dedicated pod
+- **Multi-pod architecture**: Cross-pod team collaboration
+- **Backup/DR**: Secondary pod as disaster recovery target
+
+## Key files
+
+- Pod-to-pod sync: [/team/platform/pod-to-pod-sync](/team/platform/pod-to-pod-sync)
+- Event chain: [/team/platform/event-chain](/team/platform/event-chain)
+- CP pod exposure: [/team/control-plane/pod-exposure-orchestration](/team/control-plane/pod-exposure-orchestration)
+- Shared pod model: `SHARED_POD_MODE=true` + `VECTOR_SEARCH_ENABLED=false` env vars

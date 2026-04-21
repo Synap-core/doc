@@ -1,42 +1,75 @@
 ---
-title: Agents
-description: Built-in Synap AI, external agents, MCP, skills, and governance model.
+title: 'Agents'
+description: 'Built-in Synap AI, external agents, MCP, skills, and governance model.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 Synap supports two complementary agent layers:
 
 - **Built-in intelligence** running with your pod (orchestrator + specialists).
-- **External agents** connected through open protocols.
+- **External agents** connected through open protocols (Claude Code, Claude Desktop, Cursor, Raycast, OpenClaw, custom).
 
-All mutations remain governed by permissions and proposal review.
+All mutations — from either layer — are governed by the same permission and proposal model.
+
+## Quick start
+
+```bash
+npx @synap-core/cli connect --target=claude-code
+# or: --target=claude-desktop, cursor, raycast, openclaw
+```
+
+Then jump to [Connect your AI](./connect) for the per-client guides.
 
 ## Connection protocols
 
 | Protocol | Best for | Endpoint |
 |---|---|---|
+| Agent Skills | Claude Code, Claude Desktop, OpenClaw — teach the AI how to use Synap | Markdown files in the AI's skills directory |
+| MCP | Claude Desktop, Cursor, custom agents — direct typed tool calls | `POST /mcp` |
 | Hub Protocol REST | Full agent workflows, CRUD, memory, channels | `/api/hub/*` |
-| MCP | Claude Desktop, IDE assistants, tool-use flows | `/mcp` |
-| OpenAI-compatible | Reuse existing LLM clients | `/v1/chat/completions` |
+| OpenAI-compat | Reuse existing LLM clients as-is | `/v1/chat/completions` |
 
 ## Built-in Synap AI
 
 - Works in channels and branches.
 - Can propose structured changes.
-- Supports proactive nudges/briefings.
+- Supports proactive nudges and briefings.
 - Uses the same governance model as external agents.
+
+Details: [Synap AI](./synap-ai).
 
 ## External agents
 
-- OpenClaw and custom agents connect via API keys.
-- Scope-limited access per key.
-- No silent writes outside allowed policy paths.
+- Connect via API keys (`hub-protocol.*`, `mcp.*`).
+- Scope-limited per key.
+- Writes outside the auto-approve whitelist create proposals for your review.
+- No silent mutations.
+
+Start here: [Connect your AI](./connect).
+
+## The three Synap skills
+
+Installed together on skill-capable clients:
+
+- `synap` — core data operations (read, write, link, search, remember)
+- `synap-schema` — extend the data model (new profiles, new properties)
+- `synap-ui` — build views, dashboards, bento layouts
+
+Details: [Skills](./skills).
 
 ## Practical paths
 
-- **OpenClaw onboarding**: [OpenClaw](/docs/integrate/agents/openclaw)
-- **Skill-driven execution**: [Skills](/docs/integrate/agents/skills)
-- **Message-native flows**: [Channels and agents](/docs/integrate/agents/channels-and-agents)
-- **Model/assistant tool interoperability**: [MCP](/docs/integrate/agents/mcp)
+- **End-to-end onboarding (any AI)**: [Connect your AI](./connect)
+- **Message-native flows**: [Channels and agents](./channels-and-agents)
+- **Direct tool calls**: [MCP](./mcp)
+- **OpenClaw runtime**: [OpenClaw](./connect/openclaw)
 
 ## Governance
 
@@ -46,7 +79,6 @@ All mutations remain governed by permissions and proposal review.
 
 ## Related pages
 
-- [Integrations overview](/docs/integrate/integrations/overview)
-- [API keys](/docs/integrate/integrations/api-keys)
-- [Build agents](/docs/integrate/development/ai/building-agents)
-- [Team intelligence docs](/team/intelligence)
+- [Integrations overview](../integrations/overview)
+- [API keys](../integrations/api-keys)
+- [Build custom agents](../development/ai/building-agents)

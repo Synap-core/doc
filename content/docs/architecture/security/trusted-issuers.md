@@ -1,6 +1,16 @@
 ---
-title: Trusted issuers
-description: How Synap pods decide which external services are allowed to connect and act on your data.
+title: 'Trusted issuers'
+description: >-
+  How Synap pods decide which external services are allowed to connect and act
+  on your data.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Trusted issuers

@@ -1,0 +1,42 @@
+---
+title: 'Stack & tools'
+description: >-
+  Index of technologies in Eve and Synap self-host stacks — links to upstream
+  docs and internal notes.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+This space holds **curated references** for components we **do not own**: feed generators, inference runtimes, reverse proxies, container runtimes, and tunnels. **Behavioral truth** for Synap and Eve remains in the **backend** and **hestia-cli** repos.
+
+**When to use this:** onboarding, debugging, or GTM explaining “what runs under the hood.” **When not to:** API contracts — use **[Platform](/team/platform/index)** and **[Architecture (public)](/docs/architecture/index)**.
+
+---
+
+## Quick map
+
+| Topic | Page |
+|-------|------|
+| RSSHub (RSS routes, Synap + CP + pod) | **[RSSHub](/team/technologies/rsshub)** |
+| Docker, Compose, LXC/Proxmox, sysctl errors | **[Docker & containers](/team/technologies/docker-and-containers)** |
+| Ollama, local inference, gateway | **[Ollama & inference](/team/technologies/ollama-and-inference)** |
+| Traefik, Caddy, tunnels (Pangolin, Cloudflare) | **[Ingress & tunnels](/team/technologies/ingress-and-tunnels)** |
+
+---
+
+## Related Eve docs
+
+- **[Eve — Architecture](/team/eve-cli/architecture)** — how pieces connect in our product narrative.
+- **[Eve — Operations](/team/eve-cli/operations)** — paths, logs, LXC pitfalls.
+
+---
+
+## Adding a new page
+
+Keep entries **short**: upstream link, 2–4 bullets on how Synap/Eve uses it, and caveats. Avoid duplicating **[TeamDoc guidelines](/team/platform/teamdoc-guidelines)**.

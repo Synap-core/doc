@@ -1,0 +1,40 @@
+---
+title: 'ADR: Onboarding session & memory scope'
+description: >-
+  Architecture decision record — durable onboarding state and where memory
+  lives.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# ADR: Onboarding session & memory scope
+
+**Status:** Proposed (2026-04)  
+**Context:** Universal onboarding orchestrator across Relay, Browser, content apps, import flows, and workspace templates.
+
+## Context
+
+- Clients today may keep onboarding state **only locally** (e.g. AsyncStorage), which breaks continuity across devices and blocks IS orchestration.
+- Memory about the user must be **scoped** (user vs workspace vs pod) and **governed** (no unbounded PII).
+
+## Decision (target)
+
+1. **Onboarding session:** Introduce a **pod-persisted** (or IS-persisted with pod mirror) record keyed by `userId` + optional `workspaceId`, with fields aligned to `@synap-core/onboarding-core` `OnboardingSessionState`.
+2. **Memory:** Structured chunks written via existing **Hub / memory** mechanisms; **sensitive** fields require explicit user confirm or proposal path.
+3. **Entry types:** `primary_default | import_everything | workspace_template | resume` are first-class for analytics and prompt selection.
+
+## Consequences
+
+- New tRPC procedures (or Hub routes) will be added incrementally; until then, clients may continue local state but should **emit analytics** using canonical event names.
+- IS uses `composeUniversalOnboardingPrompt` from `universal-onboarding/` with parameters from session state.
+
+## Links
+
+- Package: `synap-app/packages/core/onboarding-core`
+- IS prompts: `synap-intelligence-service/.../agents/prompts/universal-onboarding/`

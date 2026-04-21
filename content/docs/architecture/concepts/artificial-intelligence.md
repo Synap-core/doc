@@ -1,6 +1,14 @@
 ---
 sidebar_position: 4
-title: Artificial Intelligence
+title: 'Artificial Intelligence'
+description: Documentation covering Artificial Intelligence
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 > **Philosophy**: AI in Synap is not just a chatbot; it is a **collaborator** that lives alongside your data, understanding context and capable of taking action.

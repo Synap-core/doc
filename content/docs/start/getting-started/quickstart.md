@@ -1,7 +1,14 @@
 ---
-title: Quickstart
-description: Pick your first step — app, agents, or code — once you have a pod
+title: 'Quickstart'
+description: 'Pick your first step — app, agents, or code — once you have a pod'
 sidebar_position: 3
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Quickstart

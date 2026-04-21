@@ -1,5 +1,14 @@
 ---
 sidebar_position: 10
+title: 'Hub And Spoke'
+description: Documentation covering Hub And Spoke
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Hub & Spoke Architecture

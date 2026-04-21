@@ -1,6 +1,14 @@
 ---
-title: "Intelligence Hub"
-description: "Hub design, routing, agent dispatch, session management."
+title: 'Intelligence Hub'
+description: 'Hub design, routing, agent dispatch, session management.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Intelligence Hub — Developer Reference
@@ -36,7 +44,8 @@ The **Intelligence Hub** is the AI layer of the Synap platform. It is a stateles
 
 **Design principle**: The hub holds no persistent state. The Synap Backend is the single source of truth for all user data. The hub is a pure intelligence layer.
 
-```
+```bash
+
 Frontend
    │
    ▼
@@ -52,6 +61,7 @@ Intelligence Hub (port 3001)
    ├── pgvector (semantic search)
    ├── Event Store (Inngest)
    └── PostgreSQL
+
 ```
 
 ---
@@ -60,7 +70,8 @@ Intelligence Hub (port 3001)
 
 ### Request Lifecycle
 
-```
+```bash
+
 POST /api/chat/stream
         │
 [1] Authenticate (API key → Bearer token)
@@ -86,6 +97,7 @@ POST /api/chat/stream
 [6] Return / Stream
     → Non-stream: JSON { content, aiSteps, proposals }
     → Stream: SSE events { type: "thinking" | "content" | "complete" }
+
 ```
 
 ### Service Communication
@@ -249,7 +261,8 @@ Stored configurations for AI agents (including user-created custom agents).
 
 ### Flow A: Simple Q&A (no actions)
 
-```
+```bash
+
 User: "What tasks do I have this week?"
         │
 Agent calls search_unified("tasks this week")
@@ -259,11 +272,13 @@ Backend returns: [{ type:"task", title:"Buy groceries", ... }, ...]
 Agent generates: "I found 3 tasks: Buy groceries, Finalize report, Meeting with Sarah"
         │
 Returns: { content: "...", aiSteps: [search_unified call], proposals: [] }
+
 ```
 
 ### Flow B: AI Creates an Entity (with approval)
 
-```
+```bash
+
 User: "Create a task: Call the dentist on Friday"
         │
 Agent calls create_entity({ type:"task", title:"Call the dentist", ... })
@@ -281,6 +296,7 @@ Backend emits: entity.create.validated
 Inngest EntitiesExecutor inserts entity into DB
         │
 Emits: entity.create.completed → frontend refreshes
+
 ```
 
 ### Flow C: AI Updates a Document (diff proposal)
@@ -460,14 +476,17 @@ All endpoints require: `Authorization: Bearer &lt;HUB_PROTOCOL_API_KEY>`
 
 ### Health
 
-```
+```yaml
+
 GET /health
 → { status: "ok", service: "intelligence-hub" }
+
 ```
 
 ### Embeddings
 
-```
+```yaml
+
 POST /api/embeddings
 Body: { text: string }
 → { embedding: number[], dimensions: number, model: string }
@@ -475,11 +494,13 @@ Body: { text: string }
 POST /api/embeddings/batch
 Body: { texts: string[] }
 → { embeddings: number[][], count: number, dimensions: number }
+
 ```
 
 ### Orchestrate
 
-```
+```yaml
+
 POST /api/orchestrate
 Body: { userId, message, threadId?, history?, workspaceId? }
 → { success, data: { content, aiSteps, proposals, branchDecision } }
@@ -491,20 +512,24 @@ Body: same as above
 POST /api/orchestrate/approve
 Body: { userId, actions: [{ action, args }] }
 → { success, data: { executedActions } }
+
 ```
 
 ### Chat
 
-```
+```yaml
+
 POST /api/chat/stream
 Body: { query, threadId, userId, workspaceId?, agentType?, stream? }
 → If stream=false: { content, aiSteps, requiresApproval }
 → If stream=true: SSE stream
+
 ```
 
 ### Backend Hub-Protocol Endpoints
 
-```
+```yaml
+
 GET  /api/hub/search?userId&query&workspaceId&collections&limit
 GET  /api/hub/search/collection?userId&collection&query&workspaceId&limit
 GET  /api/hub/search/documents?userId&query&workspaceId&limit
@@ -520,6 +545,7 @@ POST /api/hub/skills/createSkill    Body: { userId, workspaceId, name, descripti
 
 POST /api/hub/linking/linkEntity    Body: { userId, threadId, entityId, relationshipType }
 POST /api/hub/linking/linkDocument  Body: { userId, threadId, documentId, relationshipType }
+
 ```
 
 ---

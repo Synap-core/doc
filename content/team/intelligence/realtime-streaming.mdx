@@ -1,6 +1,14 @@
 ---
-title: "Realtime Streaming"
-description: "SSE streaming, Traefik sticky sessions, client reconnection."
+title: 'Realtime Streaming'
+description: 'SSE streaming, Traefik sticky sessions, client reconnection.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Real-Time Streaming Architecture
@@ -71,3 +79,96 @@ So: **thinking** (context) → emitted via onThinking. **Tool call / tool result
 
 - **experimental_toolCallStreaming** (Vercel AI SDK): If we adopt it, we could stream partial tool-call arguments as they are generated, for even earlier “Running: …” feedback.
 - **Proposals mid-stream**: If the backend or service ever emits `proposal` events during the run (e.g. when a tool creates a proposal), the same pattern applies: emit when it happens, include in `complete` for persistence.
+
+## Known gaps & planned fixes
+
+Three operational gaps remain in the streaming pipeline. Each is low-urgency today but will bite at specific scale thresholds or on specific platforms. Documented here so we can fix in order when ready.
+
+### Gap 1 — Backpressure at high token rates
+
+**What it means.** Every token emitted by the model causes a Socket.IO event → Zustand setter → React reconcile → paint. At 30–60 tok/sec (Claude, GPT-4) this is fine. At 100+ tok/sec (Groq, fast OpenAI endpoints, DeepSeek) each update starts competing with the 16ms frame budget; `useDeferredValue` keeps the composer responsive but doesn't skip renders — React still reconciles every delta.
+
+**Impact.** Visible lag when typing while a long reply streams. Frame drops → janky animation. CPU spike on older mobile devices. Battery drain on laptops.
+
+**Right fix (smallest → largest).**
+
+- **Option A — client rAF coalescing** (~25 lines, zero backend change). Buffer deltas in a mutable map keyed by `channelId`, flush on `requestAnimationFrame`. Caps store updates to ~60/sec regardless of incoming rate.
+- **Option B — server-side batching** (~30 lines in `channels.ts` stream loop). Pod buffers IS tokens into `chat:stream` events every 40ms. What Claude.ai does. Reduces wire traffic 3–5×.
+- **Option C — token stride in IS**. Emit every Nth token adapted to model speed. Overkill until (A) and (B) don't cover it.
+
+**Recommendation.** Ship (A) when we first integrate a >100 tok/sec model. Skip (B) and (C) until profiling shows a real problem.
+
+### Gap 2 — Sequence numbers on stream events
+
+**What it means.** Socket.IO over a single WS connection preserves order. But multi-instance pods via Redis adapter, reconnect replay, and in-flight duplicates can violate that assumption. The client streaming store already accepts a `seq` field defensively — backend doesn't emit one yet, so the dedup logic is inert.
+
+**Impact.**
+
+- **Single-instance pod today**: zero impact.
+- **Multi-instance scale-out**: tokens may appear out of order or duplicated until the final `chat:message` corrects the cache.
+- **Resume protocol (Gap 3 Tier 2)**: `seq` is a hard precondition.
+
+**Right fix.** Trivial. In `synap-backend/packages/api/src/routers/channels.ts` around the `emitChatEvent({ event: "chat:stream", ... })` loop:
+
+```ts
+let seq = 0;
+for await (const chunk of stream) {
+  if (chunk.type === "chunk" && chunk.content) {
+    emitChatEvent({
+      event: "chat:stream",
+      data: { threadId, type: "chunk", content, isComplete: false, seq: seq++ },
+      ...
+    });
+  } else if (chunk.type === "step") {
+    emitChatEvent({
+      event: "ai:step",
+      data: { threadId, messageId, step, seq: seq++ },
+      ...
+    });
+  }
+}
+```
+
+~3 lines. Client already honours it. Do whenever we next touch this file.
+
+### Gap 3 — Resume after mid-stream disconnect
+
+**What it means.** User sends message → tokens stream → wifi blips (elevator, lid close, background tab for 30s) → socket drops at token 40 of 500 → backend keeps streaming into a dead connection, events discarded → backend finishes, emits `chat:message` during dead window → socket reconnects, client missed events 41–500 **and** the final message → streaming bubble stuck at "I looked at…" forever.
+
+`useRealtimeSync` invalidates the channel list on reconnect but doesn't refetch the in-flight message.
+
+**Impact.**
+
+- **Stable desktop**: rare.
+- **Mobile (Relay)**: **common**. Wi-Fi↔cellular handoffs, backgrounding drops sockets, tunnels. Will generate bug reports the day Relay has real users.
+- **Flaky office/conference wifi**: sporadic. Users describe it as "agent hung" when actually the reply finished fine in DB.
+
+**Right fix.** Three tiers:
+
+- **Tier 1 — refetch-on-reconnect** (~20 lines in `StreamingBridge.tsx`). On `socketIO.on("connected")`, for each channel with streaming state: invalidate `chat.getMessages` and clear the slice. User sees: "streaming → reconnect blip → final message appears in list, streaming bubble gone." No mid-animation recovery, but correct state every time.
+
+  ```ts
+  socketIO.on("connected", () => {
+    const active = Object.keys(useStreamingStore.getState().byChannel);
+    active.forEach((channelId) => {
+      utils.chat.getMessages.invalidate({ threadId: channelId });
+      useStreamingStore.getState().clear(channelId);
+    });
+  });
+  ```
+
+- **Tier 2 — replay from buffer**. Pod keeps a per-message ring buffer of recent events with `seq`. On reconnect, client sends `chat:resume { messageId, fromSeq }`. Pod replays missed events. Requires `seq` (Gap 2), persistent state (Redis or in-mem), TTL management, graceful "buffer expired → refetch" fallback. ~1 day of backend work.
+
+- **Tier 3 — SSE with `Last-Event-ID`**. Swap streaming off Socket.IO onto SSE. Browser natively sends `Last-Event-ID` header on reconnect; server replays from next id. Textbook solution but means two transports — architecture-level change. Don't do unless Tier 2 also proves insufficient.
+
+**Recommendation.** Ship **Tier 1 before Relay GA**. Tier 2 only if mobile users report lost streams. Tier 3 almost certainly never.
+
+### Priority order
+
+| Gap | Urgency | Fix size | Blocks |
+|---|---|---|---|
+| Gap 3 Tier 1 — refetch-on-reconnect | **High before Relay launch** | ~20 lines (studio) | Mobile / flaky-network users |
+| Gap 2 — sequence numbers | Medium, unlocks Gap 3 Tier 2 | ~3 lines (pod) | Multi-instance scale-out, resume protocol |
+| Gap 1 Option A — rAF coalescing | Low until fast-model integration | ~25 lines (studio) | Composer responsiveness during long replies |
+
+Total: ~50 lines across three files, ~1 hour of work for the base-tier fixes. The rest (Gap 2 Tier 2/3, Gap 1 Options B/C) are justified only by real user complaints or scale-out.

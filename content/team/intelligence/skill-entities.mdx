@@ -1,6 +1,14 @@
 ---
-title: "Skill: Entity Management"
-description: "Entity create/read/update skill guidance for agents."
+title: 'Skill: Entity Management'
+description: Entity create/read/update skill guidance for agents.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Skill: Entity Management
@@ -19,7 +27,8 @@ Each entity has:
 
 ## Creating an entity
 
-```
+```yaml
+
 create_entity({
   profileSlug: "crm-contact",
   title: "Acme Corp - Follow up",
@@ -29,6 +38,7 @@ create_entity({
     owner: "<user-id>"
   }
 })
+
 ```
 
 **Workflow:**
@@ -54,7 +64,8 @@ When the user mentions trackable items in conversation, create them proactively:
 
 ## Updating an entity
 
-```
+```yaml
+
 update_entity({
   entityId: "<entity-id>",
   properties: {
@@ -62,6 +73,7 @@ update_entity({
     notes: "Signed contract 2026-03-01"
   }
 })
+
 ```
 
 `update_entity` merges properties — you only need to pass the fields that changed.

@@ -1,6 +1,14 @@
 ---
-title: "Import Pipeline"
-description: "Source map, parser packages, dedup strategies, EntityUpsertService."
+title: 'Import Pipeline'
+description: 'Source map, parser packages, dedup strategies, EntityUpsertService.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Import Architecture
@@ -15,7 +23,8 @@ How Synap handles all inbound data: device contacts, Telegram exports, LinkedIn 
 
 All entity creation in Synap flows through **`EntityRepository.create()`** — never raw `db.insert(entities)`.
 
-```
+```yaml
+
 Source data
   → Parser (platform-specific file I/O)
   → Worker / tRPC handler (dedup, mapping)
@@ -25,6 +34,7 @@ Source data
       → db.insert(entities)        → correct workspaceId (null for pod-wide profiles)
       → PropertyIndexService       → indexes searchable property values (Typesense)
       → EventRepository.emit()     → entity.create.completed → automations fire
+
 ```
 
 This gives every imported entity:
@@ -109,12 +119,14 @@ This means parsers can be tested in Node, used from Browser (via `FileReader`), 
 
 Bulk imports (Telegram, LinkedIn) are fire-and-forget:
 
-```
+```yaml
+
 Frontend → tRPC mutation → pg-boss.send(QUEUE, payload) → return { jobId, total }
                                        ↓  (async)
                             pg-boss worker picks up job
                             → EntityUpsertService.upsert() per contact (handles all dedup)
                             → result: created / updated / matched counts
+
 ```
 
 This lets imports of 1,000+ contacts return instantly. Progress tracking is not yet implemented — the frontend shows 100% immediately after the job is queued.

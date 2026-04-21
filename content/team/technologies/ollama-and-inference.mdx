@@ -1,0 +1,32 @@
+---
+title: 'Ollama & inference'
+description: >-
+  Local LLM runtime used by Eve inference profiles; gateway and ports mental
+  model.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Role in Eve
+
+- **`inference_only`** and **`full`** profiles use **Ollama** (typically on Docker **`eve-network`**) and a **Traefik-secured gateway** (e.g. **127.0.0.1:11435**) — see **hestia-cli** `README` / **`docs/EVE_SETUP_PROFILES.md`** for current ports.
+- **Synap** “which model for Hub / IS” is separate from **Eve** “which provider for local OpenCode” — see **[Eve — Synap integration](/team/eve-cli/synap-integration)**.
+
+---
+
+## Upstream
+
+- [Ollama](https://github.com/ollama/ollama) — install, models, API.
+
+---
+
+## Operations notes
+
+- Pulling large models needs **disk and RAM**; small VPS may OOM during **`docker compose build`** for heavy services — prefer **image-based** Synap install on constrained hosts.
+- GPU passthrough (NVIDIA) is **host and Docker** dependent — not Eve-specific.

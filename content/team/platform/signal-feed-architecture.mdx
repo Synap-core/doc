@@ -1,6 +1,14 @@
 ---
-title: "Signal Feed Architecture"
-description: "RSSHub integration, feed classification, signal processing pipeline."
+title: 'Signal Feed Architecture'
+description: 'RSSHub integration, feed classification, signal processing pipeline.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Signal Feed - Architecture Reality Check
@@ -48,12 +56,14 @@ Signal feeds belong in `FEED` channels. External integrations (Telegram, Slack) 
 ## Two Feed Modes (Must Be Unified)
 
 ### Mode 1: Frontend Polling (On-Demand)
-```
+```bash
+
 User opens feed UI
   → Frontend polls GET /api/hub/signals/feed
   → Backend fetches from RSSHub via CP proxy
   → Classifies with IS
   → Returns ranked signal_items
+
 ```
 **Current state**:  Implemented, no channel integration
 
@@ -69,12 +79,14 @@ pg-boss worker runs (morning briefing, or every N hours)
 
 ### These Are The Same Flow
 The frontend polling and backend proactive should share the same code path:
-```
+```bash
+
 RSSHub fetch → IS classify → capture signal_item
                                     ↓
                     POST to channel (FEED type)
                                     ↓
                          Frontend polls channel messages
+
 ```
 
 ---
@@ -260,16 +272,19 @@ The `useChannelMessages` hook already exists and works for all channel types. Th
 ## Data Flow: Unified
 
 ### Subscribe to Signal (User Action)
-```
+```yaml
+
 1. User subscribes to "AI news" on Hacker News
 2. POST /signals/subscriptions { topic: "ai", platform: "hackernews" }
 3. Backend creates signal_subscription record
 4. Backend creates FEED channel (type: FEED, contextObjectId: subscriptionId)
 5. IS schedules fetch job for this subscription
+
 ```
 
 ### Backend Fetches + Classifies (Proactive)
-```
+```bash
+
 6. pg-boss worker fires (cron or event-driven)
 7. IS calls GET ${CP_URL}/api/rsshub-proxy/hackernews/frontpage
 8. IS classifies items with DeepSeek
@@ -277,6 +292,7 @@ The `useChannelMessages` hook already exists and works for all channel types. Th
    a. Creates signal_item entity
    b. Posts message to FEED channel (authorType: AGENT)
    c. Creates notification
+
 ```
 
 ### User Reads Feed (Frontend)

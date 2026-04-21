@@ -1,0 +1,45 @@
+---
+title: 'Notifications'
+description: 'Unified notification system — 27 registry types, discriminated by source, with lifecycle management'
+surfaces: ['browser', 'relay', 'studio']
+repos: ['synap-app', 'synap-backend']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Notifications
+
+Unified notification system with discriminated source types: proposal, proactive, system, data. Notifications create both notification rows and chat messages simultaneously.
+
+## Notification categories (27 types)
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| Governance | 5 | Proposal approve/reject, workspace proposal, governance alerts. [More details](/team/platform/proposals) |
+| AI/Proactive | 8 | Morning briefing, weekly digest, health check, insight, nudge. [More details](/team/platform/signal-feed-ai) |
+| Data | 7 | Import complete, sync success/failure, connector status, entity created. [More details](/team/platform/pod-to-pod-sync) |
+| System | 3 | Security alerts, maintenance notices, pod status changes. [More details](/team/platform/security) |
+| Inbox | 3 | Entity comments, mentions, direct messages. [More details](/team/platform/channels) |
+
+## Notification lifecycle
+
+1. **Creation** — `NotificationService.create()` persists to DB + Socket.IO fanout
+2. **Display** — NotificationBell (dropdown), NotificationToastProvider, NotificationBanner (urgent)
+3. **Action** — User interacts (approve/reject/acknowledge) → notification marked as `actioned`
+4. **Expiry** — Daily cleanup worker removes expired notifications (proactive notifications have configurable retention)
+
+## Source discrimination
+
+| Source | Description | Creates chat message? | Auto-close? |
+|--------|-------------|---------------------|-------------|
+| `proposal` | Governance actions | Yes | No — requires user action |
+| `proactive` | AI-generated insights | Yes | No — user decides |
+| `system` | Platform events | Yes | Auto-close after 30s |
+| `data` | Import/sync events | Conditional | Auto-close after 10s |
+
+## Key files
+
+- Notifications: [/team/platform/notifications](/team/platform/notifications)
+- NotificationService: `synap-backend/packages/api/src/services/notification-service.ts`
+- Types: `@synap-core/types` (NotificationCategory, NotificationPriority, NotificationStatus)
+- Frontend: NotificationBell, NotificationToastProvider, NotificationBanner in synap-app

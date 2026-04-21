@@ -1,6 +1,14 @@
 ---
-title: "IS Operations"
-description: "Day-to-day operations: update, scale, logs, alerts."
+title: 'IS Operations'
+description: 'Day-to-day operations: update, scale, logs, alerts.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Operations Guide
@@ -13,7 +21,8 @@ description: "Day-to-day operations: update, scale, logs, alerts."
 
 Before touching anything, understand this: **the IS is stateless replicas, not a spawner**.
 
-```
+```bash
+
 User sends message
        │
   Traefik (load balancer)
@@ -28,6 +37,7 @@ User sends message
                    • PgBouncer → PostgreSQL  — all persistent state
                    • Backend API  — session memory, entities, proposals
                    • OpenRouter  — LLM calls (rate-limited by semaphore)
+
 ```
 
 **IS replicas do not spawn child instances.** Each replica is identical — same code, same tools, same capabilities. When a user sends a message, Traefik routes it to any available replica. If one crashes, Swarm restarts it and Traefik stops sending traffic to it in the interim. You scale by adding replicas (`make scale-is N=5`), not by having a "master" spawn workers.
@@ -55,7 +65,8 @@ User sends message
 
 ### Request Lifecycle — Single Chat Message
 
-```
+```bash
+
 1. User sends message
 2. Backend (channels.ts) receives via tRPC/Socket.IO
 3. Backend inserts user message → PostgreSQL (with sessionId)
@@ -74,6 +85,7 @@ User sends message
 15. IS releases LLM semaphore + in-flight slot
 16. IS updates session usage (fire-and-forget)
 17. Langfuse records trace
+
 ```
 
 ---

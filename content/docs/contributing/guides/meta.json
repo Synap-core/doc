@@ -6,6 +6,9 @@
     "code-style",
     "testing",
     "router-development",
-    "event-system"
+    "event-system",
+    "connection-sync-roadmap",
+    "cli-and-compose-consolidation",
+    "tunnel-exposure-status"
   ]
 }

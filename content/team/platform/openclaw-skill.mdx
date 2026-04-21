@@ -17,7 +17,7 @@ metadata:
         - SYNAP_DEFAULT_CHANNEL_ID
     primaryEnv: SYNAP_HUB_API_KEY
     emoji: "\U0001F9E0"
-    homepage: https://synap.live/openclaw
+    homepage: 'https://synap.live/openclaw'
     capabilities:
       - memory
       - knowledge-graph
@@ -28,6 +28,14 @@ metadata:
       - linux
       - windows
 user-invocable: false
+title: 'Openclaw Skill'
+section: general
+audience: users
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap — OpenClaw Skill
@@ -167,7 +175,8 @@ GET /api/hub/graph/traverse?userId={UID}&startEntityId=<id>&maxDepth=2
 
 ### Memory
 
-```
+```sql
+
 POST /api/hub/memory
 { "userId": "{UID}", "fact": "Marc prefers email", "confidence": 0.9 }
 # embedding is optional — server handles it
@@ -175,11 +184,13 @@ POST /api/hub/memory
 GET /api/hub/memory?userId={UID}&query=Marc+preferences&limit=10
 
 DELETE /api/hub/memory/<fact-id>?userId={UID}
+
 ```
 
 ### Create & Update
 
-```
+```sql
+
 POST /api/hub/entities
 {
   "userId": "{UID}", "agentUserId": "{UID}", "workspaceId": "{WID}",
@@ -211,6 +222,7 @@ POST /api/hub/profiles
 POST /api/hub/property-defs
 { "userId": "{UID}", "workspaceId": "{WID}", "profileId": "<uuid>",
   "name": "Company", "slug": "company", "valueType": "string" }
+
 ```
 
 Property value types: `string`, `number`, `boolean`, `date`, `entity_id`, `array`, `object`, `secret`.
@@ -221,17 +233,21 @@ When a message arrives from Telegram, WhatsApp, Slack, or another platform:
 
 **Step 1**: Create or reuse a thread:
 
-```
+```yaml
+
 POST /api/hub/threads
 { "userId": "{UID}", "workspaceId": "{WID}", "title": "Telegram: Alice" }
+
 ```
 
 **Step 2**: Post the message (with `autoRespond: true` to trigger Synap AI):
 
-```
+```yaml
+
 POST /api/hub/threads/<thread-id>/messages
 { "role": "user", "content": "Hey are you free today?",
   "userId": "{UID}", "autoRespond": true }
+
 ```
 
 **Step 3**: Poll for AI response:

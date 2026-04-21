@@ -1,6 +1,14 @@
 ---
-title: "Native OS Guide"
-description: "@synap-core/native-os — 7 sub-packages implementation guide."
+title: 'Native OS Guide'
+description: '@synap-core/native-os — 7 sub-packages implementation guide.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Native OS integration guide
@@ -434,9 +442,11 @@ async function handleScan() {
   const { text } = await vision.scanText();
   // ...
 }
-```
+```typescript
+
 
 **Pattern 3 — wire up the hook unconditionally and let it no-op:**
+
 
 ```tsx
 // This is safe even if native-os-spotlight isn't installed

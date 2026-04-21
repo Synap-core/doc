@@ -1,6 +1,14 @@
 ---
-title: Frontend intelligence integration
-description: AI chat, tRPC, Hub Protocol, and Socket.IO bridge from backend to synap-app.
+title: 'Frontend intelligence integration'
+description: 'AI chat, tRPC, Hub Protocol, and Socket.IO bridge from backend to synap-app.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Frontend Intelligence Integration Guide
@@ -14,7 +22,8 @@ description: AI chat, tRPC, Hub Protocol, and Socket.IO bridge from backend to s
 
 ## 1. Architecture Overview
 
-```
+```yaml
+
 Browser
   │
   ├─ tRPC (via React Query)               → backend:4000
@@ -29,6 +38,7 @@ Browser
   │
   └─ REST fetch                           → backend:4000/api/hub/*
       └─ Requires: Authorization: Bearer {HUB_PROTOCOL_API_KEY}
+
 ```
 
 The backend **never sends raw SSE to the browser**. It:
@@ -134,10 +144,12 @@ Accessed via `trpc.hubProtocol.*` or REST (`/api/hub/*`).
 
 ### Context
 
-```
+```yaml
+
 getThreadContext(threadId)          → { contextSummary, metadata, messages, linkedEntities, linkedDocs }
 getUserContext(userId)              → { recentEntities, recentThreads, preferences }
 updateThreadContext(threadId, body) → { success }  body: { contextSummary?, personalityFingerprint? }
+
 ```
 
 ### Entities
@@ -168,12 +180,14 @@ vectorSearch(userId, query, types?, limit?)                   → semantic resul
 
 ### Proposals
 
-```
+```yaml
+
 listProposals(userId, workspaceId?, targetType?, status?, limit?) → Proposal[]
   status: "pending"|"approved"|"rejected"|"all"
 updateProposal(proposalId, data, summary?)                        → { success }
 approveProposal(proposalId, userId)                               → { success }
 denyProposal(proposalId, userId)                                  → { success }
+
 ```
 
 ### Skills
@@ -211,7 +225,8 @@ getBackgroundTask(userId, taskId)                           → Task
 
 > Requires `Authorization: Bearer {HUB_PROTOCOL_API_KEY}` on all routes.
 
-```
+```sql
+
 GET  /health                                            → { status, service }
 
 # Threads
@@ -261,6 +276,7 @@ POST /skills/createSkill                                → { id }
 # Commands (workspace prompt templates)
 GET  /commands?workspaceId=                             → IntelligenceCommand[]
 GET  /commands/:id                                      → IntelligenceCommand
+
 ```
 
 ---
@@ -270,7 +286,8 @@ GET  /commands/:id                                      → IntelligenceCommand
 > CLI connects here directly. Frontend may call these for agent/tool management UI.
 > Base: `${BACKEND_URL}/intelligence/api`
 
-```
+```sql
+
 # Chat (SSE — CLI uses this, frontend should prefer tRPC)
 POST /chat/stream                   → SSE stream of SseEvent[]
 
@@ -298,6 +315,7 @@ GET  /executions/:id                                 → { execution, toolLogs }
 # Error logs
 GET  /errors?source=&severity=&limit=&offset=        → ErrorLog[]
 GET  /errors/stats?since=                            → ErrorStats
+
 ```
 
 ---

@@ -1,6 +1,14 @@
 ---
-title: "Provisioning Paths"
-description: "All pod provisioning paths: standard, warm pool, self-hosted."
+title: 'Provisioning Paths'
+description: 'All pod provisioning paths: standard, warm pool, self-hosted.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap + OpenClaw Provisioning Paths
@@ -29,7 +37,8 @@ The discount incentivizes bundling. Both products are independently useful but b
 
 **Entry:** OpenClaw user installs `synap` skill
 
-```
+```bash
+
 OpenClaw agent running (anywhere)
   → User installs synap skill
   → Skill requires: SYNAP_POD_URL + SYNAP_HUB_API_KEY
@@ -45,6 +54,7 @@ OpenClaw agent running (anywhere)
     → Settings → API Keys → create key
     → Paste key into OpenClaw .env
     → Done
+
 ```
 
 **What exists:** Skill file, setup script, install.sh, CP provisioning
@@ -101,7 +111,8 @@ synap.live → signup → choose plan
 
 **Entry:** Developer wants full stack on their own server
 
-```
+```bash
+
 curl install.sh | bash
   → Prompts: domain, email, admin_email
   → Starts 11 services
@@ -113,6 +124,7 @@ curl install.sh | bash
   → Installs synap skill
 
 Done — fully self-hosted, zero cost
+
 ```
 
 **What exists:** Full flow implemented and tested
@@ -166,7 +178,8 @@ User has managed Synap pod
 
 ## Architecture: How Services Connect
 
-```
+```bash
+
 ┌─────────────────────────────────────────────────────────┐
 │  SAME SERVER (self-hosted or managed pod)                │
 │                                                          │
@@ -192,6 +205,7 @@ User has managed Synap pod
 │  │              │  /api/hub/*     │ pod.synap.live │     │
 │  └─────────────┘  Bearer token    └──────────────┘      │
 └─────────────────────────────────────────────────────────┘
+
 ```
 
 Both topologies use the same Hub Protocol REST interface. No code changes needed — just different URLs in the config.

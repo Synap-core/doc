@@ -1,6 +1,14 @@
 ---
-title: Hub Protocol flow
+title: 'Hub Protocol flow'
 description: Request/response model between agents and the data pod through Hub Protocol.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 Hub Protocol is the primary bridge between agent runtimes and Synap pods.

@@ -1,0 +1,38 @@
+---
+title: 'Universal onboarding north star'
+description: >-
+  Product and engineering anchor for cross-app onboarding — complements the
+  S-tier phased roadmap.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Universal onboarding north star
+
+This page **summarizes** the onboarding-centric roadmap (see internal **S-tier product phases** plan). It does not replace **[Feed system](/team/platform/feed-system)** or **[RSSHub](/team/technologies/rsshub)** — feeds are **one vertical** (Relay default primary goal).
+
+## One sentence
+
+Synap uses **one orchestration pattern** to onboard users onto a **new or current** **data pod or workspace** with a **primary goal** per app (Relay: feed, Browser: bento, Content: project), **grounded memory**, and optional **secondary objectives**, plus alternate entry points (**import everything**, **workspace templates**).
+
+## Code anchors
+
+| Piece | Location |
+|-------|----------|
+| Types, analytics names, prompt frame | `synap-app/packages/core/onboarding-core` |
+| IS prompt composition | `synap-intelligence-service/.../agents/prompts/universal-onboarding/` |
+| Browser import UI | `browser/electron/renderer/src/components/onboarding/import/ImportEverythingOnboardingStep.tsx` |
+
+## Related team docs
+
+- [S-tier Definition of Done](/team/platform/s-tier-definition-of-done)
+- [Onboarding analytics events](/team/platform/onboarding-analytics-events)
+- [ADR: Onboarding session & memory](/team/platform/adr-onboarding-session-memory)
+- [Onboarding security checklist](/team/platform/onboarding-security-checklist)
+- [Onboarding observability runbook](/team/platform/onboarding-observability-runbook)

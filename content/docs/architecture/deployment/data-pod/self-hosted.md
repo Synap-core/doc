@@ -1,5 +1,14 @@
 ---
 sidebar_position: 1
+title: 'Self Hosted'
+description: Documentation covering Self Hosted
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Self-Hosted Deployment
@@ -161,6 +170,40 @@ pm2 start apps/jobs/src/index.ts --name synap-jobs
 pm2 save
 pm2 startup
 ```
+
+---
+
+## Optional: Self-host RSSHub for Feed Ingestion
+
+If you want feed ingestion fully local to your infrastructure, run RSSHub alongside your pod and configure feed providers to use it.
+
+### Why do this
+
+- keep RSS transport inside your infra boundary
+- avoid dependency on managed Control Plane RSS proxy
+- tune cache/route behavior per deployment
+
+### Minimal setup
+
+```bash
+docker run -d \
+  --name synap-rsshub \
+  -p 1200:1200 \
+  diygod/rsshub
+```
+
+Then point your feed provider config to:
+
+```env
+RSSHUB_URL=http://localhost:1200
+```
+
+In Synap feed configuration, prefer provider type:
+
+- `rsshub` for RSSHub routes
+- `direct` for plain RSS/Atom URLs
+
+For managed Synap Cloud pods, the default path remains Control Plane RSS proxy with provider failover.
 
 ---
 

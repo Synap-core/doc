@@ -3,5 +3,5 @@
   "description": "Hosted control plane (synap.live) and the agent layer on your pod",
   "root": true,
   "icon": "cloud",
-  "pages": ["index", "synap-cloud", "intelligence"]
+  "pages": ["index", "synap-cloud", "pod-updates", "intelligence"]
 }

@@ -1,0 +1,46 @@
+---
+title: 'Chat'
+description: 'AI chat across all surfaces — OrchestratorAgent + PersonaAgent, tRPC Hub Protocol, branching conversations'
+surfaces: ['browser', 'relay', 'studio', 'raycast']
+repos: ['synap-app', 'browser', 'relay-app', 'synap-backend', 'synap-intelligence-service']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# Chat
+
+The AI chat experience lets users interact with Synap's intelligence layer through natural language. The OrchestratorAgent (co-founder persona) handles general queries across all tools, while PersonaAgents handle domain-specific tasks.
+
+## Chat architecture
+
+| Component | Description |
+|-----------|-------------|
+| **Multi-agent system** | OrchestratorAgent routes requests to specialist agents. Each has session-scoped memory with 4h personal / 30min others. Compaction engine manages memory overflow. [More details](/docs/architecture/concepts/multi-agent-system) |
+| **Branching conversations** | Conversations can fork into branches. Branches are entity-scoped — useful for project-specific discussions. Supports parallel threads within a workspace. [More details](/docs/architecture/concepts/branching-conversations) |
+| **Hub Protocol** | All chat messages flow through Hub Protocol REST (`/api/hub/chats`). Not tRPC — external agents also use this endpoint. Bearer token authentication. [More details](/team/platform/hub-protocol) |
+| **Streaming** | Real-time streaming responses via Socket.IO + Yjs CRDTs. Agents stream tokens to frontends for typewriter-effect rendering. [More details](/team/studio/streaming) |
+
+## Chat surfaces
+
+| Surface | Implementation | Features |
+|---------|---------------|----------|
+| **Browser** | `ai-chat` cell in sidebar | Full chat, file uploads, entity suggestions |
+| **Relay** | Mobile chat screens | Quick capture via chat, voice input |
+| **Studio** | Dedicated studio app | Channel-based AI discussions |
+| **Raycast** | Extension commands | Quick AI queries from anywhere |
+
+## AI actions in chat
+
+When an AI agent needs to **mutate data** (create/update/delete entities), it goes through the proposal system:
+1. Agent creates a `Proposal` with proposed mutations
+2. If `DEFAULT_AUTO_APPROVE` applies, mutation is applied immediately
+3. Otherwise, user reviews and approves in the Proposals tab
+4. Proactive cells surface AI action opportunities for review
+
+## Key files
+
+- Chat architecture: [/team/platform/chat-architecture](/team/platform/chat-architecture)
+- Chat core: [/team/platform/chat-core](/team/platform/chat-core)
+- Hub Protocol: [/team/platform/hub-protocol](/team/platform/hub-protocol)
+- Agent system: [/team/intelligence/agent-system](/team/intelligence/agent-system)
+- Realtime streaming: [/team/platform/realtime](/team/platform/realtime)

@@ -1,6 +1,14 @@
 ---
-title: "Platform"
-description: "Backend architecture, data model, channel system, security, and feed system."
+title: 'Platform'
+description: 'Backend architecture, data model, channel system, security, and feed system.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Platform
@@ -19,6 +27,11 @@ Backend and data-platform source of truth for internal teams.
 - Platform and operations engineers
 - Product/ops teammates who need technical flow context
 
+## Universal onboarding (S-tier roadmap)
+
+- [Universal onboarding north star](/team/platform/universal-onboarding-north-star) — cross-app primary goals, shared contracts, alternate entry points
+- [S-tier Definition of Done](/team/platform/s-tier-definition-of-done) — release checklist
+
 ## Main flows
 
 - [Golden flows](/team/platform/golden-flows) — canonical cross-service flows
@@ -35,6 +48,7 @@ Backend and data-platform source of truth for internal teams.
 | [Entity profiles](/team/platform/entity-profiles) | Dynamic type system and property model |
 | [Property def scoping](/team/platform/property-def-scoping) | Global/profile/workspace layered schema behavior |
 | [Feed system](/team/platform/feed-system) | Signal, proactive, and notification feed architecture |
+| [Pod-to-pod sync](/team/platform/pod-to-pod-sync) | Replication workers, CP pair scope, observability endpoints |
 
 ## Dependencies
 
@@ -43,5 +57,5 @@ Backend and data-platform source of truth for internal teams.
 
 ## Related public docs
 
-- [/docs/architecture](/docs/architecture)
+- [/docs/architecture](/docs/architecture) — includes [Pod replication & pairing](/docs/architecture/concepts/pod-replication) (user-facing counterpart to [Pod-to-pod sync](/team/platform/pod-to-pod-sync))
 - [/docs/integrate](/docs/integrate)

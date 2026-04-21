@@ -1,0 +1,92 @@
+---
+title: 'Studio'
+description: 'Synap Studio — the unified web app. Channels + documents + agents, HeroUI.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Studio
+
+**Status:** Live on webpack, typecheck clean, real backend wired.
+**Location:** `synap-app/apps/studio/`
+**Port:** 3002
+**Stack:** Next.js 15 (App Router) · React 19 · HeroUI v2 · Tailwind v3 · next-themes · tRPC · Socket.IO
+
+---
+
+## Purpose
+
+Studio is the single focused web app. It replaces the earlier multi-app approach (data / views / documents / channels as separate surfaces) with one coherent shell built on HeroUI, organized around three core concepts:
+
+- **Channels** — every agent + every object has a canonical conversation.
+- **Documents** — rich markdown editing with AI proposal diffs.
+- **Agents** — your AI team, summoned via @mention or called directly.
+
+Plus the supporting surfaces: Tasks, Inbox, Graph, Entity detail, Home.
+
+The aesthetic target is the "ChatGPT 2028" mockup — premium, calm, modern. No shadows, semantic tokens everywhere, Fraunces headings, generous spacing.
+
+---
+
+## Target readers
+
+- Engineers building features in Studio
+- Designers iterating on the HeroUI surface
+- Product teammates understanding the channel + data-flow model
+- Anyone extending the provider chain, state, or realtime integration
+
+---
+
+## Main flows
+
+- [Architecture](/team/studio/architecture) — provider chain, state management, mappers
+- [Channels](/team/studio/channels) — the Discord-shaped model, sidebar, branches, pins
+- [Streaming](/team/studio/streaming) — how AI token streams wire into the UI
+- [Pages](/team/studio/pages) — route-by-route inventory of what's built
+- [Data Flow](/team/studio/data-flow) — proposal: Sources + Captures + Automations, CP-catalog model
+- [Packages](/team/studio/packages) — what Studio reuses from `@synap-core/*`
+- [Design System](/team/studio/design-system) — HeroUI patterns, semantic tokens, component rules
+
+---
+
+## Key Areas
+
+| Area | Description |
+|------|-------------|
+| [Architecture](/team/studio/architecture) | 10 providers, 2 Zustand stores, 3 mapper files |
+| [Channels](/team/studio/channels) | Discord-shaped sidebar · channel-per-object · branches |
+| [Streaming](/team/studio/streaming) | Socket.IO wire-up · streaming store · known gaps |
+| [Data Flow](/team/studio/data-flow) | **Proposed** next major surface — Sources / Captures / Automations |
+| [Pages](/team/studio/pages) | 11 routes, what's wired and what's stubbed |
+| [Packages](/team/studio/packages) | Reuse map across `@synap-core/*` |
+
+---
+
+## Status snapshot
+
+- ✅ Auth (CP sign-in + pod handshake), routing, sidebar, nav sections
+- ✅ Home, Channels (list + detail + DM resolver), Documents (list + detail with Tiptap + proposal diff), Agents (roster + detail + onboarding modal), Tasks (list + board), Inbox, Graph (reagraph), Entity detail
+- ✅ Token-level streaming via `StreamingBridge` + streaming store
+- ✅ @mention-to-route · branch-from-message · custom branch purpose · channel pins
+- ✅ Document embedded channel · inline title + description edit · admin pod link
+- ✅ Creation flows: documents, tasks
+- ⚠️ Agents tools/automations/activity tabs still mocked
+- ❌ Data Flow surface (this is what the [data-flow spec](/team/studio/data-flow) covers)
+- ❌ Mobile responsive, tests
+
+## Single-space UX
+
+Unlike Browser, Studio **does not expose multi-workspace to the user**. Every Studio session is one implicit space — no workspace switcher, no "which workspace am I in", no per-workspace settings panel. The tier implication is:
+
+- **Free tier** — shared pod, one workspace (multi-tenant pod).
+- **Pro tier** — own dedicated pod, one workspace.
+
+Upgrading doesn't mean "add a workspace." It means "get your own pod." Multi-workspace needs are eventually satisfied by users generating their own custom apps (future).
+
+This shapes everything: onboarding skips workspace-naming, the sidebar has no workspace switcher, and all settings are pod-wide.

@@ -1,6 +1,14 @@
 ---
-title: "Pod Backups"
-description: "Database backup and restore procedures."
+title: 'Pod Backups'
+description: Database backup and restore procedures.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Backup & Restore Guide
@@ -32,16 +40,20 @@ crontab -e
 
 Add this line:
 
-```
+```bash
+
 0 2 * * * cd /opt/synap && ./synap backup >> /var/log/synap-backup.log 2>&1
+
 ```
 
 ### Weekly Backups
 
 For weekly backups on Sunday at 3 AM:
 
-```
+```bash
+
 0 3 * * 0 cd /opt/synap && ./synap backup weekly-$(date +\%Y\%m\%d)
+
 ```
 
 ### Backup Retention

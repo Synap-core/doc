@@ -1,6 +1,14 @@
 ---
-title: "Security & Permissions"
-description: "Security model, threat surface, audit logging."
+title: 'Security & Permissions'
+description: 'Security model, threat surface, audit logging.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Backend — Security, Permissions & Validation
@@ -332,7 +340,8 @@ When a proposal is created (AI action was not whitelisted), a human must approve
 
 **File:** `packages/api/src/routers/proposals.ts`
 
-```
+```bash
+
 Human → proposals.approve(proposalId)
   ↓
 protectedProcedure (Kratos session)
@@ -345,6 +354,7 @@ Ownership check using aiGovernance.proposalApprovalPolicy:
 Execute materialization:
   document proposals → apply proposedContent to MinIO storage + DB
   entity proposals   → re-emit as *.validated event → worker materializes
+
 ```
 
 ---
@@ -353,7 +363,8 @@ Execute materialization:
 
 ### Human writing an entity
 
-```
+```yaml
+
 Browser request
   Kratos cookie → ctx.userId = "human-uuid"
   X-Workspace-Id → ctx.workspaceId = "ws-uuid"
@@ -373,11 +384,13 @@ checkPermissionOrPropose
   → return { granted: true }
   ↓
 db.insert(entities) ← immediate write
+
 ```
 
 ### AI agent writing an entity
 
-```
+```yaml
+
 Intelligence Hub request
   API key → ctx.userId = "agent-user-uuid"
   ctx.workspaceId = resolved from thread
@@ -405,6 +418,7 @@ checkPermissionOrPropose
   ↓
 entities.create returns early: { status: "proposed", proposalId }
 NO db.insert — pending human approval
+
 ```
 
 ---

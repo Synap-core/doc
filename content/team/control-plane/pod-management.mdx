@@ -1,6 +1,14 @@
 ---
-title: "Pod Management"
-description: "Pod-agent commands, auto-update pipeline, warm pool."
+title: 'Pod Management'
+description: 'Pod-agent commands, auto-update pipeline, warm pool.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Pod Management Architecture
@@ -8,6 +16,8 @@ description: "Pod-agent commands, auto-update pipeline, warm pool."
 ## Overview
 
 The Control Plane (CP) manages data pod lifecycle through **HTTP commands** sent to a lightweight **pod-agent** running on each pod. No SSH is used for ongoing management.
+
+**DNS / tunnels / exposure modes** (how the public hostname is created and optionally how tunnel agents are activated on the pod) are documented in **[Pod exposure orchestration](/team/control-plane/pod-exposure-orchestration)** — including the provision-job flow and pod-agent `configure` contract.
 
 ## Architecture
 
@@ -59,7 +69,8 @@ The pod-agent discovers everything from each request:
 
 ## Auto-Update Flow
 
-```
+```yaml
+
 1. CI builds new Docker image → pushes to GHCR
 2. GitHub webhook → POST /webhooks/github (HMAC-SHA256 verified)
 3. CP creates image_releases record, finds pods with auto_latest policy
@@ -71,11 +82,33 @@ The pod-agent discovers everything from each request:
    d. Script: docker compose pull → migrate → restart → health check
    e. On success: callback to CP → mark update completed
    f. On failure: rollback to previous version → callback with error
+
 ```
+
+### Manual triggers (who inserts `pod_updates`?)
+
+Only **`triggerPodUpdate`** (inside the `rolling-update` job) should create the canonical **`pod_updates`** row for HTTP-driven updates. Entry points must enqueue the job with a **concrete image tag** where possible:
+
+| Entry point | Target version |
+|-------------|----------------|
+| GitHub webhook | Tag from payload |
+| `POST /pods/:id/trigger-update` | Latest tag from `image_releases.is_latest` |
+| `POST /admin/pods/:id/action` (`update`) | Same resolution when operators do not pass `targetVersion` (avoid relying on the literal string `"latest"` as the only value) |
+
+Duplicating an insert in an admin route **before** the job runs produced orphan **pending** rows and confused the dashboard.
+
+### Admin dashboard & update-status UI
+
+Operational detail: which routes refresh, how `GET /admin/pods/:id/update-status` is built, and failure triage — see **[CP dashboard & pod update pipeline](/team/control-plane/cp-dashboard-updates)**.
+
+### External connect / provision connect
+
+Provisioning may call **`/api/provision/connect`** on the pod so the Data Pod can verify control-plane JWTs for other flows. That work is **orthogonal** to rolling updates: the update trigger still targets **`https://{customDomain}`** or **`https://{subdomain}.{APP_DOMAIN}`** for `pod-agent`, not a separate “external connection URL” field.
 
 ## Provisioning Flow
 
-```
+```bash
+
 1. User creates pod via dashboard
 2. CP creates Hetzner VPS with cloud-init:
    - Installs Docker + Docker Compose
@@ -84,6 +117,7 @@ The pod-agent discovers everything from each request:
 3. CP waits for pod health (GET /health)
 4. CP sends configure command to set env vars (IS credentials, etc.)
 5. Pod marked active
+
 ```
 
 ## Pod-Agent Details

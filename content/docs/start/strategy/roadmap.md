@@ -1,6 +1,14 @@
 ---
 sidebar_position: 2
-title: Roadmap
+title: 'Roadmap'
+description: Documentation covering Roadmap
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Roadmap

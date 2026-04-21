@@ -1,6 +1,14 @@
 ---
-title: "Monitor: Skills"
-description: "Skills monitoring — loaded skills, invocations, errors."
+title: 'Monitor: Skills'
+description: 'Skills monitoring — loaded skills, invocations, errors.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Skills System
@@ -9,13 +17,15 @@ Skills are **user-created, AI-generated tools** that extend what agents can do b
 
 ## Lifecycle
 
-```
+```typescript
+
 1. Request      → You ask an agent to "create a skill to calculate ROI"
 2. LLM Code Gen → Claude writes a JavaScript function body
 3. Validation   → Syntax checked via new Function(...)
 4. Storage      → Saved to the database with parameter schema
 5. Runtime Load → Fetched at agent startup, converted to Tool
 6. Execution    → Called by agents in sandboxed scope
+
 ```
 
 ## Structure

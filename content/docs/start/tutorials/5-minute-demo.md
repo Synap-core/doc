@@ -1,6 +1,14 @@
 ---
-title: 5-minute demo
+title: '5-minute demo'
 description: Rapid walkthrough for first-time Synap evaluation.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # 5-minute demo

@@ -1,6 +1,14 @@
 ---
-title: "Connections Architecture"
-description: "How services connect: pod, IS, CP, clients."
+title: 'Connections Architecture'
+description: 'How services connect: pod, IS, CP, clients.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Synap Connection Architecture
@@ -12,7 +20,8 @@ description: "How services connect: pod, IS, CP, clients."
 
 ## Quick Map
 
-```
+```bash
+
                         ┌─────────────────────────────────┐
                         │       Synap Control Plane        │
                         │       (api.synap.live)           │
@@ -46,11 +55,23 @@ description: "How services connect: pod, IS, CP, clients."
           │  – Web App (Next.js)   │  – LLM orchestration      │
           │  – Third-party app     │  – streaming responses    │
           └──────────────────┘     └──────────────────────────┘
+
 ```
 
 ---
 
 ## The Five Connection Types
+
+## 2026-04 external connect consolidation
+
+- **Pod is canonical** for integration key issuance and verification.
+- **Control Plane is bootstrap-only** for managed flows (pod selection + handshake token handoff).
+- External connect flows now return/propagate `flowId` traces for incident debugging.
+- Client surfaces should consume shared connect helpers rather than reimplementing deeplink/handshake glue.
+- CP pod discovery now includes a handshake connectability probe (`connectability.handshakeCapable`) so clients can block known-bad pod selections before users attempt login.
+- Shared auth exposes normalized handshake failures (`AuthHandshakeError`) with explicit stage/code to keep Relay/Browser/Raycast error handling consistent.
+
+This applies to managed Raycast/OpenClaw-like connect flows and pod admin `/admin/connect`.
 
 ### 1. Control Plane → Data Pod (CP-push)
 
@@ -223,7 +244,8 @@ The `dataPodApiKey` is how the Hub calls back into the pod (Hub Protocol). The h
 
 ## Pod Lifecycle
 
-```
+```bash
+
 User subscribes (Stripe checkout)
         │
         ▼
@@ -261,6 +283,7 @@ User activates intelligence →
         │
         ▼
 All AI messages now route to the Hub
+
 ```
 
 ---

@@ -1,6 +1,14 @@
 ---
-title: "Agent System"
-description: "OrchestratorAgent + PersonaAgent, registry, session memory, tools."
+title: 'Agent System'
+description: 'OrchestratorAgent + PersonaAgent, registry, session memory, tools.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Agent System — Intelligence Service
@@ -147,7 +155,8 @@ Routing table:
 
 ### System Prompt (core intent)
 
-```
+```bash
+
 You are the Orchestrator for Synap — a proactive co-founder AI, not just a reactive assistant.
 
 OPERATING MODE: CO-FOUNDER LOOP
@@ -159,6 +168,7 @@ OPERATING MODE: CO-FOUNDER LOOP
    - Layer 3: Challenges ("Have you considered...?")
    - Layer 4: Proposals (create, branch, link)
 4. Proactively link entities/documents to the thread
+
 ```
 
 ### Tool Set (full)
@@ -230,7 +240,8 @@ Specialists are narrow-purpose, single-task agents. Always spawned into branch c
 
 ## 8. Execution Pipeline
 
-```
+```bash
+
 POST /api/chat/stream
   │
   ├── Parse & validate input (agentType length guard: max 100 chars)
@@ -258,6 +269,7 @@ POST /api/chat/stream
   │     └── 12. recordSessionUsage() + mid-session compaction check (>80k tokens)
   │
   └── Stream SSE events: step → content → branch_decision → complete
+
 ```
 
 ---

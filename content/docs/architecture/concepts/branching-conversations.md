@@ -1,6 +1,14 @@
 ---
 sidebar_position: 4
-title: Branching Conversations
+title: 'Branching Conversations'
+description: Documentation covering Branching Conversations
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # Branching Conversations

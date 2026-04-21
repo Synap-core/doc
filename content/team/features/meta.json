@@ -1,0 +1,31 @@
+{
+  "title": "Features & Flows",
+  "description": "Cross-cutting features with end-to-end user flows, surface coverage, and code references",
+  "root": true,
+  "icon": "zap",
+  "pages": [
+    "index",
+    "---Data Ingest---",
+    "capture",
+    "import",
+    "search",
+    "---Data Organization---",
+    "entity-creation",
+    "entities-profiles",
+    "views",
+    "feeds",
+    "---Communication---",
+    "chat",
+    "channels",
+    "notifications",
+    "---Intelligence---",
+    "proactive-ai",
+    "workflows",
+    "automations",
+    "intelligence-orchestrator",
+    "---Infrastructure---",
+    "pod-sync",
+    "proposals-governance",
+    "onboarding"
+  ]
+}

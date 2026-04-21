@@ -1,0 +1,105 @@
+---
+title: 'Streaming'
+description: How Studio consumes the realtime AI stream; link to upstream protocol doc.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Streaming in Studio
+
+The end-to-end streaming protocol (IS → pod → frontend) is documented at [`intelligence/realtime-streaming`](/team/intelligence/realtime-streaming). This doc covers **only the Studio-side wiring**.
+
+---
+
+## What Studio consumes
+
+The pod emits five Socket.IO events during an in-flight AI reply. Studio dispatches on each:
+
+| Event | Payload | Studio behaviour |
+|---|---|---|
+| `chat:stream` | `{ threadId, type: "chunk", content, isComplete, seq? }` | `useStreamingStore.appendDelta(channelId, content, seq)` |
+| `ai:step` | `{ threadId, messageId, step, seq? }` | `appendStep(channelId, step)` — renders as inline pill |
+| `chat:stream:error` | `{ threadId, error }` | `setError(channelId, error)` — shows retry UI |
+| `chat:message` | `{ threadId, message, userId }` | `clear(channelId)` — real message lands via `useRealtimeSync`, bubble unmounts |
+| `branch_decision` / `route_to_channel` | (metadata) | Ignored — display TBD |
+
+---
+
+## Wiring
+
+### `components/providers/StreamingBridge.tsx`
+
+Subscribes to `socketIO.on("message", ...)` and dispatches on event type. Scoped to active `workspaceId` (pulled from `useWorkspaceStore`). Returns children unchanged — renders nothing.
+
+### `stores/streaming.ts`
+
+Zustand slice keyed by channelId. Shape per channel:
+
+```ts
+{
+  text: string;         // accumulated delta text
+  steps: AgentStep[];   // ai:step events in order
+  error?: string;
+  done: boolean;
+  lastSeq: number;      // defensive against out-of-order deltas
+  startedAt: number;
+}
+```
+
+Separate from TanStack Query cache on purpose — patching cache per token destroys perf ([research](/team/intelligence/realtime-streaming#known-gaps--planned-fixes)).
+
+### `app/(app)/channels/[id]/page.tsx`
+
+Reads via `useChannelStreamingState(id)`. On user send:
+1. `beginStream(id)` + store last message in a ref (for retry)
+2. Fire `chat.sendMessage.mutate(...)`
+3. If mutation fails with auth/rate-limit error, set store error
+
+Renders a streaming bubble via `<StreamingMessage />` while:
+- `sendMutation.isPending` (optimistic) OR
+- `streaming` slice has state for this channel
+
+### `components/chat/StreamingMessage.tsx`
+
+- Uses `useDeferredValue` on streaming text → rapid deltas don't block composer input
+- Renders agent steps as pills above the text (`Loader2` spinner while running, colored dot when done/error)
+- Error state shows a red banner with "Try again" link
+
+---
+
+## Error + retry flow
+
+1. `chat:stream:error` event → `setError(channelId, error)`
+2. StreamingMessage renders inline danger card with the error + Retry link
+3. User clicks Retry → `clearStream(id)` + re-fires last `onSend` (stored in ref)
+
+Also covers mutation-level errors (auth, rate limit) — these set the same store error path.
+
+---
+
+## Dedup on final message
+
+When `chat:message` lands:
+- `useRealtimeSync` patches `chat.getMessages` infinite query cache (appends the real message)
+- `StreamingBridge` clears the streaming slice
+- `MessageList` de-dupes by message id during render
+
+Result: streaming bubble unmounts on the same render that the real message appears. No flash.
+
+---
+
+## Known gaps
+
+Three operational gaps documented at [`intelligence/realtime-streaming#known-gaps--planned-fixes`](/team/intelligence/realtime-streaming#known-gaps--planned-fixes):
+
+1. **Backpressure** at high token rates → needs client rAF coalescing
+2. **Sequence numbers** not yet emitted by backend → dedup logic inert
+3. **Mid-stream resume** on socket reconnect → streaming bubble can get stuck
+
+Priority: **Gap 3 Tier 1 before Relay launch** (~20 lines in `StreamingBridge`). Gap 2 is 3-line backend change. Gap 1 only when integrating a 100+ tok/sec model.

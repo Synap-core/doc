@@ -1,6 +1,14 @@
 ---
-title: "Hold Menu Implementation"
-description: "Hold/long-press menu implementation for mobile and desktop."
+title: 'Hold Menu Implementation'
+description: Hold/long-press menu implementation for mobile and desktop.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Hold Menu — Implementation Plan
@@ -115,7 +123,8 @@ action callback if matched.
 
 ## Component tree
 
-```
+```typescript
+
 <PortalProvider>                          // _layout.tsx root
   <GestureHandlerRootView>               // _layout.tsx root
     <FlatList
@@ -131,10 +140,12 @@ action callback if matched.
     <PortalHost name="hold-menu" />       // _layout.tsx, above everything
   </GestureHandlerRootView>
 </PortalProvider>
+
 ```
 
 Inside `HoldMenuTrigger`:
-```
+```yaml
+
 <GestureDetector gesture={panGesture}>
   <Animated.View ref={cardRef}>
     {renderCard({ focused: isActive })}   // card can style itself when focused
@@ -158,6 +169,7 @@ Inside `HoldMenuTrigger`:
     </>
   )}
 </Portal>
+
 ```
 
 ### HoldMenuOverlay

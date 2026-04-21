@@ -18,6 +18,8 @@
     "Operations",
     "operations-guide",
     "pod-management",
+    "pod-exposure-orchestration",
+    "cp-dashboard-updates",
     "deploy-checklist",
     "incident-runbook",
     "slos",

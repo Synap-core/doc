@@ -1,5 +1,14 @@
 ---
 sidebar_position: 4
+title: 'N8n'
+description: Documentation covering N8n
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 # n8n Integration
@@ -65,11 +74,13 @@ The API key is shown only once. Store it securely (e.g., in n8n credentials).
 
 In n8n:
 
-```
+```bash
+
 Credentials > Add > HTTP Header Auth
   Name: Synap API Key
   Header Name: Authorization
   Header Value: Bearer synap_user_abc123xyz...
+
 ```
 
 ### 3. Use in Workflows

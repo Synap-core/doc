@@ -1,6 +1,14 @@
 ---
 sidebar_position: 1
-title: Architecture
+title: 'Architecture'
+description: Documentation covering Architecture
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+hide_title: false
+toc: true
 ---
 
 > **Synap** is a **Sovereign AI Workspace** — a Personal Data Operating System. We provide "Workspace as a Service" where the user owns a sovereign Data Pod.

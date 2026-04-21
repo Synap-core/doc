@@ -1,0 +1,114 @@
+---
+title: 'Pod exposure orchestration'
+description: 'CP-agnostic exposure modes, DNS vs tunnel, code map, and operator checklist.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Pod exposure orchestration
+
+This page is the **handoff** for engineers (and AI agents) working on pod reachability: DNS, tunnels, Control Plane jobs, and pod-agent.
+
+## Goals of the design
+
+- **Decouple** “how traffic reaches the pod” from “Synap CP is the only orchestrator”.
+- Keep **defaults identical** to historical behavior: managed Control Plane + **direct DNS** (A record to server IP).
+- Allow future / optional paths: **Cloudflare Tunnel** (CP-managed) and orchestration modes `managed_cp` | `self_managed` | `delegated_cp` (adapters are intentionally thin until product wires delegated/self APIs).
+
+> **Pangolin is deliberately not a CP exposure mode.** Pangolin is self-hosted-only: operators run their own Pangolin server and activate the `pangolin-tunnel` compose profile in their pod's docker-compose. Synap doesn't host a Pangolin server and doesn't ship Pangolin API credentials — orchestrating it from the CP would require infrastructure Synap doesn't own. Cloudflare is different: Synap holds the Cloudflare account, so CP can create per-pod named tunnels on the operator's behalf. The split is intentional. See `synap-control-plane-api/drizzle/0026_remove_pangolin_exposure_mode.sql`.
+
+## Data model (Control Plane DB)
+
+On `data_pods` (Drizzle schema `synap-control-plane-api/src/db/schema/pods.ts`):
+
+| Column | Enum / type | Default | Meaning |
+|--------|-------------|---------|---------|
+| `orchestration_mode` | `managed_cp` \| `self_managed` \| `delegated_cp` | `managed_cp` | Who owns lifecycle / policy for exposure config |
+| `exposure_mode` | `direct_dns` \| `cloudflare_tunnel` | `direct_dns` | Which **ExposureProvider** runs at provision time |
+
+SQL migrations: `synap-control-plane-api/drizzle/0023_orchestration_and_exposure_modes.sql` (initial), `0026_remove_pangolin_exposure_mode.sql` (drop `pangolin_tunnel` value).
+
+**Deploy requirement:** run Control Plane DB migrations before rolling out API code that inserts/updates these columns.
+
+## Runtime flow (provision job)
+
+File: `synap-control-plane-api/src/jobs/provision-pod.ts`.
+
+1. After server IP is known (managed or self-hosted DNS path), the job loads `orchestrationMode` / `exposureMode` from `data_pods`.
+2. **`getControlPlaneAdapter(mode)`** — `synap-control-plane-api/src/services/provisioning/orchestration/factory.ts`  
+   Today all adapters return the same `ExposureConfigureInput` (pass-through). Hook for delegated/self logic later.
+3. **`getExposureProvider(mode)`** — `synap-control-plane-api/src/services/provisioning/exposure/factory.ts`  
+   Respects env flag `EXPOSURE_CLOUDFLARE_TUNNEL_ENABLED`.  
+   If a tunnel mode is requested but the flag is false, **mode falls back to `direct_dns`** (safe default). Legacy `pangolin_tunnel` strings (from pre-0026 clients or archived rows) also fall back to `direct_dns` — they are not an enabled mode and `isExposureModeEnabled("pangolin_tunnel")` returns `false`, so the route guards return HTTP 501 before provisioning is even scheduled.
+4. **`ExposureProvider.configure` / `verify`** — polling loop replaces the old `waitForDNS`-only path for abstraction symmetry.
+5. After **health** succeeds (`wait_health`), if the runtime config contains **env vars or compose profiles**, the job sends **`configure`** to pod-agent (JWT-signed), same transport as OpenClaw provisioning.
+
+## ExposureProvider implementations
+
+| Provider | File | Status |
+|----------|------|--------|
+| `direct_dns` | `src/services/provisioning/exposure/direct-dns.ts` | **Production**: creates/updates A record, `verify` uses DNS resolve vs IP |
+| `cloudflare_tunnel` | `src/services/provisioning/exposure/cloudflare-tunnel.ts` | Behind `EXPOSURE_CLOUDFLARE_TUNNEL_ENABLED` — see the Cloudflare Tunnel API client in the same directory |
+| ~~`pangolin_tunnel`~~ | removed 2026-04-17 (migration 0026) | Pangolin is self-hosted-only; operators use the `pangolin-tunnel` compose profile in `synap-backend/deploy/docker-compose.yml` |
+
+### Known limitation (direct DNS + DNS vendor)
+
+`DirectDnsExposureProvider` currently constructs **`CloudflareDNSProvider`** internally. Other call sites use **`getDnsProvider()`** (`src/services/provisioning/dns/factory.ts`) to pick Cloudflare vs Namecheap. If you run CP with **Namecheap-only** DNS, the exposure layer may still call Cloudflare until this is unified — track as follow-up.
+
+## DNS factory (non-exposure callers)
+
+`getDnsProvider()` is used from routes/jobs that only need generic DNS (subdomain collision checks, deprovision delete, etc.):
+
+- `src/routes/pods.ts`, `self-hosting.ts`, `openclaw.ts`, `admin.ts`
+- `src/jobs/deprovision-pod.ts`, `archive-pod.ts`, `restore-pod.ts`
+
+Namecheap gained **`subdomainExists`** for parity with Cloudflare (`src/services/provisioning/dns/namecheap.ts`).
+
+## Pod-agent: configure contract
+
+- Server: `synap-backend/deploy/pod-agent/server.js`  
+  `configure` maps `envVars` as either **`Record<string,string>`** or **`string[]` of `KEY=value`** (shell args to `configure-pod.sh`).
+- Script: `synap-backend/deploy/configure-pod.sh` — writes `.env`, optional `--profile` activation.
+
+## Docker: optional tunnel profiles
+
+`synap-backend/deploy/docker-compose.yml` defines optional services:
+
+- Profile **`cloudflare-tunnel`**: `cloudflared` image, expects `CLOUDFLARED_TUNNEL_TOKEN` in `.env`. The CP-managed provider injects this token via pod-agent `configure`.
+- Profile **`pangolin-tunnel`**: **self-hosted-only**. The operator brings their own Pangolin server (running somewhere they control) and pastes a Newt site-connector token into the pod's `.env`. The CP does NOT orchestrate this profile — it exists purely for operator-driven deployments (`./synap tunnel enable pangolin --token <NEWT_TOKEN>` in the self-hosted CLI flow). The placeholder alpine sleep container is pending replacement with a real `fosrl/newt` container once the self-hosted CLI work lands.
+
+The `cloudflare-tunnel` profile is emitted by the CP-managed `CloudflareTunnelExposureProvider`; the `pangolin-tunnel` profile is only activated by the operator's own CLI.
+
+## API surface (user / dashboard)
+
+- **`POST /pods`** — optional body fields `orchestrationMode`, `exposureMode` (`src/routes/pods.ts`). `exposureMode` is a zod enum of `direct_dns | cloudflare_tunnel`. Invalid tunnel without env flag → **501**.
+- **`POST /pods/:id/provisioning-setup`** — same optional fields persisted before provision trigger.
+- **`POST /self-hosting/provision`** — optional `orchestrationMode`, `exposureMode`; self-hosted rows default `orchestrationMode: self_managed` unless overridden.
+
+Shared types for clients: `synap-control-plane-api/packages/control-plane-types/src/pods.ts`.
+
+Legacy clients that send `exposureMode: "pangolin_tunnel"` are rejected at the zod layer with a 400; if a pre-0026 row somehow still carries that value (shouldn't happen — the migration rewrites them to `direct_dns`), `getExposureProvider()` normalises it to the direct-DNS provider.
+
+## Tests
+
+- `src/__tests__/integration/exposure-factory.integration.test.ts` — asserts tunnel modes fall back to `direct_dns` when flags are off.
+
+## Operator checklist: “can I reprovision?”
+
+1. **Migrate CP DB** so `orchestration_mode` / `exposure_mode` exist.
+2. Deploy **CP API** + **worker** (Trigger/pg-boss) versions together.
+3. For **default managed pods**: leave `exposureMode` unset or `direct_dns` — behavior matches pre-refactor DNS + health polling.
+4. `cloudflare_tunnel` is gated on `EXPOSURE_CLOUDFLARE_TUNNEL_ENABLED=true` + a valid `CLOUDFLARE_ACCOUNT_ID`; enable it deliberately when you're ready for per-pod named tunnels.
+5. There is no `pangolin_tunnel` mode. If a user wants a Pangolin-backed pod, they run it self-hosted: they bring their own Pangolin server and activate the `pangolin-tunnel` compose profile via `./synap tunnel enable pangolin --token <TOKEN>`. The CP is not in that loop.
+
+## Related docs
+
+- [Pod Management](./pod-management) — pod-agent command matrix  
+- [Ingress & tunnels](/team/technologies/ingress-and-tunnels) — Caddy vs Traefik vs Eve  
+- Public: [Tunnels and domains](/docs/architecture/deployment/data-pod/tunnels-and-domains) — user-facing guidance  

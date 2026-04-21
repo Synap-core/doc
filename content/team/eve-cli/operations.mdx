@@ -1,0 +1,57 @@
+---
+title: 'Operations & hosting'
+description: >-
+  Paths on disk, Docker vs LXC, Proxmox CT, sysctl/runc errors, and where logs
+  live.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Two trees on the server (do not confuse)
+
+| Path (typical) | What it is |
+|----------------|------------|
+| **`/opt/eve`** | **Eve / hestia-cli** clone — where you run **`pnpm … eve`**. **`.eve/`** state is relative to **this cwd** (or whatever directory you `cd` into when running `eve`). |
+| **`/opt/synap-backend`** | **Synap backend** checkout — **`synap install`** uses **`cwd` = repo root** and **`SYNAP_DEPLOY_DIR`** = `…/deploy`. **`docker compose`** for Synap must run from **`…/deploy`**, not from `/opt/eve`. |
+
+Running **`docker compose logs realtime`** from **`/opt/eve`** hits the **wrong compose file** (or no `realtime` service). Always **`cd` to the Synap deploy directory** for Data Pod logs.
+
+---
+
+## Docker inside LXC / Proxmox CT
+
+Nested containers often need:
+
+- **Nesting** enabled on the CT (`features: nesting=1` in Proxmox).
+- Sometimes **keyctl** or **privileged** CT — see host docs.
+
+**Typical error:** `open sysctl net.ipv4.ip_unprivileged_port_start … permission denied` during **`runc` create** — this is **host/CT capability**, not a missing Synap `.env` value. See **[Stack & tools — Docker & LXC](/team/technologies/docker-and-containers)**.
+
+---
+
+## Synap install: tarball vs git
+
+If the backend tree was extracted from a **tarball** (no **`.git`**), **`synap install`** must still recognize **`deploy/docker-compose.yml`** at the repo root — otherwise it may try to clone into **`/opt/synap-backend/synap-backend`**. Backend **`synap`** script encodes this; Eve sets **`SYNAP_REPO_ROOT`** and **`SYNAP_DEPLOY_DIR`** so installs anchor correctly. Details: [Synap integration](/team/eve-cli/synap-integration).
+
+---
+
+## Logs cheat sheet
+
+| Goal | Where |
+|------|--------|
+| Synap **realtime** build failure | Build output of **`docker compose build realtime`** from **`synap-backend/deploy`** — container may not exist yet; **`docker compose logs realtime`** only after **`up`**. |
+| Synap stack | `cd /opt/synap-backend/deploy && docker compose logs <service>` |
+| Eve-side services | Compose files under Eve repo / organ commands — check **`eve`/`README`** for service names |
+
+---
+
+## Related internal docs
+
+- **[DevOps](/team/devops/index)** — generic pod onboarding, security.
+- **[Control plane — pod install](/team/control-plane/pod-install)** — managed pod flows (contrast with raw self-host).

@@ -1,0 +1,39 @@
+---
+title: 'Workflows'
+description: 'AI-powered workflow orchestration — multi-step sequences with intelligence service coordination, cell composition'
+surfaces: ['browser', 'studio']
+repos: ['synap-app', 'synap-intelligence-service']
+status: 'shipped'
+last_updated: '2026-04-20'
+---
+
+# AI Workflows
+
+AI workflows leverage the intelligence service to orchestrate multi-step user tasks across Synap surfaces. Unlike automations (which are rule-based), workflows involve AI decision-making at each step.
+
+## How it works
+
+| Component | Description |
+|-----------|-------------|
+| **AI Orchestration** | The OrchestratorAgent receives a user request and decomposes it into sub-tasks. Each sub-task is assigned to a skill or persona agent. Results are composed into a final response. |
+| **Cell Composition** | Agents compose existing cells (60+ built-in) to build custom experiences. AI can also create new cell types (proposal-gated, iframe sandbox). This is the "AI action" part of the workflow. |
+| **Proposal Governance** | All AI-generated mutations go through proposals. The workflow tracks what it proposes, and the user approves/rejects. This keeps humans in the loop. [More details](/team/features/proposals-governance) |
+| **Skill System** | Each skill is a modular capability the AI can use: entities, views, documents, automations, workspace, hub protocol, widgets. Skills are like tools for the intelligence agents. [More details](/team/intelligence/skill-hub-protocol) |
+
+## Workflow vs Automation
+
+| Aspect | Workflow | Automation |
+|--------|----------|-----------|
+| Trigger | User request (chat/CLI/Raycast) | Event or schedule |
+| Decision | AI (OrchestratorAgent) | Rules/templatized |
+| Flexibility | Dynamic, natural language | Static, predefined |
+| Governance | Always proposals | Conditional |
+| Example | "Summarize my projects and create a weekly report" | "When task status=pending for 7 days, notify manager" |
+
+## Key files
+
+- Intelligence agent system: [/team/intelligence/agent-system](/team/intelligence/agent-system)
+- Intelligence skills: [/team/intelligence/skill-hub-protocol](/team/intelligence/skill-hub-protocol)
+- Cell composition: `@synap/capabilities` (60+ registered cells)
+- Proposal system: [/team/features/proposals-governance](/team/features/proposals-governance)
+- Cell runtime: `@synap/cell-runtime`

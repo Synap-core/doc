@@ -1,6 +1,14 @@
 ---
-title: "View Type: Flow"
-description: "Flow/graph view skill guidance."
+title: 'View Type: Flow'
+description: Flow/graph view skill guidance.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Skill: Flow View
@@ -10,12 +18,14 @@ Use for process maps, pipelines, decision trees, org charts, or agent orchestrat
 
 ## Creating a flow view
 
-```
+```yaml
+
 create_view({
   name: "Onboarding Process",
   type: "flow",
   profileId: "<task-profile-id>"
 })
+
 ```
 
 Nodes and edges are part of the view `config` and can be updated via `update_view` (creates a proposal).

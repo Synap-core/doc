@@ -1,5 +1,14 @@
 ---
-sidebar_position: 6
+title: Building Agents
+description: Documentation covering Building Agents
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
 ---
 
 # Building AI Agents

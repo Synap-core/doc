@@ -1,4 +1,6 @@
 // Export all components
+export { SynapFlowDiagram } from './mdx/SynapFlowDiagram';
+export type { SynapFlowDiagramProps } from './mdx/SynapFlowDiagram';
 export { AuthGuard } from './AuthGuard';
 export { SpaceSwitcher } from './SpaceSwitcher';
 export { SignIn } from './auth/SignIn';

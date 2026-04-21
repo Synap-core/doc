@@ -1,4 +1,4 @@
 {
   "title": "Agents",
-  "pages": ["index", "synap-ai", "openclaw", "channels-and-agents", "mcp", "skills"]
+  "pages": ["index", "connect", "synap-ai", "skills", "mcp", "channels-and-agents", "openclaw"]
 }

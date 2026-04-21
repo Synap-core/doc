@@ -6,7 +6,7 @@ import {
   DocsDescription,
 } from 'fumadocs-ui/page';
 import { notFound } from 'next/navigation';
-import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { mdxComponents } from '@/lib/mdx-components';
 import type { Metadata } from 'next';
 
 interface Props {
@@ -23,11 +23,11 @@ export default async function Page({ params }: Props) {
   const MDX = page.data.body;
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full} lastUpdate={page.data.lastModified}>
+    <DocsPage toc={Array.isArray(page.data.toc) ? page.data.toc : []} full={page.data.full} lastUpdate={page.data.lastModified}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
-        <MDX components={defaultMdxComponents} />
+        <MDX components={mdxComponents} />
       </DocsBody>
     </DocsPage>
   );

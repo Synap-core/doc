@@ -1,0 +1,13 @@
+{
+  "title": "Stack & tools",
+  "description": "External references and short notes on technologies Eve and Synap compose stacks use",
+  "root": true,
+  "icon": "network",
+  "pages": [
+    "index",
+    "rsshub",
+    "docker-and-containers",
+    "ollama-and-inference",
+    "ingress-and-tunnels"
+  ]
+}

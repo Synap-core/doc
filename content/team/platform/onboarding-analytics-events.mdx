@@ -1,0 +1,42 @@
+---
+title: 'Onboarding analytics events'
+description: >-
+  Canonical event names for funnel measurement — align with
+  @synap-core/onboarding-core.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-20'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Onboarding analytics events
+
+**Source of truth (code):** `synap-app/packages/core/onboarding-core/src/analytics-events.ts` (`OnboardingAnalyticsEvents`).
+
+Emit these from Relay, Browser, and other clients when integrating product analytics (PostHog, internal pipeline, etc.).
+
+| Constant | Event name | When to emit |
+|----------|------------|--------------|
+| `SESSION_START` | `onboarding.session.start` | User enters onboarding flow |
+| `SESSION_COMPLETE` | `onboarding.session.complete` | Primary goal achieved or user explicitly finishes |
+| `SESSION_ABANDON` | `onboarding.session.abandon` | Session ends without complete (timeout / dismiss) |
+| `PRIMARY_GOAL_SET` | `onboarding.primary_goal.set` | Primary goal confirmed or changed |
+| `SECONDARY_GOAL_ADDED` | `onboarding.secondary_goal.add` | User or agent adds a secondary objective |
+| `MEMORY_STORED` | `onboarding.memory.stored` | Durable memory write (respect privacy policy) |
+| `CLARIFY_PROMPT_SHOWN` | `onboarding.clarify.prompt_shown` | Agent asked a clarifying question |
+| `IMPORT_ENTRY` | `onboarding.entry.import` | User started import-everything path |
+| `TEMPLATE_ENTRY` | `onboarding.entry.template` | User started workspace-from-template path |
+
+**Recommended properties:** `app` (relay | browser | content), `entryType`, `primaryGoal`, `workspaceId` (hashed if required).
+
+---
+
+## Changelog
+
+| Date | Change |
+|------|--------|
+| 2026-04 | Initial catalog for Phase 0 measurement. |

@@ -1,0 +1,312 @@
+---
+title: 'MCP (Model Context Protocol)'
+description: >-
+  Two-way Model Context Protocol integration: agents connect to external MCP
+  servers, and Synap exposes its own tools/resources/prompts to external
+  AI systems.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-21'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Model Context Protocol (MCP)
+
+Synap implements **two complementary MCP directions**:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Intelligence Hub (IS)                     │
+│                                                              │
+│  Agent: "I need browser automation"                          │
+│    → request_mcp tool creates a `channel.mcp.add` proposal   │
+│    → User approves                                            │
+│    → mcp-client-manager.connects to Playwright MCP server    │
+│    → MCP tools adapted to internal Tool objects              │
+│    → Agent calls mcp_playwright_navigate, etc.               │
+│                                                              │
+│  Transport: stdio (spawns process) or HTTP (remote server)   │
+│  Governance: approval gating + proposal system               │
+└────────────────────────────┬─────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────┐
+│                        Backend API                            │
+│                                                              │
+│  POST /mcp  (or stdin/stdout)                                │
+│  External MCP clients call Synap's tools, resources, prompts │
+│                                                              │
+│  Tools: search, entity CRUD, document management, memory     │
+│  Resources: synap:// URIs for entities and threads           │
+│  Prompts: create_project_structure, analyze_entity_relations │
+│  Governance: Bearer API key auth + scope + proposals         │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## 1. MCP as Client (Agent → External MCP Servers)
+
+### The Problem
+
+Agents need capabilities beyond Synap's built-in tools — browser automation, web scraping, file system access, domain-specific APIs. Rather than building every integration from scratch, IS uses MCP as a universal tool protocol.
+
+### Connection Flow
+
+```bash
+┌─ Workspace owner adds config ───────────────────────────────┐
+│ workspaces.settings.mcpServers = [                         │
+│   { id: "playwright", name: "Playwright",                 │
+│     transport: "stdio", command: "npx",                   │
+│     args: ["@playwright/mcp@latest"] }                     │
+│ ]                                                          │
+└──────────────────────┬─────────────────────────────────────┘
+                       │ stored in DB (mcp_servers table)
+                       │
+┌─ Agent needs a capability ────────────────────────────────┐
+│ Agent calls `request_mcp` tool                             │
+│   → Lookup server by slug in workspace settings            │
+│   → Create `channel.mcp.add` proposal                      │
+│   → User approves via Proposals page                       │
+│   → mcp-client-manager connects (lazy, cached)             │
+│   → mcp-tool-adapter converts tools to internal Tool obj   │
+│   → Agent can now call mcp_{serverId}_{toolName}           │
+└────────────────────────────────────────────────────────────┘
+```
+
+### `request_mcp` Tool
+
+Agents call this when they need a capability not available through built-in tools:
+
+| Parameter | Description |
+|-----------|-------------|
+| `mcpServerSlug` | Workspace MCP server slug to request (e.g. `'playwright'`, `'firecrawl'`) |
+| `reason` | Why this MCP is needed — shown to user in approval dialog |
+
+Creates a `channel.mcp.add` proposal. User sees it in the Proposals page, approves/denies. Once approved, the agent gains access to all tools from that MCP server in the current channel context.
+
+### Transports
+
+| Transport | How it works | Use case |
+|-----------|-------------|----------|
+| **stdio** | Spawns a local process with command + args + env vars | CLI tools, npm packages, local executables (`npx @playwright/mcp@latest`, `npx @mendable/firecrawl-mcp`) |
+| **http** | Connects to remote server via StreamableHTTP transport | SaaS MCP servers running on their own infrastructure |
+
+### Connection Caching
+
+`mcp-client-manager` maintains a `Map<string, CachedConnection>`:
+
+- Keyed by JSON-serialized config (`id + transport + command/args/url`)
+- Max 100 active connections (oldest evicted when full)
+- Background cleanup every 10 minutes removes closed/errored connections
+- `evictServer(id)` invalidates cache on config change
+- `cleanupAllMcpConnections()` called at process exit
+
+### Tool Naming & Adaptation
+
+Each MCP tool becomes an internal Synap Tool with a deterministic name:
+
+```
+mcp_{serverId}_{toolName}
+```
+
+Example: `mcp_playwright_navigate`, `mcp_firecrawl_scrape_url`
+
+**JSON Schema → Zod conversion:** The adapter converts MCP tool input schemas (JSON Schema) to Zod schemas dynamically, handling `object`, `string`, `number`, `integer`, `boolean`, `array` types. Unknown/complex types (union, nullable) fall back to `z.unknown()` so agents can still call them.
+
+**Default category:** `context` — no auto-approve restriction. Governance for write tools is handled by the underlying MCP server itself. If stricter governance is needed, configure via `autoApproveFor` in workspace AI governance settings.
+
+## 2. MCP as Server (External AI → Synap)
+
+Synap exposes its own data and capabilities as an MCP server. External AI tools, IDE extensions, or automation systems can connect and call Synap tools directly.
+
+### Endpoints
+
+| Protocol | Entry Point | Auth |
+|----------|-------------|------|
+| **HTTP** | `POST /mcp` (JSON-RPC over StreamableHTTP) | `Authorization: Bearer <hub-protocol-api-key>` |
+| **stdio** | `STDIN/STDOUT` (MCP protocol) | `MCP_USER_ID` env var (prod guard) |
+
+### MCP Server Capabilities
+
+**`synap-mcp-server` v1.0.0** — supports: **tools**, **resources**, **prompts**
+
+#### Tools (16 total)
+
+**Read tools** (protected by `mcp.read` scope):
+
+| Tool | Description |
+|------|-------------|
+| `synap_search` | Unified search across entities, documents, views, projects, agents |
+| `synap_search_entities` | Search entities by `profileSlug` with keyword filter |
+| `synap_get_entities` | List entities filtered by `profileSlug` (browse all) |
+| `synap_get_entity` | Single entity by ID (full details + profile) |
+| `synap_get_document` | Get document by ID (full markdown content) |
+| `synap_recall_facts` | Keyword search on memory/facts |
+| `synap_get_thread_context` | Full thread context (messages + linked entities) |
+| `synap_list_proposals` | List pending/approved/rejected proposals |
+| `synap_list_profiles` | List available entity types in workspace |
+| `synap_get_relations` | Inbound + outbound entity relations |
+
+**Write tools** (protected by `mcp.write` scope, may return `"proposed"`):
+
+| Tool | Description |
+|------|-------------|
+| `synap_create_entity` | Create new entity (governed by `checkPermissionOrPropose`) |
+| `synap_update_entity` | Update entity (propose or direct based on permissions) |
+| `synap_create_document` | Create long-form markdown document |
+| `synap_remember_fact` | Store fact in persistent memory (auto-approved) |
+| `synap_link_entities` | Create typed relation between entities |
+| `synap_send_message` | Send message to a channel (direct insert, no proposal) |
+
+#### Resources (4 static + dynamic)
+
+Static resources expose commonly-used entity collections:
+
+| URI | Description |
+|-----|-------------|
+| `synap://entities/tasks` | All tasks |
+| `synap://entities/contacts` | All contacts |
+| `synap://entities/projects` | All projects |
+| `synap://entities/notes` | All notes |
+
+Dynamic resources resolve `synap://entities/{type}/{id}` and `synap://threads/{threadId}` on request.
+
+#### Prompts (2 templates)
+
+| Prompt | Purpose |
+|--------|---------|
+| `create_project_structure` | Scaffold a project with tasks + milestones |
+| `analyze_entity_relationships` | Analyze entity relationships and provide insights |
+
+## 3. Governance & Security
+
+### MCP Client Side (Synap → External Servers)
+
+| Layer | Mechanism | Detail |
+|-------|-----------|--------|
+| **Approval gating** | `mcp_servers.approved` defaults to `false` | Owner must explicitly approve before tools are injected into LLM requests |
+| **Admin-only config** | tRPC `create/update/delete` require owner/admin | Workspace members can list but not configure |
+| **Agent proposal** | `request_mcp` creates `channel.mcp.add` | Agent cannot directly add servers — must propose and wait for approval |
+| **Scope** | Per-server, per-transport, per-workspace | Each server config includes workspace scoping |
+| **Connection cache** | Soft cap at 100 connections | Prevents resource exhaustion |
+
+### MCP Server Side (External → Synap)
+
+| Layer | Mechanism | Detail |
+|-------|-----------|--------|
+| **Auth** | Bearer API key via `validateApiKey()` | Same key system as Hub Protocol |
+| **Scopes** | `mcp.read` / `mcp.write` | Read tools vs write tools separated |
+| **Rate limiting** | 100 req/min per key | Hub Protocol rate limiter |
+| **Proposal governance** | Write tools → `checkPermissionOrPropose()` | Same governance as Hub Protocol callers |
+| **Auto-approved exception** | `synap_remember_fact` never proposes | Knowledge injection is always safe |
+| **Stdio guard** | Production requires `MCP_USER_ID` env var | Prevents anonymous stdio access in production |
+
+## 4. Database Schema
+
+### `mcp_servers` table
+
+Promoted from `workspaces.settings.mcpServers[]` (JSONB) to a proper relational table for per-server status tracking, approval gating, and efficient queries:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `id` | uuid | random | Primary key |
+| `workspaceId` | uuid (nullable) | nullable | FK to workspaces, cascade delete |
+| `slug` | text | — | Unique within workspace |
+| `name` | text | — | Human-readable label |
+| `description` | text | nullable | Optional description |
+| `transport` | enum | — | "stdio" \| "http" |
+| `command` | text | nullable | Executable path (stdio only) |
+| `args` | jsonb | `[]` | Arguments as array (stdio only) |
+| `url` | text | nullable | Server URL (http only) |
+| `env` | jsonb | `{}` | Env vars for stdio process |
+| `enabled` | boolean | `true` | Toggle without removing |
+| `approved` | boolean | `false` | Owner approval required |
+| `status` | enum | `"unknown"` | "connected" \| "disconnected" \| "error" \| "unknown" |
+| `lastPingAt` | timestamp | nullable | Health tracking |
+| `errorMessage` | text | nullable | Last error details |
+| `metadata` | jsonb | `{}` | Server manifest data |
+| `createdAt` | timestamp | now | |
+| `updatedAt` | timestamp | now | |
+
+**Indexes:** `(workspaceId, slug)` unique, `workspaceId`, `status`
+
+### `workspaces.settings.mcpServers` (JSONB)
+
+Legacy location — still supported for config but `mcp_servers` table is the canonical source for lifecycle and governance:
+
+```typescript
+interface McpServerConfig {
+  id: string;      // slug within workspace
+  name: string;
+  transport: "stdio" | "http";
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  enabled?: boolean;
+}
+```
+
+## 5. Cross-Service Communication
+
+### Backend ↔ Intelligence Hub
+
+| Operation | Endpoint | Auth |
+|-----------|----------|------|
+| `mcp-servers ping` | `POST ${hubUrl}/api/mcp/ping` | `X-API-Key` header |
+| `mcp-servers listTools` | `POST ${hubUrl}/api/mcp/tools` | `X-API-Key` header |
+| Agent request MCP | Hub Protocol `createProposal(channel.mcp.add)` | `Bearer` token |
+| List MCP servers | Hub Protocol `listMcpServers(workspaceId)` | `Bearer` token |
+
+### Tool Resolution Chain
+
+```bash
+Agent calls request_mcp
+  → Hub Protocol createProposal(channel.mcp.add)
+    → Backend tRPC mcp-servers.create
+      → mcp_servers row created (approved=false)
+        → Admin sets approved=true
+          → mcp-client-manager.connects on next agent call
+            → mcp-tool-adapter.adaptMcpTool()
+              → Tool injected into agent's tool map
+  ```
+
+### tRPC Endpoints (mcp-servers router)
+
+| Method | Permission | Purpose |
+|--------|-----------|---------|
+| `list` | any workspace member | List all MCP servers (workspace + global) |
+| `create` | owner/admin | Add new MCP server to workspace |
+| `update` | owner/admin | Update server configuration |
+| `setApproved` | owner only | Approve or revoke (security-critical) |
+| `ping` | owner/admin | Test connectivity via Intelligence Hub |
+| `listTools` | any workspace member | Query live tools from connected Hub |
+| `delete` | owner/admin | Remove server (cascade) |
+
+All write operations call `invalidateMcpCache(workspaceId)` for cache consistency.
+
+## 6. JSON-Schema → Zod Conversion
+
+`mcp-tool-adapter` converts MCP tool definitions to Zod schemas so agents can call tools with proper validation:
+
+| JSON Schema type | Zod equivalent |
+|------------------|----------------|
+| `object {properties}` | `z.object(shape)` + required fields non-optional |
+| `string` | `z.string()` |
+| `number` / `integer` | `z.number()` |
+| `boolean` | `z.boolean()` |
+| `array {items}` | `z.array(itemsSchema)` |
+| anything else | `z.unknown()` |
+
+All descriptions are mapped via `.describe()`. Union types, nullable, and other advanced schemas fall back to `z.unknown()` to keep agents functional.
+
+## 7. Implementation Sources
+
+- **MCP Client:** `synap-intelligence-service/apps/intelligence-hub/src/mcp/`
+- **MCP Admin Tool:** `synap-intelligence-service/apps/intelligence-hub/src/tools/workspace/request-mcp-tool.ts`
+- **Backend MCP Server:** `synap-backend/packages/api/src/routers/mcp/`
+- **Database Schema:** `synap-backend/packages/database/src/schema/mcp-servers.ts`
+- **tRPC API:** `synap-backend/packages/api/src/routers/mcp-servers.ts`

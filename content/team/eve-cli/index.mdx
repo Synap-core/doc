@@ -1,48 +1,91 @@
 ---
 title: 'Eve CLI'
-description: Entity Creation System home — sovereign installer CLI, vision, and doc map
+description: Sovereign stack orchestrator (hestia-cli) — v2.0 architecture where Synap is the centralized, exclusive source of long-term truth for all agents
 section: general
 audience: users
-version: 1.0+
-last_updated: '2026-04-20'
+version: 2.0+
+last_updated: '2026-04-21'
 tags: []
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Eve (Entity Creation System)
+# Eve CLI
 
-Eve is Synap's **sovereign installer CLI** — a **TypeScript command-line tool** (`eve`) and monorepo (**hestia-cli**) that turns a Bare server into a coherent stack: **Brain** (Synap Data Pod + optional local inference), **Legs** (exposure: Traefik, tunnels), **Arms** (OpenClaw), **Eyes** (RSSHub), and **Builder** (OpenCode / deploy hooks).
+Eve is Synap's **sovereign stack orchestrator** — a **TypeScript CLI** (`eve`) and monorepo (**hestia-cli**) that installs and manages a self-hosted stack around the **Synap Data Pod**.
 
-Eve is **not a replacement** for the Synap backend. It **orchestrates** installs and Docker sidecars alongside the official **`synap`** shell CLI.
+> **The Golden Rule:** Synap is the exclusive source of long-term truth. Every agent reads from and writes to Synap via REST API. No agent maintains its own long-term state (SQLite, Vector DBs, local files). This is non-negotiable.
+
+---
+
+## What Eve Does
+
+1. **Guided installation** — `eve setup` installs a complete stack: Synap Data Pod, inference services, routing, agents, and developer tooling. Profiles: `inference_only`, `data_pod`, `full`.
+2. **Organ commands** — `eve brain`, `eve arms`, `eve builder`, `eve eyes`, `eve legs` — each manages a domain of the stack via the organ metaphor.
+3. **Agent wiring** — Configures OpenClaw (Arms) and Hermes Agent (Builder) to communicate exclusively through Synap's REST API. No agent speaks directly to another.
+4. **Provider routing** — Stores local tooling preferences (OpenRouter, Anthropic, Ollama) in `.eve/secrets/secrets.json`; optionally syncs non-secret policy via `eve ai sync`.
 
 ---
 
 ## Target Users
 
-- **Eve / hestia-cli contributors** — package authors, CLI UX designers, Docker compose maintainers
-- **Operators & infrastructure engineers** — bootstrap flows, LXC/Proxmox deployment, path management, `synap` delegation
-- **GTM & operations** — self-host positioning, "sovereign stack" messaging, launch narratives
+- **Operators** — Bootstrap flows, LXC/Proxmox deployment, `eve setup` automation
+- **Infrastructure engineers** — Docker networking, secrets, path management, deployment
+- **Developers** — Monorepo package boundaries, build pipeline, contributing
 
 ---
 
-## Marketing
+## Architecture Overview (v2.0)
 
-- **Positioning:** The sovereign installer for Synap and sidecars — one system, one mental model.
-- **North star metaphor:** A server becomes a **coherent digital entity** with specialized organs (Brain, Arms, Eyes, Legs, Builder), each owning a domain of capability.
-- **Key differentiator:** Sovereignty — your machine, your data, optional fully local inference, no mandatory cloud for the core stack.
-- **Messaging constraint:** Eve is complementary to Synap, not competitive; the Data Pod is the **Brain**.
+| Organ | Package | Technology | Responsibility |
+|-------|---------|------------|----------------|
+| **Brain** | `@eve/brain` | Synap Backend, PostgreSQL, Redis, Ollama | Central memory, API, governance, task queue |
+| **Arms** | `@eve/arms` | OpenClaw | Messaging ingress (WhatsApp, iMessage, Telegram), voice memos, reasoning. Fetches memory from Synap, writes back to Synap. Does NOT do coding. |
+| **Builder** | `@eve/builder` | Hermes Agent, opencode, Dokploy (optional) | Headless dev orchestrator. Polls Synap for queued tasks, spawns opencode via subprocess, writes results to Synap. |
+| **Eyes** | `@eve/eyes` | RSSHub, Outerbase | Information intake (RSS feeds), database visualization |
+| **Legs** | `@eve/legs` | Traefik, Pangolin | Reverse proxy, routing, sovereign tunneling |
 
 ---
 
-## Key User Stories
+## Data Flow (v2.0)
 
-- As an **operator**, I want to run `eve setup` once and have a complete stack deployed (inference only, Data Pod only, or both).
-- As a **self-hosted user**, I want full control over my machine, data residency, and whether cloud models are used.
-- As a **developer**, I want a pnpm monorepo with clear package boundaries and predictable port mental models.
-- As a **product user**, I want `eve brain`, `eve legs`, `eve arms` — CLI commands that map directly to the organ metaphor.
-- As a **CI operator**, I want scripted non-interactive patterns (`--yes`, `--profile`, `--domain`) for automated deployments.
+```
+User message → OpenClaw (Arms)
+    │
+    ▼
+Write to Synap via REST API (new message entity or channel update)
+    │
+    ▼
+Synap queues task for Hermes
+    │
+    ▼
+Hermes (Builder) polls Synap cron → reads task → spawns opencode via subprocess
+    │
+    ▼
+opencode runs → stdout/stderr captured → written as result back to Synap
+    │
+    ▼
+Synap notifies OpenClaw → OpenClaw replies to user
+```
+
+**Key property:** OpenClaw and Hermes never communicate directly. They both talk exclusively through Synap. They are loosely coupled services connected by event-driven queue.
+
+---
+
+## Golden Rule: Synap as Central Switchboard
+
+Every agent (OpenClaw, Hermes, opencode) treats Synap as their sole source of truth:
+
+| Layer | What | Where |
+|-------|------|-------|
+| **Memory** | User state, conversation history, device profiles | Synap PostgreSQL (agent state tables) |
+| **State** | Agent sessions, tool results, task queue | Synap PostgreSQL, Redis |
+| **Knowledge** | Skills, device mappings, provider routing | Synap workspace settings |
+| **Communication** | Agents communicate via Synap task entities and channels | Synap entities + channels |
+| **Auth** | API keys per agent | Synap API key system |
+
+No agent runs its own SQLite, Vector DB, or external state store. This applies to OpenClaw (`@eve/arms`) and Hermes (`@eve/builder`).
 
 ---
 
@@ -50,86 +93,13 @@ Eve is **not a replacement** for the Synap backend. It **orchestrates** installs
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| `eve setup` three-path flow | Shipped | `inference_only`, `data_pod`, `full` — guided wizard with dry-run support |
-| Organ metaphor (`eve brain/arms/eyes/legs/builder`) | Iterating | Commands map to product organs defined in vision |
-| Secrets management | Shipped | `.eve/secrets/secrets.json` — merged secrets across synth/ai/inference/builder/arms |
+| `eve setup` three-path flow | Shipped | `inference_only`, `data_pod`, `full` — guided wizard with dry-run |
+| Organ metaphor commands | Shipped | `eve brain`, `eve arms`, `eve builder`, `eve eyes`, `eve legs` |
+| Secrets management | Shipped | `.eve/secrets/secrets.json` — merged secrets across organs |
 | Setup profiling | Shipped | `.eve/setup-profile.json` — record of last `eve setup` choices |
-| Synap delegation via `SYNAP_REPO_ROOT` | Shipped | Eve runs `synap install` for Data Pod profiles; supports tarball + git checkouts |
-| `eve-network` sidecar topology | Shipped | Docker network for Eve organs (Ollama, Traefik, etc.) alongside Synap Caddy |
-| Public "Self-host with Eve" page | Future | Short page under Use Synap linking here for depth |
-
----
-
-## Current Status
-
-| Area | Status |
-|------|--------|
-| `eve setup` three-path flow | **Shipped** — keep repo README + `docs/EVE_SETUP_PROFILES.md` as detail source |
-| Organ metaphor | **Iterating** — verify commands against `packages/eve-cli` before external promises |
-| Ops docs (LXC paths, logs) | **Documented** in [Operations](/team/eve-cli/operations) |
-| Public-facing self-host page | **Future** — not yet built |
-
----
-
-## Overview
-
-Eve turns a **bare server** into a **coherent digital entity** with five organs:
-
-| Organ | Role | What it stands up |
-|-------|------|-------------------|
-| **Brain** | Memory, reasoning, API | Synap Data Pod (PostgreSQL, Redis, Caddy, Hub) |
-| **Arms** | Actions, tools, MCP | OpenClaw |
-| **Builder** | Create / deploy / codegen | OpenCode, OpenClaude, deploy hooks |
-| **Eyes** | Intake, feeds | RSSHub |
-| **Legs** | Exposure, routing, reachability | Traefik, Pangolin / Cloudflare tunnels |
-
-CLI maps organs to commands: `eve brain`, `eve arms`, `eve builder`, `eve eyes`, `eve legs`.
-
-**North star principles:**
-1. **Sovereignty** — Operator controls the machine and data residency.
-2. **Organic composition** — Shared network, secrets patterns, predictable ports.
-3. **Synap-centric** — Hub, proposals, and pod contracts remain authoritative.
-4. **Explicit exposure** — Synap public URL vs Eve Legs are separate user choices.
-5. **Recoverable setup** — `.eve/` is inspectable and reproducible.
-
----
-
-## Architecture
-
-### Organ Topology
-
-```
-Internet
-  │
-  ├─ Caddy :80/443 ───→ Synap Data Pod (Caddy, API :4000)
-  │
-  └─ Traefik / Tunnel ─→ Eve sidecars (eve-network)
-         ├─ Ollama (inference gateway 127.0.0.1:11435)
-         ├─ RSSHub
-         └─ OpenClaw (Arms)
-```
-
-### Synap vs Eve Boundary
-
-| Layer | Owner | Notes |
-|-------|-------|-------|
-| HTTPS for Pod API/auth | **Synap** (Caddy) | Public pod domain in `eve setup` config |
-| Inference gateway / Traefik for sidecars | **Eve** (Legs) | Does not replace Caddy on 80/443 |
-| Hub Protocol, proposals, workspace | **Synap backend** | Eve may sync non-secret provider routing via `eve ai sync` |
-| Local tool preferences (OpenRouter, etc.) | **Eve secrets** | `.eve/secrets/secrets.json` |
-
-### Monorepo Packages (hestia-cli)
-
-| Package | Responsibility |
-|---------|----------------|
-| `@eve/cli` | `eve` entrypoint, Commander + Clack |
-| `@eve/dna` | Setup profile schema, secrets, USB manifest |
-| `@eve/brain` | `runBrainInit`, Synap delegation, Ollama/Postgres/Redis helpers |
-| `@eve/legs` | Traefik, gateway, tunnel helpers |
-| `@eve/arms` | OpenClaw |
-| `@eve/eyes` | RSSHub, database UI runners |
-| `@eve/builder` | OpenCode / OpenClaude / deploy hooks |
-| `@eve/cli-kit` | Shared flags, JSON output |
+| Hermens Agent + opencode wiring | Planned v2.0 | `@eve/builder` replaced: Hermes Agent as headless dev orchestrator, opencode invoked via subprocess |
+| Synap-native OpenClaw | Planned v2.0 | OpenClaw stripped of long-term memory; fetches from/write to Synap REST API |
+| Dokploy integration | Shipped (optional) | First-class when enabled via `--with-dokploy`; injects env vars into Builder |
 
 ---
 
@@ -137,23 +107,9 @@ Internet
 
 | Page | Purpose | Read Order |
 |------|---------|------------|
-| [Vision & principles](/team/eve-cli/vision) | Metaphor, organs, product principles | 1 |
-| [Architecture](/team/eve-cli/architecture) | Packages, ports mental model, stack diagram | 2 |
-| [User flows](/team/eve-cli/user-flows) | Three paths, `eve setup` vs `synap install`, exposure semantics | 3 |
-| [Operations & hosting](/team/eve-cli/operations) | Paths on disk, Docker vs LXC, logs | 4 |
-| [Synap integration](/team/eve-cli/synap-integration) | Delegation model, env vars, tarball checkouts, Hub vs Eve routing | 5 |
-| [Repository & builds](/team/eve-cli/repository) | Monorepo layout, bootstrap, release bundles, contributing | 6 |
-
----
-
-## Code References
-
-- **Eve CLI monorepo:** [Synap-core/hestia-cli](https://github.com/Synap-core/hestia-cli) — `@eve/cli`, bootstrap scripts, `docs/`
-- **Synap Data Pod:** [synap-core/backend](https://github.com/synap-core/backend) — `synap` script, `deploy/`, Docker images
-- **Synap CLI (different):** [Synap-core/synap-cli](https://github.com/Synap-core/synap-cli) — OpenClaw bridge / agent init
-
-**Related spaces:**
-- [Platform](/team/platform/index) — entity model, Hub, channels
-- [Intelligence](/team/intelligence/index) — Intelligence Service vs local Ollama
-- [DevOps](/team/devops/index) — generic pod onboarding, security
-- [Stack & tools](/team/technologies/index) — Docker, Ollama, Traefik, tunnels
+| [Vision & principles](/team/eve-cli/vision) | Architectural principles, naming, design tradeoffs | 1 |
+| [Architecture](/team/eve-cli/architecture) | System topology, packages, ports, stack diagram | 2 |
+| [Synap integration](/team/eve-cli/synap-integration) | Central switchboard architecture, agent communication patterns | 3 |
+| [User flows](/team/eve-cli/user-flows) | Setup paths, agent execution flows, exposure semantics | 4 |
+| [Operations](/team/eve-cli/operations) | Paths on disk, Docker vs LXC, logs | 5 |
+| [Repository](/team/eve-cli/repository) | Monorepo layout, bootstrap, release, contributing | 6 |

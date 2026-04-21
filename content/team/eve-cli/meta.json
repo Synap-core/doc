@@ -1,15 +1,15 @@
 {
   "title": "Eve",
-  "description": "Entity Creation System — CLI, sovereign stack, and operator flows (hestia-cli)",
+  "description": "Sovereign stack orchestrator (hestia-cli) — Synap as centralized memory for all agents",
   "root": true,
   "icon": "package",
   "pages": [
     "index",
     "vision",
     "architecture",
+    "synap-integration",
     "user-flows",
     "operations",
-    "synap-integration",
     "repository"
   ]
 }

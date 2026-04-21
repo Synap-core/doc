@@ -1,40 +1,48 @@
 ---
 title: 'Architecture'
 description: >-
-  Eve CLI packages, Synap vs Eve boundaries, ports, and stack topology
-  (interactive diagram).
+  Eve CLI v2.0 system topology, monorepo packages, port assignments,
+  and stack diagram.
 section: general
 audience: users
-version: 1.0+
-last_updated: '2026-04-20'
+version: 2.0+
+last_updated: '2026-04-21'
 tags: []
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-## Topology (interactive)
+## Topology
 
-<EveStackDiagram />
+```
+Internet
+  │
+  ├─ Caddy :80/443 ───→ Synap Data Pod (Caddy, API :4000, Auth)
+  │
+  └─ Traefik / Pangolin ─→ Eve sidecars (eve-network)
+         ├─ Ollama (inference gateway 127.0.0.1:11435)
+         ├─ OpenClaw (Arms)
+         ├─ RSSHub (Eyes)
+         └─ Traefik dashboard
+```
 
-**How to read it:** Traffic from the **internet** hits **Legs** (Traefik / tunnel) when you expose sidecars or routes. **Synap** owns **Caddy :80/443** and the **API :4000** path for the Data Pod. **Eve sidecars** (Ollama, inference gateway on **127.0.0.1:11435**, etc.) sit on **`eve-network`**. Optional **organs** (OpenClaw, RSSHub, Builder) attach after Brain/Legs basics — exact compose depends on profile.
+**How to read it:** Traffic from the **internet** hits **Legs** (Traefik / tunnel) when you expose sidecar routes. **Synap** owns **Caddy :80/443** and the **API :4000** path for the Data Pod. **Eve sidecars** (Ollama, OpenClaw, RSSHub, etc.) sit on **`eve-network`**. Optional organs attach after Brain/Legs basics — exact compose depends on profile.
 
 ---
 
 ## Synap vs Eve (boundary)
 
 | Layer | Owner | Notes |
-|-------|--------|------|
-| HTTPS for Pod API/auth | **Synap** (Caddy) | Public “pod domain” in `eve setup` configures **Synap** install. |
+|-------|-------|-------|
+| HTTPS for Pod API/auth | **Synap** (Caddy) | Public "pod domain" in `eve setup` configures **Synap** install. |
 | Inference gateway / Traefik for sidecars | **Eve** (Legs) | Does **not** replace Caddy on 80/443 for the Data Pod. |
-| Hub Protocol, proposals, workspace | **Synap backend** | Eve may sync **non-secret** provider routing into workspace JSON via `eve ai sync` (see repo ADR). |
+| Hub Protocol, proposals, workspace, agent memory | **Synap backend** | All agent state (sessions, conversations, tasks) lives here. |
 | Local tool preferences (OpenRouter, etc.) | **Eve secrets** | `.eve/secrets/secrets.json` — distinct from Synap internal IS routing. |
 
 ---
 
-## Monorepo packages (hestia-cli)
-
-High level — authoritative tables live in the repo README.
+## Monorepo packages (hestia-cli) v2.0
 
 | Package | Responsibility |
 |---------|----------------|
@@ -42,10 +50,29 @@ High level — authoritative tables live in the repo README.
 | `@eve/dna` | Setup profile schema, secrets, USB manifest |
 | `@eve/brain` | `runBrainInit`, Synap delegation, Ollama/Postgres/Redis helpers |
 | `@eve/legs` | Traefik, gateway, tunnel helpers |
-| `@eve/arms` | OpenClaw |
+| `@eve/arms` | OpenClaw install & wiring |
 | `@eve/eyes` | RSSHub, database UI runners |
-| `@eve/builder` | OpenCode / OpenClaude / deploy hooks |
+| `@eve/builder` | **Hermes Agent deployment**, opencode CLI binary, Dokploy optional, subprocess orchestrator |
 | `@eve/cli-kit` | Shared flags, JSON output |
+
+### @eve/builder — v2.0 changes
+
+The Builder organ has been refactored to replace the OpenClaude orchestration layer with **Hermes Agent** as the sole orchestrator:
+
+| Old (v1.0) | New (v2.0) |
+|------------|-----------|
+| Orchestrates OpenCode / OpenClaude / Claude Code directly | Deploys Hermes Agent container + opencode CLI binary |
+| Direct command execution | Hermes uses its cron scheduler to poll Synap for queued tasks |
+| No sub-agent model | Hermes spawns opencode via local subprocess (`tools/execute_opencode.py` skill) |
+| Optional Dokploy | Optional Dokploy (first-class citizen when enabled) |
+
+### OpenClaw (`@eve/arms`) — v2.0 changes
+
+| Old (v1.0) | New (v2.0) |
+|------------|-----------|
+| OpenClaw maintains its own conversation history, user profiles, logs | OpenClaw fetches memory from and writes back to Synap via REST API |
+| OpenClaw may handle coding tasks | OpenClaw does NOT do coding — creates Tasks in Synap for Hermes to handle |
+| Local SQLite / vector storage | All persistent state in Synap PostgreSQL |
 
 ---
 

@@ -1,56 +1,166 @@
 ---
 title: 'Synap integration'
 description: >-
-  How Eve delegates to synap install, env vars, tarball checkouts, and Hub vs
-  Eve routing.
+  Central switchboard architecture: agents read from and write to Synap via REST API.
+  No agent maintains its own long-term state.
 section: general
 audience: users
-version: 1.0+
-last_updated: '2026-04-20'
+version: 2.0+
+last_updated: '2026-04-21'
 tags: []
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-## Delegation model
+## The Golden Rule
 
-When **`SYNAP_REPO_ROOT`** points at a valid backend checkout (with **`synap`** script + **`deploy/docker-compose.yml`**), **`eve brain`** / **`eve setup`** runs:
+> Synap is the exclusive source of long-term truth. Every agent (OpenClaw, Hermes, opencode) reads from and writes to Synap via REST API. No agent is permitted to maintain its own long-term state (SQLite, Vector DBs, local files).
+
+This applies to both OpenClaw (`@eve/arms`) and Hermes (`@eve/builder`). Their conversation history, user profiles, sessions, tool results, and logs are all in Synap — never duplicated elsewhere.
+
+---
+
+## Central Switchboard Architecture
+
+```
+User message → OpenClaw → Synap REST API (writes event/message)
+                                         │
+                                         ▼
+                                Synap stores in PostgreSQL
+                                         │
+                                         ▼
+                                Hermes polls task via REST API
+                                         │
+                                         ▼
+                                Hermes spawns opencode → captures output
+                                         │
+                                         ▼
+                                Results written to Synap via REST API
+                                         │
+                                         ▼
+                                OpenClaw reads result from Synap → replies to user
+```
+
+**Key property:** OpenClaw and Hermes never communicate directly. They both talk exclusively through Synap. They are loosely coupled services connected by event-driven queue. There is no WebSocket between them, no shared database, no direct API calls.
+
+---
+
+## What lives in Synap (agent state)
+
+| State | Table / System | Accessed by |
+|-------|----------------|-------------|
+| **User profiles** | Entities (`person`, `contact` profiles) | OpenClaw reads/writes |
+| **Conversation history** | Channels + Messages entities | OpenClaw reads/writes |
+| **Agent sessions** | Session state tables | Hermes reads/writes |
+| **Task queue** | Tasks entities + status tracking | Hermes polls |
+| **Tool results** | Task result entities + file entities | Both |
+| **Device mappings** | `device` entities | OpenClaw reads/writes |
+| **Provider routing** | Workspace settings JSONB | Both (read) |
+| **Skills** | File entities + workspace config | Both (read) |
+| **Logs** | Audit entities + task result files | Both (write) |
+
+---
+
+## Agent authentication
+
+Each agent authenticates to Synap via API keys stored in `.eve/secrets/secrets.json`:
+
+| Agent | Secret key | Used for |
+|-------|------------|----------|
+| **OpenClaw** | `arms.synapApiKey` (or similar) | REST API calls to read/write conversation state, device profiles |
+| **Hermes** | `builder.synapApiKey` (or similar) | REST API polling for queued tasks, writing results |
+| **opencode** | No direct auth — invoked by Hermes, inherits Hermes's context | Codegen tool, no API calls to Synap |
+
+---
+
+## OpenClaw session management (v2.0)
+
+OpenClaw no longer stores conversation data locally. Instead:
+
+- **Incoming messages** (WhatsApp, iMessage, Telegram, voice memos) are captured by OpenClaw and written to Synap as message entities in the appropriate channel.
+- **Conversation retrieval**: OpenClaw calls Synap REST API to fetch the channel history (latest N messages).
+- **Outgoing replies**: OpenClaw writes response as a new message entity to Synap.
+- **User state**: OpenClaw fetches current user profile from Synap at start of conversation.
+- **Session state**: If OpenClaw needs in-session context beyond message history (e.g., multi-turn reasoning), it stores intermediate state in Synap task result entities, not local SQLite.
+
+Memory lifecycle:
+1. OpenClaw calls `POST /api/hub/messages` to write incoming message
+2. OpenClaw calls `GET /api/hub/channels/:id/messages?limit=N` to fetch context
+3. OpenClaw computes reply using local LLM (Ollama or cloud provider)
+4. OpenClaw calls `POST /api/hub/messages` to write outgoing message
+5. Platform pushes notification to messaging app via the connected device
+
+---
+
+## Hermes session management (v2.0)
+
+Hermes uses its native SQLite for **session-scoped** ephemeral state (current execution context, tool call results within a single task run). This is transient and gets discarded when the task completes. Long-term persistence is always Synap.
+
+- **Task polling**: Hermes cron scheduler wakes at configurable intervals and calls Synap REST API to check for tasks with `status = "queued"`.
+- **Task execution**: For each queued task, Hermes:
+  1. Calls `GET /api/hub/tasks/:id` to read task details
+  2. Updates task status to `processing` via `PATCH /api/hub/tasks/:id`
+  3. Spawns opencode via subprocess: `subprocess.run(['opencode', '--task', '...', '--cwd', projectDir])`
+  4. Captures stdout/stderr from opencode
+  5. Writes result back to Synap via `PATCH /api/hub/tasks/:id` with `status = "done"` + result data
+- **Ephemeral state**: Hermes's built-in SQLite/session store is for single-run transient context only (tool call arguments, intermediate outputs). Not a long-term store.
+
+---
+
+## opencode invocation pattern
+
+opencode is a **passive code generation tool** — it does not talk to Synap directly. It is invoked by Hermes via local subprocess:
+
+```python
+# Inside Hermes's execute_opencode.py skill
+import subprocess
+result = subprocess.run(
+    ['opencode', '--task', task_description, '--cwd', project_dir],
+    capture_output=True,
+    text=True
+)
+# result.stdout and result.stderr contain the codegen output
+# Hermes writes this to Synap as task result
+```
+
+When Dokploy is enabled, Hermes passes `DOKPLOY_API_URL` and `DOKPLOY_API_KEY` as env vars to the subprocess call so opencode can deploy within the session. When Dokploy is disabled, opencode writes to local disk only.
+
+---
+
+## Delegation model (Eve → Synap install)
+
+When `SYNAP_REPO_ROOT` points at a valid backend checkout, `eve brain` / `eve setup` runs:
 
 ```text
 bash <repo>/synap install …
 ```
 
 with:
+- **`cwd`** = `SYNAP_REPO_ROOT` (repository root)
+- **`SYNAP_DEPLOY_DIR`** = `<repo>/deploy`
 
-- **`cwd`** = **`SYNAP_REPO_ROOT`** (repository root)
-- **`SYNAP_DEPLOY_DIR`** = **`<repo>/deploy`**
+So Synap's `get_deploy_dir()` resolves to the **deploy** folder even when the operator's shell cwd is `/opt/eve`. Eve state (`.eve/`) is still written relative to where `eve` was invoked, not the Synap repo.
 
-So **Synap’s** `get_deploy_dir()` resolves to the **deploy** folder even when the operator’s shell cwd is **`/opt/eve`**. **Eve state** (`.eve/`) is still written relative to **where `eve` was invoked**, not the Synap repo.
-
----
-
-## Why Eve sets both `SYNAP_REPO_ROOT` and `SYNAP_DEPLOY_DIR`
+### Why Eve sets both `SYNAP_REPO_ROOT` and `SYNAP_DEPLOY_DIR`
 
 - **`SYNAP_REPO_ROOT`** — Unambiguous backend root for scripts and subprocesses.
-- **`SYNAP_DEPLOY_DIR`** — Ensures **`docker compose`** and **`synap`** always target **`…/deploy`** even if **`git`** metadata is missing (tarball extract).
+- **`SYNAP_DEPLOY_DIR`** — Ensures `docker compose` and `synap` always target `…/deploy` even if `git` metadata is missing (tarball extract).
+
+### Tarball checkout (no `.git`)
+
+Archive extracts may lack `.git`. The `synap install` command must treat `deploy/docker-compose.yml` present at `SYNAP_REPO_ROOT` as "already have the tree" and avoid nested clones under `$(pwd)/synap-backend`. If you see clone errors into `/opt/synap-backend/synap-backend`, update the `synap` script from backend repo or use a `git clone` checkout.
 
 ---
 
-## Tarball checkout (no `.git`)
-
-Archive extracts may lack **`.git`**. The **`synap install`** command must treat **`deploy/docker-compose.yml`** present at **`SYNAP_REPO_ROOT`** as “already have the tree” and **avoid** nested clones under **`$(pwd)/synap-backend`**. If you see clone errors into **`/opt/synap-backend/synap-backend`**, update the **`synap`** script from **backend** repo or use a **git clone** checkout.
-
----
-
-## Intelligence Service vs Eve “AI routing”
+## Intelligence Service vs Eve "AI routing"
 
 - **Synap backend** stores which Intelligence Service instance the pod uses — product configuration.
-- **Eve** stores **local tooling** preferences (OpenRouter, Anthropic, Ollama URLs) for OpenCode / CLI — **`eve ai sync`** may push **non-secret** policy to the workspace when supported. Consolidation rules: repo **`AI_ROUTING_CONSOLIDATION_ADR.md`**.
+- **Eve** stores **local tooling** preferences (OpenRouter, Anthropic, Ollama URLs) for agents and CLI — `.eve/secrets/secrets.json`. Optionally synced into workspace JSON via `eve ai sync` for non-secret policy.
 
 ---
 
 ## References
 
-- **Backend** repo: [`synap-core/backend`](https://github.com/synap-core/backend) — **`synap`** script, **`deploy/`**.
-- **Eve** repo: [**hestia-cli**](https://github.com/Synap-core/hestia-cli) — **`packages/@eve/brain`**, **`runBrainInit`**.
+- **Backend** repo: [`synap-core/backend`](https://github.com/synap-core/backend) — `synap` script, `deploy/`.
+- **Eve** repo: [hestia-cli](https://github.com/Synap-core/hestia-cli) — `packages/@eve/brain`, `packages/@eve/arms`, `packages/@eve/builder`.

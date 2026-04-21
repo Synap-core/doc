@@ -1,12 +1,12 @@
 ---
 title: 'Operations & hosting'
 description: >-
-  Paths on disk, Docker vs LXC, Proxmox CT, sysctl/runc errors, and where logs
-  live.
+  Paths on disk, Docker vs LXC, Proxmox CT, sysctl/runc errors,
+  and where logs live.
 section: general
 audience: users
-version: 1.0+
-last_updated: '2026-04-20'
+version: 2.0+
+last_updated: '2026-04-21'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -48,6 +48,47 @@ If the backend tree was extracted from a **tarball** (no **`.git`**), **`synap i
 | Synap **realtime** build failure | Build output of **`docker compose build realtime`** from **`synap-backend/deploy`** — container may not exist yet; **`docker compose logs realtime`** only after **`up`**. |
 | Synap stack | `cd /opt/synap-backend/deploy && docker compose logs <service>` |
 | Eve-side services | Compose files under Eve repo / organ commands — check **`eve`/`README`** for service names |
+| OpenClaw (Arms) | `docker logs eve-arms-openclaw` |
+| Hermes Agent (Builder) | `docker logs eve-builder-hermes` (or corresponding container name) |
+| Traefik (Legs) | `docker logs eve-legs-traefik` |
+| RSSHub (Eyes) | `docker logs eve-eyes-rsshub` |
+| Ollama (Brain) | `docker logs eve-brain-ollama` |
+
+---
+
+## Agent operational concerns
+
+### OpenClaw (Arms)
+
+- **Startup**: OpenClaw container pulls latest image and starts. On first boot, it reads `SYNAP_API_URL` and `SYNAP_API_KEY` from its environment (injected from `.eve/secrets/secrets.json`).
+- **Health check**: Docker healthcheck pings OpenClaw's `/health` endpoint. If unhealthy, container restarts.
+- **Logging**: OpenClaw logs to stdout/stderr; Docker collects them via `docker logs`.
+- **Messaging devices**: WhatsApp/iMessage/Telegram connections are managed externally. OpenClaw does not create them — the operator (or Synap platform) provisions them and points OpenClaw at them.
+
+### Hermes Agent (Builder)
+
+- **Startup**: Hermes Agent container starts with Synap API credentials. It does NOT connect to messaging channels.
+- **Cron polling**: Hermes uses its built-in cron to periodically poll Synap REST API for queued tasks. Default interval is configurable (documented in Hermes Agent config).
+- **Subprocess management**: When spawning opencode, Hermes runs it as a child process. If opencode crashes or hangs, Hermes's process manager handles timeout and error recovery.
+- **Resource isolation**: opencode runs with limited CPU/memory (via Docker cgroups or `ulimit` when invoked outside Docker) to prevent runaway resource consumption.
+
+### opencode
+
+- **Lifespan**: Short-lived. Spawns, executes task, exits. Does not persist between invocations.
+- **Statelessness**: Does not maintain its own database. All state comes from command-line arguments and environment variables.
+- **Output capture**: stdout/stderr are captured by the calling process (Hermes). No separate opencode log files.
+
+---
+
+## Dokploy operations (optional)
+
+When Dokploy is enabled:
+
+- **Docker management**: Dokploy's Docker socket is mounted into the Dokploy container. Eve's Legs layer (Traefik) may or may not route through Dokploy depending on configuration.
+- **Service discovery**: deployed services (via opencode → Dokploy) are discoverable by their service URLs in Synap file entities.
+- **Scaling**: Dokploy manages container lifecycle for deployed services. Eve does not directly manage these containers.
+- **Logs**: Dokploy service logs are managed through Dokploy's own interface, not Docker logs directly.
+- **Shutdown**: `dokploy stop` halts all services. `dokploy start` restarts them. No separate `eve builder stop` — this is a Dokploy lifecycle command.
 
 ---
 

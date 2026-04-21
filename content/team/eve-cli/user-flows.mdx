@@ -1,12 +1,12 @@
 ---
 title: 'User flows'
 description: >-
-  Three setup paths, eve setup vs synap install, exposure semantics, and
-  scripted flags.
+  Three setup paths, agent execution flows, exposure semantics,
+  and scripted flags.
 section: general
 audience: users
-version: 1.0+
-last_updated: '2026-04-20'
+version: 2.0+
+last_updated: '2026-04-21'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -17,8 +17,8 @@ toc: true
 
 Eve organizes installation around **three product paths** (CLI profiles):
 
-1. **Inference only** (`inference_only`) — Local **Ollama** + **Traefik**-secured gateway (**no** Synap Data Pod).
-2. **Synap only** (`data_pod`) — **Data Pod** via official **`synap install`**; Eve can add **other organs** later without bundling Ollama in this profile.
+1. **Inference only** (`inference_only`) — Local **Ollama** + **Traefik**-secured gateway. No Synap Data Pod. For operators who want a local LLM endpoint without running the full Synap stack.
+2. **Synap only** (`data_pod`) — **Data Pod** via official **`synap install`; Eve can add **other organs** later without bundling Ollama in this profile.
 3. **Both** (`full`) — Data Pod **first**, then Ollama on **`eve-network`** + same gateway pattern (no host publish on **11434** for Ollama in the documented layout).
 
 ---
@@ -26,16 +26,81 @@ Eve organizes installation around **three product paths** (CLI profiles):
 ## Order of operations (recommended)
 
 1. **Secrets / profile** — Run `eve setup` (or prepare `.eve/secrets/secrets.json`) so Synap URL + Hub API key fields exist where needed.
-2. **Builder** (if you use codegen deploy) — `eve builder init` so OpenCode / OpenClaude share Hub `.env` + skills.
-3. **Legs / tunnel / RSSHub / OpenClaw** — After Brain surface is stable.
+2. **Legs** — `eve legs setup` or `eve legs newt up` to get routing/exposure for sidecars.
+3. **Brain** — `eve brain init` to initialize Synap (if `data_pod` or `full`).
+4. **Arms** — `eve arms install` to configure OpenClaw with Synap API credentials and messaging device setup.
+5. **Builder** — `eve builder init` to deploy Hermes Agent with Synap API credentials. Only after Brain is stable.
+6. **Eyes** — `eve eyes database init` / `up` for Outerbase or RSSHub as needed.
+7. **AI sync** (optional) — `eve ai sync --workspace <uuid>` to push non-secret provider policy to Synap.
+
+---
+
+## Agent execution flow (the user-to-code path)
+
+This is the full journey from user input to code output in v2.0:
+
+```
+1. User sends message (WhatsApp / iMessage / Telegram)
+   │
+2. OpenClaw receives message via device integration
+   │
+3. OpenClaw fetches conversation history from Synap REST API
+   │   GET /trpc/messages.get?channelId=…&limit=50
+   │
+4. OpenClaw fetches user profile from Synap
+   │   GET /trpc/entities.get?slug=person&…
+   │
+5. OpenClaw invokes local LLM (Ollama) or cloud LLM (OpenRouter/Anthropic)
+   │   using message history + user context as prompt
+   │
+6. OpenClaw writes outgoing message to Synap
+   │   POST /trpc/messages.create → {channelId, content, role="assistant"}
+   │
+7. If message contains a coding request:
+   │
+8. OpenClaw creates Task entity in Synap (status="queued")
+   │   POST /trpc/tasks.create → {description, projectId, assignee="hermes"}
+   │
+9. Hermes wakes (cron poll, default interval)
+   │   GET /trpc/tasks.get?status=queued&assignee=hermes
+   │
+10. Hermes reads task details
+    │   GET /trpc/tasks.get/:id
+    │
+11. Hermes updates task status to "processing"
+    │   PATCH /trpc/tasks.update/:id → {status="processing"}
+    │
+12. Hermes spawns opencode via subprocess
+    │   subprocess.run(['opencode', '--task', '<task-desc>', '--cwd', projectDir])
+    │
+13. opencode generates code, outputs to stdout/stderr
+    │
+14. Hermes captures opencode output
+    │
+15. Hermes writes result to Synap
+    │   PATCH /trpc/tasks.update/:id → {status="done", result=<stdout/stderr>}
+    │
+16. OpenClaw sees completed task (via notification or poll)
+    │   GET /trpc/tasks.get/:id → status="done"
+    │
+17. OpenClaw composes reply message to user
+    │   (summarizing result, showing relevant diffs, etc.)
+    │
+18. OpenClaw sends reply via original messaging channel
+```
+
+**Key properties:**
+- Step 8-18 only happens for coding requests. For conversational messages, the flow stops after step 7.
+- At no point does OpenClaw call Hermes or opencode directly. Hermes discovers tasks only through Synap.
+- opencode produces no side effects beyond stdout/stderr and local filesystem writes (if Dokploy is disabled).
 
 ---
 
 ## Public exposure semantics (critical)
 
-- **Synap domain** in the wizard configures the **Data Pod** public URL (Caddy, API, auth) — “where users sign in to the pod.”
+- **Synap domain** in the wizard configures the **Data Pod** public URL (**Caddy**, API, auth) — "where users sign in to the pod."
 - **Eve Legs** (Traefik, tunnel hostname) is a **separate** layer for **sidecar** and gateway routes. A public Synap domain does **not** automatically expose every Eve service.
-- Documented in depth in repo **`docs/EVE_SETUP_PROFILES.md`**.
+- If **Dokploy** is enabled, its routes can be proxied through **Eve Legs** (Traefik) OR exposed directly — this is configured per-project in `eve builder init`.
 
 ---
 
@@ -53,9 +118,42 @@ Eve organizes installation around **three product paths** (CLI profiles):
 
 ---
 
+## Setup with Dokploy (optional)
+
+When user opts-in during `eve setup` (or via `eve builder init --with-dokploy`):
+
+1. **Dokploy** is installed alongside Synap sidecars.
+2. `DOKPLOY_API_URL` and `DOKPLOY_API_KEY` are injected into:
+   - Hermes Agent environment variables (so it can deploy via Dokploy within sessions)
+   - opencode subprocess environment (so opencode can deploy during codegen)
+3. If opt-out, opencode writes to local disk without deployment hooks. These env vars are absent from the process environment.
+
+Dokploy lifecycle:
+- **Up**: `dokploy start`
+- **Down**: `dokploy stop`
+- **Config**: `/opt/dokploy/config.json` (managed by Eve)
+
+---
+
 ## Scripted / CI examples
 
 Non-interactive patterns (`--yes`, `--profile`, `--domain`, `--synap-repo`, tunnel flags) are kept current in **hestia-cli** `README.md` and **`docs/EVE_SETUP_PROFILES.md`**. Use **`eve setup --dry-run`** or **`eve --json setup --dry-run`** for plans without side effects.
+
+```bash
+# Non-interactive data pod install
+eve setup --yes --profile data_pod --domain pod.example.com
+
+# Full install with Pangolin tunnel
+eve setup --yes --profile full \
+  --domain pod.example.com \
+  --tunnel pangolin --tunnel-domain eve.example.com
+
+# Dry run (no side effects)
+eve setup --dry-run --profile full
+
+# JSON output (for CI consumption)
+eve --json setup --dry-run --profile data_pod
+```
 
 ---
 

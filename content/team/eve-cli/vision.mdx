@@ -1,12 +1,12 @@
 ---
 title: 'Vision & principles'
 description: >-
-  Eve as a sovereign digital entity — organs, metaphor, and product principles
-  aligned with Synap.
+  Eve v2.0 architectural principles: Synap as exclusive memory, agent separation of concerns,
+  sovereignty.
 section: general
 audience: users
-version: 1.0+
-last_updated: '2026-04-20'
+version: 2.0+
+last_updated: '2026-04-21'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -15,33 +15,47 @@ toc: true
 
 ## Vision statement
 
-Eve turns a **bare server** into a **coherent digital entity**: self-hosted infrastructure with specialized **organs** (Brain, Arms, Eyes, Legs, Builder), each owning a domain of capability. Synap’s **Data Pod** is the **Brain** — memory, API, governance — not “one more container.”
-
-> A server is not only hardware; it is the **body** for that entity. Eve is the **installer and orchestrator** that wires the organs to the same Docker network and secret layout.
+Eve turns a **bare server** into a **coherent self-hosted stack** centered on the **Synap Data Pod**. Synap is the centralized memory, task queue, and knowledge graph. Agents (OpenClaw, Hermes) operate around Synap, reading from and writing to it exclusively — no agent maintains its own long-term state.
 
 ---
 
 ## Design principles
 
-1. **Sovereignty** — Operator controls the machine, data residency, and whether cloud models are used at all for local tooling.
-2. **Organic composition** — Services are **organs**: same network (`eve-network`), shared secrets patterns, predictable ports for sidecars vs Synap’s Caddy.
-3. **Synap-centric** — Hub, proposals, and pod contracts remain **authoritative** in the backend; Eve does not fork Synap semantics.
-4. **Explicit exposure** — Public **Synap** URL vs **Eve Legs** (Traefik / tunnel) are **separate** user choices (see [User flows](/team/eve-cli/user-flows)).
-5. **Recoverable setup** — `.eve/setup-profile.json` and `.eve/secrets/` are inspectable; scripted paths stay reproducible.
+1. **Synap as exclusive memory** — Every agent reads from and writes to Synap via REST API. No agent (OpenClaw, Hermes, opencode) runs its own SQLite, Vector DB, or external state store. This is non-negotiable.
+
+2. **Sovereignty** — Operator controls the machine, data residency, and whether cloud models are used at all for local tooling. No mandatory cloud dependency beyond what the operator chooses.
+
+3. **Separation of concerns between agents** — OpenClaw handles **messaging ingress** (WhatsApp, iMessage, Telegram, voice memos, reasoning). Hermes Agent handles **development orchestration** (reading task queue, spawning codegen). They never speak directly to each other.
+
+4. **Organic composition** — Services are **organs**: same network (`eve-network`), shared secrets patterns, predictable ports for sidecars vs Synap's Caddy.
+
+5. **Synap-centric** — Hub, proposals, and pod contracts remain **authoritative**. Eve does not fork Synap semantics.
+
+6. **Explicit exposure** — Public **Synap** URL vs **Eve Legs** (Traefik / tunnel) are **separate** user choices.
+
+7. **Recoverable setup** — `.eve/setup-profile.json` and `.eve/secrets/` are inspectable; scripted paths stay reproducible.
 
 ---
 
-## The five organs (metaphor)
+## Naming (v2.0)
 
-| Organ | Role | Typical tech (see [Stack & tools](/team/technologies/index)) |
-|-------|------|----------------------------------------------------------------|
-| **Brain** | Memory, reasoning, API — **Synap Data Pod** | PostgreSQL, Redis, Caddy, API, Hub |
-| **Arms** | Actions, tools, MCP | OpenClaw |
-| **Builder** | Create / deploy / codegen | OpenCode, OpenClaude, optional Dokploy |
-| **Eyes** | Intake, feeds | RSSHub |
-| **Legs** | Exposure, routing, reachability | Traefik, Pangolin / Cloudflare tunnels |
+| Name | Package | Technology |
+|------|---------|------------|
+| **Brain** | `@eve/brain` | Synap Backend (PostgreSQL, Redis) |
+| **Arms** | `@eve/arms` | OpenClaw |
+| **Builder** | `@eve/builder` | Hermes Agent + opencode (replaces v1.0 OpenClaude orchestration) |
+| **Eyes** | `@eve/eyes` | RSSHub |
+| **Legs** | `@eve/legs` | Traefik + Pangolin |
 
-Eve’s CLI maps these to **`eve brain`**, **`eve arms`**, **`eve builder`**, **`eve eyes`**, **`eve legs`** — see [Architecture](/team/eve-cli/architecture).
+---
+
+## Agent responsibilities
+
+| Agent | Handles | Does NOT handle |
+|-------|---------|-----------------|
+| **OpenClaw (Arms)** | Messaging (WhatsApp, iMessage, Telegram), voice memos, user-facing reasoning | Coding tasks, database access, direct communication with other agents |
+| **Hermes Agent (Builder)** | Headless dev orchestration, task queue polling, spawning opencode, writing results to Synap | Messaging apps, user-facing UI, direct communication with other agents |
+| **opencode** | Code generation (invoked via subprocess by Hermes) | Orchestration, queue management, persistence |
 
 ---
 
@@ -50,6 +64,7 @@ Eve’s CLI maps these to **`eve brain`**, **`eve arms`**, **`eve builder`**, **
 - **Not** a second Hub or auth system — identity and governance stay in Synap.
 - **Not** a replacement for **`synap install`** — Eve **delegates** full Data Pod installs to the official **`synap`** script when using `data_pod` / `full` profiles.
 - **Not** the same as **[synap-cli](https://github.com/Synap-core/synap-cli)** (OpenClaw bridge / agent init) — complementary tooling.
+- **Not** an independent agent — Eve is infrastructure (Docker, networking, secrets). It does not "reason" or "decide."
 
 ---
 

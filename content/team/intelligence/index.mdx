@@ -13,44 +13,147 @@ hide_title: false
 toc: true
 ---
 
-# Intelligence Service
+# Intelligence
 
-The AI execution layer for Synap (OrchestratorAgent, PersonaAgent, skills, runtime contracts, and operations).
+Target Users: Intelligence service engineers, platform/backend engineers integrating AI workflows, operations team handling runtime reliability
+Marketing: The AI Agent Hub — OrchestratorAgent, PersonaAgents, skills, and the Hub Protocol that connects AI to your data with governance
+Key User Stories:
+- "I want an AI co-founder that can read my knowledge, take actions, and propose changes I can review"
+- "I need domain-expert agents (researcher, writer, analyst) that work within my workspace's governance model"
+- "I want AI to post proactive insights, morning briefings, and health checks into my personal channel"
+- "I need my AI agents to talk to my data pod through a stable, documented, permission-controlled API"
+Key Features:
+| Feature | Description | Status |
+|---------|-------------|--------|
+| OrchestratorAgent | Co-founder agent with full tools, full context, orchestrator routing | Live |
+| PersonaAgent | Domain-expert agent with branch-only scope, specialized tools | Live |
+| Hub Protocol | 21 sub-routers: AI ↔ Data Pod communication (Bearer token + governance) | Live |
+| Skill System | Named skills agents can invoke: entities, views, documents, automations | Live |
+| Proactive Intelligence | Cron workers: morning briefing, weekly digest, health check | Live |
+| Session Memory | Session-scoped memory with compaction engine | Live |
+| View Types | Bento, kanban, flow — AI can compose and render cells | Live |
+| Monitoring | Agent, execution, memory, skills, tools monitoring dashboard | Live |
+| Deployment | Docker Swarm, Traefik, autoscaler, Litellm migration | Live |
+Current Status: **Live** — full agent hub with 21 Hub Protocol sub-routers, deployed
 
-## Purpose
+## Overview
 
-- Document how IS plans, executes, and returns AI actions.
-- Define Hub Protocol interactions and tool boundaries.
-- Provide runtime operations guidance (deploy, monitor, incident response).
+The Intelligence Service is the **AI execution layer** for Synap — a distributed agent system with two architecture patterns:
 
-## Target users
+1. **Personal AI** — OrchestratorAgent (co-founder, full tools, pod-wide context) + session memory (always on, 4h personal)
+2. **Domain expertise** — PersonaAgent (domain expert, branch-only scope, specialized skills like "researcher", "writer", "analyst")
 
-- Intelligence service engineers
-- Platform/backend engineers integrating AI workflows
-- Operations team handling runtime reliability
+All AI ↔ Pod communication goes through the **Hub Protocol REST** (`/api/hub/*`) — never direct DB access. Permissions are enforced via `checkPermissionOrPropose()` which creates reviewable, reversible proposals for AI mutations.
 
-## Main flows
+The Intelligence Service runs on Docker Swarm, autoscales based on load, and connects to the pod via Bearer token + Hub routes. It integrates with LiteLLM for model routing and has a full monitoring stack for agent performance, memory usage, skill health, and execution traces.
 
-- [Agent system](/team/intelligence/agent-system) — orchestration and persona execution
-- [Skill Hub Protocol](/team/intelligence/skill-hub-protocol) — how AI tools reach Data Pod APIs
-- [Realtime streaming](/team/intelligence/realtime-streaming) — streamed responses and transport behavior
+## Architecture
 
-## Key references
+```
+┌──────────────────────────────────────────────────────────┐
+│                  Intelligence Service                     │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌────────┐  │
+│  │ Orchestrator    │  │ Persona Agents   │  │ Skills  │  │
+│  │ Agent           │  │ (researcher,     │  │ Registry│  │
+│  │ (co-founder)    │  │ writer, analyst) │  │        │  │
+│  └────────┬────────┘  └────────┬─────────┘  └────────┘  │
+│           │                    │                           │
+│  ┌────────┴────────────────────┴────────────────────────┐ │
+│  │              Hub Protocol (21 sub-routers)           │ │
+│  │  entities · views · channels · documents · skills   │ │
+│  │  automations · monitoring · runtime management       │ │
+│  └────────────────────┬─────────────────────────────────┘ │
+│                       │ (Bearer token, governance)        │
+└───────────────────────┼───────────────────────────────────┘
+                        ▼
+┌───────────────────────────────────────────────────────────┐
+│                   Data Pod (Platform)                     │
+│  tRPC · Drizzle · PostgreSQL · event chain · proposals   │
+└───────────────────────────────────────────────────────────┘
+```
 
-| Area | Description |
-|------|-------------|
-| [Architecture](/team/intelligence/architecture) | Full IS architecture — agents, swarm, routing |
+**Tech Stack:** Node.js · Docker Swarm · Traefik · LiteLLM · Socket.IO (realtime)
+**Repo:** `synap-intelligence-service/`
+**Key files:** `apps/intelligence-hub/src/agents/` (OrchestratorAgent, PersonaAgent), `apps/intelligence-hub/src/tools/`, `apps/intelligence-hub/src/skills/`
+**Deployment:** Docker Swarm with Traefik routing, autoscaling, LiteLLm model routing
+
+## Documentation Map
+
+### Architecture
+
+| Page | What it covers |
+|------|----------------|
+| [Architecture](/team/intelligence/architecture) | Full IS architecture — agent models, swarm, routing |
+| [Hub Protocol](/team/intelligence/hub) | 21 sub-routers, request/response contract |
+| [Agent System](/team/intelligence/agent-system) | OrchestratorAgent + PersonaAgent execution model |
 | [Internal API](/team/intelligence/internal-api) | All IS REST endpoints |
-| [Deployment](/team/intelligence/deployment) | Docker Swarm, Traefik, autoscaler |
-| [Monitor](/team/intelligence/monitor-agents) | IS monitoring dashboard |
+| [External Agents](/team/intelligence/external-agents) | OpenClaw, n8n, script integration via Hub |
+| [Realtime Streaming](/team/intelligence/realtime-streaming) | Streamed responses, transport behavior |
+
+### Agents
+
+| Page | What it covers |
+|------|----------------|
+| [Agents README](/team/intelligence/agents-readme) | Agent overview and onboarding |
+| [Agent SDK](/team/intelligence/agent-sdk) | SDK for building custom agents |
+| [SDK README](/team/intelligence/sdk-readme) | SDK reference documentation |
+| [Overview Internal](/team/intelligence/overview-internal) | Internal overview and context |
+| [Roadmap](/team/intelligence/roadmap) | Intelligence service roadmap |
+
+### Skills
+
+| Page | What it covers |
+|------|----------------|
+| [Skill Hub Protocol](/team/intelligence/skill-hub-protocol) | How skills reach Data Pod APIs |
+| [Skill — Entities](/team/intelligence/skill-entities) | Entity-read/write skill |
+| [Skill — Automations](/team/intelligence/skill-automations) | Workflow automation skill |
+| [Skill — Documents](/team/intelligence/skill-documents) | Document manipulation skill |
+| [Skill — Workspace](/team/intelligence/skill-workspace) | Workspace operations skill |
+| [Skill — Views](/team/intelligence/skill-views) | View management skill |
+| [Skill — Widgets](/team/intelligence/skill-widgets) | Widget configuration skill |
+
+### View Types (AI-composable)
+
+| Page | What it covers |
+|------|----------------|
+| [View — Bento](/team/intelligence/view-bento) | Bento grid rendering |
+| [View — Kanban](/team/intelligence/view-kanban) | Kanban board rendering |
+| [View — Flow](/team/intelligence/view-flow) | Flow/node canvas rendering |
+
+### Monitor
+
+| Page | What it covers |
+|------|----------------|
+| [Monitor — Agents](/team/intelligence/monitor-agents) | Agent performance dashboard |
+| [Monitor — Execution](/team/intelligence/monitor-execution) | Execution trace and diagnostics |
+| [Monitor — Memory](/team/intelligence/monitor-memory) | Session memory tracking |
+| [Monitor — Skills](/team/intelligence/monitor-skills) | Skill health monitoring |
+| [Monitor — Tools](/team/intelligence/monitor-tools) | Tool usage and status |
+
+### Deployment
+
+| Page | What it covers |
+|------|----------------|
+| [Deployment](/team/intelligence/deployment) | Docker Swarm, Traefik, autoscaler setup |
+| [Operations](/team/intelligence/operations) | Day-2 operational procedures |
+| [LiteLLm Migration](/team/intelligence/litellm-migration) | Model routing migration |
+| [Pricing & Billing](/team/intelligence/pricing-billing) | IS cost tracking and billing integration |
+
+## Code References
+
+- **Main repo:** [`synap-intelligence-service/`](https://github.com/Synap-core/synap/tree/main/synap-intelligence-service)
+- **Agent code:** `apps/intelligence-hub/src/agents/` (OrchestratorAgent, PersonaAgent)
+- **Tools:** `apps/intelligence-hub/src/tools/`
+- **Skills:** `apps/intelligence-hub/src/skills/`
+- **Hub routes:** `synap-backend/packages/api/src/routers/hub-protocol-rest.ts`
 
 ## Dependencies
 
-- [Platform](/team/platform/index) for event chain, permissions, and data contracts.
-- [Control Plane](/team/control-plane/index) for provisioning and billing-aware runtime topology.
-- [DevOps](/team/devops/index) for operational runbooks.
+- [Platform](/team/platform/index) for event chain, permissions, proposals, and data contracts
+- [Control Plane](/team/control-plane/index) for provisioning and billing-aware runtime topology
+- [DevOps](/team/devops/index) for operational runbooks and deployment
 
 ## Related public docs
 
-- [/docs/integrate/agents](/docs/integrate/agents)
-- [/docs/architecture](/docs/architecture)
+- [/docs/integrate/agents](/docs/integrate/agents) — public agent integration guide
+- [/docs/architecture](/docs/architecture) — technical architecture

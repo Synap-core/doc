@@ -8,7 +8,6 @@ audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
@@ -17,8 +16,54 @@ toc: true
 
 Rolling updates use staged rollout with explicit control points:
 
-- Build/publish via GitHub CI to GHCR.
-- Trigger update jobs through webhook + worker orchestration.
-- Roll out to canary first, then controlled fleet batches.
+## Release pipeline
 
-This minimizes blast radius while preserving update velocity.
+```
+GitHub CI (build)
+  └─→ GHCR (publish image with git SHA tag)
+      └─→ Control Plane webhook (receive image URL)
+          └─→ pg-boss job (schedule update)
+              └─→ Pod agent (pull new image, restart)
+```
+
+## Update stages
+
+| Stage | Description | Rollback trigger |
+|-------|-------------|------------------|
+| **1. Build** | CI runs lint, type-check, unit tests; publishes image to GHCR | Build test failure |
+| **2. Canary** | Deploy to first pod only; monitor health for 15 minutes | Health check failure > 1% |
+| **3. Batch 1 (25%)** | Deploy to 25% of pods; expand health window to 30 minutes | Any DB migration conflict |
+| **4. Batch 2 (50%)** | Deploy majority; monitor error rates + IS latency | Error rate spike > 50% vs baseline |
+| **5. Fleet (100%)** | Deploy to remaining pods; confirm all dashboards green | Any critical alert fires |
+| **6. Verify** | Run integration test suite against all updated pods | Functional test failure |
+
+## Implementation details
+
+```bash
+# CI pipeline (GitHub Actions)
+./synap-ci deploy --image ghcr.io/synap/pod-api:<sha> --stage canary
+
+# Manual trigger (if CI fails mid-pipeline)
+./synap-cp update --image <ghcr-url> --canary-first
+
+# Rollback
+./synap-cp rollback --target <previous-sha>
+```
+
+## Migration safety
+
+- **DB migrations** must be backwards-compatible (additive changes only) because pods may be on different versions during the rolling window
+- **Forward-compatible** schema changes: always add columns, never remove
+- **Backward-compatible** API changes: always accept both old + new field names
+
+## Monitoring during update
+
+- Watch Grafana pod health dashboard during canary stage (15 min minimum)
+- Track IS metrics for latency anomalies (canary pods route agent traffic first)
+- Check pg-boss job queue (update jobs should complete within 2 min per pod)
+
+## Related docs
+
+- [Rolling Update CI Pipeline](/team/control-plane/pod-deploy-strategies)
+- [Monitoring Setup](/team/devops/monitoring-setup)
+- [Incident Runbook](/team/control-plane/incident-runbook)

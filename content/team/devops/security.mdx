@@ -18,4 +18,46 @@ Use these canonical documents:
 - **[Platform Security Model](/team/platform/security)** — architecture-level security model and boundaries
 - **[DevOps Security Practices](/team/devops/security-practices)** — operational hardening checklist
 
-This page stays as a navigation bridge to avoid duplicate security guidance across sections.
+## Security ownership
+
+| Area | Owner | Docs |
+|------|-------|------|
+| Pod infrastructure | DevOps / Platform | [Security Practices](/team/devops/security-practices) |
+| Control Plane | DevOps / Security | [Control Plane security](/team/control-plane/pod-security) |
+| Data access + auth | Platform team | [Platform security](/team/platform/security) |
+| AI governance | DevOps | [AI Governance Audit](/team/devops/ai-governance) |
+| Auth consolidation | Platform | [Auth Audit](/team/devops/auth-audit) |
+
+## Security review cadence
+
+- **Weekly** — CI/CD security scans (dependency audit, Docker image scanning) for all repos
+- **Monthly** — Dependency audit and patch review across monorepo workspace
+- **Quarterly** — External vulnerability scan of each production pod (CP, is, PostgreSQL)
+- **Ad-hoc** — Security incident response via [Incident Runbook](/team/control-plane/incident-runbook)
+
+## Common security operations
+
+| Operation | Command / Tool | Description |
+|-----------|----------------|-------------|
+| Rotate API keys | `./synap-cp rotate-keys` | CP key rotation via dashboard or CLI |
+| Rotate DB passwords | `PGPASSWORD=... psql -c ALTER USER` | Direct PostgreSQL user password rotation |
+| Revoke token | `tRPC tokens.revoke` | Revoke a specific user or service token |
+| Audit log review | Dashboard → Governance → Audit trail | View all proposal decisions, mutations, connector syncs |
+
+## Security incident response
+
+1. **Identify** — Alert via monitoring (Prometheus/Grafana) or user report
+2. **Contain** — Isolate affected pod/service; disable compromised credentials
+3. **Assess** — Review audit logs + access logs to determine scope
+4. **Remediate** — Apply fixes, rotate keys, patch vulnerabilities
+5. **Document** — Add post-mortem to `/team/decisions/decision-log`
+6. **Recover** — Restore from backup if data integrity affected
+
+See full process in: **[Incident Runbook](/team/control-plane/incident-runbook)**
+
+## Related docs
+
+- **[Platform Security Model](/team/platform/security)** — tRPC auth, Hub Protocol access control, RBAC
+- **[Security Practices](/team/devops/security-practices)** — Docker hardening, secret management, TLS
+- **[AI Governance Audit](/team/devops/ai-governance)** — 15 issues found in OpenClaw × Synap integration
+- **[Proposal Governance](/team/features/proposals-governance)** — Mutation audit trail via reviewable proposals

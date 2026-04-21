@@ -17,10 +17,189 @@ toc: true
 - write operations remain permission/proposal governed
 - no custom bypass path for Raycast-only mutations
 
-## Auth and session
+## tRPC API connection
 
-- reuse existing auth/session patterns
-- do not introduce long-lived plaintext secrets in local logs or prompts
+### Connection target
+
+Raycast connects to the user's personal data pod via tRPC at `${podUrl}/trpc`. There is no `/api` prefix for tRPC endpoints — the Hub Protocol REST layer uses `/api/hub/*` but tRPC is served directly on `/trpc`.
+
+### Read procedures
+
+The Raycast extension uses the following tRPC read paths for fetching data:
+
+- `profiles.list` / `profiles.getEffectiveProperties` — list available entity profiles and their effective property schemas for the current workspace
+- `entities.get` — fetch entity detail by ID (with optional `includeProfile` to resolve the profile schema)
+- `entities.list` — query entities with filter support, respects `entityScope` (pod-wide vs workspace-scoped)
+- `views.list` / `views.get` — discover available views and their filter/column configs
+- `views.filter` — compile a view's filter config into a query (used to preview what a view would show)
+- `property-defs.list` — list property definitions for a profile in a workspace (threads `workspaceId` for correct overlay resolution)
+- `channels.list` — discover channels a user has access to
+- `channels.get` — fetch channel messages and metadata
+
+All read procedures are gated by `verifyWorkspaceAccess(userId, wsId)` in the Hub Protocol REST layer, and by tRPC auth guards in the router layer.
+
+### Write procedures
+
+Write procedures are the same tRPC routes but with mutations. They go through `checkPermissionOrPropose()` in the API layer:
+
+- If the user has the required RBAC role and the action is in the `DEFAULT_AUTO_APPROVE` whitelist, the mutation executes directly.
+- Otherwise, a **proposal** is created (`UniversalProposal`, `ProposalWithRequest`) that the user or a workspace admin must approve/reject before it takes effect.
+
+Key write procedures:
+
+- `entities.create` / `entities.update` — entity mutations with optional `includeProfile`
+- `profiles.create` / `profiles.update` — profile definition changes
+- `views.create` / `views.update` — view configuration changes
+- `property-defs.create` — schema changes (workspace overlay or base profile)
+- `events.create` — event scheduling and management
+
+When a write goes through a proposal, the tRPC response includes the proposal ID so the Raycast UI can show the user the pending state.
+
+### Auth
+
+tRPC queries/mutations are authenticated via the session cookie that stores the user's Better Auth session. The extension includes the session cookie in each tRPC call header. When the session expires (401 from tRPC), the extension must re-authenticate through the standard auth flow.
+
+## Hub Protocol REST integration
+
+### When to use Hub Protocol
+
+The Hub Protocol REST layer (`POST /api/hub/*` with Bearer token auth) is the dedicated channel for external integrations like Raycast. Use it when:
+
+- Calling the **21 sub-routers** that expose platform capabilities (proactive posting, memory, entity discovery, etc.)
+- The integration operates as an external agent (not in-page tRPC traffic)
+- Rate-limited endpoints are needed (e.g., `POST /proactive/post` — 3/hour, 10/day)
+
+### How Raycast calls Hub Protocol
+
+- Authenticates with a **temporary bearer token** (not long-lived secrets, see Auth flow below)
+- Calls are scoped to workspace via `getUserAccessibleWorkspaceIds(userId)` and `verifyWorkspaceAccess(userId, wsId)`
+- For shared pod deployments (multi-tenant), the Hub layer applies workspace filtering automatically
+
+### Key Hub Protocol endpoints for Raycast
+
+- `POST /entities` — entity creation (workspaceId is optional; falls back to user's first accessible workspace)
+- `POST /proactive/post` — Raycast can post insights or proactive messages into a user's personal channel
+- `POST /memory` — fact storage (embedding optional; zero-vector fallback supported)
+- The Hub Protocol endpoint for OpenAI-compat streaming: `POST /v1/chat/completions` with model aliases (`synap/auto`, `synap/free`, `synap/balanced`, `synap/advanced`, `synap/complex`)
+
+### No direct DB access
+
+Raycast never accesses the database or Redis directly. All data mutations go through tRPC or Hub Protocol REST. This is a hard boundary.
+
+## Auth flow
+
+### Token storage
+
+- **No plaintext secrets in local storage, logs, or prompts.** All session tokens and API keys are stored in the macOS keychain via the SecureStorage utility (available natively in Raycast extensions through `raycast:sec`).
+- On extension install/first run, the user authenticates through the standard pod login flow. The resulting session cookie (Better Auth) and any API keys are written to the keychain.
+- Tokens are scoped to the user's current workspace context and are refreshed transparently using Better Auth session renewal.
+
+### Session reuse
+
+- Raycast reuses the browser's Better Auth session when the user is logged into their pod in a browser window (via matching domain cookies if hosted on the same origin). If not, Raycast initiates its own login flow.
+- Session validity is checked on each request. On a 401 response from tRPC or Hub Protocol, the extension prompts the user to re-authenticate.
+- The extension never caches full tokens in memory beyond the lifetime of the active request queue.
+
+### Pod URL resolution
+
+- Raycast stores the user's pod URL in the extension settings, keyed to the current workspace account.
+- If the user has multiple workspace accounts configured, each account independently stores its pod URL, session, and active workspace ID in the settings store.
+- The default workspace for a user is resolved by fetching `getUserAccessibleWorkspaceIds` on first connect and selecting the first accessible workspace.
+- For local/offline usage (the "Keep it local" mode from story-based onboarding), Raycast falls back to IndexedDB for local entity storage. Sync back to a pod happens when connectivity is restored, using the same write + proposal flow as online mode.
+
+## Event and Proposal integration
+
+### Write governance
+
+All writes from Raycast follow the same permission model as inline web UI writes:
+
+1. The extension resolves the user's current workspace context and entity scope.
+2. If the action requires RBAC that the user has, and the action type is in the `DEFAULT_AUTO_APPROVE` whitelist, it executes directly.
+3. Otherwise, the mutation goes through `checkPermissionOrPropose()`, creating a proposal record.
+
+### Proposal visibility
+
+When a proposal is created, the Raycast extension should:
+
+- Show a visual indicator that the mutation is pending approval
+- Display the proposal details (entity change, by whom/what, timestamp)
+- Allow the user to approve or reject directly from the extension (via tRPC `proposals.approve` / `proposals.reject`)
+
+### Proposal types
+
+Raycast writes can generate these proposal types:
+
+- `entities.create` / `entities.update` — entity mutations
+- `profiles.update` — schema changes
+- `views.update` — view config changes
+- `external_import` — data sync from connectors
+
+### Batched writes
+
+For performance, batch multiple entity operations in a single Raycast flow. Each individual operation still goes through its own `checkPermissionOrPropose()` evaluation. Proposals for related operations should be grouped by the client and displayed as a single review item.
+
+### Notification integration
+
+When proposals are created, approved, or rejected, the backend fires notifications (discriminated `source` of `proposal | proactive | system | data`). Raycast should listen for these via the Socket.IO realtime layer to update its UI in real time.
+
+## Error handling patterns
+
+### Network failures
+
+- **Transient network errors** (timeout, DNS failure): retry with exponential backoff, max 3 attempts. Show a "retrying..." indicator.
+- **Pod unavailable** (5xx from server): show "Pod not available" banner. Suggest checking pod status or switching to local mode.
+- **Offline mode**: when the user explicitly disables sync, all operations write to IndexedDB locally. A "pending sync" badge appears. Sync resumes automatically when connectivity is restored.
+
+### Auth failures
+
+- **401 from tRPC or Hub Protocol**: clear the session from the keychain, show the login UI, and redirect to the pod's auth flow.
+- **403 from tRPC or Hub Protocol**: permission denied. Show the specific permission requirement and, if applicable, the user's current role. For write attempts blocked by permission, offer to create a proposal instead.
+
+### Permission denials
+
+- When `checkPermissionOrPropose()` rejects the immediate write path, it returns a proposal request. The UI should surface this to the user as a pending action that requires workspace-level approval.
+- Show the full proposal chain: who/what triggered it, what changes it makes, and the approval status (pending/approved/rejected).
+
+### Data resolution errors
+
+- **Entity or view not found** (404): show a "content removed or unavailable" message. Allow the user to clear it from their history.
+- **Property schema mismatch** (entity references a property not defined in the workspace's effective properties): log the mismatch, fall back to the global/profile-base schema definition, and show a warning in entity edit mode.
+
+## Security considerations in Raycast context
+
+### Extension sandbox
+
+Raycast extensions run in a scoped browser-like environment. All network requests must explicitly specify their target origin — no wildcard or broad-scope requests. The Raycast API enforces per-extension origin allowlisting; configure this in the Raycast developer dashboard.
+
+### Keychain security
+
+- All secrets (session tokens, API keys, pod URLs) are stored in the macOS keychain, accessible only to the extension via its app group identifier.
+- Never log, print, or display full tokens or keys in the extension console, user-facing UI, or error messages.
+- Use partial key masking when displaying any key-related value to the user (e.g., `sk-•••••••-...•••••••-12345`).
+
+### Workspace isolation
+
+- Raycast must enforce workspace boundaries at all layers. When fetching data for a given workspace, always pass `workspaceId` explicitly to tRPC procedures. Do not rely on server-side defaults alone.
+- For `property-defs` queries, always pass `workspaceId` to ensure correct overlay resolution (base defs + that workspace's overlays). Other workspaces' overlays must never leak into rendering.
+
+### Data minimization
+
+- Raycast should only store the minimum amount of synced data locally needed for the current view. Once the user navigates away from an entity or view, clear it from IndexedDB memory.
+- Proactive messages and notifications synced from the pod should be treated as ephemeral unless the user explicitly saves them.
+
+### No custom API bypasses
+
+- Raycast must never create its own endpoints or API routes on the pod. All integration traffic goes through the existing tRPC or Hub Protocol REST layer.
+- If Raycast needs a capability not currently exposed by a tRPC procedure, request that procedure be added to the backend — do not build a parallel path.
+
+### Rate limiting awareness
+
+- Raycast calls to `POST /proactive/post` (Hub Protocol) are rate-limited to 3/hour and 10/day. The extension should enqueue proactive posts and warn the user when they approach the limit.
+- Other tRPC endpoints do not have client-facing rate limits but the extension should batch requests and debounce rapid successive calls (e.g., typing in entity name field → debounce to single update call).
+
+### Audit trail
+
+- All writes from Raycast appear in the proposal audit trail just like web UI writes. There is no distinction between "internal" and "external" mutations in the proposal system — the actor type is recorded but treated identically in terms of approval workflow.
 
 ## Related docs
 

@@ -1,37 +1,92 @@
 ---
-title: 'Go-to-market'
-description: >-
-  Product/ops-first operating hub for positioning, launches, and commercial
-  execution
+title: 'Go-to-Market'
+description: 'Positioning, launch execution, market analysis, and commercial packaging'
 section: general
-audience: users
+audience: team
 version: 1.0+
 last_updated: '2026-04-20'
-tags: []
+tags: [gtm, marketing, launches, positioning, pricing]
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Go-to-market
+# Go-to-Market
 
-This space is for product, operations, and marketing execution first, with technical links where needed.
+**Target Users**: GTM team, product marketing, launch operators, sales, community managers  
+**Marketing**: How Synap moves from product to market — positioning, packaging, launches, and distribution  
+**Key User Stories**:
+- As a GTM operator, I want a clear roadmap and sequencing so I can align launches with engineering delivery
+- As a product marketer, I want planning assets (design brief, pricing, visual assets) in one place so I can build materials
+- As a launch operator, I want operational checklists and templates so I can execute rollouts consistently
+**Key Features**: GTM roadmap, planning assets, launch operations, market analysis, OpenClaw GTM funnel  
+**Current Status**: GTM structure active; launch ops links to Home space for pre-launch assets; OpenClaw GTM documented
 
-## Primary audiences
+## Overview
 
-- Product and operations teams
-- Marketing and launch owners
-- Engineering partners involved in delivery constraints
+This space covers **execution** — how Synap products reach users. It is product and operations-focused, with technical links where needed. GTM work draws from three upstream sources: product direction (Home & Vision), design/packaging assets (Home & Vision), and launch execution (this space).
 
-## How to use this space
+The space is organized into four areas:
 
-1. Start with [Roadmap](/team/go-to-market/roadmap) for delivery sequencing and narrative timing.
-2. Use [Planning assets](/team/go-to-market/planning-assets) for packaging and launch collateral.
-3. Use [Launch operations](/team/go-to-market/launch-operations) for rollout execution.
-4. Use [Market and analysis](/team/go-to-market/market-and-analysis) for positioning evidence.
+1. **Roadmap** — GTM-facing delivery sequencing and narrative timing
+2. **Planning Assets** — design, packaging, pricing, and positioning materials
+3. **Launch Operations** — rollout execution, checklists, sequencing
+4. **Market & Analysis** — positioning evidence, competitive context
 
-## Related spaces
+## Architecture
 
-- [Ops & marketing](/team/ops-marketing/index) for messaging frameworks and enablement templates.
-- [Home & vision](/team/home/index) for product north star and platform map.
-- [Relay future state](/team/relay/future-state) for mobile product direction.
+Synap's GTM strategy follows a **two-layer funnel**:
+
+```
+Layer 0: OpenClaw ecosystem (free, open-source) → Synap discovery
+  │
+  ▼
+Layer 1: Managed pod ($15-20/mo) → Revenue
+  │
+  ▼
+Layer 2: Visual products ($50/mo) → Upsell
+```
+
+The critical pattern: users enter at the **free/open layer** (not the paid layer), then upgrade as they derive value. Every GTM asset serves this funnel.
+
+## Documentation Map
+
+### GTM Roadmap
+
+| Page | Description |
+|------|-------------|
+| [Roadmap](/team/go-to-market/roadmap) | GTM-facing delivery sequencing — links to product roadmap and launch ops |
+
+### Planning Assets
+
+| Page | Description |
+|------|-------------|
+| [Planning Assets](/team/go-to-market/planning-assets) | Design brief, visual assets, pricing references, dev plan context |
+
+### Launch Operations
+
+| Page | Description |
+|------|-------------|
+| [Launch Operations](/team/go-to-market/launch-operations) | Pre-launch plan, release strategy, release checklist, landing audit |
+
+### Market & Analysis
+
+| Page | Description |
+|------|-------------|
+| [Market and Analysis](/team/go-to-market/market-and-analysis) | Market context, strategic analysis, product strategy framing |
+
+### OpenClaw GTM
+
+| Page | Description |
+|------|-------------|
+| [OpenClaw GTM](/team/go-to-market/openclaw-gtm) | Go-to-market context for OpenClaw-related initiatives and the primary distribution funnel |
+
+## Code References
+
+- **Product roadmap**: `/team/home/roadmap` — canonical scope for delivery status
+- **Launch templates**: `/team/ops-marketing/launch-playbook` — reusable launch templates
+- **Messaging framework**: `/team/ops-marketing/messaging-framework` — positioning and messaging
+- **Pricing assets**: `/team/home/pricing` — tier structure and packaging
+- **Design assets**: `/team/home/design-brief`, `/team/home/visual-assets` — brand and design materials
+- **Market analysis**: `/team/home/market`, `/team/home/analysis` — upstream research
+- **OpenClaw strategy**: `/team/home/openclaw-strategy`, `/team/home/openclaw-state` — funnel docs

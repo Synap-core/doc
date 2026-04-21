@@ -8,7 +8,6 @@ audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
@@ -17,8 +16,78 @@ toc: true
 
 First-time IS setup provisions orchestration, networking, and observability dependencies.
 
-- Run the scripted install flow (`./synap install`) from the service deploy surface.
-- Configure Docker runtime, Traefik ingress, and tracing/analytics connectors.
-- Validate Control Plane connectivity before enabling production traffic.
+## Prerequisites
 
-Follow with [Monitoring Setup](/team/devops/monitoring-setup) and [Security Practices](/team/devops/security-practices).
+- Linux server (VPS) with ≥4 CPU cores, ≥8GB RAM
+- Docker Engine (≥24.0)
+- Docker Swarm mode enabled (`docker swarm init`)
+- Traefik ingress controller configured (or install separately)
+- Control Plane API accessible and a service API key provisioned
+
+## Installation flow
+
+```bash
+# 1. Clone the IS repo
+git clone <is-repo-url>
+cd synap-intelligence-service
+
+# 2. Run the interactive installer
+./synap install
+
+# 3. What the installer does:
+#    a. Configures Docker Swarm overlay network
+#    b. Deploys Traefik for ingress + HTTPS termination
+#    c. Provisions Langfuse (tracing/observability)
+#    d. Deploys IS services: orchestrator, persona agents, tool handlers
+#    e. Connects to CP via API key for pod registry lookups
+#    f. Verifies Hub Protocol endpoint (/api/hub/status)
+#    g. Starts Langfuse UI on port 3001 for tracing dashboard
+```
+
+## Services deployed
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| OrchestratorAgent | 3001 | Main agent router (21 sub-routers) |
+| PersonaAgent workers | 3002-3006 | Domain-specific agents (one per persona) |
+| Langfuse | 3001 | Tracing analytics + token usage tracking |
+| Traefik | 80, 443 | HTTP/HTTPS ingress routing |
+| Nango connectors | 3000 | OAuth connector sync (if bundled) |
+
+## Post-install verification
+
+```bash
+# 1. Hub Protocol health
+curl https://is.yourdomain.com/api/hub/status
+# Expected: {"ok": true, "agents": 7}
+
+# 2. Langfuse UI
+# Navigate to https://is.yourdomain.com:3001
+# Verify agent activity is being traced
+
+# 3. CP connectivity
+# Dashboard → Intelligence → Service Status
+# Should show "connected" for your domain
+```
+
+## Security checklist
+
+- [ ] Traefik HTTPS termination with valid cert
+- [ ] API key auth between CP and IS (Bearer token in request header)
+- [ ] Langfuse auth enabled (prevent public access to traces)
+- [ ] Rate limiting applied: Hub Protocol endpoint limited to 3 posts/hour, 10/day per user
+- [ ] Embedding model access controlled via IS config (not exposed externally)
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Swarm nodes not joining | Check `docker swarm join-token` and firewall rules between nodes |
+| Traefik can't route | Verify `traefik.yml` middleware configs match service labels |
+| CP rejects IS calls | Regenerate service key from CP dashboard; verify token format |
+
+## Related docs
+
+- [Intelligence Architecture](/team/intelligence/architecture)
+- [Monitoring Setup](/team/devops/monitoring-setup)
+- [Security Practices](/team/devops/security-practices)

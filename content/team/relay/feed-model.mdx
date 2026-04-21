@@ -1,24 +1,383 @@
 ---
-title: 'Feed Freshness'
+title: 'Feed Model'
 description: >-
-  Layer 1 cache hygiene, Layer 2 smart polling (trpc.events.since), Layer 3
-  WebSocket plan.
+  Three-layer feed architecture: Signal Feed (real-time entity events),
+  Proactive Feed (AI-generated insights), Unified Feed (composited view).
+  Storage, API, rendering, and edge cases across Browser, Relay, Studio.
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-04-21'
 tags: []
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Feed Freshness
+# Relay Feed Model
 
-Feed freshness uses a layered update strategy:
+The Relay feed composes two independent data streams into a single scrollable experience. This document covers the architecture, data contract, API surface, cross-surface rendering, and edge cases.
 
-- **Layer 1:** cache hygiene and invalidation discipline
-- **Layer 2:** smart polling via `trpc.events.since`
-- **Layer 3:** realtime push via WebSocket for low-latency updates
+See also: [FEED-SYSTEM.md](/docs/internal/feed-system) (backend channel + automation architecture), Relay [Architecture](/team/relay/architecture).
 
-The model balances reliability first, then progressively tighter latency.
+---
+
+## 1. Three-Layer Feed Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Unified Feed UI                        │
+│          (composited, ranked, time-windowed)               │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ composes
+              ┌─────────────┴─────────────┐
+              │                           │
+     ┌────────▼────────┐         ┌────────▼────────┐
+     │  Signal Feed    │         │  Proactive Feed  │
+     │  (entity events)│         │  (AI-generated)  │
+     └────────┬────────┘         └────────┬────────┘
+              │                           │
+         Socket.IO + tRPC           Cron workers + IS
+```
+
+**Signal Feed** — Real-time updates about entities the user cares about. Triggered by concrete actions: entity created/updated, a proposal approved, a message in a subscribed channel. These are *deterministic* and *user-initiated*.
+
+**Proactive Feed** — AI-generated insights pushed into the `isProactiveFeed` channel. Includes the daily morning briefing, weekly digest, health check results, event prep briefings, and automation outputs. These are *computed* and *system-initiated*.
+
+**Unified Feed** — The composited view that renders both Signal and Proactive items in a single timeline, ranked by recency with type-based priority weighting. This is what the user scrolls in the Relay app, and what the Browser renders in the Feed widget.
+
+---
+
+## 2. Signal Feed: Entity Events
+
+### Event Types
+
+Every event in the `events` table that matches user subscription criteria produces a signal item:
+
+| Event Type | Signal Content | Example |
+|------------|---------------|---------|
+| `entity.create` | New entity card with profile icon and summary | New task: "Book flight to NYC" |
+| `entity.update` | Updated fields highlighted | Task status changed: todo → in-progress |
+| `entity.delete` | Soft-deleted entity banner (dismissable) | Archived note |
+| `proposal.created` | AI-suggested change awaiting approval | AI proposes merging two person profiles |
+| `proposal.approved` | Confirmed with attribution | Merged profiles John Doe v1, v2 |
+| `proposal.rejected` | Rejected with reasoning (if provided) | Rejected: duplicate of existing person |
+| `channel_message.created` | New message in subscribed entity channels | Telegram message from contact |
+| `relation.create` | New relationship discovered | Person met_at event ETHGlobal |
+
+### Deduplication Strategy
+
+Signal items are deduplicated using a composite key:
+
+```typescript
+type SignalDedupKey = {
+  eventType: Event['type'];
+  entityKind: string;        // entities.kind
+  entityId: string;          // entities.id
+  actorId: string;           // who triggered it
+};
+```
+
+Within a 60-second sliding window, duplicate dedup keys collapse into a single signal item that shows the most recent state. For frequent updates (e.g., a user rapidly editing a note), this prevents signal flooding:
+
+- 5 `entity.update` events on the same note in 30s → 1 aggregated signal ("Note updated (5 changes)")
+- The aggregated item expands on tap to show individual change bullets
+
+### Real-Time Delivery
+
+Signal items flow through two channels:
+
+1. **Socket.IO** (`@synap-core/client` real-time subscription) — Primary delivery path. The client subscribes to `entity.*` and `proposal.*` channels. Events arrive in `&#x3C;500ms` on active WebSocket connections.
+
+2. **Smart Polling** (`trpc.events.since`) — Fallback and gap-filling. The `events.since(timestamp)` tRPC endpoint returns all events the client hasn't acknowledged since a given cursor. Used on reconnection, during offline periods, and as a reconciliation check every 5 minutes.
+
+Acknowledgement model: each signal item carries an `acknowledged` flag. User taps an item → client calls `trpc.events.ack(signalId)` → item is marked read and UI updates.
+
+### Notification Integration
+
+Signal events that match user notification preferences also create rows in the `notifCenter` table. This means the notification bell reflects signal activity, and users can receive push-style alerts on mobile even when the app is backgrounded.
+
+Preference surface: per-signal-type toggle (entity create, entity update, proposals) plus a global quiet hours configuration.
+
+---
+
+## 3. Proactive Feed: AI-Generated Insights
+
+### Cron Workers
+
+Three background workers produce proactive content via `postProactiveMessage()`, which writes to the `isProactiveFeed` channel:
+
+| Worker | Schedule | Content | Typical Timing |
+|--------|----------|---------|---------------|
+| Morning Briefing | Daily at 7:45am | Overnight summary of key events, upcoming events, reconnection suggestions | 8:00am — 12:00pm |
+| Weekly Digest | Weekly, Monday 8:00am | Week-in-review, activity patterns, network growth metrics | Monday morning |
+| Health Check | Daily, 6:00pm | System health status, automation run summary, data quality report | Evening batch |
+
+Additional on-demand proactive items come from:
+
+- **Event Prep Briefing** — Triggered before calendar events with attendees/interactions in your network
+- **Automation outputs** — Any automation with `channelType: 'proactive'` output
+- **Direct IS posts** — Via `POST /api/hub/proactive/post` (rate-limited: 3/hr, 10/day, 1 per proactiveType per day)
+
+### Proactive Notification Type
+
+Every proactive message carries `metadata.proactiveAi: true` and `metadata.proactiveType: "morning-briefing" | "weekly-digest" | "health-check" | "event-prep-briefing" | "insight" | ...`. This metadata drives:
+
+- **UI rendering:** Different card chrome for different types (briefing has expanded layout, nudge is compact)
+- **Deduplication:** At most one proactive message per type per day
+- **Filtering:** Unified Feed can group/sort by proactiveType
+- **"Continue in chat":** Tapping a proactive item offers to open the personal chat channel with context pre-seeded
+
+### User Preference Controls
+
+Proactive feed settings live on `workspace.settings.proactiveAi` as JSONB:
+
+```json
+{
+  "enabled": true,
+  "nudgeDensity": "balanced",       // "sparse" | "balanced" | "dense"
+  "morningBriefing": {
+    "enabled": true,
+    "time": "07:45",
+    "includeReconnectionNudges": true,
+    "includeUpcomingEvents": true,
+    "includeSystemNotes": false
+  },
+  "weeklyDigest": {
+    "enabled": true,
+    "day": "monday"
+  },
+  "healthCheck": {
+    "enabled": true,
+    "includeAutomationSummary": true
+  },
+  "quietHours": {
+    "enabled": false,
+    "start": "22:00",
+    "end": "07:00"
+  }
+}
+```
+
+**Nudge density** controls the verbosity of reconnection suggestions and AI nudges:
+- `sparse`: Only critical reconnection misses (no contact in >30 days)
+- `balanced`: Critical + moderate misses (>14 days) — default
+- `dense`: All misses + opportunistic suggestions
+
+---
+
+## 4. Unified Feed Composition
+
+### Merge Strategy
+
+The `useFeed.ts` hook (Relay) and the feed cell (Browser) both execute the same composited query pattern:
+
+```
+Feed = concat(
+  Signal items from: trpc.entities.list + trpc.events.list,
+  Proactive items from: chat.getMessages(isProactiveFeed channel),
+  Notification items from: notifCenter.list,
+  Campaign activity from: trpc.entities.list { profileSlug: 'campaign' }
+)
+| sort(createdAt desc)
+| applyVisibilityWindow(last 90 days)
+```
+
+### Ranking Algorithm
+
+Items are ranked primarily by timestamp, with secondary signals:
+
+1. **Freshness (primary)** — Newest items first
+2. **Type priority (tiebreaker)** — Proactive items with `proactiveType: "morning-briefing"` rank above routine signal items at the same timestamp
+3. **Engagement weight (deferred future)** — Not yet implemented; will factor in taps/read-state to surface items the user typically interacts with
+
+### Time-Window Visibility
+
+The Unified Feed shows items from the last 90 days by default. Items older than 90 days are not included in the scrollable feed but remain queryable via:
+
+- `trpc.feed.getArchived` — Paginated access to older items
+- Time-range filter in the Feed UI (pull-down to expand window)
+
+Empty state: When no items exist in the feed window, the UI shows a contextual empty state explaining what the feed will contain once data starts flowing (new entities, AI briefings, etc.).
+
+---
+
+## 5. Feed Storage
+
+### Persistence Layer
+
+| Data | Table | Notes |
+|------|-------|-------|
+| Signal events | `events` | Event chain — immutable log, append-only |
+| Channel messages (proactive) | `channel_messages` | Read by proactive feed channel |
+| Notifications | `notifCenter` | Ephemeral; cleaned up by daily worker |
+| Proactive read state | Not explicitly tracked | Derived from `channel_messages` + user's last-tap |
+
+### Query Patterns
+
+```sql
+-- Main feed query (simplified)
+SELECT 'signal' as itemType, events.*
+FROM events
+WHERE ack_user_id = :userId
+  AND events.created_at > now() - interval '90 days'
+UNION ALL
+SELECT 'proactive' as itemType, channel_messages.*
+FROM channel_messages
+INNER JOIN channels ON channel_messages.channel_id = channels.id
+WHERE channels.user_id = :userId
+  AND channels.metadata->>'isProactiveFeed' = 'true'
+  AND channel_messages.created_at > now() - interval '90 days'
+ORDER BY created_at DESC
+LIMIT :limit OFFSET :offset;
+```
+
+### Pagination & Limiting
+
+- Relay defaults to 20 items per page with infinite scroll
+- Cursor-based pagination using `createdAt` + item ID to handle concurrent insertions
+- Maximum window: 500 items per request (capped client-side and server-side)
+
+### Archiving
+
+Items older than 90 days are soft-archived: they remain in `events` and `channel_messages` (these tables are append-only), but are excluded from feed queries. A monthly cleanup worker can optionally purge `notifCenter` entries older than 1 year.
+
+---
+
+## 6. Feed API
+
+### tRPC Endpoints
+
+| Endpoint | Type | Description |
+|----------|------|-------------|
+| `trpc.feed.get` | Query | Get composited feed items (cursor + limit pagination) |
+| `trpc.feed.getArchived` | Query | Older items beyond 90-day window |
+| `trpc.feed.ack` | Mutation | Mark item as read/acknowledged |
+| `trpc.feed.clear` | Mutation | Clear all acknowledged items (soft reset) |
+| `trpc.feed.settings.get` | Query | User's proactive preferences |
+| `trpc.feed.settings.update` | Mutation | Update proactive preferences |
+| `trpc.events.list` | Query | Raw event log for signal filter |
+| `trpc.events.since` | Query | Reconciliation endpoint (last N events since timestamp) |
+| `trpc.events.ack` | Mutation | Acknowledge individual events |
+| `trpc.notifCenter.unreadCount` | Query | Notification bell badge |
+| `trpc.notifCenter.list` | Query | Notification cards for feed |
+
+### Real-Time Subscription
+
+The `@synap-core/client` Socket.IO connection maintains these subscriptions:
+
+```typescript
+socket.on('entity.created', (payload) => optimisticInsert('signal-feed', payload))
+socket.on('entity.updated', (payload) => optimisticeUpdate('signal-feed', payload))
+socket.on('proposal.created', (payload) => optimisticInsert('signal-feed', payload))
+socket.on('proposal.approved', (payload) => optimisticUpdate('signal-feed', payload))
+socket.on('proposal.rejected', (payload) => optimisticUpdate('signal-feed', payload))
+socket.on('channel_message.created', (payload) => checkAndInsert(payload))
+socket.on('notifCenter.new', (payload) => optimisticInsert('notification-feed', payload))
+```
+
+Optimistic UI: signal items appear in the feed within `&#x3C;50ms` (local state) before the event fires via Socket.IO. If the Socket.IO connection drops, the smart polling layer (`events.since`) reconciles within 5 seconds.
+
+### Feed Settings Mutation
+
+Settings change via `trpc.feed.settings.update` with full `proactiveAi` JSONB payload. The mutation validates via Zod and writes to `workspaces.settings`. Changes are immediately reflected in the UI and take effect on the next cron worker run (or immediately for disabled features).
+
+---
+
+## 7. Cross-Surface Consistency
+
+### Relay (Mobile)
+
+- Primary feed surface — full experience with capture FAB, pull-to-refresh, infinite scroll
+- Native push notifications for critical signals (proposal actions, high-priority automation)
+- Lock screen widgets (planned) show top 3 proactive items
+- Home screen widgets planned for future: "Today's briefing" summary card
+
+### Browser (Electron)
+
+- Feed widget in bento grid — compact view showing last 5 items
+- Feed panel in sidebar (planned) — full scrollable view as a cell
+- Notification bell shows aggregate unread counts from `notifCenter`
+- Proactive feed renders as `ProactiveCard` components via the cell runtime
+
+### Studio
+
+- Feed items embedded in entity detail as the interaction timeline
+- Proactive content shown as entity metadata additions (AI enrichments, summaries)
+- Signal items as activity log entries in the entity header
+
+### Consistency Guarantee
+
+All three surfaces query the same underlying data (`events`, `channel_messages`, `notifCenter` via tRPC). There is no per-surface caching divergence — the only variance is the UI rendering layer (different component trees for Relay vs Browser vs Studio). This means:
+
+- An acknowledged item on Relay shows as acknowledged on Browser
+- Settings changed in Relay immediately affect what the Browser renders
+- Proactive items generated on the backend appear identically on all surfaces
+
+---
+
+## 8. Feed Performance
+
+### Expected Load Times
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| Initial feed render (first load) | < 800ms | Server-side query for last 20 items |
+| Subsequent page load (infinite scroll) | < 300ms | Cached TanStack Query data + cursor fetch |
+| Real-time signal delivery | `&#x3C;500ms` | Socket.IO push (local network: `&#x3C;100ms`) |
+| Feed settings load | < 200ms | Cached in Zustand store |
+| Ack operation round-trip | < 300ms | Single tRPC mutation |
+
+### Caching Strategy
+
+- **TanStack Query:** Feed data cached with 30-second stale time, indefinite stale time (won't auto-refetch; manual pull-to-refresh or new signal triggers refetch)
+- **Zustand store:** Feed settings cached locally with optimistic updates
+- **Socket.IO:** No client-side caching for real-time events — events are applied directly to local state
+- **Server-side:** No Redis cache for feed queries at current scale; PostgreSQL indexes on `events.user_id, events.created_at DESC` and `channel_messages.created_at DESC` provide O(log n) lookups
+
+### Optimistic Updates
+
+All feed write operations (ack, clear, settings update) use optimistic updates with automatic rollback:
+
+1. Client updates local state immediately
+2. tRPC mutation fires in background
+3. If mutation fails: Rollback to previous state, show toast notification
+4. If mutation succeeds: Local state remains in sync
+
+---
+
+## 9. Edge Cases
+
+### Offline Feed
+
+When offline, the Relay app:
+
+- Shows the last cached feed from TanStack Query (typically up to 20 items)
+- Queues ack operations locally (using expo-secure-store or React Native async storage) and replays on reconnect
+- Signal events are invisible until reconnection (Socket.IO events cannot arrive offline)
+- No proactive items arrive offline since they require server-side cron execution
+
+Recovery: On reconnect, `events.since` reconciles any gap — if the user was offline for 2 hours and 15 new signals arrived, they flush into the feed in chronological order.
+
+### Feed Conflicts
+
+The feed data model is append-only, so true conflicts do not exist. However:
+
+- **Simultaneous edits:** If two devices edit an entity simultaneously, the last-write-wins model applies at the entity level. The feed shows the latest event from the winning write.
+- **Proposal race conditions:** If a proposal is approved/rejected simultaneously, the event log order (determined by database transaction timestamp) is authoritative. Events are displayed in strict timestamp order.
+
+### Duplicate Signals
+
+Deduplication handles these cases:
+
+- **Multiple events from the same action:** Fast sequential entity updates (e.g., rapid field edits) are aggregated within the 60-second window. The aggregated signal shows a count of changes.
+- **Automation + manual edit:** If a user edits an entity and an enrichment automation simultaneously updates the same entity, both events produce separate signal items (they have different `actorId` values: `user` vs `automation`). They appear as two adjacent entries.
+- **Cross-surface duplicate reads:** If an item is acknowledged on Relay, Browser sees the updated `acknowledged` state within one TanStack Query refetch cycle (default 30s) or immediately via Socket.IO broadcast of the ack event.
+
+### Empty Feed
+
+When a new user or a workspace with no activity opens the feed:
+
+- Relay shows a greeting screen with contextual CTAs: "Share something from your phone" (capture), "Enable AI briefing" (settings), "Connect your Telegram" (connector)
+- Browser feed widget shows a compact "nothing yet" state with a link to the capture flow
+- The empty state is dynamic and adapts to the user's onboarding stage and available connectors

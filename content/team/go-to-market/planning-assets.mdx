@@ -1,19 +1,72 @@
 ---
 title: 'Planning Assets'
-description: 'Design, packaging, and pricing assets used for launch preparation'
+description: Design, packaging, and pricing assets used for GTM preparation
 section: general
 audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Planning assets
+# Planning Assets
 
-- Design brief: [/team/home/design-brief](/team/home/design-brief)
-- Visual assets: [/team/home/visual-assets](/team/home/visual-assets)
-- Pricing references: [/team/home/pricing](/team/home/pricing)
-- Development plan context: [/team/home/dev-plan](/team/home/dev-plan)
+GTM planning assets reference library. Canonical sources of truth for design, pricing, packaging, and positioning materials.
+
+## Design brief
+
+- **Canonical source**: [/team/home/design-brief](/team/home/design-brief) (532 lines)
+- **Covers**: product messaging hierarchy, brand philosophy, "Never lose anything. Never organize anything." two promises, sovereign infrastructure trust argument
+- **Contains**: problem statement (knowledge worker chaos), three product definitions (AI OS, sovereign data, programmable platform), emotional states we want to create (relief, trust)
+- **Use when**: drafting website copy, marketing emails, onboarding flows, or any user-facing messaging
+
+## Visual assets
+
+- **Canonical source**: [/team/home/visual-assets](/team/home/visual-assets) (385 lines)
+- **Covers**: logo files, brand colors, UI screenshots, architecture diagrams, product dashboard mockups
+- **Contains**: screenshots of Agent OS workspace, Bento dashboard, entity profiles, channel views, Intelligence Service dashboard
+- **Use when**: creating marketing materials, blog posts, product demos, social media graphics
+
+## Pricing reference
+
+- **Canonical source**: [/team/home/pricing](/team/home/pricing) (253 lines)
+- **Covers**: token-based pricing model, tier structure, per-token cost breakdown
+- **Key tiers**:
+  - Pod-only: €15/mo — managed pod, API-only, no included tokens
+  - Pod+AI: €30/mo — managed pod, 1M tokens/month, Browser + Relay usage included
+  - API pay-as-you-go: per-token surcharge on top of subscription (see token tier table)
+- **Per-token markup**: ~2.7–3.5x depending on tier (free: 3.5x, balanced: 3.3x, advanced: 2.7x, complex: 2.7x)
+- **Use when**: marketing to users on cost savings, building comparison pages, calculating ARPU projections
+
+## Development plan
+
+- **Canonical source**: [/team/home/dev-plan](/team/home/dev-plan) (299 lines)
+- **Covers**: phased development timeline, team capacity allocation, milestone dependencies
+- **Contains**: Q2–Q4 2026 feature delivery sequence, priority rankings (P1/P2/P3), estimated effort blocks per phase
+- **Use when**: aligning GTM narrative with actual engineering delivery, avoiding premature marketing before features ship
+
+## Pricing assets
+
+- **Canonical source**: [/team/home/pricing](/team/home/pricing) — token billing implementation plan, Stripe metering setup, revenue projections
+- **Contains**: Phase 1–4 implementation plan for Stripe usage-based billing (meters, reporting, dashboard), cost estimates for per-tier pricing, spending caps and rate limiting strategy
+
+## Release strategy
+
+- **Canonical source**: [/team/home/release-strategy](/team/home/release-strategy) (266 lines)
+- **Covers**: release cadence, versioning approach, backward compatibility policy
+- **Contains**: canary deployment strategy, DB migration compatibility rules, rollback procedures
+
+## Use before publishing
+
+Before creating any GTM asset from these sources, verify:
+1. Pricing claims match current tier structure (check pricing.md)
+2. Feature descriptions match shipped status (check roadmap.md "Completed" section)
+3. Design language follows the two promises (check design-brief.md § "The Two Promises")
+4. Sovereignty narrative is accurate (check design-brief.md § "Third Promise")
+
+## Related docs
+
+- [Launch operations](/team/go-to-market/launch-operations) — how to package these assets for launch
+- [Market & analysis](/team/go-to-market/market-and-analysis) — market context that informs messaging
+- [Messaging framework](/team/ops-marketing/messaging-framework) — message hierarchy and tone guidelines

@@ -1,60 +1,98 @@
 ---
-title: 'DevOps & Onboarding'
-description: 'Developer setup, quick start guides, Docker architecture, security practices.'
+title: 'DevOps'
+description: 'Onboarding, deployment, security, and infrastructure operations'
 section: general
-audience: users
+audience: team
 version: 1.0+
 last_updated: '2026-04-20'
-tags: []
+tags: [devops, infrastructure, security, deployment]
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# DevOps & Onboarding
+# DevOps
 
-Development and operations guide for running Synap environments safely.
+**Target Users**: New engineers, DevOps operators, self-hosters, contributors running full-stack environments  
+**Marketing**: Developer experience — frictionless local setup, clear ops runbooks, production-grade security posture  
+**Key User Stories**: 
+- As a new engineer, I want to get all services running locally in under 15 minutes so I can start contributing immediately
+- As a DevOps operator, I want standardized deployment, backup, and incident workflows so I can maintain reliability
+- As a self-hosted user, I want Docker-based installation with clear architecture docs so I understand my deployment
+**Key Features**: Progressive setup paths (local → hybrid → remote), Docker Compose orchestration, secret management, rolling updates, AI governance audits, auth consolidation  
+**Current Status**: Core setup docs active; security audit findings documented; auth consolidation phase 1 recommended
 
-## Purpose
+## Overview
 
-- Onboard engineers quickly to local and shared environments.
-- Standardize operations workflows (backup, update, incident, monitoring).
-- Document secure deployment and runtime practices.
+This space covers everything needed to run, deploy, and maintain Synap infra­structure — from onboarding a new developer on a weekday morning to operating production pods at scale. It is organized into four areas:
 
-## Target users
+1. **New Developer Onboarding** — progressive paths from zero to running the full stack
+2. **Operations** — provisioning, monitoring, updates, backups, incident response
+3. **Security** — hardening practices, governance audits, authentication model
+4. **Infrastructure** — Docker architecture, backlink strategy
 
-- New engineers joining the team
-- DevOps and platform operators
-- Contributors running local full-stack environments
+## Architecture
 
-## Main flows
+Synap's development and deployment stack follows a clear separation:
 
-- [Start here](/team/devops/start-here) — orientation and setup path
-- [Unified setup](/team/devops/unified-setup) — end-to-end local environment
-- [Incident runbook](/team/devops/incident-runbook) — response and escalation model
+```
+Frontend (Next.js / Electron) → Backend (Hono API) → Services (Docker)
+                                    │                    │
+                              env vars             PostgreSQL, Kratos,
+                              for connections      Redis, MinIO, Typesense
+```
 
-## Getting Started
+Key principles:
+- **One backend URL** for the frontend — all requests proxy through a single Hono API
+- **Env var driven** — every service connection is configured via environment variables
+- **No Docker locally for the API** — developers run the API process directly, connect to remote services
+- **Progressive setup** — start local, gradually migrate to remote as needed
 
-1. [Start Here](/team/devops/start-here) — orientation for new team members
-2. [Quick Start](/team/devops/quick-start) — get all services running in 15 minutes
-3. [Unified Setup](/team/devops/unified-setup) — full development environment guide
-4. [Frontend Connection](/team/devops/frontend-connection) — connect Electron/Relay to your local pod
+## Documentation Map
 
-## Key References
+### New Developers
 
-| Reference | Description |
-|-----------|-------------|
+| Page | Description |
+|------|-------------|
+| [Start Here](/team/devops/start-here) | Orientation for new team members — the 3-command path |
+| [Quick Start](/team/devops/quick-start) | 15-minute setup — local services, migrations, API |
+| [Unified Setup](/team/devops/unified-setup) | Complete architecture and configuration guide |
+| [Frontend Connection](/team/devops/frontend-connection) | Connect Electron/Relay to a local pod |
 | [SDK Reference](/team/devops/sdk-reference) | Backend SDK for external developers |
-| [Docker Architecture](/team/devops/docker-architecture) | How Docker Compose is organized |
-| [Security Practices](/team/devops/security-practices) | Security best practices |
-| [AI Governance Audit](/team/devops/ai-governance) | AI system governance findings |
 
-## Dependencies
+### Operations
 
-- [Control Plane](/team/control-plane/index) for production provisioning and service lifecycle.
-- [Platform](/team/platform/index) for backend architecture decisions and core runtime behavior.
+| Page | Description |
+|------|-------------|
+| [Install Control Plane](/team/devops/install-cp) | First-time CP server setup — secrets, bootstrap, health |
+| [Install Intelligence Service](/team/devops/install-is) | IS provisioning — Docker Swarm, Traefik, tracing |
+| [Monitoring Setup](/team/devops/monitoring-setup) | Prometheus + Grafana, IS metrics wiring |
+| [Rolling Updates](/团队/devops/rolling-updates) | CI → GHCR → canary → fleet batch rollout |
+| [Backups](/team/devops/backups) | DB snapshots, pod archives, S3 retention |
+| [Incident Runbook](/team/devops/incident-runbook) | Response and escalation (links to Control Plane) |
 
-## Related public docs
+### Security
 
-- [/docs/architecture/deployment](/docs/architecture/deployment)
-- [/docs/contributing](/docs/contributing)
+| Page | Description |
+|------|-------------|
+| [Security](/team/devops/security) | Navigation bridge to platform security |
+| [Security Practices](/team/devops/security-practices) | Hardening checklist — secrets, auth, encryption, compliance |
+| [AI Governance Audit](/team/devops/ai-governance) | OpenClaw × Synap integration findings — 15 issues (2 critical) |
+| [Auth Consolidation Audit](/team/devops/auth-audit) | 3 auth patterns across CP/pods — consolidation plan |
+
+### Infrastructure
+
+| Page | Description |
+|------|-------------|
+| [Docker Architecture](/team/devops/docker-architecture) | Docker Compose layout — services, ports, testing |
+| [Backlink Strategy](/team/devops/backlink-strategy) | SEO, dev community, distribution channels |
+
+## Code References
+
+- **Dev scripts**: `synap-backend/scripts/` — `start-local-dev.sh`, `dev-local.sh`
+- **Docker configs**: `synap-backend/deploy/docker-compose.yml`, `docker-compose.local.yml`
+- **Backend SDK packages**: `@synap/core`, `@synap/types`, `@synap/database`, `@synap/storage`, `@synap/jobs`, `@synap/api`, `@synap/ai`
+- **Security model**: `synap-backend/docs/SECURITY_AND_PERMISSIONS.md`
+- **Progressive setup**: `synap-backend/docs/development/PROGRESSIVE_SETUP.md`
+- **Hub Protocol REST**: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts`
+- **Control Plane install**: `synap-control-plane-api/` — `./synap-cp install` flow

@@ -1,20 +1,95 @@
 ---
 title: 'Market and Analysis'
-description: 'Market research, positioning evidence, and strategic analysis'
+description: Market research, positioning evidence, and strategic analysis
 section: general
 audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Market and analysis
+# Market and Analysis
 
-- Market context: [/team/home/market](/team/home/market)
-- Strategic analysis: [/team/home/analysis](/team/home/analysis)
-- Product strategy framing: [/team/home/strategy-vision](/team/home/strategy-vision)
+Market context, positioning evidence, and strategic analysis for Synap's GTM strategy.
 
-For messaging application, continue in [/team/ops-marketing/messaging-framework](/team/ops-marketing/messaging-framework).
+## Market landscape
+
+Synap sits at the intersection of three large markets converging at once:
+
+| Market | Size | Trend | Synap's position |
+|--------|------|-------|------------------|
+| **Personal knowledge management** | $2B+ | Fragmented — Notion, Obsidian, Apple Notes all solve different slices | Synap consolidates via single entity model |
+| **AI agent infrastructure** | Growing $5B+ | Shift from chat bots → autonomous agents with memory/governance | Synap provides sovereign agent memory layer |
+| **Self-hosted software** | $8B+ | Surge in data sovereignty demand (GDPR, AI regulation) | Synap's sovereignty argument is the differentiator |
+
+## Competitive positioning
+
+### Against Notion/Airtable (traditional PKM)
+
+| Dimension | Notion/Airtable | Synap |
+|-----------|-----------------|-------|
+| Data ownership | Your data is their database | Your PostgreSQL, your VPS |
+| AI integration | Bolted on, no shared understanding | Native — AI knows your entity graph |
+| Organization | Manual — you file things | Automatic — AI classifies and connects |
+| Model lock-in | Proprietary | Bring your own model |
+| Open source | No | Core platform is open source |
+
+### Against Obsidian/Roam (local-first PKM)
+
+| Dimension | Obsidian/Roam | Synap |
+|-----------|---------------|-------|
+| Data format | Markdown files, plugins | PostgreSQL with typed entities |
+| Structured data | Limited (markdown-based) | Full — typed profiles, property definitions |
+| AI understanding | Reads text, no schema awareness | Knows entity types, properties, relationships |
+| Multi-device sync | Manual (iCloud, Git, or commercial Sync) | Built-in (pod-to-pod sync) |
+| Governance | None | Proposal system, full audit trail |
+
+### Against standalone AI tools (ChatGPT, Cursor, Claude)
+
+| Dimension | ChatGPT/Claude | Synap |
+|-----------|----------------|-------|
+| Memory | Conversation-scoped only | Persistent entity graph, cross-sessions |
+| Data storage | Not your data, not in your infrastructure | Your infrastructure, your data |
+| Governance | Can't audit what the AI did to *your* data | Every AI mutation goes through proposal |
+| Model choice | Stuck with their platform | Bring any model via Hub Protocol |
+
+## Market signals we're watching
+
+1. **Anthropic's third-party API restrictions** — When Anthropic killed subscription credits (March 2026), OpenClaw users now pay full API cost. This is Synap's moment: our IS routes 90% of traffic to cheap/free models, cutting agent costs by 85%.
+2. **EU AI Act + GDPR enforcement** — Sovereignty narrative is strongest in EU/France. French tech angle: "open source, self-hosted, made in France" resonates 10x there vs US.
+3. **Post-LangChain agent infrastructure shift** — LangGraph, LangSmith, and associated tooling add complexity. Our multi-agent system (Orchestrator + Persona agents) is production-ready without adding LangChain's complexity. Deferred: LangGraph orchestration.
+4. **OpenClaw community growth** — 164K+ Discord members, 13K+ ClawHub skills. This is our primary distribution channel. Every new memory-related skill validates our demand thesis.
+
+## Strategic analysis
+
+### Why now?
+
+Three converging forces make this the right moment for Synap:
+
+1. **AI agents are moving from chat to action** — Users don't want to chat with their agent anymore; they want their agent to modify their documents, create tasks, update their CRM. That means they need governance (our proposal system) and memory (our entity graph).
+
+2. **Data sovereignty is becoming a compliance requirement** — The EU AI Act and evolving GDPR interpretations make "your data on your server" not just a nice-to-have but a legal necessity for enterprise.
+
+3. **Open-source AI infrastructure is maturing** — PostgreSQL with pgvector, Langfuse for tracing, Docker for deployment — the building blocks are production-grade. Synap is the first to compose them into a coherent product.
+
+### Why not before?
+
+Previous attempts at "AI knowledge managers" failed because:
+- They didn't solve sovereignty (users didn't trust them with their data)
+- They didn't solve governance (AI writes were opaque)
+- They treated AI as a chat interface, not a data participant
+- They were closed source — a critical trust failure in the AI space
+
+### Synap's defensible position
+
+- **Entity graph + governance = network effect for agent ecosystem** — The more agents that connect via Hub Protocol, the more valuable the knowledge graph becomes. The proposal system gives users confidence to delegate more.
+- **Self-hosted architecture = trust moat** — Competitors can copy features, but they can't replicate "your own PostgreSQL server." That's a real infrastructure moat.
+- **OpenClaw distribution = go-to-market advantage** — Being the knowledge graph for OpenClaw's 250K+ user ecosystem is a distribution advantage no vertical SaaS competitor has.
+
+## Related docs
+
+- Market campaign: [/team/home/market](/team/home/market) — full distribution map and 4-wave campaign plan
+- North Star: [/team/home/north-star](/team/home/north-star) — product vision that market positioning supports
+- Strategy vision: [/team/home/strategy-vision](/team/home/strategy-vision) — longer-term strategic positioning

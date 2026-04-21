@@ -1,21 +1,97 @@
 ---
 title: 'Launch Operations'
-description: Operational checklist and sequencing for internal launches
+description: Operational checklist and sequencing for product launches
 section: general
 audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Launch operations
+# Launch Operations
+
+Operational checklist and execution flow for product launches. This page is the launch operator's playbook — what to do, in what order, before/after each release.
+
+## Launch phases
+
+| Phase | Owner | Duration | Key outputs |
+|-------|-------|----------|-------------|
+| **Pre-launch (T-30 days)** | Product + Marketing | 3 weeks | Feature freeze, press kit, website copy, pricing confirmed |
+| **Build & validate (T-14 days)** | Engineering + QA | 2 weeks | Release candidate built, integration tests passed, docs drafted |
+| **GTM prep (T-7 days)** | Marketing + GTM | 1 week | ClawHub listing live (if applicable), blog post drafted, video ready, content creator briefs sent |
+| **Launch (T-Day)** | GTM + DevOps | 1 day | Multi-channel release, monitoring active, incident-ready |
+| **Post-launch (T+7 days)** | Product + GTM | 1 week | Metrics review, user feedback collected, lessons documented |
+
+## Launch checklist
+
+### Pre-launch (T-30)
+
+- [ ] Feature scope locked — no additions during freeze window
+- [ ] Product status updated: [roadmap](/team/home/roadmap) reflects "In Progress" → "Completed" for shipped items
+- [ ] Pricing confirmed: [pricing](/team/home/pricing) tiers updated if new monetizable feature
+- [ ] Design assets refreshed if visual changes: [visual assets](/team/home/visual-assets)
+- [ ] Legal: data privacy review if new data processing involved (AI, connectors)
+
+### Build & validate (T-14)
+
+- [ ] Release candidate built on staging environment
+- [ ] All integration tests passed (tRPC, Hub Protocol, DB migrations)
+- [ ] AI governance: any AI mutations tested through proposal system?
+- [ ] Security scan: dependency audit + Docker image scan clean
+- [ ] Rollback plan documented
+
+### GTM prep (T-7)
+
+- [ ] ClawHub listing updated (if applicable) — skill description, install command, screenshots
+- [ ] Blog post ready on synap.live/blog
+- [ ] YouTube demo video exported + uploaded (even as "unlisted")
+- [ ] Discord posts drafted — contribution format (not sales pitch)
+- [ ] Reddit posts drafted — sub-specific formatting, value-first framing
+- [ ] Content creator briefs sent (3–5 target creators)
+
+### Launch day (T-0)
+
+- [ ] Multi-channel rollout:
+  1. ClawHub listing goes live
+  2. GitHub PR submitted to awesome-openclaw-skills
+  3. Discord contribution post in #users-helping-users
+  4. Reddit posts across r/openclaw, r/LocalLLaMA, r/AI_Agents
+  5. Blog post published
+  6. YouTube video published
+- [ ] Monitoring active: Grafana dashboards, error rate tracking, IS metrics
+- [ ] On-call rotated for 48 hours post-launch
+- [ ] Support channel staffed (Discord response < 2 hours)
+
+### Post-launch (T+7)
+
+- [ ] Metrics collected: installs, stars, signups, active users
+- [ ] User feedback collated from Discord, Reddit, GitHub issues
+- [ ] Lessons documented in [decision log](/team/decisions/index) if any process changes needed
+- [ ] Next launch planned in [release schedule](/team/home/release-strategy)
+
+## Launch types
+
+| Type | Examples | Lead time | Channels |
+|------|----------|-----------|----------|
+| **Feature launch** | Widget marketplace, MCP integration | 2 weeks | ClawHub, Discord, blog |
+| **Product launch** | Browser 2.0, Enterprise tier | 4 weeks | Full wave (all channels) |
+| **Maintenance update** | Bug fix release, performance | 1 week | Discord, email |
+| **Strategic launch** | Show HN post, long-form blog | 3 weeks | HN, Twitter, blog, Discord |
+
+## What to avoid
+
+- Don't launch a feature before its proposal governance is tested — users trust the "AI proposes, humans approve" model
+- Don't publish pricing claims before Stripe integration is verified
+- Don't do a soft launch — we're not a SaaS with A/B testing; either ship it or wait
+- Don't overpromise on the roadmap — the Deferred section exists for a reason
+
+## Related docs
 
 - Pre-launch plan: [/team/home/pre-launch](/team/home/pre-launch)
 - Release strategy: [/team/home/release-strategy](/team/home/release-strategy)
 - Release checklist: [/team/home/release-checklist](/team/home/release-checklist)
 - Landing audit: [/team/home/landing-audit](/team/home/landing-audit)
-
-For reusable launch templates, see [/team/ops-marketing/launch-playbook](/team/ops-marketing/launch-playbook).
+- Launch playbook (templates): [/team/ops-marketing/launch-playbook](/team/ops-marketing/launch-playbook)
+- Landing audit: [/team/home/landing-audit](/team/home/landing-audit)

@@ -13,80 +13,89 @@ toc: true
 
 # Studio
 
-**Status:** Live on webpack, typecheck clean, real backend wired.
-**Location:** `synap-app/apps/studio/`
-**Port:** 3002
-**Stack:** Next.js 15 (App Router) · React 19 · HeroUI v2 · Tailwind v3 · next-themes · tRPC · Socket.IO
+Target Users: Engineers building features in Studio, designers iterating on the HeroUI surface, product teammates understanding the channel + data-flow model
+Marketing: The unified web app — channels, documents, and agents in a premium, calm, modern interface organized around conversation-driven knowledge work
+Key User Stories:
+- "I want to have a conversation with my AI agents and have them organize knowledge in entities and views"
+- "I need to write rich documents with AI-assisted proposal diffs that track governance"
+- "I want to browse entity details, graph relationships, and task boards in a consistent layout"
+- "I want @mention an agent to summon it into a conversation or task context"
+Key Features:
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Auth | CP sign-in + pod handshake | ✅ Live |
+| Routing + sidebar + nav sections | Multi-section navigation | ✅ Live |
+| Home | Dashboard landing surface | ✅ Live |
+| Channels | Discord-shaped model: list + detail + DMs + branches + pins | ✅ Live |
+| Documents | Rich markdown with Tiptap + AI proposal diff, embedded channel | ✅ Live |
+| Agents | Roster + detail + onboarding modal, @mention-to-route | ✅ Live (tools/automations/activity tabs mocked) |
+| Tasks | List + kanban board | ✅ Live |
+| Inbox | Notification center | ✅ Live |
+| Entity detail | Full entity surfaces and relations | ✅ Live |
+| Streaming | Token-level AI streams via StreamingBridge + streaming store | ✅ Live |
+| Graph | Node visualization (reagraph) | ✅ Live |
+| Data Flow surface | Sources + Captures + Automations, CP-catalog model | ❌ Planned |
+Current Status: **Live** on webpack, typecheck clean, real backend wired
 
----
+## Overview
 
-## Purpose
+Studio is Synap's **single focused web app** — replacing the earlier multi-app approach (data, views, documents, channels as separate surfaces) with one coherent shell built on HeroUI. It's organized around three core concepts:
 
-Studio is the single focused web app. It replaces the earlier multi-app approach (data / views / documents / channels as separate surfaces) with one coherent shell built on HeroUI, organized around three core concepts:
+**Channels** — every agent + every object has a canonical conversation
+**Documents** — rich markdown editing with AI proposal diffs
+**Agents** — your AI team, summoned via @mention or called directly
 
-- **Channels** — every agent + every object has a canonical conversation.
-- **Documents** — rich markdown editing with AI proposal diffs.
-- **Agents** — your AI team, summoned via @mention or called directly.
+Plus supporting surfaces: Tasks, Inbox, Graph, Entity detail, Home.
 
-Plus the supporting surfaces: Tasks, Inbox, Graph, Entity detail, Home.
+Unlike Browser, Studio **does not expose multi-workspace to the user**. Every Studio session is one implicit workspace — no workspace switcher, no "which workspace am I in", no per-workspace settings. The model: free tier = shared pod (one workspace), Pro tier = own dedicated pod (one workspace). Upgrading means "get your own pod."
 
-The aesthetic target is the "ChatGPT 2028" mockup — premium, calm, modern. No shadows, semantic tokens everywhere, Fraunces headings, generous spacing.
+## Architecture
 
----
+| Dimension | Value |
+|-----------|-------|
+| Location | `synap-app/apps/studio/` |
+| Port | 3002 |
+| Framework | Next.js 15 (App Router) |
+| UI | React 19 · HeroUI v2 · Tailwind v3 · next-themes |
+| Data | tRPC · Socket.IO (realtime) · Zustand |
+| Provider chain | 10 providers · 2 Zustand stores · 3 mapper files |
+| Editor | Tiptap (collaborative markdown) |
+| Graph | reagraph |
+| Aesthetic | "ChatGPT 2028" — premium, calm, no shadows, semantic tokens, Fraunces headings |
 
-## Target readers
+## Documentation Map
 
-- Engineers building features in Studio
-- Designers iterating on the HeroUI surface
-- Product teammates understanding the channel + data-flow model
-- Anyone extending the provider chain, state, or realtime integration
+### Architecture
 
----
+| Page | What it covers |
+|------|----------------|
+| [Architecture](/team/studio/architecture) | 10 providers, 2 Zustand stores, 3 mapper files, state management |
+| [Channels](/team/studio/channels) | Discord-shaped sidebar, channel-per-object, branches, pins |
+| [Streaming](/team/studio/streaming) | Socket.IO wire-up, streaming store, known gaps |
 
-## Main flows
+### Product
 
-- [Architecture](/team/studio/architecture) — provider chain, state management, mappers
-- [Channels](/team/studio/channels) — the Discord-shaped model, sidebar, branches, pins
-- [Streaming](/team/studio/streaming) — how AI token streams wire into the UI
-- [Pages](/team/studio/pages) — route-by-route inventory of what's built
-- [Data Flow](/team/studio/data-flow) — proposal: Sources + Captures + Automations, CP-catalog model
-- [Packages](/team/studio/packages) — what Studio reuses from `@synap-core/*`
-- [Design System](/team/studio/design-system) — HeroUI patterns, semantic tokens, component rules
+| Page | What it covers |
+|------|----------------|
+| [Pages](/team/studio/pages) | 11 routes: what's wired, what's stubbed |
+| [Data Flow](/team/studio/data-flow) | Proposed: Sources + Captures + Automations, CP-catalog model |
 
----
+### Engineering
 
-## Key Areas
-
-| Area | Description |
-|------|-------------|
-| [Architecture](/team/studio/architecture) | 10 providers, 2 Zustand stores, 3 mapper files |
-| [Channels](/team/studio/channels) | Discord-shaped sidebar · channel-per-object · branches |
-| [Streaming](/team/studio/streaming) | Socket.IO wire-up · streaming store · known gaps |
-| [Data Flow](/team/studio/data-flow) | **Proposed** next major surface — Sources / Captures / Automations |
-| [Pages](/team/studio/pages) | 11 routes, what's wired and what's stubbed |
+| Page | What it covers |
+|------|----------------|
 | [Packages](/team/studio/packages) | Reuse map across `@synap-core/*` |
+| [Design System](/team/studio/design-system) | HeroUI patterns, semantic tokens, component rules |
 
----
+## Code References
 
-## Status snapshot
+- **Location:** `synap-app/apps/studio/`
+- **Stack:** Next.js 15 · React 19 · HeroUI v2 · Tailwind v3
+- **Key files:** Provider chain (10 providers), streaming store, mappers (3 files)
+- **Dependencies:** `@synap-core/client`, `@synap-core/hooks`, `@synap-core/stores`, `@synap-core/ui-system`
 
-- ✅ Auth (CP sign-in + pod handshake), routing, sidebar, nav sections
-- ✅ Home, Channels (list + detail + DM resolver), Documents (list + detail with Tiptap + proposal diff), Agents (roster + detail + onboarding modal), Tasks (list + board), Inbox, Graph (reagraph), Entity detail
-- ✅ Token-level streaming via `StreamingBridge` + streaming store
-- ✅ @mention-to-route · branch-from-message · custom branch purpose · channel pins
-- ✅ Document embedded channel · inline title + description edit · admin pod link
-- ✅ Creation flows: documents, tasks
-- ⚠️ Agents tools/automations/activity tabs still mocked
-- ❌ Data Flow surface (this is what the [data-flow spec](/team/studio/data-flow) covers)
-- ❌ Mobile responsive, tests
+## Dependencies
 
-## Single-space UX
-
-Unlike Browser, Studio **does not expose multi-workspace to the user**. Every Studio session is one implicit space — no workspace switcher, no "which workspace am I in", no per-workspace settings panel. The tier implication is:
-
-- **Free tier** — shared pod, one workspace (multi-tenant pod).
-- **Pro tier** — own dedicated pod, one workspace.
-
-Upgrading doesn't mean "add a workspace." It means "get your own pod." Multi-workspace needs are eventually satisfied by users generating their own custom apps (future).
-
-This shapes everything: onboarding skips workspace-naming, the sidebar has no workspace switcher, and all settings are pod-wide.
+- [Platform](/team/platform/index) for entity profiles, permissions, proposals, event chain
+- [Intelligence Service](/team/intelligence/index) for agent conversations and streaming
+- [Synap App](/team/synap-app/index) for shared packages

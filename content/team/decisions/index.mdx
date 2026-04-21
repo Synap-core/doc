@@ -1,11 +1,11 @@
 ---
 title: 'Decisions'
-description: 'Internal record of major architecture, product, and operating decisions'
+description: 'Architecture and product decision records with rationale and impact'
 section: general
-audience: users
+audience: team
 version: 1.0+
 last_updated: '2026-04-20'
-tags: []
+tags: [decisions, adr, architecture, governance]
 sidebar_position: null
 hide_title: false
 toc: true
@@ -13,21 +13,54 @@ toc: true
 
 # Decisions
 
-Use this space to document why a decision was made, what alternatives were considered, and how we measure whether it was correct.
+**Target Users**: Engineering leads, product managers, architects, team members making cross-cutting decisions  
+**Marketing**: Decision transparency — why we chose what we chose, what we considered, and how we'll know if we were right  
+**Key User Stories**:
+- As an engineer, I want to understand the rationale behind past decisions so I don't repeat mistakes or re-debate settled questions
+- As an architect, I want a structured ADR format so I can document cross-service decisions with clear context and trade-offs
+- As a team member, I want to track decision status and review dates so old decisions stay current
+**Key Features**: ADR template, decision log, quality checklist, cross-referencing  
+**Current Status**: Template and log active; decision log empty — use it
 
-## What belongs here
+## Overview
 
-- Architecture decisions with cross-service impact
-- Product scope and prioritization decisions
-- Operational policy changes (release, incident, support model)
-- GTM and positioning shifts that affect execution
+This space exists to document **why** a decision was made, **what alternatives** were considered, and **how we'll measure** whether it was correct. It covers architecture decisions with cross-service impact, product scope and prioritization, operational policy changes, and GTM or positioning shifts that affect execution.
 
-## Decision quality checklist
+The space is organized into three pages:
 
+1. **Index** — scope, quality checklist, how to use this space
+2. **ADR Template** — structured format for writing decisions
+3. **Decision Log** — chronological index of accepted and proposed decisions
+
+## Architecture
+
+Synap's decision process follows an **ADR (Architecture Decision Record)** pattern:
+
+```
+Problem/Context → Alternatives Evaluated → Decision Made → Trade-offs → Rollout → Validation
+```
+
+Every decision is held to a **quality checklist**:
 - Context is explicit
 - Alternatives are listed
 - Trade-offs are concrete
 - Owner and review date are set
 - Follow-up metrics are defined
 
-Start from the [ADR template](/team/decisions/adr-template), then add an entry in [Decision log](/team/decisions/decision-log).
+Decisions can be in one of four states: **Proposed** → **Accepted** → **Superseded** (by a later ADR) or **Rejected**.
+
+## Documentation Map
+
+| Page | Description |
+|------|-------------|
+| [Index](/team/decisions/index) | Scope, decision quality checklist, how to write an ADR |
+| [ADR Template](/team/decisions/adr-template) | Structured template — metadata, context, alternatives, trade-offs, rollout, validation |
+| [Decision Log](/team/decisions/decision-log) | Chronological index — add new decisions at the top, link to full docs |
+
+## Code References
+
+- **Architecture decisions cross-reference**: `/team/platform/index` — backend architecture and contracts
+- **Product decisions**: `/team/home/strategy-vision` — strategic direction and priorities
+- **AI/governance decisions**: `/team/intelligence/index` — agent system, Hub Protocol
+- **Control plane**: `/team/control-plane/index` — infrastructure decisions
+- **DevOps decisions**: `/team/devops/security-practices`, `/team/devops/ai-governance` — operational security

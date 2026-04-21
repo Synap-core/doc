@@ -1,12 +1,11 @@
 ---
 title: 'Backups'
-description: 'Manual DB snapshot, pod archive flow, S3 storage configuration.'
+description: 'DB snapshot workflow, pod archive restore flow, S3 retention policy.'
 section: general
 audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
@@ -15,8 +14,78 @@ toc: true
 
 Backup operations protect both structured data and deployment state.
 
-- Manual DB snapshots for emergency and migration workflows.
-- Pod archive flow for tenant transfer and recovery scenarios.
-- S3-compatible storage configuration for off-host retention.
+## Backup strategy
 
-Operationally pair this with restore drills in your incident runbook.
+| Backup type | Frequency | Retention | Storage | Notes |
+|-------------|-----------|-----------|---------|-------|
+| **PostgreSQL dump** | Daily (02:00 UTC) | 7 days | S3 (encrypted) | Full DB snapshot via `pg_dumpall` |
+| **Typesense index** | Daily (03:00 UTC) | 7 days | S3 | Export + import restore |
+| **Pod archive** | On-demand | Until deleted | S3 + local | Tenant transfer / recovery scenario |
+| **Config backup** | Weekly | 30 days | S3 | docker-compose.yml, env files, Traefik config |
+
+## PostgreSQL backup
+
+```bash
+# Full DB snapshot (production)
+pg_dumpall -h <db-host> -U <db-user> | gzip > pg_backup_$(date +%Y%m%d).sql.gz
+
+# Restore from snapshot
+gunzip -c pg_backup_latest.sql.gz | psql -h <db-host> -U <db-user> <dbname>
+
+# Point-in-time recovery (requires WAL archiving enabled)
+# Configure recovery_target_time in postgresql.conf before restore
+```
+
+## Pod archive (tenant transfer)
+
+Use this workflow when migrating a workspace from a shared pod to a dedicated pod, or when a user downgrades and you need to export their data.
+
+```bash
+# 1. Create archive from source pod
+./synap-pod archive --workspace-id <ws-id> --destination s3://backups/pods/<workspace-id>.tar.gz
+
+# 2. Inspect archive contents (optional)
+tar tzvf pods/<workspace-id>.tar.gz | head
+
+# 3. Restore to destination pod
+./synap-pod restore --archive pods/<workspace-id>.tar.gz --target-pod https://new-pod.example.com
+```
+
+### Archive contents
+
+- All entities + properties (Drizzle snapshot)
+- View definitions + filter configs
+- Channel data + messages
+- Proposal history
+- User workspace member associations
+- Excludes: cached search index, session stores, temporary files
+
+## S3 configuration
+
+```yaml
+# .env or deploy config
+S3_BACKUP_BUCKET: synap-backups-prod
+S3_BACKUP_REGION: us-east-1
+S3_BACKUP_ENCRYPTION: aes256
+S3_BACKUP_LIFECYCLE_DAYS: 30  # Auto-delete old backups
+```
+
+## Restore drills
+
+- **Monthly** — Test PostgreSQL restore on a staging pod
+- **Quarterly** — Test pod archive restore to a fresh pod in a different cluster
+- **After major release** — Verify backup integrity (size check, row count comparison)
+
+## Recovery time objectives
+
+| Scenario | RPO (data loss) | RTO (recovery time) |
+|----------|-----------------|---------------------|
+| Accidental row delete | 1 hour (hourly dumps) | 15 minutes |
+| Full pod crash | 24 hours (daily dumps) | 2 hours |
+| Migration failure | 0 (point-in-time) | 1 hour |
+
+## Related docs
+
+- [Control Plane Backups](/team/control-plane/pod-backups) — Enterprise-grade backup strategy for multi-tenant pods
+- [Incident Runbook](/team/control-plane/incident-runbook) — Response workflow for data loss
+- [Pod-to-Pod Sync](/team/platform/pod-to-pod-sync) — Real-time replication as backup complement

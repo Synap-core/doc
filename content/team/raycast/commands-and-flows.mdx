@@ -11,21 +11,83 @@ hide_title: false
 toc: true
 ---
 
-## Command categories (draft)
+## Command categories
 
-- quick capture
-- quick lookup
-- action triggers that escalate into governed proposals when needed
+| Category | Commands | Purpose |
+|----------|----------|---------|
+| **Quick Capture** | `Synap Capture`, `Synap Note`, `Synap Task`, `Synap Bookmark` | Create entities from text input without opening a full app |
+| **Quick Lookup** | `Synap Search`, `Synap Lookup` | Search and browse entities by keyword, semantic query, or ID |
+| **Action Triggers** | `Synap Open`, `Synap Add to Project`, `Synap AI Summarize` | Perform specific entity operations or trigger deep-handoff to Browser |
 
-## User flow baseline
+## Quick Capture flow
 
-1. invoke command
-2. resolve identity/pod context
-3. run read or propose write action
-4. return short confirmation with link to full surface if needed
+```
+1. User triggers command (e.g. Cmd+Space → type "Synap Note")
+2. Raycast extension shows input prompt with optional fields (title, project tag)
+3. On submit:
+   a. Resolve pod URL + workspace context (from cached identity + first accessible workspace)
+   b. Build entity payload (type: note + captured text + metadata)
+   c. Call tRPC mutation (or Hub Protocol if AI-modified)
+   d. Show confirmation notification with link to opened entity in Browser
+4. Error handling:
+   - Connection failure → "Couldn't connect to your Synap pod" + retry button
+   - Validation error → Show specific error from backend (e.g. missing required fields)
+   - Permission denied → "This action requires a proposal review" with link to proposals
+```
 
-## UX constraints
+## Quick Lookup flow
 
-- keep first response low-friction
-- avoid hidden side effects
-- expose failure and fallback clearly
+```
+1. User triggers "Synap Search" or "Synap Lookup"
+2. Input prompt for search query
+3. On submit:
+   a. Resolve context (pod URL, workspace)
+   b. Call search API (Typesense full-text + pgvector semantic)
+   c. Return ranked results as a Raycast options list
+4. User selects result:
+   a. Show entity preview (title, type, summary)
+   b. Action buttons: "Open in Browser", "Open in Relay"
+5. Error handling:
+   - No results → "No matches found. Try a different query."
+   - Connection failure → Fallback message + retry
+```
+
+## Action Trigger flow
+
+```
+1. User triggers action command (e.g. "Synap Open")
+2. Input: entity ID or selection of entity from search results
+3. Action execution depends on type:
+   a. "Open in Browser" → Launch Browser app with entity deep link
+   b. "Add to Project" → Prompt for project selection, then call tRPC update
+   c. "AI Summarize" → Call Intelligence Service, stream summary back to Raycast
+4. Confirmation shown after each action
+```
+
+## Command palette UX
+
+- **Searchable command list** — All Synap commands appear in Raycast's main command palette under the "Synap" app section
+- **Input prompts** — Text inputs with optional dropdowns (for project selection, entity type)
+- **Results** — Displayed as a list of entity cards showing: entity type icon, title, brief content snippet, related project
+- **Confirmation notifications** — Short toast-style notifications on successful actions
+- **Deep links** — Each action can launch Browser/Relay with the relevant entity pre-selected
+
+## Interaction model principles
+
+| Principle | Implementation |
+|-----------|----------------|
+| First response under 200ms | Use local cache for context resolution; search results stream in |
+| No hidden side effects | Every write shows a confirmation before executing |
+| Clear error states | Generic + specific error messages; no silent failures |
+| Progressive disclosure | Start with simple capture; advanced options (tags, projects) behind expand panel |
+| Platform contract compliance | All data operations use tRPC/Hono; no direct DB access |
+
+## Keyboard shortcuts configuration
+
+Commands are launched through Raycast's main palette (Cmd+Space by default). No global keyboard shortcuts are needed — the Raycast command palette is the primary entry point. Users can configure custom Raycast keyboard shortcuts for specific Synap commands if desired.
+
+## Related docs
+
+- **[Scope and status](/team/raycast/scope-and-status)** — Proposed command set and milestones
+- **[Integration model](/team/raycast/integration-model)** — Auth, data access, service boundaries
+- **[Platform](/team/platform)** — tRPC contracts and auth patterns

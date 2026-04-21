@@ -1,8 +1,6 @@
 ---
 title: 'Stack & tools'
-description: >-
-  Index of technologies in Eve and Synap self-host stacks — links to upstream
-  docs and internal notes.
+description: Stack & tools space home — curated external references for Synap and Eve
 section: general
 audience: users
 version: 1.0+
@@ -13,30 +11,121 @@ hide_title: false
 toc: true
 ---
 
-This space holds **curated references** for components we **do not own**: feed generators, inference runtimes, reverse proxies, container runtimes, and tunnels. **Behavioral truth** for Synap and Eve remains in the **backend** and **hestia-cli** repos.
+# Stack & tools
 
-**When to use this:** onboarding, debugging, or GTM explaining “what runs under the hood.” **When not to:** API contracts — use **[Platform](/team/platform/index)** and **[Architecture (public)](/docs/architecture/index)**.
+Curated external references and short notes on the technologies Synap and Eve compose stacks use. **Behavioral truth** for Synap and Eve remains in the **backend** and **hestia-cli** repos.
 
----
-
-## Quick map
-
-| Topic | Page |
-|-------|------|
-| RSSHub (RSS routes, Synap + CP + pod) | **[RSSHub](/team/technologies/rsshub)** |
-| Docker, Compose, LXC/Proxmox, sysctl errors | **[Docker & containers](/team/technologies/docker-and-containers)** |
-| Ollama, local inference, gateway | **[Ollama & inference](/team/technologies/ollama-and-inference)** |
-| Traefik, Caddy, tunnels (Pangolin, Cloudflare) | **[Ingress & tunnels](/team/technologies/ingress-and-tunnels)** |
+When to use this space: **onboarding**, **debugging**, or **GTM** explaining "what runs under the hood." When not to: **API contracts** — use **[Platform](/team/platform/index)** and **[Architecture (public)](/docs/architecture/index)**.
 
 ---
 
-## Related Eve docs
+## Target Users
 
-- **[Eve — Architecture](/team/eve-cli/architecture)** — how pieces connect in our product narrative.
-- **[Eve — Operations](/team/eve-cli/operations)** — paths, logs, LXC pitfalls.
+- **Operators & infrastructure engineers** debugging deployment issues or onboarding new team members
+- **GTM operations** explaining self-host stack components in sales or marketing materials
+- **Eve contributors** needing quick reference to upstream docs for components they don't own
+
+---
+
+## Marketing
+
+- **Purpose:** Authoritative short-form reference for "what runs under the hood" — not a blog, not a product page.
+- **Scope:** Curated upstream links + 2–4 bullets on how Synap/Eve uses each technology + known caveats.
+- **Out of scope:** Full upstream documentation, API contract specifications, product feature pages.
+
+---
+
+## Key User Stories
+
+- As an **operator**, I need a quick reference for Docker-in-LXC pitfalls, sysctl errors, and which compose file to use.
+- As a **developer**, I need to understand how RSSHub routes differ from plain RSS URLs and how Synap fetches feeds.
+- As a **GTM person**, I need to explain to stakeholders what third-party technologies power the self-host stack without reading 200-page upstream docs.
+- As a **new contributor**, I need to know which upstream project owns each component and where the behavioral truth lives.
+
+---
+
+## Key Features
+
+| Technology | Role in Stack | Docs Page |
+|------------|---------------|-----------|
+| [RSSHub](/team/technologies/rsshub) | Feed generator — produces RSS/Atom from sites without native feeds | RSSHub |
+| [Docker & containers](/team/technologies/docker-and-containers) | Compose stacks, nested Docker in LXC/Proxmox, runc/sysctl errors | Docker & containers |
+| [Ollama & inference](/team/technologies/ollama-and-inference) | Local LLM runtime for inference profiles and sidecar gateway | Ollama & inference |
+| [Ingress & tunnels](/team/technologies/ingress-and-tunnels) | Caddy (Data Pod edge), Traefik (Eve legs), Pangolin/Cloudflare tunnels | Ingress & tunnels |
+
+---
+
+## Current Status
+
+| Area | Status |
+|------|--------|
+| RSSHub reference | **Complete** — three-layer integration model documented |
+| Docker & containers | **Complete** — nested Docker pitfalls noted |
+| Ollama & inference | **Complete** — role in Eve profiles documented |
+| Ingress & tunnels | **Complete** — two-layer exposure model documented |
+| Adding new pages | Open — see "Adding a new page" below |
+
+---
+
+## Overview
+
+This space is a **curated reference**, not a product spec. For each technology we:
+
+1. Link to the **upstream documentation** (the behavioral truth).
+2. Provide **2–4 bullets** on how Synap or Eve specifically uses it.
+3. Call out **known pitfalls** and caveats.
+
+**Three-layer integration model** (illustrated by RSSHub):
+- **Control Plane** — proxy layer for rate-limited, provider-backed feeds
+- **Data Pod** — RSS fetch worker, feed jobs, normalization
+- **Intelligence Service** — classification and personalization of normalized items
+
+---
+
+## Architecture
+
+Each technology page follows a **standard template**:
+
+```
+Technology overview (2–3 sentences)
+  ├─ Role in Synap/Eve
+  ├─ Upstream link (authoritative source)
+  ├─ How Synap/Eve uses it (-- specific wiring)
+  └─ Pitfalls / caveats (ops-level)
+```
+
+**Do not duplicate** upstream docs. Link out whenever possible.
+
+---
+
+## Documentation Map
+
+| Page | Core coverage |
+|------|---------------|
+| [RSSHub](/team/technologies/rsshub) | Routes vs plain URLs, CP proxy, Data Pod fetch worker, Intelligence Service pipeline |
+| [Docker & containers](/team/technologies/docker-and-containers) | Compose stacks, LXC/Proxmox nesting, sysctl/runc errors, project name gotchas |
+| [Ollama & inference](/team/technologies/ollama-and-inference) | Inference profiles, gateway ports, disk/RAM constraints, GPU passthrough |
+| [Ingress & tunnels](/team/technologies/ingress-and-tunnels) | Caddy vs Traefik layers, Control Plane exposure modes, tunnel story |
+
+---
+
+## Code References
+
+- **Eve CLI:** [hestia-cli](https://github.com/Synap-core/hestia-cli) — Docker compose files, organ commands, `EVE_SETUP_PROFILES.md`
+- **Synap backend:** [synap-core/backend](https://github.com/synap-core/backend) — `deploy/`, `synap` script, rss-fetcher
+- **Platform contracts:** [Platform](/team/platform/index) — API contracts, Hub Protocol, data model
+
+**Related spaces:**
+- [Eve — Operations](/team/eve-cli/operations) — logs, paths, LXC pitfalls
+- [Eve — Architecture](/team/eve-cli/architecture) — how pieces connect in product narrative
+- [DevOps](/team/devops/index) — pod onboarding, security
+- [Control Plane](/team/control-plane/index) — managed pod flows, exposure orchestration
 
 ---
 
 ## Adding a new page
 
-Keep entries **short**: upstream link, 2–4 bullets on how Synap/Eve uses it, and caveats. Avoid duplicating **[TeamDoc guidelines](/team/platform/teamdoc-guidelines)**.
+1. Keep entries **short**: upstream link, 2–4 bullets on how Synap/Eve uses it, caveats.
+2. Follow the template above for consistency.
+3. Avoid duplicating [TeamDoc guidelines](/team/platform/teamdoc-guidelines).
+4. Update this **meta.json** `pages` array when adding a new page.

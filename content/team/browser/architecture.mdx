@@ -1,6 +1,6 @@
 ---
 title: 'Architecture'
-description: 'Browser trust model, process boundaries, and data movement'
+description: 'Browser trust model, process boundaries, window management, and IPC contracts'
 section: general
 audience: users
 version: 1.0+
@@ -11,23 +11,194 @@ hide_title: false
 toc: true
 ---
 
-## Process model
+# Browser Architecture
 
-```text
-Main process (Node)      - windows, secure storage, updater, IPC router
-Renderer (React/Tamagui) - shell UI and product apps
-Webviews (untrusted)     - external websites in sandboxed contexts
+Browser is an Electron application with two primary processes (main + renderer), multiple sub-windows (app OS windows, PIP modes, quick-capture overlay), and a system tray. This page documents all process boundaries, IPC channels, data flows, and security controls.
+
+## Process Model
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Main Process (Node.js)                           │
+│  ┌──────────────┐  ┌─────────────┐  ┌──────────────┐  ┌────────┐  │
+│  │ WindowManager │  │  IpcRouter  │  │ CaptureSvc   │  │  Tray  │  │
+│  │             - │  │  Handler    │  │  Manager     │  │  Menu  │  │
+│  │ MainWindow    │  │  Router     │  │  Service     │  │        │  │
+│  │ AppWindows N  │  │  IPC        │  │  QuickCap    │  │        │  │
+│  │ PIP modes     │  │             │  │  Capture     │  │        │  │
+│  └──────┬───────┘  └──────┬──────┘  └──────┬───────┘  └────────┘  │
+│         │                  │                │                       │
+│  ┌──────┴──────────────────┴────────────────┴──────────────────┐    │
+│  │                   Pod Connection Manager                     │    │
+│  │  Cookie auth · synap:// deep-link · session management       │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────┘
+         │                    Electron Bridge (IPC)                    │
+┌────────┴────────────────────────────────────────────────────────────→
+│                    Renderer Process (React 19 + Tamagui)            │
+│  ┌────────┬────────┬────────┬────────┬────────┬────────┐           │
+│  │ AppShell│ Sidebar│ App Host│ Cell   │ Capture│ 18 App │            │
+│  │ (chrome│ (8 app │ (lazy    │ Runtime│ Overlay│  Tabs  │            │
+│  │  )     │  bars) │ loaded) │        │         │         │            │
+│  └────────┴────────┴────────┴────────┴────────┴────────┘            │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Boundary rules
+### Main Process Responsibilities
 
-- keep `contextIsolation` enabled
-- avoid Node APIs in untrusted webviews
-- allowlist IPC channels and validate payloads
-- prefer sensitive pod calls through trusted paths
+| Module | File | Responsibility |
+|--------|------|----------------|
+| App entry | `electron/main/index.ts` | Lifecycle (`whenReady`, `activate`, `window-all-closed`), deep-link handling, auto-update wiring |
+| WindowManager | `electron/main/window-manager.ts` | MainWindow creation, state persistence, AppWindow factory (normal + PIP), OAuth popup detection, `window.open()` routing |
+| TabManager | `electron/main/tabs/tab-manager.ts` | In-app browser tab management (create, switch, close, reorder) |
+| PodConnectionManager | `electron/main/pod/pod-connection-manager.ts` | SYNAP_INSTANCE_URL cookie management, pod URL resolution, session state |
+| IpcRouter | `electron/main/ipc/ipc-router.ts` | Central IPC handler registry — all renderer↔main communication routes through here |
+| CaptureService | `electron/main/capture/capture-service.ts` | Web capture flow: webview content extraction, entity classification, pod write |
+| QuickCaptureWindow | `electron/main/quick-capture-window.ts` | Floating overlay: global hotkey (Cmd+Shift+Space), height adjustment, pod session read |
+| Terminal | `electron/main/terminal/terminal-ipc.ts` | xterm.js integration, node-pty spawn/close, PTY process lifecycle |
+| AppWindow IPC | `electron/main/app-window-ipc.ts` | `createAppWindow`, `closeAppWindow`, `setAppWindowBounds`, `focusAppWindow` handlers |
+| Tray | `electron/main/tray.ts` | System tray menu: show/hide main window, quick capture toggle, quit |
+| Extensions | `electron/main/extensions/extension-manager.ts` | Chromium extension loading (saved from user preferences) |
+| Security | `electron/main/security/index.ts` | Credential storage, biometric auth, anonymous auth fallback |
 
-## Integration points
+### Renderer Process Structure
 
-- platform contracts: **[Platform](/team/platform)**
-- package ownership: **[Synap App](/team/synap-app)**
-- agent/user experience coupling: **[Intelligence](/team/intelligence)**
+| Module | Path | Responsibility |
+|--------|------|----------------|
+| App shell | `electron/renderer/src/App.tsx` | Root layout, theme provider, deep-link listener, error boundary |
+| Sidebar | `electron/renderer/src/adapters/sidebar/` | 8 persistent sidebar apps: Dashboard, Browser, Chat, Library + drawer apps |
+| App manifest | `electron/renderer/src/apps/manifest.ts` | 18 apps defined with metadata, lazy loaders, capability flags |
+| App registry | `electron/renderer/src/apps/registerApps.ts` | Runtime app registration, lazy component factory |
+| App host | `electron/renderer/src/components/` | AppWindowHost, PanelAppHost, FullScreenAppHost — rendering modes |
+| Cells | `electron/renderer/src/cells/` | Cell runtime host integration, reactive rendering |
+| Providers | `electron/renderer/src/providers/` | TanStack Query, tRPC, Socket.IO, Zustand store wiring |
+| Store sync | `electron/renderer/src/stores/` | App-level Zustand stores, electron-specific state |
+
+## Window Model
+
+Browser supports 3 window types, managed by `WindowManager`:
+
+### MainWindow
+
+Single primary window. Config:
+- 800×600 minimum, resizes with user
+- State persisted to `userData/window-state.json`
+- `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, `webviewTag: true`
+- Auto-hides menu bar, default title bar
+- OAuth popups allowed (Google, GitHub, Microsoft, etc. — see `isOAuthPopup()`)
+- `window.open()` → in-app browser tabs or OS handler for non-HTTP schemes
+
+### AppWindows (App OS)
+
+Secondary windows, created per-app. Two modes:
+
+| Mode | Use Case | Frame | Resizable | On Top |
+|------|----------|-------|-----------|--------|
+| `normal` | Whiteboard in separate window | Yes | Yes | No |
+| `pip` | Floating widgets (stat cards, mini chat) | No | No | Yes |
+
+Created via `windowManager.createAppWindow({ id, appId, mode })`. Each has its own preload, loads renderer with URL params (`?windowId=X&appId=Y&mode=Z`). On close, main window receives `app-window:closed` IPC.
+
+### Quick Capture Overlay
+
+Always-on-top floating window. Created lazily on first hotkey press.
+- Resizable via `quick-capture:set-height` IPC
+- Hides on save/escape via `quick-capture:hide` IPC
+- Reads pod URL from `SYNAP_INSTANCE_URL` cookie directly
+- Tracks workspace ID pushed from main window renderer
+
+## Browser Webview System
+
+The in-app browser uses a **dedicated Electron session** (`persist:browser`) that isolates webview state from the renderer's default session:
+
+1. **Custom preload**: `webview-preload.js` masks Electron fingerprints (`navigator.webdriver`, `navigator.plugins`)
+2. **User-Agent strategy**: Chrome UA by default; auto-switches to Firefox UA for `.google.com`, `.microsoft.com`, `.apple.com` domains (bypasses embedded-browser blocks used by Google Sign-In, Microsoft 365, etc.)
+3. **Client Hints stripping**: Removes `sec-ch-ua` headers for Firefox UA sessions
+4. **DRM support**: Grants `protectedMediaIdentifier` permission for streaming sites
+5. **Certificate verification**: Strict in production; permissive in dev/localhost
+6. **HTTP Basic Auth**: Handled via main-process `login` event → renderer IPC dialog (60s timeout)
+
+## IPC Channel Registry
+
+All IPC channels are registered by `IpcRouter`. Key categories:
+
+| Category | Channels | Direction |
+|----------|----------|-----------|
+| Window | `window:minimize`, `window:maximize`, `window:close`, `window:fullscreen` | Renderer → Main |
+| App Windows | `app-window:create`, `app-window:close`, `app-window:bounds`, `app-window:focus`, `app-window:close-all` | Bidirectional |
+| Pod | `pod:connect`, `pod:disconnect`, `pod:ping`, `pod:status` | Bidirectional |
+| Capture | `capture:start`, `capture:save`, `capture:cancel`, `capture:analyze` | Renderer → Main |
+| Terminal | `terminal:spawn`, `terminal:write`, `terminal:resize`, `terminal:close` | Renderer → Main |
+| Extension | `extension:install`, `extension:uninstall`, `extension:list` | Renderer → Main |
+| Quick Capture | `quick-capture:hide`, `quick-capture:set-height`, `quick-capture:get-session`, `quick-capture:set-workspace` | Renderer → Main |
+| Updater | `updater:install` | Renderer → Main |
+| Notifications | `app:deep-link` (renderer ← main) | Main → Renderer |
+| Auth | `webview-auth-request`, `webview-auth-response` | Bidirectional |
+| App Events | `synap-app:open-external` (renderer ← main) | Main → Renderer |
+
+## Session & Auth Flow
+
+1. **Connection**: Renderer connects to pod via tRPC using `SYNAP_INSTANCE_URL` cookie
+2. **Session token**: Pod returns tRPC session token, stored in renderer Zustand store
+3. **Workspace selection**: User picks workspace → pushed to quick-capture window via IPC
+4. **OAuth connectors**: Nango Connect UI opens in popup window (detected by `isOAuthPopup()`)
+5. **Deep links**: `synap://` protocol → main process handles → forwards to renderer via IPC
+
+## Data Flow Summary
+
+```
+User action (renderer)
+  ↓ (IPC → Main)
+IpcRouter dispatches to specific handler (Window/Capture/Terminal/Extension)
+  ↓ (Main process logic)
+CaptureService: webview extraction → entity analysis → pod write via tRPC
+WindowManager: window creation/bounds → native OS window
+  ↓ (IPC ← Renderer)
+Renderer receives response, updates UI state
+```
+
+## Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Runtime | Electron 33.4 | Desktop shell |
+| Build | electron-vite | Bundles main + renderer with Vite |
+| Packaging | electron-builder | dmg, nsis, AppImage, deb |
+| Auto-update | electron-updater | GitHub Releases publish target |
+| Logging | electron-log | Structured logging, file + console |
+| UI | React 19 + Tamagui + lucide-react | Cross-platform UI |
+| State | Zustand + TanStack Query | Client state + tRPC cache |
+| Terminal | xterm.js + node-pty | PTY-based terminal |
+| Browser | `<webview>` tags | Embedded Chromium for in-app browser |
+| Layout | react-grid-layout + reactflow + dagre | Bento grid + graph visualization |
+| Animation | framer-motion | Micro-interactions |
+| Forms | zod | Validation throughout |
+| Data | trpc + superjson | Typed tRPC client |
+
+## Package Dependencies
+
+Browser is a **host**, not a feature package consumer. It imports ~55 `@synap-core/*` workspace packages from `synap-app`, including:
+
+**Core**: `ui-system`, `types`, `client`, `hooks`, `stores`, `cell-runtime`, `view-renderer`, `capabilities`
+**Feature modules**: `ai-chat`, `channels`, `proposals`, `connectors`, `capture-pipeline`, `imports-core`, `imports-parsers`, `bento-view`, `masonry-view`
+**Apps consumed as packages**: `data-app`, `data-structure`, `docs-app`, `document`, `entity-card`, `entity-views`, `intelligence`, `whiteboard`, `workflows`, `relay`, `relay-app`, `bento-view`, `notification`, `search`, `sidebar`, `onboarding`, `marketplace`, `platform-auth`, `billing`, `pricing`, `workspace`
+**Platform**: `auth`, `pod-client`, `pod-failover`, `external-connect-client`, `platform-flow`, `control-plane-types`, `deep-link-constants`, `ipc-contract`, `react`
+
+## Design Principles
+
+1. **contextIsolation is non-negotiable** — all Node.js API access goes through explicit IPC channels
+2. **No singleton window** — WindowManager manages N app windows, each with independent lifecycle
+3. **One entry, many routes** — renderer loads `index.html` for every window; window params (id, appId, mode) are URL search params
+4. **Session token lives in renderer** — main process never holds auth tokens; pod URL comes from cookies
+5. **Deep links are first-class** — `synap://` protocol is registered at app lifecycle; all platforms supported (macOS `open-url`, Windows/Linux `second-instance`)
+
+## Code References
+
+- **Main entry**: `browser/electron/main/index.ts` (440 lines)
+- **Window management**: `browser/electron/main/window-manager.ts` (388 lines)
+- **App manifest**: `browser/electron/renderer/src/apps/manifest.ts` (290 lines, 18 apps)
+- **Build config**: `browser/electron-builder.yml` (90 lines, dmg/nsis/AppImage/deb)
+- **Security**: `browser/electron/main/security/` (credential-manager, biometric-auth, anonymous-auth)
+- **Preload scripts**: `browser/electron/preload/` (browser and webview preloads)
+- **Renderer apps**: `browser/electron/renderer/src/apps/` (18 App files)
+- **Package boundary**: Uses workspace packages from `synap-app/` (see `browser/package.json` deps)

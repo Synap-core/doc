@@ -1,12 +1,11 @@
 ---
 title: 'Launch playbook'
-description: 'Standard launch operating procedure across product, engineering, and marketing'
+description: Standard launch operating procedure across product, engineering, and marketing
 section: general
 audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
@@ -15,42 +14,46 @@ toc: true
 
 ## Launch summary
 
-- Initiative:
-- Release window:
-- Launch owner:
-- Status:
+- Initiative: Synap GTM launches follow a 4-wave campaign model with defined channels, owners, and success metrics
+- Release window: Each wave spans 1–2 weeks with a T-30 day preparation cycle
+- Launch owner: Product marketing (GTM team) coordinates; product engineering delivers milestones
+- Status: 4-wave campaign operational; first wave focused on OpenClaw ecosystem
 
 ## Scope and goals
 
-- In scope:
-- Out of scope:
-- Success metrics:
+- **In scope:** ClawHub skill publishing, Discord community posts, Reddit campaigns, show HN, blog posts, YouTube demos, content creator outreach, CLI releases
+- **Out of scope:** Paid ads, influencer sponsorships, conference booths (not in current resource allocation)
+- **Success metrics:** ClawHub installs (50+/week), GitHub stars (100→500→1000), managed pod signups (10→100), npm downloads (200→1000)
 
 ## Timeline
 
 | Phase | Owner | Inputs | Outputs | Date |
 |------|------|------|------|------|
-| Planning |  |  |  |  |
-| Build and validate |  |  |  |  |
-| Go-to-market prep |  |  |  |  |
-| Launch |  |  |  |  |
-| Post-launch review |  |  |  |  |
+| Planning | Product + Marketing | Feature roadmap, design brief, pricing | Launch plan, channel schedule, success metrics | T-30 |
+| Build and validate | Engineering + QA | Release candidate, integration tests | Feature freeze confirmation, test pass reports | T-14 |
+| GTM prep | Marketing + GTM | Approved assets, documentation | ClawHub listing, blog post, video, content briefs | T-7 |
+| Launch | GTM + DevOps | All assets ready, monitoring active | Multi-channel rollout, live metrics dashboard | T-0 |
+| Post-launch review | Product + GTM | Metrics data, user feedback | Metrics report, lessons learned, next wave plan | T+7 |
 
 ## Channel plan
 
-- Website/docs:
-- Product UI:
-- Sales/support:
-- Community/social:
+- **Website/docs:** Launch announcement on synap.live/blog; release notes updated in `content/docs`; ClawHub listing goes live
+- **Product UI:** In-app release notes, changelog section, feature highlights on bento dashboard
+- **Sales/support:** Updated FAQ, competitive battlecards, sales enablement docs
+- **Community/social:** Discord contribution posts, Reddit campaigns, Twitter/X threads with architecture screenshots, YouTube demo videos
 
 ## Risks and mitigations
 
-- Risk:
-- Mitigation:
-- Owner:
+| Risk | Mitigation | Owner |
+|------|-----------|-------|
+| Feature not shipped by launch date | Feature freeze at T-14; scope down if needed | Product |
+| ClawHub listing not indexed quickly | Submit to awesome-openclaw-skills + Discord post simultaneously | GTM |
+| Security concern raised in community | Have security docs ready; respond with architecture transparency | DevOps |
+| Overpromising on roadmap | Only market shipped features; Deferred section exists for a reason | Product |
+| Negative Show HN response | Prepare constructive feedback response process; iterate quickly | GTM |
 
 ## Retro
 
-- What worked:
-- What did not:
-- Changes for next launch:
+- What worked: OpenClaw Discord and ClawHub are highest-ROI channels (direct access to target users)
+- What did not: HN Show HN is high-reach but high-risk; careful with security criticism threads
+- Changes for next launch: Allocate more effort to French parallel track (sovereignty narrative is strongest there)

@@ -13,43 +13,98 @@ hide_title: false
 toc: true
 ---
 
-# Relay & Native
+# Relay
 
-Relay is the mobile surface of Synap, focused on capture, feed consumption, and native OS integrations.
+Target Users: Mobile engineers, product/design teammates working on mobile UX, operational teammates coordinating launch readiness
+Marketing: The mobile surface of Synap — capture on the go, feed consumption, and native OS integrations that make your knowledge work feel effortless
+Key User Stories:
+- "I want to capture anything from my phone — a link, a text, a photo — and have it structured in my pod"
+- "I want a morning briefing delivered through my phone's feed with smart organization"
+- "I need native share, spotlight search, and widgets that connect my phone to Synap seamlessly"
+- "I want to switch between my personal pod and team workspaces instantly from my phone"
+Key Features:
+| Feature | Description | Status | Repo |
+|---------|-------------|--------|------|
+| Mobile app | Expo/React Native app with capture, feed, entity views | In progress | `relay-app/` |
+| Native OS share | Share extension for iOS/Android content capture | Planned | `native-os-share/` |
+| Spotlight search | OS-level search indexing for Synap entities | Planned | `native-os-spotlight/` |
+| Home screen widgets | Live entity cards, feed previews, quick capture | Planned | `native-os-widgets/` |
+| Feed model | 3-surface feed: signal, proactive, unified | Planned | `relay-app/` |
+| Automation templates | Mobile-triggered workflow templates | Planned | `relay-app/` |
+Current Status: **In development** — iOS plan and native OS architecture defined, ship plan in progress
 
-## Purpose
+## Overview
 
-- Document Relay architecture and product intent.
-- Define key mobile user journeys and native platform integrations.
-- Track delivery plans for iOS, Android, and store operations.
+Relay is Synap's **mobile-first surface** built on Expo/React Native. It's not just a responsive version of the desktop app — it's a deliberately mobile-optimized experience that takes advantage of native device capabilities: camera, location, push notifications, share extensions, widgets, and OS search indexing.
 
-## Target users
+Relay serves three primary surfaces:
+1. **Feed consumption** — morning briefing, signal feed, proactive insights delivered as a scrollable experience optimized for mobile
+2. **Capture** — quick entity creation from the camera, clipboard, share sheet, or voice
+3. **Native OS integrations** — share extensions, widgets, live activities, spotlight search, and shortcuts that make Synap feel like a native part of the device
 
-- Mobile engineers
-- Product and design teammates working on mobile UX
-- Operational teammates coordinating launch readiness
+Under the hood, Relay delegates complex native integrations to 7 native OS sub-packages: share, spotlight, widgets, live activities, intents, shared storage, and on-device vision.
 
-## Main flows
+## Architecture
 
-- [User flows](/team/relay/user-flows) — capture and daily usage journeys
-- [Native OS guide](/team/relay/native-os-guide) — platform integrations and capabilities
-- [Future state & vision](/team/relay/future-state) — consolidated direction and roadmap focus
-- [Ship plan](/team/relay/ship-plan) — launch readiness and distribution workflow
+```
+┌─────────────────────────────────────────────────────┐
+│                   React Native (Expo)               │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────┐ │
+│  │ Feed     │  │ Capture  │  │ Entities │  │ ...│ │
+│  │ Surface  │  │ Surface  │  │ Surface  │  │    │ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  │    │ │
+└───────┼──────────────┼──────────────┼────────┼────┘
+        │              │              │
+┌───────┼──────────────────────────────────────────────┐
+│  Native OS Layer (native-os-* packages)              │
+│  share · spotlight · widgets · intents · live-       │
+│  activities · shared-storage · vision                │
+└──────────────────────────────────────────────────────┘
+```
 
-## Key Areas
+**Tech Stack:** Expo (React Native) · Tamagui (cross-platform UI) · Zustand · tRPC
+**Repo:** `relay-app/` (Expo standalone app)
+**Native OS:** `synap-app/packages/core/native-os-*` (7 sub-packages)
+**Key files:** `relay-app/app/` (Expo file-based routing), `relay-app/src/` (components)
 
-| Area | Description |
-|------|-------------|
-| [Architecture](/team/relay/architecture) | 3-surface feed model, data flow, stores |
+## Documentation Map
+
+### Relay App
+
+| Page | What it covers |
+|------|----------------|
+| [Architecture](/team/relay/architecture) | 3-surface feed model, data flow, stores, Expo config |
+| [Feed Model](/team/relay/feed-model) | Signal/feed/unified feed architecture |
 | [User Flows](/team/relay/user-flows) | Capture flow, morning flow, space switcher |
-| [Future state & vision](/team/relay/future-state) | Consolidated product direction and roadmap priorities |
-| [Native OS Guide](/team/relay/native-os-guide) | 7 sub-packages: share, spotlight, widgets, live activities |
+| [Pages](/team/relay/pages) | Route-by-route inventory of built screens |
+| [Future State](/team/relay/future-state) | Consolidated product direction and roadmap |
+| [Automation Templates](/team/relay/automation-templates) | Mobile-triggered workflow templates |
+| [App Store](/team/relay/app-store) | App Store readiness and metadata |
+
+### Native OS
+
+| Page | What it covers |
+|------|----------------|
+| [Native OS](/team/relay/native-os) | 7-sub-package unified facade |
+| [Native OS Guide](/team/relay/native-os-guide) | Platform integrations and capabilities |
+| [Native OS UX](/team/relay/native-os-ux) | UX guidelines for native surfaces |
+| [Native OS Deferred](/team/relay/native-os-deferred) | Deferred/deprioritized native capabilities |
+
+### Mobile Ship
+
+| Page | What it covers |
+|------|----------------|
 | [iOS Plan](/team/relay/ios-plan) | Next-gen iOS implementation |
 | [Android Plan](/team/relay/android-plan) | Android implementation plan |
-| [Ship Plan](/team/relay/ship-plan) | App Store + Play Store launch |
+| [Ship Plan](/team/relay/ship-plan) | App Store + Play Store launch readiness |
+
+## Code References
+
+- **Main repo:** [`relay-app/`](https://github.com/Synap-core/synap/tree/main/relay-app)
+- **Native OS facade:** [`packages/core/native-os`](https://github.com/Synap-core/synap/tree/main/synap-app/packages/core/native-os) + 7 sub-packages
+- **Key files:** `relay-app/app/` (routing), `relay-app/src/` (components), `relay-app/eas.json` (Expo app config)
 
 ## Dependencies
 
-- [Platform](/team/platform/index) for entity/feed/channels data contracts.
-- [Intelligence Service](/team/intelligence/index) for AI-driven relay experiences.
-- [Ops & marketing](/team/ops-marketing/index) for launch and messaging alignment.
+- [Platform](/team/platform/index) for entity/feed/channels data contracts
+- [Intelligence Service](/team/intelligence/index) for AI-driven relay experiences

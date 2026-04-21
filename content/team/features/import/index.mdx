@@ -17,20 +17,177 @@ Import existing data into Synap from CSV files, JSON exports, external service c
 |------|-------------|
 | **CSV Upload** | User uploads CSV files via the browser. Platform validates columns, maps to entity profiles, and creates entities. Supports batch creates with conflict resolution. |
 | **JSON Import** | Structured JSON import with schema validation. Used for programmatic data migration and API-based bulk creation. |
-| **Nango Connectors** | OAuth-based data pull from external services (Gmail, Slack, Notion, etc.). Nango handles token management; Synap pulls the data through Hub Protocol. |
+| **Nango Connectors** | OAuth-based data pull from external services. Nango handles token management; Synap pulls the data through Hub Protocol. |
 | **Pod-to-Pod Sync** | Event log replication between pods. Real-time hook (500ms batching) + polling fallback (60s). Bidirectional with LWW conflict resolution. |
+| **Migration Tools** | Dedicated importers for Notion, Obsidian, Google Keep, Apple Notes, and Excel spreadsheets via structured export formats. |
 
-## Import flow
+## CSV Import
 
-1. **Source selection** — User chooses import method (file upload, connector, or API)
-2. **Schema mapping** — Platform attempts auto-mapping of columns/fields to entity profiles. User can review and correct.
-3. **Validation** — Each row is validated against target profile schema. Invalid rows are reported with error details.
-4. **Bulk creation** — Valid rows are batch-inserted via Drizzle. Events are emitted for each new entity.
-5. **Post-processing** — Search index updates, embeddings generated, and notifications sent.
+CSV import is the primary manual data ingestion path. The platform handles detection, parsing, and mapping with minimal user intervention.
 
-## Key files
+### File parsing
 
-- Import pipeline: [/team/platform/import-pipeline](/team/platform/import-pipeline)
-- File upload: [/team/platform/file-upload](/team/platform/file-upload)
-- Nango connectors: [/team/platform/connectors](/team/platform/connectors)
-- Pod-to-pod sync: [/team/platform/pod-to-pod-sync](/team/platform/pod-to-pod-sync)
+The CSV parser auto-detects delimiter character (comma, semicolon, pipe, tab) by testing a sample of rows against standard delimiters and selecting the one yielding the most consistent column count. Supported encodings: UTF-8, UTF-16, ISO-8859-1, Windows-1252. The parser reads the first 2KB to sniff encoding via BOM detection or heuristic byte analysis.
+
+### Column detection and type inference
+
+After parsing, the platform analyzes each column to infer its data type — string, number, date, email, URL, boolean, or select (enum-like). Inference uses a two-pass approach: first pass collects non-null values per column up to 50 samples; second pass applies regex heuristics (email pattern, URL pattern, ISO-8601 date pattern, numeric pattern). Columns with mixed inferred types are flagged for manual review.
+
+### Header row handling
+
+The first row is assumed to be a header row by default. Users can disable this option to treat all rows as data. If header detection fails (no inferred column names, or a single-column CSV), the parser falls back to auto-generated column names (`col_0`, `col_1`, etc.). Users can rename columns during the schema mapping step.
+
+### Schema mapping
+
+Each detected column is matched to an entity profile property using fuzzy name matching against all 18 system profile properties. Columns that fail to match are grouped under "Unmapped" for manual assignment. Each row's data is then validated against the target profile's property definition schema (including workspace overlays when applicable, resolved via `ProfileResolutionService.getEffectiveProperties()`).
+
+### Type coercion and date handling
+
+Dates are parsed in ISO-8601 format (`YYYY-MM-DD`), US format (`MM/DD/YYYY`), and European format (`DD/MM/YYYY`) with ambiguity resolution: dates that parse unambiguously in only one format are accepted; ambiguous dates (e.g. `01/02/2025`) are flagged for user review. Users can specify the expected date format during mapping.
+
+## JSON Import
+
+JSON import supports both array-of-objects (flat records) and structured nested objects for complex data.
+
+### Expected schema format
+
+The primary expected format is a JSON array where each element represents an entity to be created:
+
+```json
+[
+  { "name": "Task Name", "status": "todo", "priority": "high", "dueDate": "2026-04-25" },
+  { "name": "Another Task", "status": "in-progress", "priority": "medium" }
+]
+```
+
+Optional top-level fields: `profile` (defaults to `task`), `workspaceId` (user's first accessible workspace), `conflictStrategy` (`create-duplicate`, `skip`, `update`).
+
+### Nested object handling
+
+Properties defined with `type: "object"` in the profile schema receive nested JSON as-is (stored in JSONB). The platform does NOT flatten nested objects unless the user explicitly requests it during mapping. Top-level properties whose names contain a dot (e.g. `contact.email`) are treated as dot-path references to nested object properties — the JSONB is set up accordingly.
+
+### Array expansion rules
+
+Top-level JSON arrays within a single field are interpreted as select-type values (multi-select). For example, `"tags": ["urgent", "review"]` maps to a multi-select property. Nested arrays are stored as JSONB arrays — no array-of-entities expansion is performed. A special `__array__` prefix on a property name triggers array-of-entities expansion: each item in the array creates a separate entity under the specified profile.
+
+## Nango Connectors
+
+Nango is the self-hosted OAuth integration layer. Connectors sync data into Synap via the Hub Protocol.
+
+### Supported services
+
+| Service | Data synced | Entity type mapping |
+|---------|------------|---------------------|
+| **Gmail** | Emails, contacts | `email` entity profiles, `contact` for sender/recipient |
+| **Slack** | Messages, channels, users | `message` entities within `channel` views, `person` for users |
+| **Notion** | Pages, databases, blocks | `note` entities, `task` for checkbox items, `project` for databases |
+| **GitHub** | Issues, PRs, repos | `task` for issues/PRs, `project` for repos, `person` for authors |
+| **Google Drive** | Documents, spreadsheets | `file` entities, `note` for doc content extraction |
+| **Jira** | Issues, sprints | `task` entities with status mapping, `project` for boards |
+| **Linear** | Issues, projects | `task` and `project` entities (native fit — preferred over Jira) |
+| **Zoom** | Meetings, recordings | `event` entities for scheduled meetings, `file` for recordings |
+| **Twitter/X** | Tweets, bookmarks | `bookmark` entities, `article` for long-form posts |
+| **Stripe** | Invoices, customers | `deal` entities, `company` for customers |
+
+Additional connectors available through Nango's public catalog. New connectors are added by deploying updated Nango configurations on the pod.
+
+### OAuth handshake
+
+The connector is initiated from the Synap UI via the Connectors settings page, which generates an OAuth authorization URL through Nango's `/connect` endpoint. User is redirected to the service provider's OAuth consent screen. On callback, Nango stores the access and refresh tokens. Synap receives a Nango connection ID and initiates an initial sync via Hub Protocol `POST /connectors/sync/{connectionId}`.
+
+### Sync scheduling
+
+Connectors support three sync modes:
+- **Initial sync**: Pulls all available data on first connection up to a configurable limit (default: 1000 records with pagination)
+- **Incremental sync**: Polls for new/changed records at a configurable interval (default: every 15 minutes, throttled to avoid provider rate limits)
+- **Manual trigger**: User-initiated sync from the connector detail page
+
+### Rate limiting
+
+Nango enforces per-service rate limits from upstream providers and batches requests to stay within quotas. Synap respects Nango's `X-RateLimit-Remaining` headers. When a provider rate limit is reached, sync is deferred and retried with exponential backoff (1s, 2s, 4s, 8s, up to 60s). Failed syncs create a warning notification under the `data_sync` category.
+
+## Pod-to-Pod Sync
+
+Pod-to-Pod sync enables two Synap pods to replicate entity data in near real-time.
+
+### Event log replication
+
+Both pods expose an event log endpoint that returns entries with a monotonically increasing `sequence_id`. Each entry contains: operation type (`create`, `update`, `delete`), entity ID, profile slug, timestamp, and the mutated data. The receiving pod replays events on its own database via Drizzle and emits local events for downstream consumers (search index, embeddings, notifications).
+
+### Real-time hook vs polling fallback
+
+The primary sync path is a real-time webhook: the source pod posts new event log entries to the destination pod's `/api/sync/webhook` endpoint as they occur, with up to 500ms batching for throughput. If the webhook delivery fails (network error, destination pod unavailable), the destination retries up to 5 times with exponential backoff. After 5 failed webhook attempts, the destination falls back to polling the source's `/api/sync/events` endpoint every 60 seconds until the connection is restored. Recovery from polling to webhook is automatic once a successful webhook delivery is confirmed.
+
+### Conflict resolution
+
+Conflict resolution uses Last-Writer-Wins (LWW) semantics. Each event carries a server-side UTC timestamp. When the same entity is modified on both pods independently, the event with the later timestamp wins. The losing side's change is recorded as an AI proposal for review (not silently discarded). For cases where timestamp precision is insufficient (modifications within the same millisecond on both pods), a secondary tiebreaker uses the `sequence_id` — higher sequence_id wins.
+
+### Workspace-scoped filtering
+
+Pod-to-Pod sync respects workspace scoping: only entities from explicitly authorized workspaces are synced. Each workspace maintains a sync authorization list with per-workspace workspace IDs. Entity-scoped filtering happens at the database query level — workspace ID is injected into every event retrieval query via the `workspace_members` join. Pod-wide entity types (`note`, `task`, `project`, `event`, `person`, `contact`, `company`, `bookmark`, `website`, `article`) are synced to both pods' authorized workspaces. Workspace-scoped entity types (`deal`, `file`, `capture`, `anchor`) are only synced if the source workspace is in the destination's authorized workspace list.
+
+## Import Error Handling
+
+### Retry logic
+
+Failed individual row operations within a batch are retried once automatically. If a row fails on retry (e.g., constraint violation, foreign key error), it is moved to the error queue and processing continues with remaining rows — the batch is not rolled back entirely. Transient errors (connection timeouts, lock contention) are retried up to 3 times with exponential backoff before being classified as permanent failures.
+
+### Partial failure behavior
+
+Import batches process optimistically: valid rows are committed, invalid rows are collected for reporting. Users can re-upload a corrected batch that references the same mapping configuration. Failed rows are shown in an error report UI with per-row error messages (e.g., "Invalid date format in 'dueDate' column", "Missing required property 'name'").
+
+### Error reporting UI
+
+The import results screen shows a summary table: total rows, successful, failed, skipped (duplicates), and warnings. Each failed row is expandable to show the original data, the target profile property, and the validation error. Users can download a CSV error report and re-upload corrected data. A "retry all" button re-processes all failed rows with the same mapping config.
+
+## Performance Considerations
+
+### Batch sizes
+
+CSV and JSON imports are processed in batches of 200 rows. The maximum configurable batch size is 1000 rows (set by `IMPORT_BATCH_SIZE`). Each batch is a single database transaction within Drizzle, ensuring atomicity within the batch.
+
+### Concurrent imports
+
+The system supports up to 3 concurrent import operations per workspace. Additional queued imports are held in a priority queue (processed FIFO) with a maximum wait time of 10 minutes before timeout. Concurrent import tracking uses a simple in-memory counter per workspace plus a database `import_operations` table for durability across worker restarts.
+
+### Rate limits
+
+Per-pod, the maximum import throughput is 10,000 entity operations per minute. This is enforced by a token bucket rate limiter. Individual tRPC mutations and Hub Protocol endpoints are rate-limited at 30 requests per minute per user session to prevent abuse during bulk import.
+
+## Security
+
+### Data validation
+
+All imported data passes through Zod schema validation before reaching the database. The schema is derived from the target entity profile's property definitions (including workspace overlays). Fields that do not match any defined property and are not explicitly mapped are rejected unless the user explicitly enables "accept unmapped fields" — in which case they are stored in the entity's JSONB `_raw` field with a warning.
+
+### Injection prevention
+
+String values are validated against XSS patterns (HTML tags, JavaScript event handlers, data URIs). CSV import strips or escapes embedded delimiters and line breaks that could break the row structure. SQL injection is not applicable at the application layer since Drizzle ORM parameterizes all queries — import validation is purely at the Zod schema level.
+
+### Permission checks on imported data
+
+During schema mapping, the system verifies that the user has permission to create entities under the target profile type in the target workspace. If a user attempts to import `company` data into a workspace where they lack write access, the import is blocked at the validation stage with a permission-specific error message. Hub Protocol-connected imports (Nango, pod-to-pod) go through `checkPermissionOrPropose()` — imports are created as proposals requiring user approval before becoming live entities.
+
+## Migration Tools
+
+Synap provides dedicated migration paths for common note-taking and data management platforms.
+
+### Notion migration
+
+Import Notion workspaces by exporting as Markdown + CSV from Notion's settings. Pages become `note` entities. Database items become their respective entity types (checkbox items → `task`, page references → `bookmark`). Inline images and attachments are extracted and stored as `file` entities. Blocks are assembled into a single content string per `note`. Database relations create `entity_relationship` entries in the knowledge graph.
+
+### Obsidian migration
+
+Import Obsidian vaults directly by pointing to the vault directory. Each `.md` file becomes a `note` entity. YAML frontmatter is parsed into entity properties (properties are matched against profile definitions by key name). Wikilinks (`[[Page Name]]`) are resolved to internal entity references and stored as `entity_relationship` entries. Tags are mapped to the `tags` property. Images, PDFs, and attachments in the vault are ingested as `file` entities.
+
+### Google Keep migration
+
+Import Google Keep via Google Takeout export (JSON format). Each note becomes a `note` entity. Labels are mapped to the `tags` property. Color annotations are preserved as the note's display color. Lists with items become `task` entities. Sticked/pinned notes are flagged with a `pinned: true` property. Audio notes and image notes have their media linked as `file` attachments on the `note` entity.
+
+### Apple Notes migration
+
+Import Apple Notes via .txt export or .textbundle format. Each note becomes a `note` entity. Folders are mapped as workspace-level grouping within the Library view. Rich text formatting is preserved as HTML in the `content` field. Attachments (files, photos) are stored as `file` entities linked to the parent note.
+
+### Excel spreadsheets migration
+
+Import Excel (.xlsx) spreadsheets using the same CSV import pipeline — the platform reads xlsx via the `xlsx` parsing library and normalizes to the same CSV import flow (column detection, type inference, schema mapping). Multi-sheet spreadsheets are presented as separate imports, one per sheet. Each sheet can map to a different entity type.

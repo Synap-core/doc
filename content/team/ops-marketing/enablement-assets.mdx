@@ -6,7 +6,6 @@ audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
@@ -15,20 +14,45 @@ toc: true
 
 ## Core assets checklist
 
-- One-pager
-- Product demo script
-- FAQ and objection handling
-- Competitive battlecard
-- Onboarding quickstart
+| Asset | Status | Source | Owner |
+|-------|--------|--------|-------|
+| One-pager | In progress | Design brief + pricing | Marketing |
+| Product demo script | Draft | Product overview video | Product |
+| FAQ and objection handling | Draft | Community questions + HN criticisms | Support |
+| Competitive battlecard | Draft | Market & analysis doc | Marketing |
+| Onboarding quickstart | Draft | Start here guide | Product |
 
-## Asset registry template
+## Asset registry
 
 | Asset | Audience | Owner | Source doc | Last updated |
 |------|------|------|------|------|
-|  |  |  |  |  |
+| Product overview | All teams | Product | Product overview (711 lines) | April 2026 |
+| Pricing guide | Sales, support | Product | Pricing (253 lines) | April 2026 |
+| Security whitepaper | Enterprises | DevOps | Security practices (391 lines) | April 2026 |
+| Architecture diagram | Technical teams | Product | Platform (70 pages) | April 2026 |
+| Competitive analysis | Marketing, sales | Marketing | Market & analysis | April 2026 |
+| Demo video script | Support, sales | Product | Product overview + design brief | April 2026 |
+| Installation guide | Self-hosters | DevOps | DevOps index (98 lines) + quick-start | April 2026 |
 
 ## Quality standard
 
-- Every asset links back to canonical product or architecture docs.
-- Every claim has one concrete proof point.
-- Every asset has an owner and refresh date.
+- Every asset links back to canonical product or architecture docs. No self-contained claims that can't be traced to a source of truth.
+- Every claim has one concrete proof point. "AI structures your data" → "14 system profiles, automatic classification, relation detection."
+- Every asset has an owner and refresh date. Outdated assets degrade trust more than no asset at all.
+- Marketing assets use language from the messaging framework — don't deviate into custom phrasing without updating the framework.
+
+## Distribution
+
+| Asset | Format | Where it lives | Who distributes |
+|-------|--------|---------------|-----------------|
+| One-pager | PDF + web | synap.live/assets/ | Marketing |
+| Battlecard | PDF | Internal (ops-marketing) | Sales |
+| FAQ | MDX | synap-team-docs/content/team/ | Support |
+| Demo video | YouTube + embedded | synap.live, YouTube | Marketing |
+| Install guide | MDX | synap-team-docs/content/team/devops/ | DevOps |
+
+## Next actions
+
+1. Complete competitive battlecard — map top 5 alternatives with specific comparison points
+2. Record product demo video (3-minute walkthrough) — core capture → AI classification → knowledge graph query flow
+3. Update FAQ with common OpenClaw security questions | Synap solution | (this is our strongest angle)

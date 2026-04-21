@@ -5,7 +5,7 @@ section: features
 audience: all-teams
 version: 1.0+
 last_updated: '2026-04-20'
-tags: []
+tags: [features, flows, user-stories, end-to-end]
 sidebar_position: null
 hide_title: false
 toc: true
@@ -13,20 +13,53 @@ toc: true
 
 # Features & Flows
 
-This section maps each Synap feature end-to-end across all product surfaces. For each feature, you'll find:
+**Target Users**: Product managers, engineers, designers, QA — anyone validating or building cross-cutting features  
+**Marketing**: Feature documentation is the product — every feature maps end-to-end across surfaces, architecture, and source code  
+**Key User Stories**:
+- As a PM, I want to trace each feature from trigger to outcome across all product surfaces so I can validate completeness
+- As an engineer, I want code references linked to every feature so I can find the implementation quickly
+- As a designer, I want surface coverage mapped so I know which products support each feature
+**Key Features**: Data ingest, data organization, communication, intelligence, infrastructure — 20 features across 5 categories  
+**Current Status**: All 20 feature docs active under 5 categories; last updated March 2026
+
+## Overview
+
+This section maps **every Synap feature end-to-end** across all product surfaces. For each feature, the documentation covers:
 
 - **What it does** — One-sentence capability summary
-- **Surface coverage** — Which products support this feature
+- **Surface coverage** — Which products support this feature (Browser, Relay, Studio, Raycast, Platform)
 - **How it works** — End-to-end flow from trigger to outcome
 - **Architecture** — Key services and contracts involved
-- **Code links** — Relevant repos + source files
+- **Code links** — Relevant repos and source files
 - **Related features** — Cross-linked documentation
 
----
+## Architecture
 
-## Data Ingest
+Features are organized into **five categories** that follow the Synap triptych (Entities → Views → Channels):
 
-How content enters Synap from external sources.
+```
+Data Ingest      →  Data Organization     →  Intelligence
+   │                    │                        │
+   ▼                    ▼                        ▼
+Capture, Import,     Entities, Profiles,       Proactive AI,
+Search               Views, Feeds              Workflows, Orchestrator
+
+                              Communication
+                              │
+                              ▼
+                              Chat, Channels, Notifications
+                              
+                              Infrastructure
+                              │
+                              ▼
+                              Pod Sync, Proposals, Onboarding
+```
+
+## Documentation Map
+
+### Data Ingest
+
+*How content enters Synap from external sources.*
 
 | Feature | Description | Surfaces |
 |---------|-------------|----------|
@@ -34,9 +67,9 @@ How content enters Synap from external sources.
 | [Import](/team/features/import) | Bulk data import from CSV, JSON, Nango connectors, pod-to-pod | Browser, Studio, Platform |
 | [Search](/team/features/search) | Full-text (Typesense) + semantic (pgvector) search | All surfaces |
 
-## Data Organization
+### Data Organization
 
-How content is structured, organized, and visualized.
+*How content is structured, organized, and visualized.*
 
 | Feature | Description | Surfaces |
 |---------|-------------|----------|
@@ -45,9 +78,9 @@ How content is structured, organized, and visualized.
 | [Views](/team/features/views) | Named queries with rendering configs — 16 types defined | Browser, Relay, Studio |
 | [Feeds](/team/features/feeds) | Three-layer feed: signal, proactive, unified | Browser, Relay, Studio |
 
-## Communication
+### Communication
 
-How people and AI agents communicate.
+*How people and AI agents communicate.*
 
 | Feature | Description | Surfaces |
 |---------|-------------|----------|
@@ -55,9 +88,9 @@ How people and AI agents communicate.
 | [Channels](/team/features/channels) | Communication surfaces: ai_thread, branch, entity_comments, etc. | Browser, Relay, Studio |
 | [Notifications](/team/features/notifications) | Unified notification system — 27 registry types | Browser, Relay, Studio |
 
-## Intelligence
+### Intelligence
 
-AI-powered capabilities and autonomous operations.
+*AI-powered capabilities and autonomous operations.*
 
 | Feature | Description | Surfaces |
 |---------|-------------|----------|
@@ -66,9 +99,9 @@ AI-powered capabilities and autonomous operations.
 | [AI Workflows](/team/features/ai-workflows) | Multi-step AI orchestration with cell composition | Browser, Studio |
 | [Intelligence Orchestrator](/team/features/intelligence-orchestrator) | AI agent system, skills, Hub Protocol | All surfaces |
 
-## Infrastructure
+### Infrastructure
 
-Cross-cutting platform capabilities.
+*Cross-cutting platform capabilities.*
 
 | Feature | Description | Surfaces |
 |---------|-------------|----------|
@@ -76,15 +109,25 @@ Cross-cutting platform capabilities.
 | [Proposals & Governance](/team/features/proposals-governance) | AI mutation governance via proposal review | Browser, Relay, Studio |
 | [Onboarding](/team/features/onboarding) | Story-based onboarding with presets and feature picks | New users |
 
----
-
 ## How to read this section
 
-Each feature page links to the deep-dive documentation in:
+Each feature page links to deep-dive documentation in:
 
 - **Product spaces** (`/team/browser/`, `/team/relay/`, etc.) — surface-specific documentation
 - **Platform space** (`/team/platform/`) — backend architecture and contracts
 - **Intelligence space** (`/team/intelligence/`) — AI agent system
+- **Technologies** (`/team/technologies/`) — infrastructure and tooling
 - **Tech Matrix** (`/team/tech-matrix/`) — repository code anchors and infrastructure
 
-This section is designed for product validation. For each feature, you can jump to the right level of detail: overview → surface coverage → architecture → source code.
+This section is designed for **product validation**: for each feature, you can jump to the right level of detail — overview → surface coverage → architecture → source code.
+
+## Code References (feature surface)
+
+- **Data ingest**: `synap-backend/packages/jobs/src/fetchers/` — RSS, feed workers
+- **Profile system**: `synap-backend/packages/database/src/utils/ensure-system-profiles.ts` — 14 system profiles
+- **Views**: `synap-app/packages/views/` — table, kanban, bento, calendar, flow adapters
+- **Cells/Widgets**: `synap-app/packages/` — bento-widgets, core-widgets, entity-views, channels
+- **Channels**: `synap-backend/packages/api/src/routers/channels.ts` — channel types, streaming, branching
+- **Proposals**: `synap-backend/packages/api/src/utils/permission-check.ts` — `checkPermissionOrPropose()`
+- **AI**: `synap-intelligence-service/apps/intelligence-hub/src/agents/` — agent system
+- **Onboarding**: `browser/electron/renderer/src/components/onboarding/` — story flow, presets

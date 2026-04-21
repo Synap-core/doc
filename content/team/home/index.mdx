@@ -1,344 +1,95 @@
 ---
-title: 'Home'
-description: 'Synap product vision, strategy, and team resources'
+title: 'Home & Vision'
+description: 'Product vision, north star, strategy, and roadmap for all teams'
 section: general
-audience: users
+audience: team
 version: 1.0+
 last_updated: '2026-04-20'
-tags: []
-sidebar_position: null
+tags: [vision, strategy, roadmap, north-star, openclaw]
+sidebar_position: 0
 hide_title: false
 toc: true
 ---
 
-import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Callout } from 'fumadocs-ui/components/callout';
-import { TeamSpacesGrid, PublicSpacesGrid } from '@/components/SpaceGrids';
-import {
-  Layers,
-  Brain,
-  Server,
-  Compass,
-  Rocket,
-  GitBranch,
-  Target,
-  Shield,
-  Eye,
-  Terminal,
-  Users,
-  Smartphone,
-  Share2,
-  List,
-  Zap,
-} from 'lucide-react';
+# Home & Vision
 
-# Welcome to the Synap team portal
+**Target Users**: All Synap team members — engineering, product, GTM, operations, design  
+**Marketing**: The single source of truth for Synap's product direction, philosophy, and execution plan  
+**Key User Stories**: 
+- As a new team member, I want to understand Synap's vision, triptych model, and north star so I can align my work
+- As a product leader, I want the roadmap and strategy documents accessible in one place so I can sequence releases
+- As a GTM operator, I want the positioning, pricing, and OpenClaw distribution strategy documented so I can execute
+**Key Features**: Vision & philosophy, north star strategic plan, strategy vision, roadmap across horizons, OpenClaw GTM funnel, product & surface index  
+**Current Status**: All docs active; roadmap reflects March 2026 status; North Star is confidential strategic plan
 
-Your hub for product vision, roadmap, development resources, and collaboration. Sign in with Control Plane credentials to access restricted spaces.
+## Overview
 
-**Internal map:** [Product & surface index](/team/home/synap-products) lists every repo and where it appears in public vs team docs.
+This space is the **product vision and strategy hub** for Synap. It answers the questions: What are we building? Why? Where is it going? How do we get there? It serves as the north star that every feature, roadmap item, and GTM decision references.
 
-<div className="not-prose my-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-  <div className="space-y-4">
-    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Application Spaces</h3>
-    <div className="flex flex-wrap gap-2">
-      <a
-        href="/team/browser/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Smartphone className="size-5 shrink-0" />
-        Browser & Extensions
-      </a>
-      <a
-        href="/team/relay/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Smartphone className="size-5 shrink-0" />
-        Relay (Mobile)
-      </a>
-      <a
-        href="/team/studio/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Eye className="size-5 shrink-0" />
-        Studio
-      </a>
-      <a
-        href="/team/raycast/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Target className="size-5 shrink-0" />
-        Raycast
-      </a>
-    </div>
-  </div>
-  
-  <div className="space-y-4">
-    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Platform Services</h3>
-    <div className="flex flex-wrap gap-2">
-      <a
-        href="/team/platform/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Layers className="size-5 shrink-0" />
-        Data Pod
-      </a>
-      <a
-        href="/team/intelligence/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Brain className="size-5 shrink-0" />
-        Intelligence Service
-      </a>
-      <a
-        href="/team/control-plane/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Server className="size-5 shrink-0" />
-        Control Plane
-      </a>
-      <a
-        href="/team/technology/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Server className="size-5 shrink-0" />
-        Technologies
-      </a>
-    </div>
-  </div>
-  
-  <div className="space-y-4">
-    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Developer Tools</h3>
-    <div className="flex flex-wrap gap-2">
-      <a
-        href="/team/eve-cli/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Terminal className="size-5 shrink-0" />
-        Eve CLI
-      </a>
-      <a
-        href="/team/synap-packages/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Layers className="size-5 shrink-0" />
-        Synap Packages
-      </a>
-      <a
-        href="/team/devops/index"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Terminal className="size-5 shrink-0" />
-        DevOps
-      </a>
-    </div>
-  </div>
-  
-  <div className="space-y-4">
-    <h3 className="text-fd-font-semibold text-fd-foreground mb-2">Featured Workflows</h3>
-    <div className="flex flex-wrap gap-2">
-      <a
-        href="/team/features/external-sources"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Share2 className="size-5 shrink-0" />
-        External Sources
-      </a>
-      <a
-        href="/team/features/feeds"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <List className="size-5 shrink-0" />
-        Feeds & Filtering
-      </a>
-      <a
-        href="/team/features/ai-workflows"
-        className="inline-flex items-center justify-center gap-2 rounded-lg border border-fd-border bg-fd-card px-5 py-2.5 text-sm font-medium text-fd-foreground transition-colors hover:bg-fd-accent/80"
-      >
-        <Zap className="size-5 shrink-0" />
-        AI Workflows
-      </a>
-    </div>
-  </div>
-</div>
+The space is divided into two areas:
 
-<Callout type="info" title="Internal documentation">
-  This portal is for the Synap team. Some sections require authentication.
-</Callout>
+1. **Direction** — Vision, north star, strategy, product overview, roadmap, and related assets
+2. **OpenClaw** — The OpenClaw integration strategy, current state, and research
 
-## Quick links
+## Architecture
 
-<Cards>
-  <Card
-    icon={<Compass className="size-4" />}
-    title="Platform overview"
-    description="High-level architecture and systems."
-    href="/team/platform/index"
-  />
-  <Card
-    icon={<Brain className="size-4" />}
-    title="AI architecture"
-    description="Agent system and intelligence service."
-    href="/team/intelligence/index"
-  />
-  <Card
-    icon={<Server className="size-4" />}
-    title="Control plane"
-    description="SaaS provisioning and management."
-    href="/team/control-plane/index"
-  />
-  <Card
-    icon={<Smartphone className="size-4" />}
-    title="Relay (mobile)"
-    description="Mobile app architecture."
-    href="/team/relay/index"
-  />
-  <Card
-    icon={<Target className="size-4" />}
-    title="Go-to-market"
-    description="Launch execution, market analysis, and planning assets."
-    href="/team/go-to-market/index"
-  />
-</Cards>
+Synap's product is organized around the **Triptych** — three composable concepts that form the entire product surface:
 
-## Learning path (new teammates)
+```
+   Entities (Data)     Views (Lenses)      Channels (Interaction)
+┌────────────┐    ┌────────────┐    ┌────────────┐
+│ Typed,     │◄───│ Any view   │◄───│ AI + human │
+│ related,   │    │ on the     │    │ conversation │
+│ governed   │    │ graph      │    │            │
+└────────────┘    └────────────┘    └────────────┘
+```
 
-<Cards>
-  <Card icon={<Rocket className="size-4" />} title="Week 1: Foundation" description="Core concepts and setup.">
-    <ol className="mt-2 list-decimal space-y-2 pl-4 text-fd-muted-foreground">
-      <li>
-        <a href="/docs/start/concepts/what-is-synap" className="text-fd-primary underline-offset-4 hover:underline">
-          What is Synap?
-        </a>
-      </li>
-      <li>
-        <a href="/team/platform/index" className="text-fd-primary underline-offset-4 hover:underline">
-          Platform overview
-        </a>
-      </li>
-      <li>
-        <a href="/team/devops/start-here" className="text-fd-primary underline-offset-4 hover:underline">
-          Development environment
-        </a>
-      </li>
-    </ol>
-  </Card>
-  <Card icon={<Layers className="size-4" />} title="Week 2: Deep dive" description="Data model and key services.">
-    <ol className="mt-2 list-decimal space-y-2 pl-4 text-fd-muted-foreground">
-      <li>
-        <a href="/team/platform/entity-profiles" className="text-fd-primary underline-offset-4 hover:underline">
-          Entity profiles
-        </a>
-      </li>
-      <li>
-        <a href="/team/intelligence/agent-system" className="text-fd-primary underline-offset-4 hover:underline">
-          Agent system
-        </a>
-      </li>
-      <li>
-        <a href="/team/control-plane/pod-management" className="text-fd-primary underline-offset-4 hover:underline">
-          Pod management
-        </a>
-      </li>
-    </ol>
-  </Card>
-  <Card icon={<GitBranch className="size-4" />} title="Week 3: Contribute" description="Ship your first changes.">
-    <ol className="mt-2 list-decimal space-y-2 pl-4 text-fd-muted-foreground">
-      <li>
-        <a
-          href="https://github.com/orgs/Synap-core/repositories"
-          className="text-fd-primary underline-offset-4 hover:underline"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Repositories & issues
-        </a>
-      </li>
-      <li>
-        <a href="/team/platform/creating-apps" className="text-fd-primary underline-offset-4 hover:underline">
-          Building on the platform
-        </a>
-      </li>
-      <li>
-        <a href="/team/platform/design-guidelines" className="text-fd-primary underline-offset-4 hover:underline">
-          Design guidelines
-        </a>
-      </li>
-    </ol>
-  </Card>
-</Cards>
+Everything else — templates, the intelligence service, the browser app, documents — is infrastructure that enables or extends these three.
 
-## Featured
+**The OS metaphor is load-bearing**: apps don't own data (they query entities), views are lenses not copies, AI is a privileged process that needs authorization, and the package manager (template engine) installs complete workspace configurations.
 
-<Cards>
-  <Card icon={<Target className="size-4" />} title="Product vision & roadmap" description="Direction and priorities.">
-    <p className="mt-2 text-fd-muted-foreground">
-      Sovereign personal data infrastructure: capture, organize, and extend with AI under your governance.
-    </p>
-    <p className="mt-4">
-      <a
-        href="/team/home/roadmap"
-        className="text-sm font-medium text-fd-primary underline-offset-4 hover:underline"
-      >
-        View roadmap →
-      </a>
-    </p>
-  </Card>
-  <Card icon={<Shield className="size-4" />} title="Team resources" description="Tools and collaboration.">
-    <ul className="mt-2 list-none space-y-2 p-0 text-fd-muted-foreground">
-      <li>
-        <a
-          href="https://github.com/Synap-core"
-          className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <GitBranch className="size-4 shrink-0" />
-          GitHub organization
-        </a>
-      </li>
-      <li>
-        <a href="/team/devops/index" className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline">
-          <Terminal className="size-4 shrink-0" />
-          DevOps & deployment
-        </a>
-      </li>
-      <li>
-        <a
-          href="/team/platform/design-guidelines"
-          className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline"
-        >
-          <Eye className="size-4 shrink-0" />
-          Design system
-        </a>
-      </li>
-      <li>
-        <a
-          href="https://discord.gg/synap"
-          className="inline-flex items-center gap-2 text-fd-primary underline-offset-4 hover:underline"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Users className="size-4 shrink-0" />
-          Discord
-        </a>
-      </li>
-    </ul>
-  </Card>
-</Cards>
+## Documentation Map
 
-## All team documentation
+### Direction
 
-*Requires authentication.*
+| Page | Description |
+|------|-------------|
+| [Vision & Philosophy](/team/home/vision) | Core beliefs: data sovereignty, AI governance, open ecosystem |
+| [North Star](/team/home/north-star) | Strategic vision — knowledge infrastructure for the agent economy (confidential) |
+| [Strategy Vision](/team/home/strategy-vision) | Long-term direction — mission, core beliefs, strategic priorities |
+| [Product Overview](/team/home/product-overview) | High-level reference — triptych, data model, views, channels, pricing |
+| [Roadmap](/team/home/roadmap) | What's built, in progress, next, and deferred — across horizons |
+| [Synap Products](/team/home/synap-products) | Internal map — every repo, surface, and where it appears in public vs team docs |
 
-<TeamSpacesGrid />
+### OpenClaw
 
-Archive and historical pages are available in [/team/archive/index](/team/archive/index).
+| Page | Description |
+|------|-------------|
+| [OpenClaw Strategy](/team/home/openclaw-strategy) | Distribution funnel — how OpenClaw drives Synap adoption |
+| [OpenClaw State](/team/home/openclaw-state) | Current integration status and provisioning flow |
+| [OpenClaw Research](/team/home/openclaw-research) | Competitive and ecosystem research |
 
-## Related public documentation
+### Related Pages
 
-<PublicSpacesGrid limit={3} />
+| Page | Description |
+|------|-------------|
+| [Design Brief](/team/home/design-brief) | Design thinking and brief |
+| [Visual Assets](/team/home/visual-assets) | Brand assets and design resources |
+| [Pricing](/team/home/pricing) | Pricing tiers and packaging |
+| [Market](/team/home/market) | Market analysis and context |
+| [Analysis](/team/home/analysis) | Strategic analysis and competitive landscape |
+| [Pre-launch](/team/home/pre-launch) | Pre-launch checklist and planning |
+| [Release Strategy](/team/home/release-strategy) | Release sequencing and strategy |
+| [Release Checklist](/team/home/release-checklist) | Step-by-step release checklist |
+| [Landing Audit](/team/home/landing-audit) | Landing page audit and recommendations |
+| [Dev Plan](/team/home/dev-plan) | Development planning documentation |
 
----
+## Code References
 
-> This space is for the Synap development team. Ask your lead if you need access to a specific area.
+- **Triptych data model**: `synap-backend/packages/database/src/schema/` — entities, views, channels tables
+- **Template engine**: `synap-backend/packages/database/src/utils/ensure-system-profiles.ts` — 14 default entity profiles
+- **Entity scope resolution**: `synap-backend/packages/database/src/services/profile-resolution-service.ts`
+- **Proposal governance**: `synap-backend/packages/api/src/utils/permission-check.ts` — `checkPermissionOrPropose()`
+- **Hub Protocol**: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` — external AI contract
+- **Intelligence Service**: `synap-intelligence-service/apps/intelligence-hub/src/agents/` — OrchestratorAgent + PersonaAgent
+- **North Star (confidential)**: Authoritative source — this team doc mirrors but does not replace the confidential document

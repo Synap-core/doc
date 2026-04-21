@@ -13,9 +13,34 @@ hide_title: false
 toc: true
 ---
 
+Target Users: Frontend engineers managing dependencies, full-stack engineers adding features across client layers, platform contributors defining package contracts, product teammates mapping features to packages.
+
+Marketing: A comprehensive map of the synap-app monorepo — 80+ npm packages organized as a shared frontend OS spanning design tokens, data client, cell rendering, view adapters, feature modules, and native OS bridges.
+
+Key User Stories:
+- **As a frontend engineer**, I want a complete package map with npm names, roles, and GitHub links so I can find the right package without searching the monorepo.
+- **As a platform contributor**, I want to understand the three-layer data pattern (hooks → stores → client) and mandatory import rules so I don't violate architectural boundaries.
+- **As a feature implementer**, I want to know which packages own view renderers, cell system, entities, channels, AI interfaces, and platform auth so I can extend or create packages correctly.
+- **As a new contributor**, I want to understand why packages exist as separate npm modules instead of one app folder (bundle control, non-React contracts, swappable views, separation of concerns).
+
+Key Features:
+
+| Feature | Description | Status | Repo |
+|---------|-------------|--------|------|
+| Full package map | ~80 packages organized by role (data client, UI, views, cells, features, apps, native OS) | Active | `synap-app` |
+| Three-layer data pattern | Mandatory: hooks → stores → client — enforced by convention | Active | `synap-app/packages/synap-{hooks,stores,client}` |
+| Package boundaries | Separation rules for platform-flow, auth, platform-auth, pod-connect, external-connect-client | Active | `synap-app/packages/core/{auth,platform-flow,...}` |
+| Why-packages-over-app rationale | Bundle control, non-React contracts, swappable views, separation of concerns | Active | `synap-app` monorepo design |
+
+Current Status: All packages are active and in production use across Browser Electron, web, and extension hosts. Some legacy packages (`pod-connect`) are kept for backward compatibility only.
+
+## Overview
+
 The **`synap-app`** monorepo ([**Synap-core/synap-app** on GitHub](https://github.com/Synap-core/synap-app)) is the **shared frontend OS**: Tamagui UI, tRPC client, hooks, stores, view implementations, cells, and feature apps. **Primary user surface today is the Electron Browser**; `apps/web` and other apps are hosts or legacy shells that **reuse the same packages**.
 
 **Path prefix on GitHub:** `https://github.com/Synap-core/synap-app/tree/main/` + path below.
+
+This space is the canonical package map. For product context about synap-app, see **[Synap App](/team/synap-app)**.
 
 ---
 
@@ -243,7 +268,7 @@ Dozens of markdown audits (workspace URL, entity panel, bento, whiteboard, …) 
 
 ## Related team spaces
 
-- **[Synap App](/team/synap-app)** — product positioning (not “the signup app”).  
+- **[Synap App](/team/synap-app)** — product positioning (not "the signup app").  
 - **[Browser](/team/browser)** — Electron host.  
 - **[Platform](/team/platform)** — pod contracts feeding these packages.  
 - **[Relay](/team/relay)** — mobile + native OS story.

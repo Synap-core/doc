@@ -15,17 +15,52 @@ toc: true
 
 ## Proposed scope
 
-- fast command-entry workflows for power users
-- lightweight capture and retrieval interactions
-- handoff into Browser or other canonical surfaces for deep workflows
+- **Quick capture (primary)** — Keyboard-driven capture of notes, tasks, and bookmarks from any macOS context. Triggered via Raycast command palette with `Cmd+Shift+C` equivalent. Capture target resolves to current workspace automatically.
+- **Quick lookup (secondary)** — Search entities, projects, and tasks by keyword or semantic query. Results shown as a compact list with entity card previews. Click opens the full entity in Browser or Relay.
+- **Context resolution** — At command invocation time, resolve the user's identity, pod URL, and primary workspace. Falls back to first accessible workspace if context is ambiguous.
+- **Deep-handoff** — When a Raycast action requires a deep edit or multi-step workflow, surface a direct link back to the appropriate product surface (Browser for full entity editor, Relay for mobile capture).
+
+## Command set (proposed)
+
+| Command | Category | Action |
+|---------|----------|--------|
+| `Synap Capture` | Capture | Prompt for text, create entity, return confirmation |
+| `Synap Note` | Capture | Quick note capture with optional project tagging |
+| `Synap Task` | Capture | Quick task creation with status and priority |
+| `Synap Search` | Lookup | Full-text and semantic search across entities |
+| `Synap Lookup` | Lookup | Search entities by ID, title, or content snippet |
+| `Synap Open` | Action | Open a specific entity in Browser/Relay |
+| `Synap Add to Project` | Action | Move an existing entity into a project |
+| `Synap AI Summarize` | AI | Request AI summary of an entity (requires IS connectivity) |
 
 ## Non-goals (current)
 
-- replacing Browser as primary desktop shell
-- duplicating full extension feature sets
-- introducing alternate governance rules for writes
+- **Replacing Browser as primary desktop shell** — Raycast is supplementary, not sovereign. All data operations, deep edits, and content management stay in Browser, Relay, or Studio.
+- **Duplicating full extension feature sets** — No calendar management, no file browser, no channel conversations, no document editing.
+- **Introducing alternate governance rules** — Write operations use the exact same permission/proposal gates as Browser and Relay. No Raycast-specific bypass path.
+- **Local-first / offline mode** — Raycast commands require an active connection to the pod. No local storage for entity data.
+
+## Status by component
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Capture commands | Draft | UX flow defined, implementation not started |
+| Search/lookup | Draft | Requires frontend search cell exposed to Raycast extension |
+| Context resolution | Draft | Needs pod identity + workspace resolution API |
+| Auth/session | Draft | Reuse existing platform auth patterns (no new secrets) |
+| Proposal-gated writes | Draft | Writes flow through `checkPermissionOrPropose()` contract |
+| Confirmation UI | Draft | Short notification on capture success with link to full surface |
 
 ## Dependencies
 
-- package/runtime dependencies in **[Synap App](/team/synap-app)**
-- platform contracts in **[Platform](/team/platform)**
+- **Platform contracts:** [Platform](/team/platform) — Data Pod APIs and auth/session model
+- **Frontend search cell:** `@synap/core/search` — Must be exposed to Raycast extension context
+- **tRPC client:** Must work within Raycast's JavaScript runtime (Electron-based, not Node.js)
+- **Raycast Extensions SDK v3** — Official extension API for command registration and UI rendering
+
+## Milestone plan
+
+1. **M1 — Scope lock** — Finalize command set, ownership, and release timeline. Draft status.
+2. **M2 — MVP capture** — Implement `Synap Capture` and `Synap Search` commands. Basic workflow end to end.
+3. **M3 — Expanded commands** — Add project-specific captures (note, task, bookmark) and deep-handoff links.
+4. **M4 — AI integration** — Add AI-powered commands (summarize, suggest tags) via Intelligence Service.

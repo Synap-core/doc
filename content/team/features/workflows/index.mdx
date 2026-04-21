@@ -18,18 +18,156 @@ Automations execute predefined workflows triggered by events (entity create, sch
 | **Workflows App** | The workflows app in the browser drawer provides the UI for creating, managing, and monitoring automations. Lists all workflows, shows execution status, and provides a command interface for creating new ones. |
 | **Automation Executors** | Backend workers that execute automation steps. Can trigger entity updates, send notifications, post to channels, call external APIs, or invoke intelligence service actions. [More details](/team/platform/permissions) |
 | **Triggers** | Entity lifecycle triggers (create, update, delete), scheduled triggers (cron-based), and external triggers (webhooks, Nango connector sync). [More details](/docs/architecture/concepts/why-events) |
-| **Templates** | Pre-built automation templates for common workflows: task assignment, status updates, notification forwarding, entity duplication, cross-entity sync. |
+| **Templates** | Pre-built automation templates for common workflows. See [Template library](#template-library) for the full catalog. |
+
+## Trigger types
+
+Automations are triggered by one of three trigger categories. Each trigger defines conditions that determine when the automation fires.
+
+### Entity lifecycle triggers
+
+Fire on entity creation, property updates, or deletion. Each trigger supports filter conditions to narrow scope.
+
+| Event | Description | Example condition |
+|-------|-------------|-------------------|
+| `entity.create` | Entity is created with a specific profile type | `where profile = "task" AND priority = "high"` |
+| `entity.update` | A property changes on an existing entity | `where status changed to "done" AND task.priority = "high"` |
+| `entity.delete` | An entity is removed | `where profile = "note" AND tags include "sensitive"` |
+
+Conditions use a filter DSL compatible with the view filter compiler (`synap-backend/packages/api/src/routers/`). Multiple conditions are ANDed together.
+
+### Scheduled (cron) triggers
+
+Run on a cron schedule using standard cron syntax. Supports timezone-aware scheduling and one-time offsets.
+
+Cron format: `minute hour day-of-month month day-of-week`
+
+Example schedules:
+- `0 9 * * 1-5` — Every weekday at 9:00 AM (morning briefing)
+- `0 */6 * * *` — Every 6 hours
+- `30 8 * * 1` — Mondays at 8:30 AM (weekly digest)
+- `0 0 1 * *` — First day of every month
+
+Triggers are registered as pg-boss jobs (7 cron-managed workers with configurable schedules). Each schedule is scoped per-workspace so different workspaces can have independent runs.
+
+### External triggers
+
+Fire from outside Synap — webhooks or connector sync events.
+
+**Webhooks:** Each automation can expose a unique webhook URL. The payload is validated against a schema:
+
+```json
+{
+  "source": "string (required)",
+  "event": "string (required)",
+  "timestamp": "ISO 8601 (optional)",
+  "data": { 
+    "type": "string", 
+    "fields": "Record<string, any>" 
+  }
+}
+```
+
+Payload `data` is mapped to entity properties based on the action chain configuration. Webhook URLs use Hub Protocol authentication tokens and are scoped to the workspace that owns the automation.
+
+**Connector sync:** Nango connector sync events can also trigger automations — e.g., a new contact synced from CRM creates a corresponding contact entity and fires downstream actions.
+
+## Template library
+
+Built-in templates provide starting templates for common workflows. Each template pre-configures the trigger, action chain, and governance settings.
+
+| Template | Description |
+|----------|-------------|
+| **Task assignment** | When a task is created with a priority flag, automatically assign it to a person (by team role, round-robin, or explicit owner) and notify them in their personal channel. |
+| **Status updates** | When an entity's status property changes, create a log entry, notify relevant stakeholders, and update downstream linked entities. |
+| **Notification forwarding** | Forward notifications from one channel to another (e.g., broadcast task channel updates to a team channel). Supports filtering by entity type and priority. |
+| **Entity duplication** | When a project is marked complete, duplicate its tasks with status `todo` and due dates shifted by a configurable offset. Useful for recurring project structures. |
+| **Cross-entity sync** | Keep properties in sync across related entities. E.g., when a deal stage changes, update the associated company's deal-related properties and notify the account owner. |
+| **AI summarization** | When a note or article is created, invoke the AI agent to summarize it and store the summary as a property on the entity. Can also generate tags or extract key points. |
+| **Deadline reminders** | Scheduled check that scans for entities approaching a due date (e.g., within 48 hours) and sends reminder notifications to owners. Repeated until resolution. |
+
+Custom templates can be created from scratch or cloned from existing ones. Template cloning copies the action chain and trigger configuration for reuse.
+
+## Action chain detail
+
+Action chains are executed sequentially. Each action type can reference data from the trigger event or previous actions in the chain.
+
+| Action type | Description | Example |
+|-------------|-------------|---------|
+| **Entity update** | Modify properties of an existing entity by ID or resolved filter | Update `status` field on a task entity |
+| **Entity create** | Create a new entity with properties derived from trigger data | Create a `task` entity from a webhook payload |
+| **Notification** | Post a notification to the notification system and/or personal channel | Notify user about a deadline approaching |
+| **Email** | Send an email via configured SMTP provider | Email a summary report to external stakeholders |
+| **Webhook** | POST data to an external HTTP endpoint with configurable headers | Notify a Slack bot or internal service |
+| **Message relay** | Post a message to a channel (ai_thread, branch, view_discussion, etc.) | Relay an automation result to a team channel |
+| **Data export** | Export entity data to a format (CSV, JSON) and store as a `file` entity | Generate a monthly report of closed deals |
+
+Actions can include conditional gates (e.g., "only execute if property X is set") and can reference variables set by earlier actions using a simple variable interpolation syntax.
 
 ## Automation flow
 
 1. **Template selection** — User picks an automation template or creates from scratch
 2. **Trigger configuration** — User defines what event triggers the automation
 3. **Action chain** — Sequential steps: entity update, notification, external API call
-4. **Governance** — AI-triggered automations go through the proposal system
-5. **Execution** — pg-boss worker executes; success/failure tracked in run history
-6. **Feedback** — Results posted to personal channel and notification system
+4. **Governance** — AI-triggered automations go through the proposal system; user-initiated actions execute directly
+5. **Execution** — pg-boss worker executes with retry logic, dead letter queue, and configurable timeouts
+6. **Monitoring** — Run history tracks success/failure rates, execution time, and step-level results
+7. **Feedback** — Results posted to personal channel and notification system
 
-## AI workflow automations
+## Governance model
+
+Automations are subject to governance rules that differ based on who or what initiates the trigger.
+
+- **User-initiated triggers** — Actions execute directly with no proposal gate. The user already has permission to modify the target entities, so `checkPermissionOrPropose()` fast-tracks.
+- **AI-triggered automations** — Actions from intelligence service skills or AI workflow skills go through the proposal system. A proposal is created for each mutation, giving the user the opportunity to review and approve or reject before the action is applied. The AI cannot auto-approve its own proposals.
+- **Scheduled triggers** — Inherit the initiator's permission context. Since they were configured by a user, they execute directly if the user had permission at creation time, subject to periodic re-validation.
+- **Auto-approve conditions** — Certain low-risk automation actions can be auto-approved via the `DEFAULT_AUTO_APPROVE` whitelist in `permission-check.ts`. This typically includes internal notifications, self-referential entity updates, and read-only exports.
+
+All automation mutations are auditable through the proposal timeline. [More details on proposals](/team/platform/proposals).
+
+## pg-boss job system
+
+Automations run on pg-boss, a PostgreSQL-based job scheduler.
+
+| Setting | Value |
+|---------|-------|
+| **Dedicated workers** | 27 pg-boss workers running in the backend (per `synap-backend/packages/jobs/`) |
+| **Cron-managed jobs** | 7 proactive cron jobs including morning briefing, weekly digest, health check |
+| **Retry logic** | Configurable retry count per job type with exponential backoff (multipliers: 1x, 2x, 4x) |
+| **Dead letter queue** | Jobs that exhaust all retries are moved to a dead letter table — they can be inspected and manually re-run from run history |
+| **Execution timeout** | Configurable per-workflow, defaults to 60 seconds per job. Timeout fires after the limit and the job is marked failed |
+| **Concurrency** | Jobs are concurrent up to the worker pool size. Same automation runs on different triggers can execute in parallel |
+| **Persistence** | All job state is stored in PostgreSQL — no external Redis dependency |
+
+## Error handling
+
+When an automation step fails:
+
+1. **Step-level failure** — The failing action is marked `failed`, logged with error details, and the remaining steps in the chain are skipped unless conditional "continue on error" is enabled.
+2. **Automatic retry** — On transient errors (network timeout, DB lock), pg-boss retries the job using exponential backoff. The retry count is configurable per job type.
+3. **Partial execution** — Steps that already succeeded are preserved in run history. Re-running the automation does not undo previous successes.
+4. **After retries exhausted** — The job moves to the dead letter queue. The user is notified via the notification system that the automation failed. From run history, the user can inspect the error and manually re-trigger.
+5. **Rollback** — Automations do not automatically roll back successful steps. A manual cleanup or counter-automation must be created if undoing is required.
+
+## Monitoring
+
+Run history provides visibility into automation execution:
+
+- **Per-run stats** — Success/failure status, execution time (per step and total), step count, and worker node that processed the job
+- **Aggregate views** — Success rate, average execution time, and error rate trends across all runs of a workflow
+- **Step-level detail** — Each step in the chain shows input data, output, status, duration, and any error message
+- **Run history UI** | Accessible from the workflows app in the browser drawer — filter by workflow, status, date range, and trigger type
+- **Notification alerts** | Failed runs can trigger configurable notifications (e.g., alert on 3+ failures in an hour)
+
+## Security
+
+Automation actions respect the same permission and access boundaries as every other operation in Synap:
+
+- **Permission scope** — Automation actions are authorized using the same tRPC/Hub Protocol permission model. The automation inherits the workspace permissions of the user who created it.
+- **Data access boundaries** — Actions cannot access entities outside the workspace the automation belongs to (unless the automation has access to a different workspace explicitly). Entity scope rules still apply — pod-wide profiles are visible across workspaces, workspace-scoped profiles are not.
+- **Webhook authentication** — External webhook endpoints use Hub Protocol bearer tokens. Each webhook URL is scoped to a workspace and an automation ID. Unauthorized requests return 401 with a clear error.
+- **Proposal gating for AI actions** — As described in the governance model, AI-triggered mutations create proposals rather than executing directly, giving users an audit trail and rejection path.
+- **Payload validation** — External webhook payloads are validated against a Zod schema before being processed. Malformed payloads are rejected immediately and logged.
 
 Intelligence service skills include `skill-automations` — AI agents can create and manage automations through natural language. The automations skill provides:
 

@@ -11,41 +11,107 @@ hide_title: false
 toc: true
 ---
 
-`synap-app` is mostly a frontend package workspace and integration layer.
+Target Users: Frontend and full-stack engineers working on Synap UI, platform contributors who touch shared packages, product and design teammates needing package-level orientation.
 
-## Purpose
+Marketing: The shared frontend package monorepo that powers every Synap host surface — from the Electron Browser desktop app to mobile and web — through a composable system of UI tokens, data client, view adapters, and feature apps.
 
-- Track current scope vs deprecated scope in this repo.
-- Clarify package ownership and layering decisions.
-- Document frontend integration paths with backend and intelligence services.
+Key User Stories:
+- **As a frontend engineer**, I want a single monorepo with all shared packages (UI system, data client, hooks, stores, cells, views) so I can build any feature without cross-repo dependency dance.
+- **As a platform contributor**, I want clear package boundaries and a three-layer data pattern (hooks → stores → client) so I can modify UI without breaking tRPC contracts or introducing upward imports.
+- **As a full-stack engineer**, I want to understand how frontend integrates with the Intelligence Service (tRPC + Socket.IO bridge) so I can wire AI chat, proposals, and real-time events end-to-end.
+- **As a product designer**, I want the ui-system package to be the source of visual truth (tokens, components, spacing) so I can prototype using the same design language the codebase ships.
+- **As a new contributor**, I want a status-and-scope doc that clearly marks what is active vs deprecated in the repo so I don't waste time on dead code paths like Telegram or legacy web.
 
-## Target users
+Key Features:
 
-- Frontend and full-stack engineers
-- Platform contributors touching shared packages
-- Product/design teammates needing package-level orientation
+| Feature | Description | Status | Repo |
+|---------|-------------|--------|------|
+| Frontend package monorepo | pnpm workspace with ~80+ shared packages (core, features, views, apps) | Active | `synap-app` |
+| Design system (`ui-system`) | Tamagui tokens, components, theme provider — visual truth for all hosts | Active | `synap-app/packages/core/ui-system` |
+| Three-layer data client | hooks → stores → client (tRPC + TanStack Query) — mandatory pattern | Active | `synap-app/packages/synap-{hooks,stores,client}` |
+| Frontend ↔ Intelligence integration | tRPC, Socket.IO bridge, Hub Protocol REST for AI chat, proposals, streaming | Active | `synap-app/packages/features/ai-chat`, backend `@synap/app/intelligence-connect` |
+| Package boundaries | Routing reference for where to read package ownership vs duplication | Active | `synap-app/packages/` + `synap-packages` space |
+| Status and scope | Active vs deprecated surfaces, decision rules for where to document | Active | This space |
 
-## Main flows
+Current Status: The shared frontend packages in `synap-app` are fully active. The Electron Browser is the primary user surface; `apps/web`, `apps/web-desktop`, `apps/telegram`, and extensions are hosts that consume the same packages. Telegram app in this repo is deprecated.
 
-- [Frontend ↔ Intelligence integration](/team/synap-app/frontend-intelligence-integration)
-- [Package boundaries](/team/synap-app/package-boundaries)
-- [Status and scope](/team/synap-app/status-and-scope)
+## Overview
 
-## Current status
+`synap-app` is the frontend package monorepo for Synap. It contains no monolithic app — instead it ships ~80+ npm packages: a design system (`ui-system`), data client (`client`, `hooks`, `stores`), cell system (`cell-runtime`, `capabilities`), view adapters (`table`, `kanban`, `calendar`, `masonry`, `flow`, `graph`, `map`), feature modules (`ai-chat`, `channels`, `proposals`, `connectors`, `capture`), and apps (`chat`, `intelligence`, `whiteboard`, `relay`, etc.). All host surfaces (Browser Electron, web, extensions, Relay) consume the same packages.
 
-- The **Telegram app in this repo is deprecated** and not the forward product direction.
-- The primary user-facing desktop product is **[Browser](/team/browser/index)**.
-- Most long-term frontend value here is the shared package graph and integration contracts.
+This team space holds product context about the repo: status, package boundaries, and frontend ↔ Intelligence Service integration. The canonical package map lives in **[Synap Packages](/team/synap-packages)**.
 
-## Read next
+## Architecture
 
-- **[Status and scope](/team/synap-app/status-and-scope)** — active vs deprecated surfaces
-- **[Package boundaries](/team/synap-app/package-boundaries)** — where to read package ownership and layering
-- **[Synap app packages](/team/synap-packages)** — canonical package map
-- **[Frontend ↔ Intelligence integration](/team/synap-app/frontend-intelligence-integration)** — runtime integration deep dive
+```
+Host (Browser Electron / web / extension / Relay)
+  │
+  ├─ @synap-core/ui-system        (Tamagui provider, tokens, base components)
+  ├─ @synap-core/client           (tRPC + TanStack Query transport to pod)
+  ├─ @synap-core/hooks            (queries + stores + UX rules)
+  ├─ @synap-core/stores           (Zustand ephemeral state)
+  ├─ @synap-core/cell-runtime     (CellRenderer dispatcher)
+  ├─ @synap-core/view-renderer    (view type dispatcher + shared chrome)
+  ├─ @synap-core/{entity-card, entity-views, property-renderer}
+  ├─ @synap-core/channels, chat-interface, notifications
+  ├─ @synap-core/ai-chat          (full AI chat app module)
+  └─ @synap-core/{platform, auth, pod-connect, pod-failover}
+```
 
-## Dependencies
+**Tech stack**: React 19, Tamagui, TanStack Query, Zustand, tRPC 11, Socket.IO client, Electron (as host).
 
-- [Browser](/team/browser/index) as primary desktop product surface.
-- [Platform](/team/platform/index) for backend contracts and event model.
-- [Intelligence Service](/team/intelligence/index) for AI runtime integration.
+**Three-layer data pattern** is mandatory: Components use `@synap-core/hooks` → `@synap-core/stores` → `@synap-core/client`. Never import client directly from UI packages. Never skip a layer.
+
+**Cell system**: `@synap-core/capabilities` is the manifest (zero React) consumed by agents, scripts, and backend. `@synap-core/cell-runtime` is the registry + dispatcher. Cells render via hosts (BentoCellHost, PanelCellHost, PageCellHost).
+
+## Package Map / Structure
+
+The canonical package map is in **[Synap Packages](/team/synap-packages)**. This repo's top-level structure:
+
+- `packages/core/*` — Foundational packages: UI system, data client, cells, views, profiles, channels, notifications, auth, platform, native-OS bridges.
+- `packages/features/*` — Feature modules: AI chat, sidebar, floating panels, capture, proposals, connectors, document, entity-views, agent-service, platform-auth.
+- `packages/views/*` — View adapters behind `view-renderer`: table, kanban, list, grid, masonry, calendar, timeline, flow, graph, map.
+- `packages/apps/*` — Embeddable feature apps: chat, intelligence, whiteboard, relay, telegram, extension, agent-os, zeroclaw.
+- `packages/sdk`, `packages/react`, `packages/core/database`, `packages/core/data-utils` — SDK surface, React providers, client-side DB helpers, data transforms.
+- `packages/ipc-contract`, `packages/core/deep-link-constants` — Cross-process contracts.
+- `apps/web`, `apps/telegram` — Host shells (web and telegram — legacy).
+
+See **[Synap Packages → package map](/team/synap-packages)** for the full package table with npm names and roles.
+
+## Documentation Map
+
+**This space covers:**
+- Product positioning of synap-app within the Synap stack
+- Active vs deprecated surfaces (status-and-scope)
+- Where package boundaries and ownership are documented (package-boundaries)
+- How the frontend integrates with the Intelligence Service (frontend-intelligence-integration)
+
+**What lives elsewhere:**
+- **Canonical package map**: [Synap Packages](/team/synap-packages) — full package inventory, npm names, roles, paths, ownership.
+- **Platform / backend**: [Platform](/team/platform) — pod contracts, API, event model, governance.
+- **Browser host**: [Browser](/team/browser) — Electron app, sidebar apps, manifest.
+- **Browser source**: `browser/electron/` repo — host-level code that wires packages together.
+
+## Code References
+
+| Reference | Link |
+|-----------|------|
+| GitHub repo | https://github.com/Synap-core/synap-app |
+| Package map (team docs) | [Synap Packages](/team/synap-packages) |
+| Status and scope | [Status and scope](/team/synap-app/status-and-scope) |
+| Package boundaries | [Package boundaries](/team/synap-app/package-boundaries) |
+| Frontend ↔ Intelligence integration | [Frontend intelligence integration](/team/synap-app/frontend-intelligence-integration) |
+| Auth & external-connect boundaries | [Auth & External Connect](/team/synap-packages/auth-and-external-connect-boundaries) |
+| Auth primitives | `packages/core/auth/src/` |
+| Client + tRPC | `packages/synap-client/src/` |
+| Hooks layer | `packages/synap-hooks/src/` |
+| Stores (Zustand) | `packages/synap-stores/src/` |
+| UI system | `packages/core/ui-system/src/` |
+| Capability manifest | `packages/core/capabilities/src/` |
+| Cell runtime | `packages/core/cell-runtime/src/` |
+| View renderer | `packages/core/view-renderer/src/` |
+| AI chat | `packages/features/ai-chat/src/` |
+| Cell registry | `packages/core/cells/src/` |
+| Proposal types (shared) | `packages/core/proposal-types/src/` |
+| Notifications | `packages/core/notifications/src/` |
+| Channels | `packages/core/channels/src/` |

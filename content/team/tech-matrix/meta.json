@@ -1,0 +1,13 @@
+{
+  "title": "Tech Matrix",
+  "description": "Engineering setup guides and infrastructure configurations for the team's tech stack",
+  "root": true,
+  "icon": "settings",
+  "pages": [
+    "index",
+    "claude-code-setup",
+    "code-anchors",
+    "ollama-docker-setup",
+    "openclaw-docker-configuration"
+  ]
+}

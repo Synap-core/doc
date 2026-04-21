@@ -11,37 +11,75 @@ hide_title: false
 toc: true
 ---
 
-# Browser & Extensions
+# Browser
 
-Unified space covering the Synap desktop browser (Electron-based) and browser extensions.
+Target Users: Desktop engineers, security/release operators, product/design teammates working on the desktop experience
+Marketing: The Electron desktop app — your sovereign Synap workspace, locally runnable with enterprise-grade security
+Key User Stories: 
+- "I want to install Synap on my laptop and start capturing knowledge immediately"
+- "I need to capture web content seamlessly while browsing and have it appear as structured entities in my pod"
+- "I want a trusted, sandboxed desktop experience where my data stays on my machine"
+- "I need a reliable update path that ships without breaking my local setup"
+Key Features:
+| Feature | Description | Status | Repo |
+|---------|-------------|--------|------|
+| Desktop shell | Electron-based app with sidebar, 18+ embedded apps | Live | `browser/` |
+| Web capture | Capture flow from web → structured entities | Live | `browser/` |
+| Trust model | IPC security, webview sandboxing, content policies | Live | `browser/` |
+| Update system | Electron Forge + auto-update mechanism | Live | `browser/` |
+| App manifest | Sidebar manifest controlling which apps surface | Live | `electron/renderer/src/apps/manifest.ts` |
+Current Status: **Live** — primary desktop product surface
 
-## Purpose
+## Overview
 
-- Document Browser architecture and trust boundaries.
-- Define operational and release model for desktop shipping.
-- Capture user-facing flows from capture to knowledge workflows.
+Browser is Synap's **primary user-facing product** — a desktop application built on Electron that provides a secure, offline-capable interface to your data pod. Unlike the web-only Studio app, Browser runs locally, giving users direct control over their data and infrastructure.
 
-## Target users
+The app exposes 18 embedded apps (dashboard, browser, chat, library, data, views, calendar, files, channels, proposals, workflows, marketplace, relay, vault, settings, terminal, whiteboard, dataStructure) controlled by a single manifest file. Each app is a package in `synap-app/packages/apps/` or `synap-app/packages/features/` that gets lazily loaded.
 
-- Desktop engineers
-- Security and release operators
-- Product/design teammates working on desktop experience
+Browser also serves as the primary surface for web capture — the entry point for knowledge work. Users can capture content from any website and have it transformed into structured entities in their pod.
 
-## Main flows
+## Architecture
 
-- [Capture and flows](/team/browser/capture-and-flows) — input to structured knowledge path
-- [Operations and release](/team/browser/operations-and-release) — package, update, and ship lifecycle
-- [Security](/team/browser/security) — hardening and policy controls
+```
+┌─────────────────────────────────────────┐
+│        Electron Main Process            │
+│  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │ Sidebar  │  │ IPC Hub  │  │ Updater│ │
+│  └────┬─────┘  └────┬─────┘  └────────┘ │
+└───────┼──────────────┼──────────────────┘
+        │              │
+┌───────┼──────────────────────────────────┐
+│       ▼     Renderer (React + Tamagui)   │
+│  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │ App Shell│  │ Cell     │  │ Capture│ │
+│  │(18 apps) │  │ Runtime  │  │ Flow   │ │
+│  └──────────┘  └──────────┘  └────────┘ │
+└─────────────────────────────────────────┘
+```
 
-## Read next
+**Tech Stack:** Electron · React 19 · Tamagui · Zustand · tRPC · Yjs (collaborative editing)
+**Repo:** `browser/` (standalone monorepo package)
+**Entry Point:** `electron/main.ts` (main process), `electron/renderer/src/` (renderer)
+**Sidebar Config:** `electron/renderer/src/apps/manifest.ts`
 
-- **[Architecture](/team/browser/architecture)** — trust boundaries, IPC, webview model
-- **[Security](/team/browser/security)** — hardening and release gates
-- **[Operations and release](/team/browser/operations-and-release)** — packaging, updater, CI
-- **[Capture and flows](/team/browser/capture-and-flows)** — user journey from web to pod
+## Documentation Map
+
+| Page | What it covers |
+|------|----------------|
+| [Architecture](/team/browser/architecture) | Trust boundaries, IPC model, webview sandboxing, security isolation |
+| [Security](/team/browser/security) | Hardening strategy, content policies, release gates, trust model |
+| [Operations & Release](/team/browser/operations-and-release) | Electron Forge packaging, auto-update mechanism, CI/CD pipeline |
+| [Capture & Flows](/team/browser/capture-and-flows) | User journey: web content → structured entities, capture pipeline UI |
+
+## Code References
+
+- **Main repo:** [`browser/`](https://github.com/Synap-core/synap/tree/main/browser)
+- **Key files:** [`electron/renderer/src/apps/manifest.ts`](https://github.com/Synap-core/synap/tree/main/browser/electron/renderer/src/apps/manifest.ts) (app manifest)
+- **Shared libs:** `@synap-core/client`, `@synap-core/cell-runtime`, `@synap-core/view-renderer` (via synap-app packages)
+- **Collaboration:** Yjs bindings in `electron/renderer/src/`
 
 ## Dependencies
 
-- [Platform](/team/platform/index) for data contracts and event governance.
-- [Synap app](/team/synap-app/index) for shared package/runtime boundaries.
-- [DevOps](/team/devops/index) for environment and release operations.
+- [Platform](/team/platform/index) for data contracts, entity profiles, and event governance
+- [Synap App](/team/synap-app/index) for shared package/runtime boundaries
+- [DevOps](/team/devops/index) for environment setup and release operations

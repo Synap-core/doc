@@ -1,20 +1,145 @@
 ---
 title: 'OpenClaw GTM'
-description: Go-to-market context for OpenClaw-related initiatives
+description: Go-to-market context for OpenClaw-related initiatives and the primary distribution funnel
 section: general
 audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
 
 # OpenClaw GTM
 
-- OpenClaw strategy: [/team/home/openclaw-strategy](/team/home/openclaw-strategy)
-- OpenClaw state: [/team/home/openclaw-state](/team/home/openclaw-state)
-- OpenClaw research: [/team/home/openclaw-research](/team/home/openclaw-research)
+OpenClaw is Synap's primary distribution engine — our Layer 0 entry point in the two-layer GTM funnel.
 
-Keep OpenClaw technical architecture in [/team/intelligence/index](/team/intelligence/index) and [/team/platform/index](/team/platform/index).
+## The OpenClaw funnel
+
+```
+OpenClaw users (250K+ across Discord + ClawHub)
+  │
+  ├── ClawHub: synap-memory skill (install: clawhub install synap-memory)
+  ├── Discord: contribution posts in #users-helping-users
+  ├── GitHub: awesome-openclaw-skills listings
+  ├── Reddit: posts in r/openclaw, r/LocalLLaMA, r/AI_Agents
+  └── Content: tutorials, blog posts, YouTube demos
+   
+  ▼
+Self-hosted Synap pod users
+  │
+  ├── synap init CLI (one-command setup)
+  ├── synap-memory structured memory skill
+  └── synap-os SKILL.md (fleet management workspace)
+  
+  ▼
+Managed pod subscribers ($15-20/mo)
+  │
+  ├── Users who outgrow self-hosting
+  ├── Users who want AI + no maintenance
+  └── Users whose agents cost too much raw API
+  
+  ▼
+Visual product upsells ($50/mo)
+  │
+  ├── Advanced views (kanban, bento, flow)
+  ├── Team collaboration features
+  └── Enterprise (SSO, audit trails)
+```
+
+## Synap as OpenClaw's intelligence layer
+
+The strategic play: OpenClaw configures Synap as their model provider.
+
+```json
+{
+  "models": {
+    "providers": {
+      "synap": {
+        "baseUrl": "https://pod.synap.live/v1",
+        "apiKey": "synap_user_xxx",
+        "models": ["synap/auto", "synap/balanced", "synap/advanced"]
+      }
+    }
+  }
+}
+```
+
+**Value prop to OpenClaw users:**
+- Anthropic API: $150-300/month for agent usage
+- Via Synap IS: $30-50/month (same quality, smart routing)
+- 90% of traffic → DeepSeek V3 (free) / Kimi K2.5 (cheap)
+- 10% → Claude Sonnet for complex tasks
+- Our margin: ~60% on the markup
+
+## Synap as OpenClaw's memory layer
+
+OpenClaw's memory problem: MEMORY.md is a flat file. No schema, no queryability, no relationship detection.
+
+Synap solves this:
+- **Typed entities** — tasks, notes, contacts, projects are all structured
+- **Relation detection** — AI finds connections between entities automatically
+- **Semantic search** — pgvector enables "find the note about Project X from 3 months ago"
+- **Full-text search** — Typesense for exact keyword matching
+- **Proposal governance** — agent mutations are reviewable
+
+Install command: `clawhub install synap-memory`
+
+## The `synap init` CLI distribution weapon
+
+```bash
+npx @synap/cli init
+```
+
+This is our Homebrew moment — the one command that wraps OpenClaw in Synap infrastructure:
+
+1. Detects OpenClaw installation
+2. Applies 7 security hardening rules automatically
+3. Installs synap-memory skill
+4. Sets up Synap pod (self-hosted or managed)
+5. Configures Intelligence Service smart routing
+6. Installs recommended skills pack
+
+Every OpenClaw user who runs `synap init` becomes a Synap user without visiting synap.live. That's infrastructure distribution.
+
+## Distribution channels prioritized
+
+| Channel | Reach | Cost | Quality of users | Priority |
+|---------|-------|------|------------------|----------|
+| ClawHub skill listings | 13K+ skills, vector search | Free | High (installers are builders) | P0 |
+| OpenClaw Discord (#users-helping-users) | 164K+ members | Free | High (active contributors) | P0 |
+| Reddit r/LocalLLaMA | Growing fast, tech-savvy | Free | High (care about sovereignty) | P1 |
+| Reddit r/openclaw, r/AI_Agents | Growing fast | Free | Medium-High | P1 |
+| awesome-openclaw-skills GitHub | 5.4K+ curated | Free | High (curated directory) | P1 |
+| Show HN | High-quality but high-risk | Free | Medium (broad audience) | P2 |
+| YouTube demo | Long-tail traffic | Free (time) | Medium | P2 |
+| Content creator outreach | Tiered access | Free–$29 | Very high (paid communities) | P2 |
+
+## French parallel track
+
+The sovereignty narrative resonates exceptionally well in France:
+
+- LinkedIn posts in French targeting Parisian tech meetups, Station F network
+- "open source, auto-hébergé, fait en France" — triple advantage in a market that cares deeply about AI sovereignty
+- French enterprise (B2B) is more receptive to self-hosted + sovereignty than US enterprise
+- Potential: French startups as first enterprise customers (€50/mo tier)
+
+## Metrics to track
+
+| Metric | Source | Target |
+|--------|--------|--------|
+| ClawHub installs of synap-memory | ClawHub dashboard | 50+/week → 200+/week |
+| GitHub repo stars | GitHub | 100 → 500 → 1000 |
+| Managed pod signups from OpenClaw users | CP dashboard | 10/mo → 100/mo |
+| `@synap/cli` npm downloads | npm stats | 200 → 1000 |
+| Discord community engagement | Manual tracking | 10+ DMs/week |
+| Content creator features | Manual tracking | 3+ per quarter |
+| Blog post traffic (synap.live/blog) | Analytics | 1000 unique/mo |
+
+## Related docs
+
+- OpenClaw strategy: [/team/home/openclaw-strategy](/team/home/openclaw-strategy) — full strategy document
+- OpenClaw state: [/team/home/openclaw-state](/team/home/openclaw-state) — current ecosystem state
+- OpenClaw research: [/team/home/openclaw-research](/team/home/openclaw-research) — community research findings
+- Market campaign: [/team/home/market](/team/home/market) — 4-wave distribution campaign
+- GTM roadmap: [/team/go-to-market/roadmap](/team/go-to-market/roadmap) — timeline sequencing

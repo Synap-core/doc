@@ -6,7 +6,6 @@ audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
@@ -15,34 +14,42 @@ toc: true
 
 ## Primary audience
 
-- **Target user:** Define primary buyer/user.
-- **Team context:** Startup, agency, creator, enterprise, or other.
-- **Maturity level:** Beginner, advanced, or mixed.
+- **Target user:** Sovereign-minded knowledge workers — developers, researchers, and operators who already self-host services, run local LLMs, and care deeply about data ownership. They are frustrated by AI tools that lock them in, by PKM tools that require manual fiddling, and by SaaS platforms that treat their data as the product.
+- **Team context:** OpenClaw communities (164K+ Discord), LocalLLaMA users, French tech/SaaS founders, and self-hosted developers on HN. The early adopter segment is technically proficient and will evaluate Synap on architecture docs, not on marketing copy.
+- **Maturity level:** Mixed. We serve both beginners (second brain, personal note-keeping) and advanced users (agent fleet management, custom entity profiles, pod-to-pod sync). Our product supports both via templates, AI assistance, and progressive disclosure in the UI.
 
 ## Core pain points
 
-- Pain 1: What they struggle with today.
-- Pain 2:
-- Pain 3:
+- **Pain 1: Captured information disappears.** The gap between "I should save this" and actually saving it is where 90% of valuable information dies. Users have 47 browser tabs, scattered notes, and a "to read" list they never return to. Every current tool makes organizing hard — you choose where things go, you maintain the structure, you forget where you put it.
+- **Pain 2: AI has no memory of you.** ChatGPT and Claude reset every session. Your agent knows nothing about your data. Memory is flat files (MEMORY.md), not structured queries. You can't ask "what tasks are overdue for Project X?" — you can only grep logs.
+- **Pain 3: No governance over AI actions.** When an AI modifies your data, there is no audit trail, no way to review what changed, no proposal system to approve or reject. You can't trust autonomous agents because opacity creates risk.
 
 ## Unique value proposition
 
-One paragraph: why Synap is different and better.
+Synap is a sovereign AI second brain and operating system for knowledge work. You capture anything — notes, tasks, contacts, bookmarks, code — and AI automatically structures it into typed entities with relationships. Everything lives in your own PostgreSQL database on your own server, not a SaaS platform. AI proposes before it acts: every AI mutation goes through a reviewable proposal system. The entity graph is exposed to any AI model via an open Hub Protocol — no vendor lock-in, no model dependency. Your data exports at any time as raw SQL. If Synap shuts down tomorrow, your server and your data keep running.
 
 ## Competitive framing
 
-- **Alternative:** Notion, Airtable, custom stack, or another baseline.
-- **Why users choose us:** Add 3 bullets.
-- **When we lose:** Add 3 bullets.
+| Dimension | **Notion / Airtable / Obsidian** | **ChatGPT / Claude** | **Synap** |
+|-----------|-----------------------------------|---------------------|-----------|
+| Data ownership | Your data lives in their database | Reset every session | Your PostgreSQL, your VPS |
+| AI memory | No schema-aware memory | Conversation-scoped only | Persistent entity graph |
+| Organization | Manual — you file things | Automatic classification and connection detection (AI driven) | Same |
+| Governance | None (write access is all you need) | No audit trail on AI writes | Proposal system, full event chain audit |
+| Model lock-in | Proprietary | Locked to provider | Bring any model via Hub Protocol |
+| Open source | Selective | No | Core platform open source |
+
+- **Why users choose Synap:** Sovereignty-first architecture (your own server), AI governance (human-in-the-loop for all AI writes), structured memory (typed entities, not flat files), and open protocol (agent-agnostic via Hub Protocol).
+- **When we lose:** Users who want a polished out-of-the-box SaaS experience and don't care about data ownership. Teams that need real-time collaboration without any infrastructure setup. Users who only need simple note-taking and don't want to manage a server.
 
 ## Evidence and proof points
 
-- Customer quotes:
-- Usage signals:
-- Delivery outcomes:
+- **Customer signals:** Early adopter community across OpenClaw Discord (164K+), LocalLLaMA, and French tech (Station F, Paris meetups)
+- **Usage signals:** ClawHub skill installations, GitHub stars, `@synap/cli` downloads, managed pod signups
+- **Delivery outcomes:** 14 system profiles, 16 view types, 60+ built-in widgets, 21 Hub Protocol sub-routers, full proposal governance system, event chain + audit trail
 
 ## Review cadence
 
-- Owner:
-- Last reviewed:
-- Next review:
+- Owner: Product team
+- Last reviewed: April 2026
+- Next review: Before next product launch

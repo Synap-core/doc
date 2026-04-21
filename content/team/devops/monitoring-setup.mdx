@@ -8,7 +8,6 @@ audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
@@ -17,8 +16,71 @@ toc: true
 
 Monitoring combines platform health, pod metrics, and intelligence service visibility.
 
-- Prometheus scrapes core service metrics.
-- Grafana dashboards provide operations views and alerting surfaces.
-- Intelligence Service metrics require explicit token wiring for secure access.
+## Architecture
 
-Pair setup with the incident runbook so on-call has actionable dashboards.
+```
+Prometheus (metrics collection)
+  ├─ Scrapes: Hono API endpoints /trpc/health
+  ├─ Scrapes: PostgreSQL (via postgres_exporter)
+  ├─ Scrapes: Typesense (if exposed metrics endpoint)
+  └─ Scrapes: IS services /api/hub/metrics (with auth token)
+      │
+      ▼
+Grafana (visualization)
+  ├─ Imports dashboards from /team/devops/grafana-dashboards/
+  ├─ Alert rules for: CPU > 80%, DB errors, IS latency
+  └─ On-call notifications via PagerDuty / Slack
+```
+
+## Dashboard imports
+
+| Dashboard | Purpose | File |
+|-----------|---------|------|
+| **Pod Health** | Overall pod availability, response times, error rates | `pod-health.json` |
+| **API Metrics** | tRPC route performance, throughput, error rates | `api-metrics.json` |
+| **PostgreSQL** | Connections, query performance, DB size, replication lag | `postgres.json` |
+| **Intelligence** | Agent invocation count, token usage, latency percentiles | `intelligence.json` |
+| **Job Workers** | pg-boss worker status, job queue depth, failure rates | `job-workers.json` |
+
+## Alert rules (recommended)
+
+| Alert | Condition | Severity | Response |
+|-------|-----------|----------|----------|
+| Pod Unavailable | HTTP 5xx > 1% over 5 min | Critical | Page on-call |
+| DB Connection Pool Exhausted | Active connections > 90% of max | Critical | Scale replicas |
+| IS Rate Limit Reached | Hub Protocol 429s > 50/hr | Warning | Review agent traffic patterns |
+| Job Queue Backlogged | pg-boss pending jobs > 1000 | Warning | Scale worker count |
+| Typesense Sync Delay | Entity index > 5 min behind DB | Warning | Check indexing worker |
+
+## IS metrics authentication
+
+Intelligence Service metrics require an auth token to prevent unauthorized access:
+
+```bash
+# 1. Generate a metrics API key from CP dashboard
+./synap-cp generate-key --type metrics --name "prometheus-scrape"
+
+# 2. Configure Prometheus scrape config (prometheus.yml):
+   - job_name: 'intelligence-service'
+     scheme: https
+     metrics_path: '/api/hub/metrics'
+     bearer_token: '<the-metrics-key>'
+     static_configs:
+       - targets: ['is.yourdomain.com:3001']
+
+# 3. Verify metrics endpoint returns data:
+   curl -H "Authorization: Bearer <key>" https://is.yourdomain.com/api/hub/metrics
+```
+
+## Monitoring a new deployment
+
+1. **Post-deploy** — Verify Grafana shows "healthy" status across all dashboards
+2. **First hour** — Watch for spurious alerts (monitoring noise during warmup)
+3. **First 24h** — Tune alert thresholds if false positives observed
+4. **Ongoing** — Monthly dashboard review; add new metrics for new features
+
+## Related docs
+
+- **[Security Practices](/team/devops/security-practices)** — Protect monitoring endpoints
+- **[Incident Runbook](/team/control-plane/incident-runbook)** — Alert-to-incident workflow
+- **[Rolling Updates](/team/devops/rolling-updates)** — Monitor during deployments

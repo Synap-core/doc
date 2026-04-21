@@ -1,6 +1,6 @@
 ---
 title: 'App Store'
-description: 'App Store IDs, assets, submission checklist. Status: pending.'
+description: 'App Store readiness, metadata, submission checklist. App package registry and marketplace security model.'
 section: general
 audience: users
 version: 1.0+
@@ -19,4 +19,126 @@ Track all store-readiness assets in one place before release windows.
 - Store listing assets (copy, screenshots, privacy metadata)
 - Submission and review checklist for each platform
 
-Current status: submission prep active; keep this aligned with release checklist.
+## App Store IDs and Signing
+
+Both platform bundles must be registered before submission:
+
+| Platform | Bundle ID | Team | Signing Identity | Profile |
+|---|---|---|---|---|
+| iOS | `com.synap.relay` | Synap Dev Team | Apple Distribution | `Apple Distribution: ...` |
+| Android | `com.synap.relay` | Synap Google Play | Keystore (.jks) | Release keystore |
+
+**iOS provisioning**: Create an app-specific password in App Store Connect. Generate a new provisioning profile for the App Store distribution certificate. Ensure Push Notifications, Background Modes (Remote Notifications, Background Fetch), and Share Extension entitlements are enabled in the capability profile.
+
+**Android keystore**: Pin the release keystore SHA-256 fingerprint in the Google Play Console under App Signing. Store the `.jks` file and passwords in the team's secret manager. Never commit to git.
+
+## Store Listing Assets
+
+Both platforms require a consistent brand experience in their respective storefronts:
+
+**Required assets:**
+
+| Asset | Size | Platform | Notes |
+|---|---|---|---|
+| App icon | 1024×1024 | Both | Transparent PNG, no rounded corners (stores round) |
+| Feature graphic | 1024×500 | Android | Banner shown above description |
+| Phone screenshots | 1242×2208 (iOS) / 1080×2400 (Android) | Both | Minimum 2 screenshots per device size |
+| Tablet screenshots | 2048×2732 (iOS) / 1920×1200 (Android) | Both | Optional but recommended for Apple |
+| In-app review screenshots | N/A | Both | Shown in review submission flow |
+| Promo text | 80 chars | iOS | Tagline in App Store Connect |
+| Short description | 170 chars | iOS | Subtitle field |
+| Full description | 4000 chars | Both | SEO-optimized with key features |
+
+**Privacy metadata:**
+- `Privacy Policy` URL: must be live and hosted on Synap domain
+- `Privacy Nutrition Labels`: iOS requires a filled-out form in App Store Connect
+- Data types collected: list all (email for auth, device info for analytics, entities for storage)
+- Links to data: specify if data is shared with third parties (yes: intelligence service for AI features)
+
+## Store Submission Checklist
+
+**Pre-submission:**
+
+- [ ] All signing identities and profiles are in place and valid
+- [ ] Bundle IDs match exactly between iOS and Android declarations
+- [ ] Store listing assets uploaded (icons, screenshots, feature graphic)
+- [ ] Privacy policy URL verified live and accessible
+- [ ] Privacy Nutrition Labels completed for iOS
+- [ ] In-app purchase configuration review (if applicable)
+- [ ] App version bump and release notes prepared
+- [ ] tRPC backend health endpoint verified for pod-connect handshake
+- [ ] Notification provisioning (APNs for iOS, FCM for Android) confirmed
+- [ ] Share extension entitlements registered in both platform portals
+
+**Submission:**
+
+- [ ] iOS: Submit via Xcode Archive → Upload to App Store or transport (Apple Transporter for CLI)
+- [ ] iOS: Set content rights (copyright, age rating, export compliance)
+- [ ] Android: Upload signed `.aab` to Google Play Console → Internal testing track first
+- [ ] Android: Set content rating questionnaire
+- [ ] Request both platforms to mark as "ready for sale"
+- [ ] Set release dates (immediate vs scheduled)
+
+**Post-submission:**
+
+- [ ] Monitor App Store review feedback (typically 24-48 hours for iOS)
+- [ ] Address any review feedback (common: missing info in description, crash logs, edge cases)
+- [ ] Release to production after approval
+- [ ] Set up crash analytics (Sentry / Bugsnag) for both storefronts
+- [ ] Configure in-app review requests (trigger after first successful capture)
+- [ ] Submit update to Internal → Beta → Production tracks (Android)
+
+## Package Registry / Marketplace Concept
+
+The App Store concept extends beyond the platform storefronts. On the Synap level, an **app package** is an installable unit that adds new functionality to Relay:
+
+**Package types:**
+
+| Type | What it adds | Example |
+|---|---|---|
+| View cell | A new view type for entity lists | Timeline view, Gantt chart, mindmap |
+| Widget | A home-screen widget for entity data | Calendar snapshot, recent tasks, activity chart |
+| Capture source | New content capture modality | QR code scanner, PDF importer, Slack export |
+| Connector | External data sync source (Nango connector) | Notion, Confluence, Linear |
+| AI persona | A custom Intelligence Service persona with its own skills | Research assistant, legal analyst, teacher |
+| Automation template | A ready-to-use workflow with triggers and actions | "New email → create task → notify Slack" |
+
+**Installation flow for users:**
+
+1. Browse available packages from a package catalog (in-app)
+2. Review package metadata: description, required capabilities, permissions
+3. Install — creates a proposal via `checkPermissionOrPropose()` for governance
+4. Accept the proposal → package gets registered via `registerCell()` and appears
+5. Package auto-subscribes to relevant data hooks and receives updates
+6. Uninstall removes cell registrations, clears package data, and creates a proposal for governance
+
+**Security model:**
+
+- All marketplace installs go through proposal governance (`checkPermissionOrPropose`). No silent installs.
+- Packages declare their required native capabilities (camera, location, push, etc.) at install time
+- Packages that add native modules require a dev-client rebuild — flagged during installation
+- AI personas are sandboxed: only receive the tools explicitly listed in their definition, not full API access
+- Automated security scans for package code (dependency audit, no `any` types, no hardcoded secrets)
+- Developer accounts are verified — only authorized contributors can publish packages
+- Packages can be updated via the same flow; existing installs get a review prompt
+- User data access is scoped: packages only see entities within the installing workspace, never pod-wide by default
+
+**Developer workflow:**
+
+1. Package author creates a new monorepo package: `pnpm scaffold-pkg synap-app/packages/views/my-view`
+2. Implements the cell widget or feature per Synap conventions (registerCell, use three-layer data pattern)
+3. Adds package manifest: metadata, capabilities, permissions declaration
+4. Runs `pnpm typecheck` and `pnpm build` — must pass cleanly
+5. Publishes: pushes to a review branch → team reviews PR → publishes to package registry
+6. Users can then discover and install from within Relay
+7. Package author receives feedback through in-app reviews and usage analytics
+
+## Deferred / Future
+
+- Android Play Store "Internal Testing" track for rapid iteration before public release
+- iOS TestFlight for pre-release beta distribution
+- In-app review prompts (trigger after meaningful user actions, respect rate limits)
+- Crash analytics dashboard integration for both storefronts
+- App store optimization (keywords, screenshots with feature highlights, localized descriptions)
+
+**Current status:** submission prep active; keep this aligned with release checklist.

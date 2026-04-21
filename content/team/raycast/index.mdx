@@ -15,34 +15,101 @@ toc: true
 
 > **Status:** Draft. This area is intentionally incomplete until Raycast scope is finalized.
 
-Use this space for internal scope, architecture constraints, and command design.
+A **Raycast extension** for Synap — enabling quick capture and power-user workflows through fast command-entry on macOS. Designed as a lightweight surface for capture, retrieval, and handoff into Browser or other canonical surfaces for deep workflows.
 
-## Purpose
+---
 
-- Track Raycast integration strategy and shipping scope.
-- Document command architecture and backend interaction patterns.
-- Align Raycast work with platform and security constraints.
+## Target Users
 
-## Target users
+- **Power users** on macOS who already use Raycast as their launcher / quick-action tool
+- **Raycast integration engineers** building and maintaining the extension
+- **Product & ops teammates** evaluating rollout timing and scope boundaries
 
-- Raycast integration engineers
-- Platform engineers reviewing integration contracts
-- Product and operations teammates evaluating rollout timing
+---
 
-## Main flows
+## Marketing
 
-- [Scope and status](/team/raycast/scope-and-status) — what is in or out of the current milestone
-- [Commands and flows](/team/raycast/commands-and-flows) — command-level UX and execution paths
-- [Integration model](/team/raycast/integration-model) — auth, data access, and service boundaries
+- **Positioning:** Fast command-entry surface for Synap — capture and lookup without leaving your keyboard flow.
+- **Key differentiator:** No replacement for Browser; intentionally complementary, handoff-first integration.
+- **Messaging constraints:** Keep first-response low-friction; expose failure and fallback clearly; no hidden side effects.
 
-## Read next
+---
 
-- **[Scope and status](/team/raycast/scope-and-status)**
-- **[Commands and flows](/team/raycast/commands-and-flows)**
-- **[Integration model](/team/raycast/integration-model)**
+## Key User Stories
 
-## Dependencies
+- As a power user, I want to **quickly capture** a note, task, or bookmark from anywhere on my Mac with a keyboard shortcut.
+- As a user, I want to **search and retrieve** entities without opening the full Browser.
+- As an operator, I want capture actions that **escalate into governed proposals** when writes are needed, without bypassing platform contracts.
+- As a new user, I want Raycast to serve as a **lightweight on-ramp** — no deep setup, just install the extension and start capturing.
 
-- [Platform](/team/platform/index) for Data Pod contracts and security model.
-- [Intelligence Service](/team/intelligence/index) when commands invoke AI capabilities.
-- [Ops & marketing](/team/ops-marketing/index) for positioning and launch narratives.
+---
+
+## Key Features
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Command categories (draft) | Draft | Quick capture, quick lookup, action triggers |
+| Identity / pod resolution | Draft | Resolve context at command invocation |
+| Auth/session reuse | Draft | Reuse existing platform auth patterns |
+| Proposal-gated writes | Draft | Writes go through `checkPermissionOrPropose()` — no bypass |
+| Confirmation + link-back | Draft | Short confirmation with link to full surface if needed |
+| Failure/fallback signaling | Draft | Expose errors clearly with graceful degradation |
+
+---
+
+## Current Status
+
+| Area | Status |
+|------|--------|
+| Overall Raycast integration | **Draft** — scope intentionally constrained until ownership and command set are finalized |
+| Scope boundaries | Documented in **[Scope and status](/team/raycast/scope-and-status)** — current scope: fast capture, lightweight retrieval, handoff into Browser |
+| Non-goals (current) | Not replacing Browser as desktop shell, not duplicating full extension feature sets, no alternate governance rules |
+| UX constraints | Low-friction first response, no hidden side effects, clear failure/fallback |
+
+---
+
+## Overview
+
+Raycast is a **supplementary capture surface** for Synap, not a replacement for the Browser. The model is:
+
+1. **Invoke command** in Raycast → 2. **Resolve identity/pod context** → 3. **Run read or propose write action** → 4. **Return short confirmation** with link to full surface if needed.
+
+Key architectural constraints:
+- Read/write actions **must use existing platform contracts** (tRPC + Hub Protocol).
+- Write operations remain **permission/proposal governed** — no Raycast-specific bypass path.
+- **No custom secrets** stored in local logs or prompts; reuse existing auth/session patterns.
+
+---
+
+## Architecture
+
+```
+Raycast Extension (macOS)
+  ├─ Command invoker → resolves identity/pod context
+  ├─ Read path → tRPC queries via platform contracts
+  ├─ Write path → checkPermissionOrPropose() → proposals
+  └─ Response → short confirmation + link to Browser for deep workflows
+```
+
+Boundaries:
+- **Raycast extension** handles UX only — all data operations go through Synap platform.
+- **Synap backend** (tRPC/Hono) is the authoritative data layer.
+- **Intelligence Service** invoked only when commands call AI capabilities.
+
+---
+
+## Documentation Map
+
+| Page | Purpose |
+|------|---------|
+| [Scope and status](/team/raycast/scope-and-status) | What is in or out of the current milestone |
+| [Commands and flows](/team/raycast/commands-and-flows) | Command-level UX and execution paths |
+| [Integration model](/team/raycast/integration-model) | Auth, data access, and service boundaries |
+
+---
+
+## Code References
+
+- **Platform contracts:** [Platform](/team/platform/index) — Data Pod contracts and security model.
+- **Intelligence Service:** [Intelligence](/team/intelligence/index) — when commands invoke AI capabilities.
+- **Ops & marketing:** [Ops & marketing](/team/ops-marketing/index) — positioning and launch narratives.

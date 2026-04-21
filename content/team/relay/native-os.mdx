@@ -2,7 +2,7 @@
 title: 'Native OS'
 description: >-
   @synap-core/native-os umbrella, 7 sub-packages, platform bridge, Metro-safe
-  static requires.
+  static requires. Native capabilities available on Relay.
 section: general
 audience: users
 version: 1.0+
@@ -17,8 +17,96 @@ toc: true
 
 Relay uses the `@synap-core/native-os` bridge to expose device capabilities safely.
 
-- Umbrella package coordinates multiple platform-specific modules.
-- Maintains Metro-safe static requires and explicit capability boundaries.
+- Umbrella package coordinates multiple platform-specific modules across 7 sub-packages.
+- Maintains Metro-safe static requires (explicit `require()` strings in a central switch) and explicit capability boundaries.
 - Keeps app features portable across iOS/Android while preserving native hooks.
+
+## Native Capabilities
+
+These are the device capabilities Relay taps into, organized by surface area:
+
+| Capability | iOS | Android | Expo API | Native Module |
+|---|---|---|---|---|
+| Share extension (text, URL, image, file) | Core Spotlight Share | ActionProvider | `expo-share-intent` | `expo-share-extension` (W9) |
+| OS search indexing | Core Spotlight | AppSearch | `react-native-spotlight-search` | Custom Android module |
+| Home screen widgets | WidgetKit (SwiftUI) | Glance (Compose) | `@bacons/apple-targets` | Glance target plugin |
+| Live activities (recording pill) | ActivityKit Dynamic Island | Foreground service + Notifee | `expo-live-activity` | `@notifee/react-native` (Android) |
+| Siri / Google Assistant intents | App Intents framework | Android Shortcuts | Swift `AppIntent` conformance | `shortcuts.xml` + Kotlin Activity |
+| Camera OCR / text scan | Vision framework | ML Kit text recognition | `@react-native-ml-kit/text-recognition` | ML Kit / Vision native wrappers |
+| Push notifications | APNs + Firebase | FCM | `expo-notifications` | Native provisioning |
+| Biometric auth | FaceID / TouchID | BiometricManager | `expo-local-authentication` | Native provisioning |
+| Haptic feedback | Core Haptics | Vibration API | `expo-haptics` | None |
+| Background fetch / tasks | BackgroundTasks | WorkManager | `expo-background-fetch` | Native task registration |
+| Shared storage (App Group / SharedPreferences) | App Group UserDefaults | SharedPreferences | `@synap-core/native-os-shared-storage` | App Group entitlement |
+| Camera (photo/video capture) | AVFoundation | Camera2 API | `expo-image-picker`, `react-native-vision-camera` | Camera permissions |
+| Location / geofencing | Core Location | Fused Location | `expo-location` | Geofencing native |
+| Bluetooth / proximity | Core Bluetooth | BLE | `expo-bluetooth` | Peripheral mode |
+
+## Expo-Only vs Native Module Requirements
+
+The table above shows the split between what Expo SDK provides out of the box and what requires a custom native module.
+
+**Expo SDK only (no native code needed):**
+- Haptic feedback (`expo-haptics`)
+- Push notifications (`expo-notifications`) — needs APNs/Firebase provisioning but no custom native modules
+- Biometric auth (`expo-local-authentication`)
+- Shared storage via AsyncStorage (works for simple key-value, but App Group / SharedPreferences needed for widget data)
+- Basic camera capture (`expo-image-picker`)
+- Location (`expo-location`)
+- Voice recording (`expo-av`)
+
+**Requires native module (custom Swift/Kotlin + Expo config plugin):**
+- Share extension with custom SwiftUI sheet (swap from `expo-share-intent` to `expo-share-extension`)
+- Home screen widgets (WidgetKit on iOS, Glance on Android)
+- Live Activity on iOS (ActivityKit Dynamic Island)
+- Siri App Intents (conforming to `AppIntent` protocol in Swift)
+- Android AppSearch for Spotlight-equivalent index
+- Live camera scan overlay with text-region highlighting (`react-native-vision-camera` + frame processor)
+- Full native share extension with AI preview (custom process inside the extension)
+
+## Architecture: Native ↔ JavaScript Bridge
+
+The bridge layer sits between native code (Swift + Kotlin) and the JavaScript runtime. Here's how data flows:
+
+```
+iOS / Android native code (Swift / Kotlin)
+         │
+         │ App Group UserDefaults / SharedPreferences
+         │
+         ▼
+@synap-core/native-os (TS facade)
+         │
+         │ relay:// URLs → Linking.openURL()
+         │ widgets.setState() → sharedStorage writes
+         │ vision.scanText() → native module call
+         │ useShareIntent() / useSpotlightSync() → hooks
+         │
+         ▼
+React Native (JS) / Expo
+```
+
+**Key patterns:**
+
+1. **Shared storage** — Native extensions write to App Group UserDefaults (iOS) or SharedPreferences (Android). The JS side reads via `sharedStorage.get/set` methods. This is the primary cross-process data pipe for widget state and queued intents.
+
+2. **Deep-link URLs** — All inbound OS events (share, spotlight, intents) produce `relay://` URLs that flow through `Linking.openURL()` into the existing `expo-router` deep-link handler. No new routing surface needed.
+
+3. **Native module calls** — One-shot operations like `vision.scanText()` are direct async calls to native code that return results into JS. No persistent connection.
+
+4. **JS-driven native updates** — `widgets.setState()` and `liveActivity.setState()` are JS calls that write to shared state. The native side is a passive reader. This direction is simpler and has fewer failure modes.
+
+## Package Structure
+
+- **Umbrella** — `@synap-core/native-os` — facade, type definitions, centralized `require()` switch for Metro bundler compatibility
+- **Sub-packages** — 7 packages, each targeting a specific capability:
+  - `native-os-share` — Share extension wiring
+  - `native-os-spotlight` — OS search indexing
+  - `native-os-widgets` — Home screen widget state
+  - `native-os-live-updates` — Dynamic Island / Live Activities
+  - `native-os-intents` — Siri / Assistant integration
+  - `native-os-vision` — Camera OCR / text recognition
+  - `native-os-shared-storage` — App Group / SharedPreferences abstraction
+
+Each sub-package is independently installable via `"@synap-core/native-os-{name}": "workspace:*"`. The umbrella's facades degrade to safe no-ops for any bridge not present, enabling incremental adoption.
 
 See also: [Native OS UX](/team/relay/native-os-ux).

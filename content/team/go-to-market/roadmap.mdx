@@ -1,20 +1,91 @@
 ---
 title: 'Roadmap'
-description: Canonical roadmap entrypoint for planning and sequencing
+description: GTM-facing delivery sequencing — narrative timing and launch calendar
 section: general
 audience: users
 version: 1.0+
 last_updated: '2026-04-20'
 tags: []
-sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Roadmap
+# GTM Roadmap
 
-Use this page as the GTM-facing roadmap entrypoint.
+GTM-facing delivery sequencing and narrative timing. Maps engineering milestones to public-facing messages.
 
-- Product roadmap source: [Home roadmap](/team/home/roadmap)
-- Commercial and launch implications: [Launch operations](/team/go-to-market/launch-operations)
-- Decision rationale: [Decisions](/team/decisions/index)
+## The two-layer GTM funnel
+
+Synap's distribution follows a deliberate funnel architecture:
+
+```
+Layer 0: OpenClaw ecosystem (free, open-source, ClawHub skills)
+  │  → 250K+ potential users, zero cost acquisition
+  │  → Entry point: synap-memory skill on ClawHub
+  │  → Distribution: Discord, Reddit, HN, content creators
+  ▼
+Layer 1: Managed pod ($15-20/mo subscription)
+  │  → Revenue engine, recurring revenue
+  │  → Value prop: sovereignty + AI + no maintenance
+  │  → Upsell path from Layer 0 self-hosted users
+  ▼
+Layer 2: Visual products ($50/mo)
+  │  → Upsell: advanced views, AI workflows, team collaboration
+  │  → Enterprise tier: multi-workspace, SSO, audit trails
+  │  → Maximum ARPU from power users and teams
+```
+
+## Narrative timeline (Q2–Q4 2026)
+
+| Quarter | Engineering Milestone | GTM Narrative | Launch Channel |
+|---------|----------------------|---------------|----------------|
+| **Q2** | Knowledge graph + proposals shipped | "Your agent needs structured memory, not flat files" | ClawHub, Discord, Reddit |
+| **Q2** | `synap init` CLI released | "Set up OpenClaw properly — one command" | npm, ClawHub, blog post |
+| **Q3** | Pod-to-pod sync + template engine | "Your second brain on your own server" | Show HN, YouTube demo, French tech |
+| **Q3** | Intelligence Service smart routing | "Cut agent costs by 90% without quality loss" | OpenClaw community, HN, content creators |
+| **Q4** | Widget marketplace + MCP integration | "Build the tools your workspace needs" | Marketplace launch, community showcase |
+| **Q4** | Enterprise features (SSO, audit trails) | "AI governance for teams that can't afford mistakes" | LinkedIn, French enterprise events |
+
+## Monthly cadence
+
+| Month | Content | Social Proof | Channel |
+|-------|---------|-------------|---------|
+| April | synap-memory on ClawHub, Discord post | First 50 installs | clawhub, discord |
+| May | `synap init` CLI release, blog post | GitHub stars, HN thread | npm, hn, blog |
+| June | YouTube demo video, French tech posts | User testimonials | youtube, linkedin |
+| July | Pod-to-pod sync, template engine | Second brain use cases | showhn, discord |
+| August | Intelligence Service smart routing | Cost comparison data | openclaw, rn |
+| September | Widget marketplace | Community showcases | marketplace, twitter |
+| October | Enterprise features | Early customer logos | linkedin, email |
+
+## Key GTM milestones
+
+1. **Day 1–7**: ClawHub skill published, awesome-openclaw-skills PR submitted, Discord contribution post
+2. **Day 8–14**: Reddit campaign across 3 subreddits, security thread engagement, content creator outreach
+3. **Week 3**: Show HN post, long-form blog "Why Your Agent Needs a Knowledge Graph", YouTube demo
+4. **Ongoing**: Daily Discord presence (helping, not selling), French parallel track, ClawHub skill monitoring
+5. **Q4**: Enterprise launch for French/EU market — sovereignty narrative is strongest here
+
+## Success metrics by funnel layer
+
+| Layer | Metric | Target (3 months) | Target (6 months) |
+|-------|--------|-------------------|-------------------|
+| Layer 0 (OpenClaw) | ClawHub installs | 50+/week | 200+/week |
+| Layer 0 (OpenClaw) | GitHub stars | 100+ | 500+ |
+| Layer 1 (Pod) | Managed pod signups | 10 | 100 |
+| Layer 1 (Pod) | Self-hosted → managed conversion | 5% | 15% |
+| Layer 2 (Visual) | ARPU growth | €30/mo avg | €50/mo avg |
+
+## Dependencies and prerequisites
+
+- **Design assets**: [Design brief](/team/home/design-brief), [visual assets](/team/home/visual-assets) must be ready before each launch wave
+- **Pricing**: Finalized in [pricing.md](/team/home/pricing) — subscription tiers and token model
+- **Product direction**: Engineering priorities defined in [roadmap.md](/team/home/roadmap)
+- **Market research**: Upstream data from [market.md](/team/home/market) drives campaign planning
+
+## Related docs
+
+- Product roadmap: [/team/home/roadmap](/team/home/roadmap) — canonical engineering delivery status
+- Launch operations: [/team/go-to-market/launch-operations](/team/go-to-market/launch-operations) — execution templates
+- Market analysis: [/team/home/market](/team/home/market) — full distribution map and campaign plan
+- OpenClaw strategy: [/team/home/openclaw-strategy](/team/home/openclaw-strategy) — funnel infrastructure

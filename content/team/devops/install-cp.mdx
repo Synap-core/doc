@@ -17,8 +17,58 @@ toc: true
 
 Control Plane install bootstraps the management backbone for pods and billing.
 
-- Use the scripted setup flow (`./synap-cp install`) for deterministic provisioning.
-- Generate and store secrets before exposing public endpoints.
-- Start services, then bootstrap initial admin and verify health endpoints.
+## Prerequisites
 
-Continue with [Security Practices](/team/devops/security-practices) and [Incident Runbook](/team/control-plane/incident-runbook).
+- Linux server (VPS) with ≥2 CPU cores, ≥4GB RAM
+- Docker + Docker Compose installed
+- Domain name pointing to your server (HTTPS required)
+- SSH access with a non-root user
+
+## Installation flow
+
+```bash
+# 1. Clone the CP repo
+git clone <cp-repo-url>
+cd synap-control-plane-api
+
+# 2. Run the interactive installer
+./synap-cp install
+
+# 3. What the installer does:
+#    a. Generates secrets (JWT, cookies, API keys) — stored in .env
+#    b. Validates Docker Compose configuration
+#    c. Starts CP services (Hono REST, Better Auth, database migrations)
+#    d. Bootstraps initial admin user
+#    e. Verifies health endpoints (/api/health, /api/auth/status)
+#    f. Outputs admin login URL and initial setup instructions
+```
+
+## Post-install steps
+
+1. **Verify health** — `curl https://cp.yourdomain.com/api/health` should return `{"ok": true}`
+2. **Set up billing** — Configure pricing tiers and webhook endpoints for payment processing
+3. **Configure email** — Set SMTP credentials for user notifications and password reset
+4. **Set up pod quota** — Define max pods per account, shared pod vs dedicated pod logic
+5. **Enable SSO (optional)** — Configure SAML/OAuth for enterprise teams
+
+## Security checklist
+
+- [ ] Firewall restricts to ports 80, 443, SSH only
+- [ ] HTTPS configured with Let's Encrypt or equivalent
+- [ ] Secrets generated (never use defaults)
+- [ ] Admin credentials rotated after first login
+- [ ] Audit logging enabled (all CP API calls logged)
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Health check fails | Check Docker logs: `docker compose logs cp-api` |
+| Migration fails | Verify PostgreSQL is running and reachable; check env vars for DB connection |
+| HTTPS errors | Ensure domain DNS resolves correctly; retry Let's Encrypt provisioning |
+
+## Related docs
+
+- [CP Infrastructure](/team/control-plane/infrastructure)
+- [Security Practices](/team/devops/security-practices)
+- [Incident Runbook](/team/control-plane/incident-runbook)

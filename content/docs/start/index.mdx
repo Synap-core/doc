@@ -1,0 +1,49 @@
+---
+title: 'Use Synap'
+description: 'Install, learn the product, get started — deep tech lives in Architecture'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-04-01'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+import { Card, Cards } from 'fumadocs-ui/components/card';
+import { Rocket, BookOpen, Terminal } from 'lucide-react';
+
+Welcome to the Synap docs.
+
+This section covers product use: getting your Synap pod set up, understanding the core concepts, and making the most of what's in the application interface and views. Deep tech architecture, internal build guides, and operational runbooks live in the Architecture docs.
+
+## Where to start
+
+<Cards>
+  <Card icon={<Rocket className="size-4" />} title="Getting started" href="/docs/start/getting-started">
+    Choose your environment: hosted, Docker, or CLI. Follow the quickstart guide to set up a pod, connect agents, and begin importing data.
+  </Card>
+  <Card icon={<BookOpen className="size-4" />} title="Concepts" href="/docs/start/concepts">
+    Entities, views, channels, property schemas, and the triptych model that makes Synap's data architecture unique.
+  </Card>
+  <Card icon={<Terminal className="size-4" />} title="What is Synap?" href="/docs/start/concepts/what-is-synap">
+    Product overview, vision, key capabilities, and how Synap differs from traditional SaaS apps.
+  </Card>
+</Cards>
+
+## Navigation
+
+- **Getting started** — installation, setup, and quickstart for your pod
+- **Concepts** — product model overview and deep dives into each core concept
+- **What is Synap?** — product vision and high-level capability overview
+
+## Also check out
+
+- **[Architecture](/docs/architecture)** — technical depth: data pod internals, system patterns, event chain, branching conversations
+- **[Build & integrate](/docs/integrate)** — connecting agents, building on the backend, and hub protocol
+- **[Cloud & Intelligence](/docs/cloud)** — Synap Cloud and intelligence services
+
+<Callout type="info" title="Need the product?" href="https://synap.live">
+  Try Synap hosted at [synap.live](https://synap.live), or [run your own pod locally](https://github.com/synap-core/synap) with one command.
+</Callout>

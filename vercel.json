@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "outputDirectory": "synap-team-docs/.next"
+  "buildCommand": "pnpm run build --filter synap-team-docs",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": ".next"
 }

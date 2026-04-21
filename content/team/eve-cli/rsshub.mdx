@@ -1,0 +1,67 @@
+---
+title: 'RSSHub'
+description: >-
+  Information ingestion — RSS feed generation for monitoring and data intake.
+  Part of Eyes organ.
+section: general
+audience: users
+version: 2.0+
+last_updated: '2026-04-21'
+tags: []
+hide_title: false
+toc: true
+---
+
+## What it is
+
+**RSSHub** (https://github.com/DIYgod/RSSHub) is an open-source RSS feed generation engine. In Eve, it powers the **Eyes** organ — the information intake layer that converts web content into structured feeds.
+
+RSSHub capabilities:
+- Generates RSS/Atom feeds from 1000+ websites and APIs
+- Real-time feed generation from social media, news, GitHub, etc.
+- Custom routes for internal services
+- Docker-native deployment
+
+## Why RSSHub
+
+- **Breadth of sources**: Already supports thousands of popular web properties — no need to build custom scrapers.
+- **Structured output**: All feeds follow the RSS/Atom standard — easy to consume by any downstream service.
+- **Lightweight single binary**: Minimal resource footprint, fits the organic composition principle.
+- **Docker-ready**: No external dependencies beyond Node.js (which runs inside the container).
+
+## How it integrates
+
+```
+RSSHub Container (eve-eyes-rsshub)
+    │
+    ├── Generates feeds from configured routes
+    │   └── e.g., https://rsshub.localhost/github/hot/50
+    │
+    ├── Feeds consumed by:
+    │   ├─ Synap entities (article/bookmark profiles)
+    │   └─ Proactive intelligence layer (monitoring triggers)
+    │
+    └── External consumption
+        └── RSS readers, monitoring tools, etc.
+```
+
+RSSHub feeds are typically consumed by creating articles/bookmarks in Synap, which can then be ingested by the proactive intelligence layer (morning briefings, weekly digests) as part of their "insights" sources.
+
+## Interaction with other parts
+
+| Component | Interaction | Direction |
+|-----------|-------------|-----------|
+| **Synap** | Feed items become article/bookmark entities | Writes |
+| **Proactive intelligence** | Feeds provide real-time signals for proactive cards | Reads |
+| **OpenClaw** | May surface feed highlights in morning briefing replies | Reads |
+| **Traefik** | Routes external traffic to RSSHub dashboard | Routes to |
+
+## Guidelines
+
+- **Container name**: `eve-eyes-rsshub` — consistent with organ naming.
+- **Internal URL**: `http://eve-eyes-rsshub:1200` (inside `eve-network`).
+- **External URL**: `rsshub.localhost` via Traefik label, configurable.
+- **Environment**: `NODE_ENV=production`, `CACHE_TYPE=memory` (default — sufficient for self-hosted use).
+- **Routes**: RSSHub ships with 1000+ pre-built routes. Eve can define custom routes for internal services (e.g., Synap entity feeds).
+- **Resource limits**: RSSHub is low-resource — 100MB RAM, 0.1 CPU is sufficient for typical self-hosted usage.
+- **Not core to v2.0**: RSSHub is an optional organ. `eve setup` defaults to not including it unless `--with-rsshub` is passed.

@@ -1,0 +1,104 @@
+---
+title: 'Routing & Connectivity'
+description: >-
+  Traefik (reverse proxy) + Pangolin (sovereign tunneling) — how sidecars
+  get exposed publicly.
+section: general
+audience: users
+version: 2.0+
+last_updated: '2026-04-21'
+tags: []
+hide_title: false
+toc: true
+---
+
+## What it is
+
+**Traefik** and **Pangolin** form the **Legs** organ — the networking layer responsible for exposing Eve sidecars to users and services. They work as a reverse proxy + tunnel pair.
+
+### Traefik
+
+**Traefik** (https://traefik.io) is a modern reverse proxy and load balancer that works natively with Docker. In Eve, it:
+- Routes inbound HTTP/HTTPS traffic to sidecar services (OpenClaw, RSSHub, etc.)
+- Manages TLS certificates (Let's Encrypt) for public-facing services
+- Discovers services automatically via Docker labels (e.g., `traefik.enable=true`)
+- Provides a dashboard for monitoring routes and service health
+
+### Pangolin
+
+**Pangolin** is a sovereign tunneling tool (replacing the previous Cloudflare reliance). In Eve, it:
+- Creates tunnels to expose services behind NAT/private networks
+- Replaces Cloudflare tunnels with an open-source alternative
+- Writes config under `/opt/hestia/tunnels`
+- Manages inbound traffic routing independently from Traefik
+
+## Why these choices
+
+**Traefik**:
+- Docker-native service discovery — automatically routes to containers that declare themselves
+- Let's Encrypt integration — zero-config TLS for public services
+- Lightweight — single binary, no external dependencies
+
+**Pangolin**:
+- Sovereign control — no vendor lock-in to Cloudflare
+- Open-source — auditable, self-hostable
+- Replaces Cloudflare tunnels for operators who want full control
+
+## How they integrate
+
+```
+Internet
+    │
+    ├── Route A: Traefik ingress (port :80/:443)
+    │   │
+    │   ▼
+    │   Traefik discovers services via Docker labels
+    │   ├─ openclaw.localhost → OpenClaw :3000
+    │   ├─ rsshub.localhost → RSSHub :1200
+    │   └─ traefik.localhost → Dashboard :8080
+    │
+    └── Route B: Pangolin tunnel
+        │
+        ▼
+        Pangolin creates outbound tunnel → tunnel endpoint
+        Routes from tunnel endpoint → services by hostname
+        (e.g., eve.example.com → service routes via Traefik)
+```
+
+## Interaction with other parts
+
+| Component | Interaction | Direction |
+|-----------|-------------|-----------|
+| **Synap (Caddy)** | Operates on port 80/443 independently — does not compete with Traefik | Separate |
+| **Traefik** | Operates on port 80/443 when it is the primary ingress | — |
+| **Pangolin** | Routes through Traefik or directly to container ports | Routes to |
+| **OpenClaw** | Exposed via Traefik (label-based routing) | Read from Traefik |
+| **RSSHub** | Exposed via Traefik (label-based routing) | Read from Traefik |
+
+### Traefik vs Caddy boundary
+
+| Layer | Owner | Port |
+|-------|-------|------|
+| HTTPS for Pod API/auth | **Synap** (Caddy) | :80/:443 |
+| Traefik gateway for sidecars | **Eve** (Legs) | :80/:443 |
+| OpenClaw internal API | **Eve** (Arms) | :3000 |
+| RSSHub internal API | **Eve** (Eyes) | :1200 |
+| Inference gateway | **Eve** (Brain) | :11434/:11435 |
+
+**Key rule**: Traefik and Caddy **never compete for the same hostname**. Synap (Caddy) owns pod.example.com. Traefik owns either same host with subdomains (claw.pod.example.com) or a separate host (traefik.example.com). When Traefik listens on 80/443, Caddy must be configured to not bind on those ports for the same hostname.
+
+## Guidelines
+
+- **Docker labels**: Services declare their Traefik routes using Docker labels:
+  ```docker
+  labels:
+    - "traefik.enable=true"
+    - "traefik.http.routers.openclaw.rule=Host(`openclaw.localhost`)"
+    - "traefik.http.routers.openclaw.entrypoints=web"
+    - "traefik.http.services.openclaw.loadbalancer.server.port=3000"
+  ```
+- **Tunnel domain**: When Pangolin is enabled, the `--tunnel-domain` flag sets the ingress hostname. Can be same as Synap host or different (two patterns).
+- **SSL**: Traefik uses Let's Encrypt by default (`--certificatesresolvers.letsencrypt.acme.tlschallenge=true`). Configured during `eve legs setup`.
+- **Pangolin config**: Written to `/opt/hestia/tunnels/` — each tunnel entry contains hostname, target service, and credentials.
+- **Tunnel strategy**: When using same hostname as Synap, Traefik routes subdomains (e.g., `*.pod.example.com`). When using custom hostname, Traefik owns all routes on that hostname.
+- **Docker socket**: Traefik needs read-only access to Docker socket for service discovery: `/var/run/docker.sock:ro`.

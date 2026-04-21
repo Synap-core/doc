@@ -1,0 +1,88 @@
+---
+title: 'Dokploy'
+description: >-
+  Optional self-hosted PaaS — deploy generated code, inject env vars into Builder.
+  First-class when enabled, silent when disabled.
+section: general
+audience: users
+version: 2.0+
+last_updated: '2026-04-21'
+tags: []
+hide_title: false
+toc: true
+---
+
+## What it is
+
+**Dokploy** is a self-hosted Platform-as-a-Service (https://dokploy.com) for deploying and managing containers, databases, and services on your own infrastructure. In Eve v2.0, it is an **optional** component: if the user opts-in during `eve builder init` with `--with-dokploy`, it gets installed alongside Synap sidecars. If opt-out, it is never touched.
+
+Dokploy capabilities:
+- Container lifecycle management (start, stop, restart, scale)
+- Service discovery and routing
+- Environment variable injection per-service
+- Webhook-based deployment triggers
+- SSL/TLS management for deployed services
+- Database provisioning (PostgreSQL, Redis, etc.)
+- Built on Docker
+
+## Why Dokploy
+
+- **Sovereign deployment**: Replaces managed PaaS (Heroku, Railway) with a self-hosted alternative — fits the sovereignty principle.
+- **Simple API**: REST API for deployment operations — easy to integrate with opencode subprocess calls.
+- **Docker-native**: Runs on the same `eve-network` Docker network, sharing containers and networking with the rest of the stack.
+- **First-class optional component**: Not a dependency of anything else. Stands alone when enabled, completely absent when disabled.
+
+## How it integrates
+
+```
+Hermes Agent (polls Synap for task)
+    │
+    ▼
+Hermes spawns opencode with Dokploy env vars:
+    subprocess.run([
+        'opencode', '--task', '<desc>',
+        '--cwd', project_dir
+    ], env={
+        ...process.env,
+        DOKPLOY_API_URL: 'http://localhost:3000',
+        DOKPLOY_API_KEY: 'sk-…',
+        DOKPLOY_WEBHOOK_URL: 'https://…',
+    })
+    │
+    ▼
+opencode runs codegen → writes code to filesystem
+    │
+    ▼
+Dokploy deploys generated code as a service container
+    │
+    ▼
+Dokploy service becomes discoverable via its internal URL
+    │
+    ▼
+Dokploy service URL written to Synap as file entity (for tracing)
+```
+
+Dokploy is a **sidecar of the Builder organ** — it lives on `eve-network`, exposes its API on port 3000, and communicates with Hermes through environment variables passed to the opencode subprocess.
+
+## Interaction with other parts
+
+| Component | Interaction | Direction |
+|-----------|-------------|-----------|
+| **Hermes** | Receives env vars; orchestrates deployment flow | Reads/writes (via opencode) |
+| **opencode** | Reads `DOKPLOY_API_URL` + `DOKPLOY_API_KEY`; may trigger deployment during task | Reads env vars |
+| **Synap** | Service URLs written back as file entities for audit/tracing | Writes |
+| **Traefik (Legs)** | Optional: Traefik may proxy routes to Dokploy-deployed services | Reads docker labels |
+
+## Guidelines
+
+- **Dokploy config file**: `/opt/dokploy/config.json` — managed by Eve setup flow. Contains API keys, webhook URLs, and routing configuration.
+- **API key rotation**: Dokploy API keys are stored in `.eve/secrets/secrets.json` → `builder.dokployApiKey`. Rotate via Dokploy dashboard.
+- **Dokploy lifecycle commands**:
+  - Start: `dokploy start`
+  - Stop: `dokploy stop`
+  - Restart: `dokploy restart`
+  - Status: `dokploy status`
+- **Docker socket**: Dokploy requires access to the Docker socket (`/var/run/docker.sock:ro`). This is mounted in the Dokploy container during setup.
+- **Deployment strategy**: opencode generates code → Dokploy builds a Docker image from the generated code → Dokploy starts the container → new service appears on `eve-network` → its URL is discoverable.
+- **When Dokploy is disabled**: opencode writes to `--cwd` only, no deployment happens. This is the default behavior. Users who want deployment must explicitly enable it during `eve builder init`.
+- **Webhook integration**: `DOKPLOY_WEBHOOK_URL` (optional) is set when users want external CI/CD triggers to call into Dokploy for redeployment.

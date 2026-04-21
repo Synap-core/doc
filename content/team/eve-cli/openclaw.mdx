@@ -1,0 +1,84 @@
+---
+title: 'OpenClaw'
+description: >-
+  Messsaging ingress router — WhatsApp, iMessage, Telegram, voice memos.
+  Stripped of long-term memory; reads from and writes to Synap.
+section: general
+audience: users
+version: 2.0+
+last_updated: '2026-04-21'
+tags: []
+hide_title: false
+toc: true
+---
+
+## What it is
+
+OpenClaw is an AI agent framework that connects **messaging platforms** (WhatsApp, iMessage, Telegram) to LLM inference. In Eve v2.0, it serves as the **messaging ingress and egress router** — the "front door" between users and the system.
+
+OpenClaw capabilities:
+- Connects to WhatsApp, iMessage, Telegram via device integrations
+- Handles voice memos (transcribes audio via local Ollama or cloud provider)
+- Performs user-facing reasoning and conversation
+- Has access to 5,700+ MCP tools
+- Uses local or cloud LLMs for reasoning
+
+## Why OpenClaw
+
+- **Messaging breadth**: Supports the widest range of messaging platforms with established device integration patterns.
+- **Rich tool ecosystem**: 5,700+ MCP tools provide immediate capability for system interaction, data lookups, and user requests.
+- **Voice transcription**: Built-in voice memo handling is essential for mobile-first user interaction.
+- **Community support**: Actively maintained with a large developer community.
+
+## v2.0 Changes (memory removal)
+
+The critical v2.0 change is **stripping OpenClaw's long-term memory**:
+
+| Before (v1.0) | After (v2.0) |
+|---------------|--------------|
+| OpenClaw stores conversation history locally | Conversations stored in Synap `message` entities |
+| OpenClaw maintains user profiles in local SQLite | Profiles fetched from Synap entity API |
+| OpenClaw maintains its own state/logs | All state in Synap PostgreSQL |
+| OpenClaw may initiate coding tasks itself | OpenClaw creates Tasks in Synap → Hermes handles |
+
+OpenClaw still does reasoning and conversation — it just becomes **stateless** with respect to long-term storage. It fetches context from Synap at the start of each interaction and writes results back.
+
+## How it integrates
+
+```
+User (WhatsApp / iMessage / Telegram)
+    │
+    ▼
+OpenClaw (Docker container)
+    │
+    ├── Fetch conversation history from Synap
+    │   └── GET /trpc/messages.get?channelId=…&limit=50
+    │
+    ├── Fetch user profile from Synap
+    │   └── GET /trpc/entities.get?slug=person&…
+    │
+    ├── Invoke LLM (Ollama or cloud provider)
+    │   └── http://localhost:11434 or https://openrouter.ai/api/v1
+    │
+    └── Write response to Synap
+        └── POST /trpc/messages.create → {channelId, content, role="assistant"}
+```
+
+## Interaction with other parts
+
+| Component | Interaction | Direction |
+|-----------|-------------|-----------|
+| **Synap** | Reads/writes all agent state (messages, profiles, tasks) | Reads/writes |
+| **Hermes** | Indirect — OpenClaw creates Tasks in Synap, Hermes reads them | No direct communication |
+| **Ollama** | LLM inference for reasoning | Reads only |
+| **Cloud providers** | Fallback LLM inference (OpenRouter, Anthropic, OpenAI) | Reads only |
+| **Messaging platforms** | Device integration endpoints | Reads/writes |
+
+## Guidelines
+
+- **API key**: OpenClaw authenticates to Synap via `arms.synapApiKey` stored in `.eve/secrets/secrets.json`. Separate key from Hermes (`builder.synapApiKey`) for audit trail.
+- **Startup sequence**: OpenClaw reads its Synap credentials at container startup. On first boot, it should verify connectivity to the Synap API before accepting messages.
+- **Channel mapping**: Each messaging platform maps to a Synap channel. The `channelId` is used consistently across all API calls for message retrieval and posting.
+- **Voice memos**: Flow: user sends voice → OpenClaw transcribes via Ollama Whisper or cloud STT → transcribed text enters the normal conversation flow → response follows the standard write-back pattern.
+- **No local SQLite**: OpenClaw must be configured to use no persistent local databases. All state goes through the Synap Memory Provider Plugin mechanism described in the Synap integration doc.
+- **MCP tools**: OpenClaw's MCP tools may read/write Synap entities. These tool integrations must conform to Synap's API contracts and proposal governance.

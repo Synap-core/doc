@@ -1,16 +1,11 @@
 {
   "title": "Use Synap",
-  "description": "Install, learn the product, guides, strategy, and resources — deep tech lives in Architecture",
+  "description": "Install, learn the product, get started — deep tech lives in Architecture",
   "root": true,
   "icon": "rocket",
   "pages": [
     "index",
-    "vision",
     "getting-started",
-    "concepts",
-    "guides",
-    "tutorials",
-    "strategy",
-    "resources"
+    "concepts"
   ]
 }

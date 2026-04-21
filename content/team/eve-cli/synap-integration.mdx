@@ -105,6 +105,7 @@ Hermes uses its native SQLite for **session-scoped** ephemeral state (current ex
   4. Captures stdout/stderr from opencode
   5. Writes result back to Synap via `PATCH /api/hub/tasks/:id` with `status = "done"` + result data
 - **Ephemeral state**: Hermes's built-in SQLite/session store is for single-run transient context only (tool call arguments, intermediate outputs). Not a long-term store.
+- **API integration**: Hermes uses a custom Python Memory Provider Plugin (`plugins/memory/synap_provider.py`) to map its internal `sync_turn` and `prefetch` hooks to Synap's REST API. This is the mechanism by which all agent state is kept in Synap rather than local stores.
 
 ---
 

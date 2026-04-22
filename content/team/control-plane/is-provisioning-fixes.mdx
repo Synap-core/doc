@@ -136,3 +136,10 @@ After both Hub and pod backend fixes are deployed:
 6. On the self-hosted pod, call `POST /api/provision/connect` with a JWT containing a *different* `podId` (simulating contamination), then call again with the correct `podId` — verify the second call overwrites and restores correct state.
 
 Admin diagnostics: `GET /admin/pods/:id/intelligence-issues` shows IS provisioning state and any mismatch between CP-stored `hubPodId` and pod-reported state.
+
+## Related
+
+- [Infrastructure Status](./infrastructure-status.mdx) — IS fleet health endpoint details
+- [Pod Security](./pod-security.mdx) — JWT authentication for CP↔Pod auth
+- [Operations Guide](./operations-guide.mdx) — provisioning operational steps
+- [Pod Management](./pod-management.mdx) — pod lifecycle management

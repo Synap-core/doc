@@ -1,0 +1,853 @@
+# Synap Browser Evolution - Implementation Plan
+
+## Executive Summary
+
+This plan transforms Synap Browser from a basic workspace browser into a **full workspace OS** with:
+- Multi-pod auth with profile-pod linking
+- Dashboard views stored in pod (not local)
+- Extensible widget system with graceful error handling
+- Expanded entity profiles for CRM, captures, etc.
+- AI-powered app generation foundation
+
+---
+
+## Phase 1: Widget System Enhancement
+
+### 1.1 Graceful Widget Error Handling
+
+**Goal**: Unknown widget types render placeholder instead of crashing
+
+**File**: `/synap-app/packages/views/bento/src/components/BentoBlock.tsx`
+
+```typescript
+// Add UnknownWidget fallback
+const UnknownWidget: React.FC<{ widgetKey: string }> = ({ widgetKey }) => (
+  <YStack
+    flex={1}
+    alignItems="center"
+    justifyContent="center"
+    backgroundColor="$backgroundHover"
+    borderRadius="$4"
+    padding="$4"
+  >
+    <AlertCircle size={24} color="$mutedForeground" />
+    <SizableText size="$3" color="$mutedForeground" marginTop="$2">
+      Widget "{widgetKey}" not available
+    </SizableText>
+    <SizableText size="$2" color="$color8">
+      This widget may be app-specific
+    </SizableText>
+  </YStack>
+);
+
+// Update widget resolution
+export function BentoBlock({ block, ...props }) {
+  const Widget = WIDGET_REGISTRY[block.widgetKey];
+
+  if (!Widget) {
+    return <UnknownWidget widgetKey={block.widgetKey} />;
+  }
+
+  return (
+    <ErrorBoundary fallback={<UnknownWidget widgetKey={block.widgetKey} />}>
+      <Widget {...block.config} />
+    </ErrorBoundary>
+  );
+}
+```
+
+### 1.2 Widget Registry Architecture
+
+**Goal**: Enable app-specific widgets without cross-app requirements
+
+**File**: `/synap-app/packages/views/bento/src/widgets/registry.tsx`
+
+```typescript
+// Core widgets (available everywhere)
+export const CORE_WIDGETS = {
+  'feed': FeedWidget,
+  'calendar': CalendarWidget,
+  'quick-access': QuickAccessWidget,
+  'welcome': WelcomeWidget,
+  'workspace-info': WorkspaceInfoWidget,
+  'metric': MetricWidget,
+  'entity-list': EntityListWidget,  // NEW: Generic entity display
+  'view-embed': ViewEmbedWidget,    // NEW: Embed any view
+} as const;
+
+// Widget metadata for UI
+export const WIDGET_METADATA: Record<string, WidgetMeta> = {
+  'feed': { name: 'Feed', icon: 'Rss', description: 'Activity feed' },
+  'calendar': { name: 'Calendar', icon: 'Calendar', description: 'Upcoming events' },
+  // ... etc
+};
+
+// Registry can be extended at runtime
+let extendedRegistry: Record<string, React.ComponentType<any>> = {};
+
+export function registerWidget(key: string, component: React.ComponentType<any>) {
+  extendedRegistry[key] = component;
+}
+
+export function getWidget(key: string): React.ComponentType<any> | null {
+  return CORE_WIDGETS[key] ?? extendedRegistry[key] ?? null;
+}
+
+export function isWidgetAvailable(key: string): boolean {
+  return key in CORE_WIDGETS || key in extendedRegistry;
+}
+```
+
+### 1.3 Browser-Specific Widgets
+
+**File**: `/browser/electron/renderer/src/widgets/registry.ts`
+
+```typescript
+import { registerWidget } from '@synap/bento-view';
+
+// Browser-only widgets
+import { ClockWidget } from './ClockWidget';
+import { PodStatusWidget } from './PodStatusWidget';
+import { RecentTabsWidget } from './RecentTabsWidget';
+import { RecentCapturesWidget } from './RecentCapturesWidget';
+import { BookmarksWidget } from './BookmarksWidget';
+import { WebsiteEmbedWidget } from './WebsiteEmbedWidget';
+import { TerminalWidget } from './TerminalWidget';
+
+// Register browser-specific widgets
+export function initBrowserWidgets() {
+  registerWidget('clock', ClockWidget);
+  registerWidget('pod-status', PodStatusWidget);
+  registerWidget('recent-tabs', RecentTabsWidget);
+  registerWidget('recent-captures', RecentCapturesWidget);
+  registerWidget('bookmarks', BookmarksWidget);
+  registerWidget('website-embed', WebsiteEmbedWidget);
+  registerWidget('terminal', TerminalWidget);
+}
+```
+
+---
+
+## Phase 2: Entity Profile Expansion
+
+### 2.1 New Base Profiles
+
+**Goal**: Add CRM, capture, and website entity types
+
+**File**: Create seed data or migration
+
+```typescript
+// New profiles to add
+const NEW_PROFILES = [
+  // CRM Profiles
+  {
+    slug: 'contact',
+    displayName: 'Contact',
+    parentProfileSlug: 'person',  // Inherits from person
+    scope: 'system',
+    uiHints: { icon: 'UserCircle', color: '$blue9' },
+    properties: [
+      { key: 'company', type: 'relation', relationProfile: 'company' },
+      { key: 'role', type: 'text' },
+      { key: 'email', type: 'email' },
+      { key: 'phone', type: 'phone' },
+      { key: 'linkedIn', type: 'url' },
+      { key: 'source', type: 'select', options: ['inbound', 'outbound', 'referral', 'event'] },
+      { key: 'status', type: 'select', options: ['lead', 'prospect', 'customer', 'churned'] },
+    ]
+  },
+  {
+    slug: 'deal',
+    displayName: 'Deal',
+    parentProfileSlug: null,
+    scope: 'system',
+    uiHints: { icon: 'DollarSign', color: '$green9' },
+    properties: [
+      { key: 'contact', type: 'relation', relationProfile: 'contact' },
+      { key: 'company', type: 'relation', relationProfile: 'company' },
+      { key: 'value', type: 'currency' },
+      { key: 'stage', type: 'select', options: ['discovery', 'proposal', 'negotiation', 'closed-won', 'closed-lost'] },
+      { key: 'probability', type: 'percentage' },
+      { key: 'expectedCloseDate', type: 'date' },
+      { key: 'assignee', type: 'user' },
+    ]
+  },
+  {
+    slug: 'company',
+    displayName: 'Company',
+    parentProfileSlug: null,
+    scope: 'system',
+    uiHints: { icon: 'Building2', color: '$purple9' },
+    properties: [
+      { key: 'website', type: 'url' },
+      { key: 'industry', type: 'text' },
+      { key: 'size', type: 'select', options: ['1-10', '11-50', '51-200', '201-500', '500+'] },
+      { key: 'revenue', type: 'currency' },
+      { key: 'location', type: 'location' },
+    ]
+  },
+
+  // Capture Profiles
+  {
+    slug: 'capture',
+    displayName: 'Web Capture',
+    parentProfileSlug: 'bookmark',
+    scope: 'system',
+    uiHints: { icon: 'Camera', color: '$orange9' },
+    properties: [
+      { key: 'url', type: 'url', required: true },
+      { key: 'capturedAt', type: 'datetime' },
+      { key: 'mode', type: 'select', options: ['metadata', 'screenshot', 'readability', 'clip'] },
+      { key: 'screenshot', type: 'image' },
+      { key: 'content', type: 'richtext' },  // Extracted content
+      { key: 'source', type: 'text' },       // Browser, extension, etc.
+    ]
+  },
+  {
+    slug: 'website',
+    displayName: 'Website',
+    parentProfileSlug: null,
+    scope: 'system',
+    uiHints: { icon: 'Globe', color: '$cyan9' },
+    properties: [
+      { key: 'url', type: 'url', required: true },
+      { key: 'domain', type: 'text' },
+      { key: 'favicon', type: 'image' },
+      { key: 'lastVisited', type: 'datetime' },
+      { key: 'visitCount', type: 'number' },
+      { key: 'category', type: 'select', options: ['work', 'personal', 'research', 'entertainment'] },
+    ]
+  },
+
+  // Content Profiles
+  {
+    slug: 'article',
+    displayName: 'Article',
+    parentProfileSlug: 'document',
+    scope: 'system',
+    uiHints: { icon: 'Newspaper', color: '$amber9' },
+    properties: [
+      { key: 'author', type: 'text' },
+      { key: 'publication', type: 'text' },
+      { key: 'publishedAt', type: 'date' },
+      { key: 'readingTime', type: 'number' },  // minutes
+      { key: 'sourceUrl', type: 'url' },
+    ]
+  },
+];
+```
+
+### 2.2 Update Entity Config
+
+**File**: `/synap-app/packages/core/entity-card/src/utils/entityConfig.ts`
+
+```typescript
+// Add new entity type configs
+export const ENTITY_CONFIG: Record<string, EntityTypeConfig> = {
+  // Existing...
+  task: { icon: CheckSquare, gradient: [...], accentColor: '$blue9', label: 'Task' },
+  note: { icon: FileText, ... },
+
+  // CRM
+  contact: {
+    icon: UserCircle,
+    gradient: ['$blue4', '$blue6'],
+    accentColor: '$blue9',
+    label: 'Contact'
+  },
+  deal: {
+    icon: DollarSign,
+    gradient: ['$green4', '$green6'],
+    accentColor: '$green9',
+    label: 'Deal'
+  },
+  company: {
+    icon: Building2,
+    gradient: ['$purple4', '$purple6'],
+    accentColor: '$purple9',
+    label: 'Company'
+  },
+
+  // Captures
+  capture: {
+    icon: Camera,
+    gradient: ['$orange4', '$orange6'],
+    accentColor: '$orange9',
+    label: 'Capture'
+  },
+  website: {
+    icon: Globe,
+    gradient: ['$cyan4', '$cyan6'],
+    accentColor: '$cyan9',
+    label: 'Website'
+  },
+  article: {
+    icon: Newspaper,
+    gradient: ['$amber4', '$amber6'],
+    accentColor: '$amber9',
+    label: 'Article'
+  },
+};
+```
+
+---
+
+## Phase 3: Auth Architecture Upgrade
+
+### 3.1 Multi-Session Auth Manager
+
+**Goal**: Support multiple pod sessions + ecosystem identity
+
+**File**: `/browser/electron/main/auth/auth-manager.ts`
+
+```typescript
+import { session } from 'electron';
+import log from 'electron-log/main';
+
+interface EcosystemIdentity {
+  userId: string;
+  email: string;
+  subscription?: {
+    tier: string;
+    status: 'active' | 'past_due' | 'canceled';
+  };
+}
+
+interface PodSession {
+  podUrl: string;
+  userId: string;        // User ID in THIS pod
+  workspaces: { id: string; name: string; role: string }[];
+  sessionCookie: string;
+  expiresAt?: Date;
+}
+
+export class AuthManager {
+  private defaultSession = session.defaultSession;
+
+  // Ecosystem (Control Plane) identity
+  private ecosystemIdentity: EcosystemIdentity | null = null;
+
+  // Active pod sessions (can have multiple)
+  private podSessions: Map<string, PodSession> = new Map();
+
+  // Currently active pod
+  private activePodUrl: string | null = null;
+
+  constructor() {
+    log.info('[AuthManager] Initialized');
+  }
+
+  // ========== Ecosystem Identity ==========
+
+  async getEcosystemIdentity(): Promise<EcosystemIdentity | null> {
+    if (this.ecosystemIdentity) return this.ecosystemIdentity;
+
+    // Try to fetch from control plane
+    const controlPlaneUrl = process.env.CONTROL_PLANE_URL || 'https://app.synap.live';
+
+    try {
+      const cookies = await this.defaultSession.cookies.get({
+        url: controlPlaneUrl,
+        name: 'ory_kratos_session'
+      });
+
+      if (cookies.length === 0) return null;
+
+      // Fetch whoami from control plane
+      const response = await fetch(`${controlPlaneUrl}/.ory/kratos/public/sessions/whoami`, {
+        headers: { Cookie: `ory_kratos_session=${cookies[0].value}` }
+      });
+
+      if (!response.ok) return null;
+
+      const session = await response.json();
+
+      this.ecosystemIdentity = {
+        userId: session.identity.id,
+        email: session.identity.traits.email,
+      };
+
+      return this.ecosystemIdentity;
+    } catch (err) {
+      log.error('[AuthManager] Failed to get ecosystem identity:', err);
+      return null;
+    }
+  }
+
+  async signInToEcosystem(): Promise<{ success: boolean; identity?: EcosystemIdentity }> {
+    // Opens BrowserWindow to control plane login
+    return new Promise((resolve) => {
+      const controlPlaneUrl = process.env.CONTROL_PLANE_URL || 'https://app.synap.live';
+
+      const authWindow = new BrowserWindow({
+        width: 480,
+        height: 640,
+        webPreferences: {
+          session: this.defaultSession,
+        }
+      });
+
+      authWindow.loadURL(`${controlPlaneUrl}/auth`);
+
+      // Watch for session cookie
+      const cookieWatcher = async (_event, cookie, _cause, removed) => {
+        if (cookie.name === 'ory_kratos_session' && !removed) {
+          this.defaultSession.cookies.off('changed', cookieWatcher);
+          authWindow.close();
+
+          const identity = await this.getEcosystemIdentity();
+          resolve({ success: true, identity: identity || undefined });
+        }
+      };
+
+      this.defaultSession.cookies.on('changed', cookieWatcher);
+
+      authWindow.on('closed', () => {
+        this.defaultSession.cookies.off('changed', cookieWatcher);
+        resolve({ success: false });
+      });
+    });
+  }
+
+  // ========== Pod Sessions ==========
+
+  async connectToPod(podUrl: string): Promise<{ success: boolean; session?: PodSession }> {
+    // Check if we already have a valid session
+    const existing = this.podSessions.get(podUrl);
+    if (existing && (!existing.expiresAt || existing.expiresAt > new Date())) {
+      this.activePodUrl = podUrl;
+      return { success: true, session: existing };
+    }
+
+    // Try handshake if we have ecosystem identity
+    const identity = await this.getEcosystemIdentity();
+    if (identity) {
+      const handshakeResult = await this.attemptHandshake(podUrl);
+      if (handshakeResult.success) {
+        return handshakeResult;
+      }
+    }
+
+    // Fallback to direct pod auth
+    return this.directPodAuth(podUrl);
+  }
+
+  private async attemptHandshake(podUrl: string): Promise<{ success: boolean; session?: PodSession }> {
+    const controlPlaneUrl = process.env.CONTROL_PLANE_URL || 'https://app.synap.live';
+
+    try {
+      // Get handshake token from control plane
+      const tokenResponse = await fetch(`${controlPlaneUrl}/api/trpc/platform.requestHandshake`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUrl: podUrl }),
+        credentials: 'include',
+      });
+
+      if (!tokenResponse.ok) {
+        log.warn('[AuthManager] Handshake token request failed');
+        return { success: false };
+      }
+
+      const { result: { data: { token } } } = await tokenResponse.json();
+
+      // Exchange token at pod
+      const exchangeResponse = await fetch(`${podUrl}/api/auth/exchange?token=${token}`, {
+        credentials: 'include',
+      });
+
+      if (!exchangeResponse.ok) {
+        log.warn('[AuthManager] Token exchange failed');
+        return { success: false };
+      }
+
+      // Get session info from pod
+      const session = await this.getPodSession(podUrl);
+      if (session) {
+        this.podSessions.set(podUrl, session);
+        this.activePodUrl = podUrl;
+        return { success: true, session };
+      }
+
+      return { success: false };
+    } catch (err) {
+      log.error('[AuthManager] Handshake failed:', err);
+      return { success: false };
+    }
+  }
+
+  private async directPodAuth(podUrl: string): Promise<{ success: boolean; session?: PodSession }> {
+    // Opens BrowserWindow to pod login (existing openInAppAuth logic)
+    return new Promise((resolve) => {
+      const authWindow = new BrowserWindow({
+        width: 480,
+        height: 640,
+        webPreferences: {
+          session: this.defaultSession,
+        }
+      });
+
+      authWindow.loadURL(`${podUrl}/.ory/kratos/public/self-service/login/browser`);
+
+      const cookieWatcher = async (_event, cookie, _cause, removed) => {
+        if (cookie.name === 'ory_kratos_session' && !removed) {
+          this.defaultSession.cookies.off('changed', cookieWatcher);
+          authWindow.close();
+
+          const session = await this.getPodSession(podUrl);
+          if (session) {
+            this.podSessions.set(podUrl, session);
+            this.activePodUrl = podUrl;
+            resolve({ success: true, session });
+          } else {
+            resolve({ success: false });
+          }
+        }
+      };
+
+      this.defaultSession.cookies.on('changed', cookieWatcher);
+
+      authWindow.on('closed', () => {
+        this.defaultSession.cookies.off('changed', cookieWatcher);
+        resolve({ success: false });
+      });
+    });
+  }
+
+  private async getPodSession(podUrl: string): Promise<PodSession | null> {
+    try {
+      const cookies = await this.defaultSession.cookies.get({
+        url: podUrl,
+        name: 'ory_kratos_session'
+      });
+
+      if (cookies.length === 0) return null;
+
+      // Get session details from pod
+      const response = await fetch(`${podUrl}/.ory/kratos/public/sessions/whoami`, {
+        headers: { Cookie: `ory_kratos_session=${cookies[0].value}` }
+      });
+
+      if (!response.ok) return null;
+
+      const kratosSession = await response.json();
+
+      // Get workspaces from pod
+      // This would use the pod's tRPC endpoint
+      const workspacesResponse = await fetch(`${podUrl}/api/trpc/workspaces.list`, {
+        headers: { Cookie: `ory_kratos_session=${cookies[0].value}` }
+      });
+
+      const workspaces = workspacesResponse.ok
+        ? (await workspacesResponse.json()).result?.data || []
+        : [];
+
+      return {
+        podUrl,
+        userId: kratosSession.identity.id,
+        workspaces,
+        sessionCookie: cookies[0].value,
+        expiresAt: kratosSession.expires_at ? new Date(kratosSession.expires_at) : undefined,
+      };
+    } catch (err) {
+      log.error('[AuthManager] Failed to get pod session:', err);
+      return null;
+    }
+  }
+
+  // ========== Session Management ==========
+
+  getActivePodSession(): PodSession | null {
+    if (!this.activePodUrl) return null;
+    return this.podSessions.get(this.activePodUrl) || null;
+  }
+
+  getAllPodSessions(): PodSession[] {
+    return Array.from(this.podSessions.values());
+  }
+
+  async switchToPod(podUrl: string): Promise<boolean> {
+    const session = this.podSessions.get(podUrl);
+    if (!session) {
+      const result = await this.connectToPod(podUrl);
+      return result.success;
+    }
+
+    this.activePodUrl = podUrl;
+    return true;
+  }
+
+  async disconnectFromPod(podUrl: string): Promise<void> {
+    this.podSessions.delete(podUrl);
+
+    if (this.activePodUrl === podUrl) {
+      this.activePodUrl = null;
+    }
+
+    // Clear cookies for this pod
+    const cookies = await this.defaultSession.cookies.get({ url: podUrl });
+    for (const cookie of cookies) {
+      await this.defaultSession.cookies.remove(podUrl, cookie.name);
+    }
+  }
+
+  async signOut(): Promise<void> {
+    // Clear all sessions
+    this.ecosystemIdentity = null;
+    this.podSessions.clear();
+    this.activePodUrl = null;
+
+    await this.defaultSession.clearStorageData({ storages: ['cookies'] });
+  }
+}
+```
+
+### 3.2 Profile-Pod Linking
+
+**File**: `/browser/electron/renderer/src/stores/profileStore.ts`
+
+```typescript
+interface Profile {
+  id: string;
+  name: string;
+  type: 'personal' | 'work' | 'datapod' | 'custom';
+
+  // Pod/Workspace binding
+  podUrl?: string;           // Which pod
+  workspaceId?: string;      // Which workspace
+  workspaceName?: string;    // Cached name
+
+  // Home view (stored in pod, not local)
+  homeViewId?: string;       // ID of home view in pod
+
+  // Local-only preferences
+  theme?: 'light' | 'dark' | 'system';
+  sidebarCollapsed?: boolean;
+}
+
+// When switching profiles:
+async function switchProfile(profileId: string) {
+  const profile = profiles.find(p => p.id === profileId);
+  if (!profile) return;
+
+  set({ activeProfileId: profileId });
+
+  // Switch pod connection if needed
+  if (profile.podUrl) {
+    const authManager = getAuthManager();
+    await authManager.switchToPod(profile.podUrl);
+
+    // Set active workspace
+    if (profile.workspaceId) {
+      useWorkspaceStore.getState().setActiveWorkspace(profile.workspaceId);
+    }
+  }
+}
+```
+
+---
+
+## Phase 4: Dashboard as Pod View
+
+### 4.1 Home View Schema
+
+**Goal**: Dashboard config stored as ViewObject in pod
+
+```typescript
+// Home view is a bento view with special handling
+interface HomeViewConfig {
+  type: 'bento';
+  isHome: true;
+  blocks: BentoBlock[];
+}
+
+// When profile has homeViewId, load from pod
+// When no homeViewId, create default and save to pod
+```
+
+### 4.2 Dashboard Sync
+
+**File**: `/browser/electron/renderer/src/hooks/useHomeView.ts`
+
+```typescript
+import { useView, useUpdateView, useCreateView } from '@synap/hooks';
+
+export function useHomeView(profile: Profile) {
+  // If profile has a homeViewId, load from pod
+  const { data: homeView, isLoading } = useView(
+    profile.homeViewId || null,
+    { enabled: !!profile.homeViewId && !!profile.podUrl }
+  );
+
+  const createView = useCreateView();
+  const updateView = useUpdateView();
+
+  // Create home view if doesn't exist
+  const initializeHomeView = async () => {
+    if (profile.homeViewId || !profile.podUrl) return;
+
+    const defaultConfig: BentoViewConfig = {
+      blocks: [
+        { id: 'welcome', widgetKey: 'welcome', pos: { x: 0, y: 0, w: 12, h: 2 } },
+        { id: 'feed', widgetKey: 'feed', pos: { x: 0, y: 2, w: 6, h: 4 } },
+        { id: 'quick-access', widgetKey: 'quick-access', pos: { x: 6, y: 2, w: 6, h: 4 } },
+      ]
+    };
+
+    const view = await createView.mutateAsync({
+      name: `Home - ${profile.name}`,
+      type: 'bento',
+      config: defaultConfig,
+      metadata: { isHome: true, profileId: profile.id }
+    });
+
+    // Update profile with homeViewId
+    useProfileStore.getState().updateProfile(profile.id, {
+      homeViewId: view.id
+    });
+
+    return view;
+  };
+
+  // Save dashboard changes to pod
+  const saveDashboard = async (config: BentoViewConfig) => {
+    if (!profile.homeViewId) {
+      const view = await initializeHomeView();
+      if (view) {
+        await updateView.mutateAsync({ id: view.id, config });
+      }
+    } else {
+      await updateView.mutateAsync({ id: profile.homeViewId, config });
+    }
+  };
+
+  return {
+    homeView,
+    isLoading,
+    saveDashboard,
+    initializeHomeView,
+  };
+}
+```
+
+---
+
+## Phase 5: Intelligence Integration
+
+### 5.1 AI Chat in Browser
+
+**File**: `/browser/electron/renderer/src/apps/AIChatApp.tsx`
+
+```typescript
+import { AIChatInterface } from '@synap/ai-chat';
+
+export function AIChatApp({ instance, isActive }: AppComponentProps) {
+  const { ecosystemIdentity } = useAuthStore();
+  const { activePodSession } = useConnectionStore();
+
+  // AI Chat requires ecosystem identity (for quota) + pod session (for context)
+  if (!ecosystemIdentity) {
+    return (
+      <YStack flex={1} alignItems="center" justifyContent="center">
+        <SizableText>Sign in to Synap to use AI features</SizableText>
+        <Button onPress={() => authManager.signInToEcosystem()}>
+          Sign In
+        </Button>
+      </YStack>
+    );
+  }
+
+  return (
+    <AIChatInterface
+      userId={ecosystemIdentity.userId}
+      podUrl={activePodSession?.podUrl}
+      workspaceId={activePodSession?.workspaces[0]?.id}
+    />
+  );
+}
+```
+
+### 5.2 Capture to Intelligence Pipeline
+
+**Goal**: Captures can be processed by Intelligence Hub
+
+```typescript
+// Enhanced capture flow
+async function captureWithIntelligence(tabId: string, options: CaptureOptions) {
+  // 1. Basic capture
+  const capture = await captureService.saveCurrentTab(tabId, options);
+
+  // 2. Create entity in pod
+  const entity = await createEntity({
+    profileSlug: 'capture',
+    title: capture.title,
+    properties: {
+      url: capture.url,
+      capturedAt: capture.capturedAt,
+      mode: options.mode,
+    }
+  });
+
+  // 3. If AI processing requested
+  if (options.processWithAI) {
+    await intelligenceClient.processCapture({
+      entityId: entity.id,
+      url: capture.url,
+      instructions: options.aiInstructions || 'Extract key information and summarize',
+    });
+  }
+
+  return entity;
+}
+```
+
+---
+
+## Implementation Order
+
+### Week 1: Foundation
+1. ✅ Widget error handling (Phase 1.1)
+2. ✅ Widget registry architecture (Phase 1.2)
+3. ✅ Browser widget registration (Phase 1.3)
+
+### Week 2: Entity Expansion
+4. Add new entity profiles (Phase 2.1)
+5. Update entity config (Phase 2.2)
+6. Test CRM and capture entities
+
+### Week 3: Auth Upgrade
+7. Implement AuthManager (Phase 3.1)
+8. Update IPC handlers for new auth
+9. Profile-pod linking (Phase 3.2)
+
+### Week 4: Dashboard Sync
+10. Home view schema (Phase 4.1)
+11. Dashboard sync hooks (Phase 4.2)
+12. Migration from local to pod storage
+
+### Week 5: Intelligence
+13. AI Chat integration (Phase 5.1)
+14. Capture intelligence pipeline (Phase 5.2)
+
+---
+
+## File Changes Summary
+
+### New Files
+- `/browser/electron/main/auth/auth-manager.ts`
+- `/browser/electron/renderer/src/widgets/registry.ts`
+- `/browser/electron/renderer/src/hooks/useHomeView.ts`
+- `/synap-app/packages/views/bento/src/components/UnknownWidget.tsx`
+
+### Modified Files
+- `/synap-app/packages/views/bento/src/widgets/registry.tsx`
+- `/synap-app/packages/views/bento/src/components/BentoBlock.tsx`
+- `/synap-app/packages/core/entity-card/src/utils/entityConfig.ts`
+- `/browser/electron/renderer/src/stores/profileStore.ts`
+- `/browser/electron/renderer/src/stores/connectionStore.ts`
+- `/browser/electron/main/ipc/ipc-router.ts`
+- `/browser/electron/preload/index.ts`
+
+### Backend (seed data / migrations)
+- Add new entity profiles (contact, deal, company, capture, website, article)
+- No new routers needed - uses existing profiles/entities system

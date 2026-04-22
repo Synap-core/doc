@@ -1,0 +1,184 @@
+# DOC-07 — Build & Install Blueprint (USB + Script)
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-07 |
+| Title | Build & Install Blueprint |
+| Status | Draft |
+| Version | 0.2 |
+| Date | 2026-04-12 |
+
+## 1) Packaging principle
+* The **same installer + Ansible playbooks** must power both delivery methods: a "script installer" for existing servers and a "USB installer" for bare metal.
+* Cloud-init/autoinstall should do the minimal work necessary to get the system bootstrapped, after which Ansible performs the majority of configuration for maintainability and iteration speed.
+
+## 2) Repository layout (proposed)
+* Single repo `synap-stack/` containing scripts, configs, docs, and templates to ensure reproducible builds.
+* File tree:
+```text
+synap-stack/
+    docs/
+        DOC-01-vision.md
+        DOC-02-architecture.md
+        DOC-03-phase1-prd.md
+        DOC-04-phase2-prd.md
+        DOC-05-phase3-prd.md
+        DOC-06-integration-contract.md
+        DOC-07-build-install-blueprint.md
+        DOC-08-test-plan.md
+    install/
+        install.sh
+        wizard/
+            wizard.sh
+            lib/
+    ansible/
+        site.yml
+        roles/
+            base/
+            docker/
+            nvidia/
+            security/
+            phase2_synap/
+            phase2_openclaw/
+            phase3_openclaude/
+            orchestrator/
+    compose/
+        synap/
+        openclaw/
+        openclaude/
+        caddy/
+    usb/
+        ventoy/
+            ventoy.json
+            scripts/
+                ubuntu-24.04-user-data.yaml
+        README.md
+        checksums/
+```
+
+## 3) Install modes and supported platforms
+* **Script mode** supports Ubuntu Server 22.04/24.04 (initially), installs Docker, security baseline, then optional phases.
+* **USB mode** targets x86_64 bare metal with UEFI/Legacy support using Ventoy as the multiboot layer.
+
+## 4) USB mode: Ventoy + Ubuntu autoinstall without rebuilding ISO
+* Ventoy supports unattended installation via its **Auto Install plugin**, including **Ubuntu Server 20.x+ via cloud-init templates**, avoiding custom ISO rebuild.
+* Ubuntu Server automated installs use the **autoinstall** format (cloud-init YAML) supported by modern Ubuntu installers (20.04+).
+* USB content requirements: original Ubuntu Server ISO + Ventoy `ventoy.json` referencing your cloud-init template stored on the USB.
+
+### 4.1 Ventoy configuration (`usb/ventoy/ventoy.json`)
+* Use `auto_install` to bind the Ubuntu ISO path to the cloud-init user-data template file.
+* Example (adjust ISO filename to your exact ISO path):
+```json
+{
+  "control": [
+    { "VTOY_DEFAULT_SEARCH_ROOT": "/ISO" }
+  ],
+  "auto_install": [
+    {
+      "image": "/ISO/ubuntu-24.04-live-server-amd64.iso",
+      "template": "/ventoy/scripts/ubuntu-24.04-user-data.yaml",
+      "autosel": 1,
+      "timeout": 10
+    }
+  ]
+}
+```
+
+### 4.2 Ubuntu autoinstall template (`usb/ventoy/scripts/ubuntu-24.04-user-data.yaml`)
+* Autoinstall config must be valid `#cloud-config` YAML, and should include disk wipe/partitioning only when you are confident about target selection and user warnings in UI.
+* Ubuntu autoinstall behavior differs from preseed: missing answers often default or fail rather than prompting unless configured, so templates must be explicit.
+* Minimal example (extend with storage, packages, and late-commands as needed):
+```yaml
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  identity:
+    hostname: synap-node
+    username: setup
+    password: "$6$REPLACE_WITH_HASH"
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  packages:
+    - curl
+    - git
+    - ufw
+
+  late-commands:
+    - curtin in-target -- mkdir -p /opt/synap-stack
+    - curtin in-target -- bash -lc "curl -fsSL https://example.invalid/synap-stack/install.sh -o /opt/synap-stack/install.sh"
+    - curtin in-target -- chmod +x /opt/synap-stack/install.sh
+    - curtin in-target -- /opt/synap-stack/install.sh --mode=usb --phase=1 --noninteractive
+
+  shutdown: reboot
+```
+
+## 5) Script mode: `curl | bash` installer (idempotent)
+* Script mode is the same end-state as USB mode but skips OS install and diagnostics, focusing on repeatable provisioning and upgrades.
+* Ansible is agentless and well-suited for this because the control node can be the same machine (localhost) and avoids per-target agents, keeping installs simple.
+* Contract for `install/install.sh`:
+    * Must be re-runnable without breaking (idempotent).
+    * Must write config to `/etc/synap-stack/config.yaml`.
+    * Must store secrets in `/etc/synap-stack/secrets.env` with `0600` perms.
+
+### 5.1 Script interface (proposed CLI)
+* Example invocations (stable UX for both modes):
+```bash
+# Phase 1 baseline only
+sudo ./install.sh phase1
+
+# Phase 2: Synap + OpenClaw (choose local vs remote brain)
+sudo ./install.sh phase2 --brain=remote --brain-url=http://10.0.0.50:11434
+
+# Phase 3: OpenClaude builder
+sudo ./install.sh phase3 --approval-mode=required
+```
+
+## 6) Configuration and "separating the AI from the rest"
+* The system must treat inference as a pluggable "Brain endpoint" so users can run the GPU workload elsewhere while keeping Synap/OpenClaw/OpenClaude on the control-plane node.
+* Required config fields stored at `/etc/synap-stack/config.yaml`:
+```yaml
+install_mode: usb # or script
+role: control-plane # or brain-only
+
+brain:
+  mode: remote # or local
+  endpoint_url: "http://10.0.0.50:11434"
+  api_key_env: "BRAIN_API_KEY" # optional
+
+services:
+  synap:
+    enabled: true
+  openclaw:
+    enabled: true
+  openclaude:
+    enabled: false
+
+policy:
+  approval_mode: required
+  workspace_root: "/srv/synap-workspaces"
+  network_access_default: deny
+```
+
+## 7) Baseline security defaults
+* Default firewall manager for Ubuntu-based installs should be UFW for simplicity; more complex zone-based setups can be deferred.
+* Secrets must never be embedded in URLs or committed to git; use env vars or root-only files and support rotation.
+
+## 8) OpenClaw installation and channel posture (Phase 2)
+* OpenClaw is a self-hosted gateway for multi-channel agent access; treat it as the inbound boundary and keep its admin UI bound to localhost or protected LAN/VPN.
+* Channel tokens (Telegram/Discord/etc.) must be stored in secrets file and referenced by env var expansion in Compose, never printed to logs.
+
+## 9) OpenClaude installation posture (Phase 3)
+* OpenClaude provides headless/server capabilities for coding-agent execution; run it behind the Orchestrator and enforce workspace + tool policies.
+* The build workspace root must be a dedicated directory with strict permissions and optional filesystem snapshots/rollback strategy later.
+
+## 10) Testing before "real hardware"
+* Autoinstall must be validated in VM (UEFI + Legacy) to avoid destructive mistakes; failures in unattended installs can be subtle if config is incomplete.
+* Cloud-init first-boot behavior depends on detecting "first boot" correctly; Phase 1/2/3 services should use marker files to guarantee one-time init where required.

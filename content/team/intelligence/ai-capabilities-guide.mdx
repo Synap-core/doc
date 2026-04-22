@@ -1,0 +1,849 @@
+# Synap AI: Complete Capabilities Guide
+
+_15+ Specialized Agents • Infinite Conversations • Your Data, Your Control_
+
+---
+
+## Overview
+
+Synap provides **ChatGPT-level AI assistance** with three critical differences:
+
+1. **Open-Source Backend** - Your data pod is fully open, exportable, self-hostable
+2. **Hub Protocol** - Plug in any AI service (ours, marketplace, or your own)
+3. **Multi-Agent System** - 15+ specialized agents collaborate on your behalf
+
+**What You Get:**
+
+- ✅ 15+ Specialized AI Agents
+- ✅ Infinite Conversations with Branching
+- ✅ Multi-Agent Collaboration
+- ✅ Approval Workflows (AI proposes, you approve)
+- ✅ Memory & Context Management
+- ✅ Open-Source Backend (data ownership)
+- ✅ Hub Protocol (AI interoperability)
+
+---
+
+## Core Architecture
+
+### Your Data Pod (Open Source)
+
+```
+┌─────────────────────────────────────┐
+│ YOUR DATA (PostgreSQL)              │
+│ - Conversations                     │
+│ - Documents                         │
+│ - Tasks, Contacts, Projects         │
+│ - Knowledge Graph                   │
+│ - Conversation History              │
+└────────────┬────────────────────────┘
+             │
+             │ Hub Protocol API
+             │ (OAuth2 + Standard REST)
+             │
+      ───────┴──────────────────────
+      │              │           │
+┌─────▼─────┐  ┌────▼────┐  ┌──▼────┐
+│ Synap AI  │  │ Market  │  │ Your  │
+│ (Default) │  │ Agents  │  │ Custom│
+└───────────┘  └─────────┘  └───────┘
+```
+
+**Key Insight:** Your data pod runs independently of AI services. You can:
+
+- Switch AI providers without data migration
+- Use multiple AI services simultaneously
+- Self-host your entire stack
+- Export everything in standard formats
+
+---
+
+## Core Features
+
+### 1. Infinite Chat
+
+**What it is:** Never-ending conversations that remember everything
+
+**Technical Foundation:**
+
+- Open-source backend stores full history
+- Smart context management (no token limit hits)
+- Export full conversation history anytime
+- Self-hosting option for complete control
+
+**How it works:**
+
+- One continuous conversation per project/workspace
+- Context preserved across sessions (weeks, months, years)
+- No token limits (managed automatically)
+- Full conversation history always accessible
+- Stored in YOUR database, not locked in cloud
+
+**Use cases:**
+
+- Long-term project planning (months-long conversations)
+- Research that spans weeks
+- Continuous learning and improvement
+- Full conversation export for compliance/documentation
+
+**Unique to Synap:**
+
+- ChatGPT: 32K token limit, locked in OpenAI
+- Claude: 200K token limit, locked in Anthropic
+- Synap: **Infinite + open-source storage**
+
+---
+
+### 2. Conversation Branching
+
+**What it is:** Fork conversations to explore ideas in parallel
+
+**How it works:**
+
+- Create branches for specific explorations
+- Main conversation continues uninterrupted
+- Merge findings back when ready
+- Visual tree shows all branches
+- All stored in open database (query, analyze, export)
+
+**Use cases:**
+
+```
+Main: "Build SaaS product"
+  ├─ Branch A: Research competitors (Research Agent)
+  ├─ Branch B: Draft 3 pricing strategies (Business Agent)
+  ├─ Branch C: Explore tech stacks (Code Agent)
+  └─ Branch D: Write landing page copy (Writer Agent)
+
+All branches share context, work in parallel
+Merge findings back when done
+```
+
+**Unique to Synap:**
+
+- Other AIs: Linear conversations only
+- Synap: **Git-like branching + open storage**
+
+---
+
+### 3. Hub Protocol: AI Interoperability
+
+**What it is:** Open standard for AI services to access your data
+
+**Why It Matters:**
+
+- ✅ **No Vendor Lock-In:** Switch AI providers without data migration
+- ✅ **Mix AI Services:** Use multiple AIs together (best tool for each job)
+- ✅ **Marketplace Ready:** Install community agents with one click
+- ✅ **Custom AI:** Build and connect your own agents
+- ✅ **Future-Proof:** New AIs plug in without rebuilding
+
+**How It Works:**
+
+**Step 1: Authentication (OAuth2)**
+
+```
+AI Service requests access to your data pod
+You grant scoped permissions (read docs, create tasks, etc.)
+Service receives time-limited access token
+```
+
+**Step 2: Standard API**
+
+```
+AI Service calls Hub Protocol endpoints:
+- GET /hub/documents (search your documents)
+- POST /hub/entities (propose creating task)
+- GET /hub/conversations (access chat history)
+```
+
+**Step 3: Approval Workflow**
+
+```
+AI proposes action → Stored in your data pod → You review → Approve/reject
+Only approved actions execute
+```
+
+**Example Scenarios:**
+
+**Scenario 1: Use Synap's Hosted AI (Default)**
+
+```
+You: "Research our competitors"
+→ Your Data Pod (open source)
+→ Hub Protocol
+→ Synap Intelligence Service (our 15 agents)
+→ Research Agent does deep analysis
+→ Results stored back in YOUR data pod
+
+Benefits: Managed service, 15+ agents, automatic updates
+```
+
+**Scenario 2: Use Marketplace Agent**
+
+```
+You: Install "CTO Agent" from marketplace
+→ CTO Agent implements Hub Protocol
+→ Connects to your data pod via OAuth
+→ Access your codebase, technical docs
+→ Provides specialized CTO advice
+
+Benefits: Specialized expertise, one-click install, still YOUR data
+```
+
+**Scenario 3: Build Your Own Agent**
+
+```
+You: Create custom "Sales Forecasting Agent"
+→ Implement Hub Protocol (open standard)
+→ Connect to your data pod
+→ Access sales data, past forecasts
+→ Run proprietary forecasting logic
+
+Benefits: Complete control, proprietary logic, integrated with YOUR data
+```
+
+**Scenario 4: Multi-Provider Orchestra**
+
+```
+You: "Build and launch marketing campaign"
+→ Synap Orchestrator (coordination)
+→ Perplexity Agent (market research via Hub Protocol)
+→ Your Custom Agent (brand guidelines via Hub Protocol)
+→ GPT-4 Agent (ad copy generation via Hub Protocol)
+→ All working together, all accessing YOUR data
+
+Benefits: Best tool for each job, seamlessly integrated
+```
+
+**Hub Protocol Technical Details:**
+
+**Authentication:**
+
+```http
+POST /oauth/token
+client_id: your_ai_service_id
+client_secret: your_ai_service_secret
+scope: read:documents write:entities read:conversations
+
+Returns: access_token (time-limited)
+```
+
+**Standard Endpoints:**
+
+```http
+# Search
+POST /hub/search/documents
+POST /hub/search/entities
+POST /hub/search/vector
+
+# Retrieve
+GET /hub/documents/:id
+GET /hub/entities/:id
+GET /hub/conversations/:threadId
+
+# Propose Actions (requires approval)
+POST /hub/proposals/create_entity
+POST /hub/proposals/update_document
+POST /hub/proposals/create_branch
+```
+
+**For Developers:**
+
+- Full Hub Protocol specification: [docs.synap.io/hub-protocol]
+- Client libraries: Python, TypeScript, Go
+- Example implementations: GitHub repo
+- Certification program for marketplace listing
+
+---
+
+### 4. Multi-Agent Collaboration
+
+**What it is:** Different AI specialists working together on your tasks
+
+**How it works:**
+
+- Orchestrator coordinates multiple agents
+- Each agent has specialized expertise
+- Agents share context through Hub Protocol
+- Seamless handoffs between agents
+- All agents access YOUR data pod (with permission)
+
+**Example Flow:**
+
+```
+You: "Build competitor analysis and marketing strategy"
+
+Orchestrator: Analyzes request, creates plan:
+  ├─ Research Agent: Gather competitor data
+  ├─ Business Agent: Analyze market positioning
+  ├─ Writer Agent: Draft strategy document
+  └─ Task Agent: Create action items
+
+All agents:
+- Access your data via Hub Protocol
+- Store findings in YOUR database
+- Propose actions for your approval
+- Can be swapped with marketplace/custom agents
+```
+
+**Agent Coordination:**
+
+1. Orchestrator receives request
+2. Breaks into sub-tasks
+3. Routes to specialized agents (Synap, marketplace, or custom)
+4. Agents execute in parallel
+5. Results synthesized
+6. Actions proposed for approval
+7. Everything stored in your data pod
+
+**Marketplace Integration:**
+
+```
+Default Setup:
+Orchestrator → Synap's 15 agents
+
+With Marketplace:
+Orchestrator → Mix of Synap + marketplace + custom agents
+            → "CTO Agent" from marketplace for tech decisions
+            → "Legal Agent" from marketplace for contract review
+            → Your custom "Brand Agent" for brand compliance
+            → All coordinated, all accessing YOUR data
+```
+
+---
+
+### 5. Specialized AI Agents
+
+**Current Agents (Synap Default):**
+
+#### 1. Orchestrator Agent (Coordination)
+
+- **Purpose:** Multi-agent coordination
+- **When to use:** Complex multi-step tasks
+- **Capabilities:** Task decomposition, agent routing, result synthesis
+
+#### 2. Research Agent (Deep Analysis)
+
+- **Purpose:** Research and fact-finding
+- **Capabilities:** Web search, source citation, analysis
+- **When to use:** "Research competitors", "Analyze market trends"
+
+#### 3. Writer Agent (Content Creation)
+
+- **Purpose:** Writing and editing
+- **Capabilities:** Drafting, refinement, style adaptation
+- **When to use:** "Write blog post", "Draft email to investors"
+
+#### 4. Code Agent (Programming)
+
+- **Purpose:** Code generation and review
+- **Capabilities:** Generate, debug, refactor, document
+- **When to use:** "Build API endpoint", "Fix this bug"
+
+#### 5. Business Agent (Strategy)
+
+- **Purpose:** Business analysis
+- **Capabilities:** Market analysis, financial modeling, strategy
+- **When to use:** "Analyze pricing", "Create business plan"
+
+#### 6. Creative Agent (Ideation)
+
+- **Purpose:** Creative thinking
+- **Capabilities:** Brainstorming, storytelling, design thinking
+- **When to use:** "Generate product ideas", "Write creative brief"
+
+#### 7. Data Agent (Analysis)
+
+- **Purpose:** Data interpretation
+- **Capabilities:** Statistical analysis, trend identification
+- **When to use:** "Analyze sales data", "Find patterns"
+
+#### 8. Task Agent (Productivity)
+
+- **Purpose:** Task management
+- **Capabilities:** Create tasks, prioritize, track
+- **When to use:** "Create task list", "Update project status"
+
+#### 9. Meeting Agent (Coordination)
+
+- **Purpose:** Meeting management
+- **Capabilities:** Agenda creation, notes, action items
+- **When to use:** "Prepare meeting agenda", "Extract action items"
+
+#### 10. Email Agent (Communication)
+
+- **Purpose:** Email drafting
+- **Capabilities:** Compose, tone adjustment, templates
+- **When to use:** "Draft email to client", "Write follow-up"
+
+#### 11. Learning Agent (Education)
+
+- **Purpose:** Teaching and tutoring
+- **Capabilities:** Explain concepts, create quizzes, study plans
+- **When to use:** "Explain quantum computing", "Create study guide"
+
+#### 12. Planning Agent (Project Management)
+
+- **Purpose:** Project planning
+- **Capabilities:** Timeline creation, resource allocation
+- **When to use:** "Plan product launch", "Create project timeline"
+
+#### 13. Review Agent (Quality Assurance)
+
+- **Purpose:** Content review
+- **Capabilities:** Quality assessment, feedback, error detection
+- **When to use:** "Review this document", "Check for errors"
+
+#### 14. Summary Agent (Synthesis)
+
+- **Purpose:** Summarization
+- **Capabilities:** Extract key points, create summaries
+- **When to use:** "Summarize this report", "Extract key findings"
+
+#### 15. Translation Agent (Localization)
+
+- **Purpose:** Translation
+- **Capabilities:** Multi-language translation, cultural adaptation
+- **When to use:** "Translate to French", "Localize for EU market"
+
+**Coming: Marketplace Agents**
+
+- Community-created specialists
+- Industry-specific agents (legal, medical, finance)
+- Role-based agents (CTO, CMO, CFO)
+- One-click installation
+- All use Hub Protocol (access YOUR data)
+
+**Coming: Custom Agents**
+
+- Build your own with visual builder
+- Select tools and capabilities
+- Define system prompt
+- Connect via Hub Protocol
+- Deploy to your data pod or marketplace
+
+---
+
+### 6. Approval Workflows
+
+**What it is:** AI proposes actions, you approve before execution
+
+**Why Open Source Matters Here:**
+
+- All proposals stored in YOUR database
+- Full audit trail you can query
+- Export approval history anytime
+- Custom approval rules (modify open-source code)
+
+**How it works:**
+
+1. AI suggests action (create task, update document, etc.)
+2. Proposal stored in your data pod
+3. You see in UI with AI's rationale
+4. Approve or reject with one click
+5. If approved: Action executes
+6. Result stored in your database
+
+**Example:**
+
+```
+User: "Create tasks from our meeting notes"
+
+Task Agent:
+  Reads meeting notes (from YOUR data pod)
+  Identifies 5 potential tasks
+  Proposes each task with rationale:
+
+  Proposal 1: Create task "Review Q2 financials"
+  Rationale: "Alice mentioned needed by Friday"
+
+  Proposal 2: Create task "Call supplier about delay"
+  Rationale: "Bob raised concern about shipment"
+
+User: Reviews proposals
+  - Approves Proposal 1 ✅
+  - Edits Proposal 2 (changes deadline) ✅
+  - Rejects Proposal 3 ❌
+
+Result: 2 tasks created in YOUR database
+```
+
+**Granular Control:**
+
+- Approve individual actions
+- Edit proposals before approving
+- Set default approvals for trusted actions
+- Revoke past approvals
+- Full audit trail in your database
+
+**Privacy Benefit:**
+
+- Proposals reviewed locally (your data pod)
+- No data sent to AI unless approved
+- You see what AI sees before execution
+
+---
+
+### 7. Context & Memory
+
+**What it is:** AI remembers everything across conversations
+
+**Open-Source Advantage:**
+
+- Memory stored in YOUR database
+- Export all memories anytime
+- Query your memory directly (SQL access)
+- Self-host for complete privacy
+
+**How it works:**
+
+- **Conversation History:** Full transcript in your database
+- **Long-Term Memory:** Facts and preferences learned over time
+- **Semantic Search:** Find past discussions by meaning
+- **User Preferences:** AI adapts to your style
+- **All stored locally** in your data pod
+
+**Use cases:**
+
+```
+Session 1 (January):
+You: "I prefer Python for data analysis"
+AI: Stores preference in YOUR database
+
+Session 2 (March):
+You: "Build data analysis script"
+AI: Automatically uses Python (remembers from YOUR database)
+
+Session 3 (June):
+You: "What did we decide about data tools?"
+AI: Searches YOUR database, finds January discussion
+```
+
+**Memory Types:**
+
+1. **Conversation Memory:** Full chat history in your database
+2. **Entity Memory:** Connections between your data
+3. **Preference Memory:** Your stated preferences
+4. **Behavioral Memory:** Learned patterns from your usage
+
+**Privacy & Control:**
+
+- All memory in YOUR database (open-source)
+- Export memory anytime
+- Delete specific memories
+- Query memories directly (SQL)
+- Self-host for complete privacy
+
+---
+
+### 8. Knowledge Graph Integration
+
+**What it is:** AI understands connections in your data
+
+**Open-Source Benefit:**
+
+- Your knowledge graph in YOUR database
+- Standard PostgreSQL (query with SQL)
+- Export graph anytime
+- Custom graph algorithms (modify code)
+
+**How it works:**
+
+- AI indexes your documents, tasks, contacts
+- Builds relationship graph (stored locally)
+- Searches by semantic meaning
+- Understands context and connections
+- All in YOUR open-source database
+
+**Use cases:**
+
+```
+"Find contacts in SaaS industry"
+→ Searches YOUR database
+→ Returns results from YOUR data
+
+"Show documents related to Q2 launch"
+→ Traverses YOUR knowledge graph
+→ Finds connected documents
+
+"What tasks depend on this project?"
+→ Queries YOUR database
+→ Shows dependency tree
+```
+
+**Technical:**
+
+- PostgreSQL + pgvector (open source)
+- Embeddings generated locally
+- Full-text search + semantic search
+- Graph traversal via SQL
+- Export entire graph
+
+---
+
+## Hub Protocol: Deep Dive
+
+### For Users
+
+**What You Can Do:**
+
+1. **Use Default (Synap AI)**
+
+```
+Easy setup: Works out of box
+15+ agents included
+Automatic updates
+Managed service
+```
+
+2. **Add Marketplace Agents**
+
+```
+Browse marketplace
+One-click install
+Agents connect via Hub Protocol
+Access your data (with permission)
+```
+
+3. **Build Custom Agents**
+
+```
+Implement Hub Protocol
+Connect to your data pod
+Deploy anywhere (your server, cloud, local)
+Full control over logic
+```
+
+4. **Mix & Match**
+
+```
+Use Synap for general tasks
+Use marketplace "Legal Agent" for contracts
+Use your custom "Brand Agent" for compliance
+All coordinated by Orchestrator
+All accessing YOUR data via Hub Protocol
+```
+
+**Why This Matters:**
+
+- Never locked into one AI vendor
+- Best tool for each job
+- Competition keeps prices low
+- Future-proof (new AIs plug in)
+
+---
+
+### For Developers
+
+**Building Hub Protocol Agents:**
+
+**Step 1: Register Your Agent**
+
+```typescript
+// Register with user's data pod
+const registration = await dataPod.registerAgent({
+  name: "My Custom Agent",
+  description: "Specialized in X",
+  scopes: ["read:documents", "write:entities"],
+  webhookUrl: "https://my-agent.com/webhook",
+});
+```
+
+**Step 2: Implement OAuth2**
+
+```typescript
+// User authorizes your agent
+app.get("/oauth/authorize", (req, res) => {
+  const { userId, dataPodUrl } = req.query;
+  // Show authorization UI
+  // User grants permissions
+  // Redirect back with auth code
+});
+
+app.post("/oauth/token", async (req, res) => {
+  const { code } = req.body;
+  // Exchange code for access token
+  const token = await dataPod.exchangeToken(code);
+  // Store token for API calls
+});
+```
+
+**Step 3: Call Hub Protocol APIs**
+
+```typescript
+import { HubProtocolClient } from "@synap/hub-protocol";
+
+const client = new HubProtocolClient({
+  dataPodUrl: user.dataPodUrl,
+  accessToken: user.accessToken,
+});
+
+// Search user's documents
+const docs = await client.searchDocuments({
+  query: "pricing strategy",
+  limit: 10,
+});
+
+// Propose action
+const proposal = await client.proposeAction({
+  type: "create_entity",
+  data: {
+    type: "task",
+    title: "Review pricing",
+    description: "Based on research findings",
+  },
+});
+```
+
+**Step 4: Handle Approvals**
+
+```typescript
+// Webhook when user approves/rejects
+app.post("/webhook/approval", (req, res) => {
+  const { proposalId, decision, userId } = req.body;
+
+  if (decision === "approved") {
+    // Execute the action
+    await executeAction(proposalId);
+  }
+});
+```
+
+**Resources:**
+
+- Hub Protocol Specification: docs.synap.io/hub-protocol
+- Client Libraries: npm install @synap/hub-protocol
+- Example Agents: github.com/synap-ai/example-agents
+- Certification: docs.synap.io/marketplace/certification
+
+**Monetization:**
+
+- List on marketplace
+- Free or paid agents
+- Subscription model
+- Revenue share with Synap
+
+---
+
+## Comparison Matrix
+
+| Feature               | ChatGPT      | Notion AI   | Claude Projects | **Synap**                  |
+| --------------------- | ------------ | ----------- | --------------- | -------------------------- |
+| **Data Ownership**    | OpenAI       | Notion      | Anthropic       | **✅ You (open source)**   |
+| **Self-Hosting**      | ❌           | ❌          | ❌              | **✅ Yes**                 |
+| **Bring Your Own AI** | ❌           | ❌          | ❌              | **✅ Hub Protocol**        |
+| **Marketplace**       | ❌           | ❌          | ❌              | **✅ Coming Q2 2025**      |
+| **Context Limit**     | 32K          | Page        | 200K            | **∞ Infinite**             |
+| **Branching**         | ❌           | ❌          | ❌              | **✅ Yes**                 |
+| **Multi-Agent**       | Single       | Single      | Single          | **✅ 15+**                 |
+| **Actions**           | ❌ Chat only | Edit only   | ❌ Chat only    | **✅ Full CRUD**           |
+| **API**               | ✅ ($)       | Limited     | ✅ ($)          | **✅ Free (Hub Protocol)** |
+| **Export**            | Limited      | Proprietary | Limited         | **✅ Full (open source)**  |
+| **Custom Agents**     | ❌           | ❌          | ❌              | **✅ Via Hub Protocol**    |
+
+---
+
+## Advanced Capabilities (Q2 2025)
+
+### Agent Marketplace
+
+- Community-created specialized agents
+- Industry-specific (legal, medical, finance, real estate)
+- Role-based (CTO, CMO, CFO, Product Manager)
+- Language-specific (localized agents)
+- One-click installation
+- All use Hub Protocol (access YOUR data)
+- Revenue sharing for creators
+
+### Custom Agent Builder
+
+- Visual workflow builder
+- Select tools and permissions
+- Define system prompt and behavior
+- Choose AI model (GPT-4, Claude, Mistral, etc.)
+- Test in sandbox
+- Deploy to your data pod
+- Optionally list on marketplace
+
+### Workflow Automation
+
+- Visual workflow builder
+- Trigger-based automation
+- Multi-step workflows
+- Connect multiple agents
+- All executing on YOUR data
+
+### Team Collaboration (Opt-In)
+
+- Shared conversations (with permission)
+- Team agents (shared context)
+- Permission management
+- Audit trails
+- Still on YOUR infrastructure (self-hostable)
+
+---
+
+## Getting Started
+
+### 1. Sign Up
+
+```
+Create account → Your data pod deployed (open source)
+Choose: Cloud-hosted or self-hosted
+```
+
+### 2. Start Chatting
+
+```
+Default setup: Synap's 15 agents via Hub Protocol
+Works immediately
+No configuration needed
+```
+
+### 3. Explore Advanced Features
+
+```
+Create branches for parallel work
+Review and approve AI proposals
+Search your conversation history
+Export your data anytime
+```
+
+### 4. Extend (Optional)
+
+```
+Browse marketplace for specialized agents
+Install with one click
+Or build your own via Hub Protocol
+```
+
+---
+
+## Summary
+
+**Synap AI** combines:
+
+- ✅ ChatGPT-level intelligence (15+ specialized agents)
+- ✅ Your data, your control (open-source backend)
+- ✅ AI interoperability (Hub Protocol standard)
+- ✅ No vendor lock-in (switch providers, export data, self-host)
+- ✅ Infinite context (never lose conversation thread)
+- ✅ Multi-agent collaboration (right expert for each task)
+- ✅ Human-in-the-loop (approve before execution)
+
+**The Result:**
+Powerful AI assistance without sacrificing control, privacy, or flexibility.
+
+**Your Data. Your AI. Your Rules.**
+
+---
+
+_Ready to try Synap? Visit synap.io_
+
+## Related
+
+- [AI Vision & Philosophy](./ai-vision-philosophy.mdx) — underlying design philosophy
+- [Agent System](./agent-system.mdx) — agent architecture and classes
+- [External Agents](./external-agents.mdx) — third-party IS integration guide
+- [Hub Protocol](../platform/hub-protocol.mdx) — AI interoperability standard

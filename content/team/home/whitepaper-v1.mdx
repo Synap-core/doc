@@ -1,0 +1,636 @@
+# Synap Core: Building the Sovereign Web
+
+**A Technical Manifesto for Human-Centric Digital Infrastructure**
+
+*Version 1.1 • November 2024*
+
+---
+
+## Introduction: The Digital Ownership Crisis
+
+Imagine a world where you cannot own property. Where you can only rent—never buy. A world where your home, your possessions, your creations are always someone else's, and you pay monthly for the privilege of temporary access.
+
+You would refuse this in the physical world. **Yet this is our digital reality today.**
+
+You don't own your notes in Notion. You don't own your photos in Google Photos. You don't own your tasks in Todoist. You rent precarious access—and if you stop paying, if the company changes its mind, if the algorithm decides you violated some terms of service, it all vanishes.
+
+**You are a serf in a digital fiefdom.**
+
+This isn't just inefficient. It's not just frustrating. **It's a regression of human rights.** We fought for centuries to establish property rights, freedom of expression, and privacy in the physical world. The moment we went digital, we surrendered them all.
+
+### The Twin Crises
+
+We face two interconnected problems:
+
+**1. The Economic Crisis: The "Rent-Seeking Tax"**
+
+You pay $10 here, $20 there, $30 for that premium feature. Before you know it, you're spending **$300/month** just to access your own information across a dozen platforms. Meanwhile, these platforms build multi-billion dollar moats by making it **impossibly painful** to leave—your data is trapped, your workflows are locked in, and migration costs can exceed **10x the original investment**.
+
+**2. The Sovereignty Crisis: Digital Feudalism**
+
+Even regulations like GDPR and the EU Data Act (2025) can't solve this. They mandate "data portability," but what good is a CSV export when all the relational context is lost? When the format is intentionally crippled? When the very act of exporting is designed to be so painful that you give up?
+
+The platforms know this. **Vendor lock-in is not a bug—it's the business model.**
+
+---
+
+## The Web's Evolution: What We Learned
+
+To understand where we're going, we must understand where we've been.
+
+---
+
+### [ICON:Archive] Web 1.0 (1990s): The Era of Ownership
+
+**What It Got Right:**
+- [ICON:Check] **True Ownership**: You bought software, owned it forever
+- [ICON:Check] **Open Standards**: HTML, HTTP — no vendor lock-in
+- [ICON:Check] **Decentralized**: Your site, your server
+
+**Where It Failed:**
+- [ICON:X] **Terrible UX**: Command lines, FTP, manual everything
+- [ICON:X] **Technical Barriers**: Only tech-savvy users could participate
+- [ICON:X] **No Collaboration**: Email attachments and pain
+
+**The Lesson**: Ownership is essential, but UX can't be sacrificed.
+
+---
+
+### [ICON:Globe] Web 2.0 (2000s): The Era of Platforms
+
+**What It Got Right:**
+- [ICON:Check] **Amazing UX**: Click a button, it just works
+- [ICON:Check] **Mainstream**: Billions could participate
+- [ICON:Check] **Collaboration**: Real-time editing, seamless sharing
+
+**Where It Failed:**
+- [ICON:X] **Silos**: Your data trapped in walled gardens
+- [ICON:X] **Vendor Lock-in**: Migration costs > 10x investment
+- [ICON:X] **No Privacy**: You became the product
+- [ICON:X] **Rent Forever**: Monthly subscriptions, never own
+
+**The Lesson**: Great UX is essential, but ownership can't be sacrificed.
+
+---
+
+### [ICON:Link] Web 3.0 (2010s): The Era of Broken Promises
+
+**What It Got Right:**
+- [ICON:Check] **The Vision**: Data sovereignty, user ownership
+- [ICON:Check] **Proved Demand**: People want to own their digital lives
+
+**Where It Failed:**
+- [ICON:X] **Complexity**: Gas fees, seed phrases, wallets
+- [ICON:X] **Ideology First**: Led with tech instead of solving problems
+- [ICON:X] **Terrible UX**: Even worse than Web 1.0
+- [ICON:X] **Not Mainstream**: Only crypto-natives participated
+
+**The Lesson**: Vision is right, execution was wrong. People don't want decentralization for its own sake—they want **ownership, control, and interoperability**. Web3 confused the means (blockchain) with the end (sovereignty).
+
+---
+
+### [ICON:Sparkles] Web 2.5 (2025+): Our Synthesis
+
+**What We Keep:**
+- [ICON:Check] **Ownership** (from Web 1.0)
+- [ICON:Check] **Amazing UX** (from Web 2.0)
+- [ICON:Check] **Sovereignty Vision** (from Web 3.0)
+- [ICON:Check] **Pragmatism**: Self-host when ready, not forced
+
+**What We Fix:**
+- [ICON:X] No silos (data is portable)
+- [ICON:X] No lock-in (apps are interchangeable)
+- [ICON:X] No complexity (Docker one-liner)
+- [ICON:X] No blockchain baggage (just infrastructure)
+
+**The Result**: A system that feels like Web 2.0 but respects you like Web 1.0, with the sovereignty promised by Web 3.0—**without the baggage**.
+
+---
+
+## The Vision: The Sovereign Stack
+
+Instead of your data scattered across dozens of platforms, it lives in **one place: your personal data pod**. We call it **EVE** (your Event-sourced Vault of Everything).
+
+### What is EVE?
+
+**EVE is your digital home.** Just as you own physical property, you own your EVE:
+
+- **Self-hosted or managed** (your choice): Run it on your own server, or let us host it—but the data is **always** yours, portable, and under your control.
+- **Event-sourced**: Every action becomes an immutable event. Complete history, full audit trail, perfect for AI.
+- **Structured & queryable**: Not just files and folders—your tasks, notes, contacts, calendar are all **typed, relational, and intelligent**.
+- **Extensible**: New capabilities can be added via**plugins**—APIs that connect to your EVE with granular permissions.
+
+### The Architecture: Three Layers
+
+Instead of monolithic apps, Synap Core is built on a layered architecture where each layer has a clear purpose.
+
+---
+
+### Layer 3: Intelligence & Applications
+
+**The User Experience Layer**
+
+This is what you interact with: apps, AI agents, and intelligent features.
+
+**Key Capabilities:**
+- [ICON:Palette] **Apps as "Views"**: Switch tools without migrating data
+- [ICON:Bot] **AI Integration**: Agents work ON your data (don't own it)
+- [ICON:Plug] **Plugin Ecosystem**: Add capabilities on demand
+- [ICON:Building] **Proprietary Intelligence**: Our Intelligence Hub and community plugins
+
+**Technical Stack:**
+- tRPC for type-safe APIs
+- LangGraph for AI workflows
+- Vercel AI SDK (provider-agnostic)
+
+---
+
+### Layer 2: The Data Pod (EVE)
+
+**The Sovereignty Layer**
+
+This is YOUR infrastructure—the core that holds your data.
+
+**Key Capabilities:**
+- [ICON:Package] **Event Store**: Immutable audit trail (TimescaleDB)
+- [ICON:Globe] **Universal API**: One API for all data types (tRPC)
+- [ICON:Lock] **Plugin System**: Authorized, scoped access
+- [ICON:Handshake] **Hub Protocol**: Secure AI ↔ Pod communication
+- [ICON:HardDrive] **Storage Abstraction**: Hybrid model (metadata in PostgreSQL, content in R2/MinIO)
+
+**Technical Stack:**
+- PostgreSQL + TimescaleDB + pgvector
+- Drizzle ORM
+- Cloudflare R2 or MinIO
+
+---
+
+### Layer 1: Infrastructure
+
+**The Foundation Layer**
+
+The proven technologies that make it reliable and scalable.
+
+**Key Capabilities:**
+- [ICON:Database] **PostgreSQL + TimescaleDB**: Event log with time-series optimization
+- [ICON:Search] **pgvector**: Semantic search for AI features
+- [ICON:Folder] **Cloudflare R2 / MinIO**: Scalable content storage
+- [ICON:Container] **Docker**: One-command deployment
+
+**Why These Choices:**
+- Battle-tested (not experimental)
+- Self-hostable (no vendor dependency)
+- Scalable (single user → thousands)
+
+---
+
+**[ICON:Link2] How They Connect:**
+
+```
+User → App (Layer 3) 
+      → Universal API (tRPC)
+      → Event Store (Layer 2)
+      → PostgreSQL (Layer 1)
+```
+
+Every interaction flows through the layers, ensuring consistency, auditability, and extensibility.
+
+---
+
+## The Technical Deep-Dive: How EVE Works
+
+### Event Store (TimescaleDB)
+
+All state changes are stored as **immutable events** in a TimescaleDB hypertable (optimized for time-series data):
+
+**Example Event:**
+```typescript
+const event = {
+  type: 'task.created',
+  data: { title: 'Call Maria about Q4 budget', dueDate: '2025-05-15' },
+  userId: 'user-123',
+  timestamp: '2025-05-01T10:00:00Z',
+  subjectId: 'task-abc-123'
+}
+
+await eve.events.append(event) // Immutable, auditable, replayable
+```
+
+**Why Event Sourcing?**
+
+1. **Complete History**: You can see *exactly* how your data evolved. Who changed what, when, and why.
+2. **AI-Friendly**: LLMs thrive on context. With a complete event log, your AI assistant understands *everything*.
+3. **Audit Trail**: Perfect for compliance (GDPR, CCPA), debugging, and trust.
+4. **Time-Travel**: Replay your data to any point in history. Undo is trivial.
+
+**The Universal API (tRPC):**
+
+Instead of each app having its own custom API, **one standardized, type-safe API** powers everything:
+
+```typescript
+// Any app can read your tasks
+const tasks = await eve.tasks.list.query({
+  filters: { status: 'pending' },
+  limit: 10
+}) // Auto-complete, type-safe, zero boilerplate
+
+// Any app can create events
+await eve.events.append({
+  type: 'note.created',
+  data: { content: 'Meeting notes from today...' }
+})
+```
+
+**Plugin System with Authorization:**
+
+Third-party apps don't get blanket access to your EVE. They request **granular permissions**:
+
+```typescript
+// A time-tracking plugin requests read-only access to tasks
+const plugin = await eve.plugins.authorize({
+  pluginId: 'time-tracker-pro',
+  scope: ['tasks:read'],
+  expiresIn: 3600 // 1 hour
+})
+
+// User approves in UI → plugin gets a scoped token
+// Plugin can ONLY read tasks, nothing else
+const tasks = await plugin.api.tasks.list()
+```
+
+This is the **"App Store model, but for your data"**: apps must ask permission, work is sandboxed, and you can revoke access anytime.
+
+### Apps Become "Views" on Your Data
+
+In the old model, each app owns a slice of your life:
+- Todoist owns your tasks
+- Notion owns your notes
+- Google owns your calendar
+
+In our model, **you own everything**. Apps are just *lenses*:
+
+- Don't like your task manager? Switch to a competitor. Your tasks don't move—the view does.
+- Want a different calendar UI? Install a new plugin. Same events, new interface.
+- Prefer a new note-taking app? It reads from the same EVE. No migration needed.
+
+**AI That Understands You (The Intelligence Hub):**
+
+Our **proprietary Intelligence Hub** (built on LangGraph + Vercel AI SDK) is an AI layer that sits *on top* of your EVE:
+
+- It reads events, understands context, and generates insights.
+- It writes back structured data (new tasks, calendar events, knowledge facts).
+- It respects the Hub Protocol: scoped access, time-limited tokens, full audit trail.
+
+**Example: Natural Language Input**
+
+```
+User types: "Call with Maria at 2pm about Q4 budget review, need to prepare slides"
+
+Intelligence Hub:
+1. Generates access token (scope: ['calendar', 'tasks', 'projects'])
+2. Reads existing Q4 project context
+3. Creates calendar event
+4. Links to project
+5. Creates task: "Prepare slides for Q4 budget review"
+6. All logged in event store
+```
+
+**The "Liberation Button":**
+
+At any point, you can export your entire EVE—every event, every file, every relationship—in **open, portable formats**:
+
+- Events: JSON-LD (linked data standard)
+- Notes: Markdown
+- Structured data: SQLite
+- Files: Original formats (no vendor encoding)
+
+This isn't a "gimped CSV export." This is **your entire digital life, fully reconstructible**, ready to be imported into any compatible system.
+
+### The Future: Event Chain
+
+In the long term, we envision a **distributed Event Chain**: a lightweight blockchain that interconnects individual EVEs.
+
+**Why blockchain here (and not elsewhere)?**
+
+- **Problem**: If you want to collaborate with others (shared projects, team workspaces), how do you sync events between EVEs without a central server?
+- **Solution**: An event-based blockchain. Each EVE can publish select events to a shared chain, creating a **distributed ledger of collaborative work**.
+
+**Key Difference from Web 3**:
+- **No gas fees**: Events are cheap, batched, and subsidized by compute, not speculation.
+- **No tokens**: This isn't a cryptocurrency. It's infrastructure.
+- **Optional**: You can use Synap Core entirely without touching the Event Chain. It's for advanced, distributed use cases.
+
+---
+
+## Technical Details: Security & Performance
+
+### Row-Level Security (RLS)
+
+In multi-user scenarios (teams, organizations), PostgreSQL RLS ensures **automatic data isolation**:
+
+```sql
+-- Enable RLS on events table
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only see their own events
+CREATE POLICY user_isolation ON events
+  FOR ALL
+  USING (user_id = current_setting('app.current_user_id')::UUID);
+```
+
+Now, when a query runs:
+```typescript
+// Set user context
+await db.query("SET app.current_user_id = 'user-123'")
+
+// All queries auto-filtered by user_id
+const events = await db.select().from(events) // Only user-123's events
+```
+
+**Zero trust leakage**—the database enforces isolation at the row level.
+
+### Vector Search (pgvector)
+
+For semantic search and AI features, we use **pgvector** to store embeddings:
+
+```sql
+CREATE EXTENSION vector;
+
+CREATE TABLE entity_vectors (
+  id UUID PRIMARY KEY,
+  entity_id UUID NOT NULL,
+  entity_type TEXT NOT NULL,
+  embedding VECTOR(1536),  -- OpenAI ada-002 dimensions
+  content TEXT,
+  user_id UUID NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for fast similarity search
+CREATE INDEX ON entity_vectors USING ivfflat (embedding vector_cosine_ops);
+```
+
+**Usage**:
+```typescript
+// Semantic search: "Find notes about AI architecture"
+const queryEmbedding = await openai.embeddings.create({
+  input: "AI architecture",
+  model: "text-embedding-3-small"
+})
+
+const results = await db
+  .select()
+  .from(entityVectors)
+  .where(cosineDistance(entityVectors.embedding, queryEmbedding.data[0].embedding).lt(0.3))
+  .limit(10)
+```
+
+Your AI assistant can now **semantically search your entire knowledge base**, not just keyword match.
+
+### The Hub Protocol (AI Integration)
+
+To allow AI agents to access your EVE securely, we implement the **Hub Protocol**:
+
+**1. Token Generation (Scoped, Time-Limited)**
+
+```typescript
+const token = await eve.hub.generateAccessToken({
+  scope: ['notes', 'tasks', 'calendar'],
+  expiresIn: 300 // 5 minutes max
+})
+
+// Returns JWT with:
+// { userId, scope: [...], exp: timestamp }
+```
+
+**2. Data Request (Read-Only)**
+
+```typescript
+const data = await hub.requestData({
+  token,
+  scope: ['tasks'],
+  filters: { status: 'pending' }
+})
+
+// Hub receives ONLY pending tasks, nothing else
+// Every access is logged in event store for audit
+```
+
+**3. Insight Submission (Structured Write)**
+
+```typescript
+await hub.submitInsight({
+  token,
+  insight: {
+    type: 'action_plan',
+    actions: [
+      {
+        eventType: 'task.created',
+        data: { title: 'Review Q4 slides', dueDate: '2025-05-14' }
+      }
+    ],
+    confidence: 0.95,
+    reasoning: 'Based on calendar event and project context'
+  }
+})
+
+// EVE transforms insight → events
+// User can review/approve before execution
+```
+
+**Security guarantees**:
+- Tokens expire in minutes (not hours/days)
+- Scoped access (can't request more than granted)
+- Audit log (every access recorded)
+- User approval required for writes (unless pre-authorized)
+
+### Storage Abstraction (Hybrid Model)
+
+Metadata lives in PostgreSQL. Content lives in object storage (R2/MinIO):
+
+```typescript
+// Upload a note
+const content = "# Meeting Notes\\n\\nDiscussed Q4 budget..."
+const path = storage.buildPath(userId, 'note', noteId, 'md')
+
+const file = await storage.upload(path, content, {
+  contentType: 'text/markdown'
+})
+
+// Metadata in PostgreSQL
+await db.insert(entities).values({
+  id: noteId,
+  userId,
+  type: 'note',
+  title: 'Meeting Notes',
+  filePath: file.path,
+  fileUrl: file.signedUrl // Time-limited access URL
+})
+```
+
+**Why hybrid?**
+- **Cost**: Object storage (R2) is 10x cheaper than PostgreSQL for large files.
+- **Performance**: Metadata queries are fast (indexed in PostgreSQL).
+- **Scalability**: Content scales independently of database.
+
+---
+
+## The Economic Model: From Rent to Ownership
+
+### The Problem with SaaS Economics
+
+Traditional SaaS has a fatal flaw: **infrastructure costs scale with users**.
+
+- 1,000 users: $500/month for AWS
+- 10,000 users: $5,000/month
+- 100,000 users: $50,000/month
+- 1,000,000 users: $500,000/month
+
+This cost is **passed on to you** via subscriptions. You pay monthly because *they* pay monthly.
+
+### The Sovereign Stack Model
+
+**Users Pay for Infrastructure (if self-hosted):**
+
+If you run your own EVE:
+- A $5/month VPS can handle 1 user's pod
+- A $50/month server can handle a team of 20
+- **Zero recurring cost to us**
+
+**Apps Pay to Connect (if marketplace):**
+
+- Apps don't store data → no infrastructure costs
+- They charge for **intelligence, UX, and features**
+- We take a 15-30% marketplace fee
+- Result: **Lower prices**, **better quality**, **fierce competition**
+
+**Back to One-Time Purchases:**
+
+Because apps have no ongoing infrastructure costs, they can offer:
+- **Buy once, use forever** (like Web 1.0)
+- Or: **Optional subscriptions** for premium AI features
+
+**Example:**
+
+| Old Model (SaaS) | New Model (Sovereign Stack) |
+|------------------|------------------------------|
+| Notion: $10/month forever | Note-taking app: $20 one-time |
+| Todoist: $5/month forever | Task manager: $15 one-time |
+| Google Workspace: $12/month | Office suite: $50 one-time |
+| **Total: $324/year** | **Total: $85 once** |
+
+Over 5 years:
+- **Old model**: $1,620
+- **New model**: $85 + $5/month EVE hosting = $385
+- **Savings**: $1,235 (76% reduction)
+
+---
+
+## The Path Forward: Adoption Strategy
+
+### Phase 1: Developers
+
+**Target**: Individual developers, tech-savvy early adopters
+
+**Product**:
+- Open-source EVE core
+- Self-hosting guides (Docker one-liner)
+- Basic first-party apps (Universal Input)
+
+**Why developers first?**
+- They understand the value immediately (no vendor lock-in, API-first).
+- They can self-host (no dependency on us).
+- They'll build the first plugins (bootstrapping the ecosystem).
+
+**Go-To-Market**:
+- Open source (GitHub)
+- Dev community (Hacker News, Reddit, Dev.to)
+- Technical content (architecture deep-dives, tutorials)
+
+### Phase 2: Knowledge Workers
+
+**Target**: Freelancers, consultants, creatives, privacy-conscious professionals
+
+**Product**:
+- Managed hosting option ($5-15/month)
+- Expanded first-party apps (notes, tasks, CRM)
+- Marketplace launch (community plugins)
+
+**Why knowledge workers?**
+- They pay for productivity tools (proven market).
+- They hate vendor lock-in (high switching costs).
+- They value privacy (don't want data in big tech clouds).
+
+**Go-To-Market**:
+- Content marketing (case studies, comparisons)
+- Vertical apps (e.g., "Kickoff" for entrepreneurs)
+- Freemium model (hosted EVE with limits)
+
+### Phase 3: Teams
+
+**Target**: Small-to-medium teams (10-100 people)
+
+**Product**:
+- Collaboration features (shared workspaces, permissions)
+- Team on-premise deployment
+- SSO, audit logs, compliance features
+
+**Why teams?**
+- Higher LTV (10-100 users per account)
+- Network effects (more users = more valuable)
+- Enterprise demand (privacy + control)
+
+**Go-To-Market**:
+- Team plans ($10-20/user/month or self-hosted)
+- Referral programs
+- Case studies from early adopters
+
+### Regulatory Tailwinds
+
+The **EU Data Act (2025)** mandates:
+- Data portability between platforms
+- Interoperability of digital services
+- User control over data
+
+This regulation makes **vendor lock-in illegal**. Companies that don't adapt will face fines up to **4% of global revenue**.
+
+**Our position**: We're not just compliant—we're **native to this future**. When regulation forces competitors to retrofit portability, we'll have it by design.
+
+---
+
+## Conclusion: A Call to Build
+
+This isn't just about better software. It's about **restoring human dignity in the digital world**.
+
+We've spent two decades surrendering our digital sovereignty—fragmenting our identities, renting our memories, and accepting that the tools we use every day are not truly ours.
+
+**It doesn't have to be this way.**
+
+With event sourcing, open standards, and the right economic model, we can build a web where:
+- You **own** your data, not rent access to it.
+- Apps **compete** on quality, not lock-in.
+- Intelligence **serves** you, not surveils you.
+- Your digital life is **portable**, **private**, and **yours**.
+
+This is **Web 2.5**: the synthesis of everything we learned.
+
+The technology exists. The regulatory momentum is here. The demand is proven.
+
+**All that's missing is the will to build it.**
+
+Join us.
+
+---
+
+**Learn More:**
+- **Home**: [synap.sh](/)
+- **For Developers**: [synap.sh/developers](/developers)
+- **GitHub**: [github.com/synap/core](https://github.com/Synap-core/backend)
+- **Discord**: [discord.gg/synap](https://discord.gg/synap)
+
+**License**: This whitepaper is released under CC BY-SA 4.0. The Synap Core codebase is MIT licensed.
+
+---
+
+*Version 1.1 • November 2024*  
+*Written by Antoine • Founder, Synap Core*

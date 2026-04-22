@@ -1,0 +1,447 @@
+# Synap AI: Vision & Philosophy
+
+_Collaborative Intelligence Without Lock-In_
+
+---
+
+## Executive Summary
+
+**Synap AI** is a multi-agent intelligence system built on an open-source foundation that gives users **true ownership** of their AI capabilities.
+
+**One-Sentence Pitch:**  
+Synap provides ChatGPT-level AI assistance with infinite context, multi-agent collaboration, and conversation branching—while keeping your data and AI logic fully under your control.
+
+**Who It's For:**
+
+- Power users frustrated by AI limitations
+- Teams wanting AI without vendor lock-in
+- Developers building custom AI workflows
+- Organizations with data sovereignty requirements
+
+**Core Value Proposition:**
+
+- ✅ **Never Locked In:** Open-source backend means your data is portable
+- ✅ **Bring Your Own AI:** Use our agents, marketplace agents, or build your own
+- ✅ **Infinite Conversations:** No context limits, branching, full history
+- ✅ **Multi-Agent Collaboration:** 15+ specialized agents working together
+- ✅ **Human-in-the-Loop:** AI proposes, you approve—full transparency
+
+---
+
+## The Problem with Current AI Assistants
+
+### ChatGPT / Claude
+
+**What They Do Well:**
+
+- Powerful language models
+- General-purpose assistance
+- Good UI/UX
+
+**Critical Limitations:**
+
+- ❌ **Context Limits:** 32K-200K tokens, then forget
+- ❌ **Vendor Lock-In:** Your conversations locked in their platform
+- ❌ **Single Model:** One AI for everything
+- ❌ **No Branching:** Linear conversations only
+- ❌ **No Data Integration:** Can't access your knowledge base
+- ❌ **Black Box:** Can't customize or extend
+
+### Notion AI / Microsoft Copilot
+
+**What They Do Well:**
+
+- Integrated into existing tools
+- Contextual assistance
+
+**Critical Limitations:**
+
+- ❌ **Limited Scope:** Editing only, no autonomous actions
+- ❌ **Shallow Integration:** Surface-level data access
+- ❌ **Proprietary:** Can't customize or extend
+- ❌ **Expensive:** $10-20/user/month add-on
+
+### GitHub Copilot
+
+**What They Do Well:**
+
+- Excellent code generation
+- IDE integration
+
+**Critical Limitations:**
+
+- ❌ **Code Only:** No broader knowledge work
+- ❌ **Proprietary:** Black box model
+- ❌ **No Autonomy:** Suggestions only, no actions
+
+---
+
+## Synap's Philosophy: Open Intelligence
+
+### Core Principle: Your Data, Your AI, Your Rules
+
+**Open-Source Backend:**
+
+```
+Your Data Pod (Open Source)
+    ├─ PostgreSQL Database (you own)
+    ├─ API Layer (you control)
+    ├─ Event System (you extend)
+    └─ Hub Protocol (you integrate)
+```
+
+**What This Means:**
+
+- ✅ **Data Portability:** Export everything, anytime
+- ✅ **Self-Hosting:** Run on your infrastructure
+- ✅ **Customization:** Modify to your needs
+- ✅ **Integration:** Connect any tool or AI
+- ✅ **Privacy:** Data never leaves your control
+
+**Proprietary Intelligence Layer (Optional):**
+
+```
+Intelligence Service (Synap Hosted)
+    ├─ 15+ Specialized Agents
+    ├─ Multi-Agent Orchestration
+    ├─ Memory Management
+    └─ Advanced Features
+```
+
+**But You're Not Locked In:**
+
+- ✅ Use our AI agents (convenient)
+- ✅ OR use marketplace agents (community)
+- ✅ OR build your own agents (ultimate control)
+- ✅ OR mix and match (best of all worlds)
+
+---
+
+## The Hub Protocol: AI Interoperability
+
+### What Is Hub Protocol?
+
+**Hub Protocol** is an open standard for AI services to communicate with your data pod.
+
+**Think of it as:**
+
+- "USB for AI" - Plug in any intelligence source
+- "Docker for Agents" - Standard interface for AI services
+- "OAuth for Intelligence" - Secure, scoped access
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────┐
+│ YOUR DATA POD (Open Source)                     │
+│ - Your documents, tasks, contacts               │
+│ - Your conversation history                     │
+│ - Your knowledge graph                          │
+└────────────┬────────────────────────────────────┘
+             │ Hub Protocol (Standard API)
+      ───────┴──────────────────────────
+      │              │              │
+┌─────▼─────┐  ┌────▼────┐  ┌──────▼──────┐
+│ Synap AI  │  │ OpenAI  │  │ Your Custom │
+│ (Default) │  │ Agents  │  │ Agents      │
+└───────────┘  └─────────┘  └─────────────┘
+```
+
+**Any AI service that implements Hub Protocol can:**
+
+- ✅ Read your data (with permission)
+- ✅ Propose actions (you approve)
+- ✅ Execute operations (after approval)
+- ✅ Access conversation history
+- ✅ Use your memory and context
+
+**This Means:**
+
+- ✅ **No Vendor Lock-In:** Switch AI providers anytime
+- ✅ **Mix & Match:** Use multiple AI services together
+- ✅ **Future-Proof:** New AIs plug in without migration
+- ✅ **Competitive Market:** AIs compete for your business
+
+### Examples
+
+**Scenario 1: Use Synap's Hosted AI**
+
+```
+You → Data Pod → Hub Protocol → Synap Intelligence Service
+(Easy, managed, 15+ agents ready)
+```
+
+**Scenario 2: Bring Your Own AI**
+
+```
+You → Data Pod → Hub Protocol → Your OpenAI Agent
+(Full control, custom logic)
+```
+
+**Scenario 3: Marketplace Agent**
+
+```
+You → Data Pod → Hub Protocol → Community CTO Agent
+(Specialized expertise, one-click install)
+```
+
+**Scenario 4: Multi-Provider**
+
+```
+You → Data Pod → Hub Protocol ──┬─→ Synap (orchestration)
+                                ├─→ Perplexity (research)
+                                ├─→ GitHub Copilot (code)
+                                └─→ Your Custom (domain logic)
+```
+
+---
+
+## Core Principles
+
+### 1. User Owns Their Data
+
+**Not just "privacy-friendly" - actual ownership:**
+
+- ✅ Open-source backend you can self-host
+- ✅ Standard PostgreSQL database (export anytime)
+- ✅ No proprietary formats or lock-in
+- ✅ Data portability guaranteed by design
+
+**Contrast:**
+
+- ChatGPT: Your data on OpenAI servers
+- Notion: Your data in Notion's format
+- Synap: Your data in **your** database
+
+### 2. Transparent AI Actions
+
+**You see everything the AI does:**
+
+- ✅ AI explains its reasoning
+- ✅ AI shows proposed actions before executing
+- ✅ You approve or reject each action
+- ✅ Full audit trail of AI decisions
+
+**Why This Matters:**
+
+- Build trust gradually
+- Prevent AI mistakes
+- Learn how AI thinks
+- Control over automation level
+
+### 3. Specialized Expertise
+
+**Right AI for the right task:**
+
+- Research Agent for deep analysis
+- Writer Agent for content creation
+- Code Agent for programming
+- Business Agent for strategy
+- **15+ specialists working together**
+
+**Contrast:**
+
+- ChatGPT: One model for everything
+- Synap: Specialized agents collaborating
+
+### 4. Collaborative, Not Autonomous
+
+**AI as partner, not replacement:**
+
+- ✅ AI proposes, you decide
+- ✅ AI assists, you control
+- ✅ AI learns, you teach
+- ✅ AI scales, you lead
+
+**Philosophy:**
+
+- Augment human intelligence
+- Don't replace human judgment
+- Transparency over autonomy
+- Partnership over automation
+
+### 5. Infinite Context Without Limits
+
+**Never lose conversation context:**
+
+- ✅ Unlimited conversation length
+- ✅ Full history always accessible
+- ✅ Branching for parallel exploration
+- ✅ Memory across sessions
+
+**Contrast:**
+
+- ChatGPT: 32K tokens, then forgets
+- Claude: 200K tokens max
+- Synap: Infinite with smart management
+
+### 6. Open > Proprietary
+
+**Open-source foundation enables:**
+
+- ✅ Community contributions
+- ✅ Custom extensions
+- ✅ Self-hosting option
+- ✅ Marketplace ecosystem
+- ✅ Long-term viability (can't be shut down)
+
+---
+
+## What Makes Synap Different
+
+| Feature                | ChatGPT      | Notion AI    | Claude Projects | **Synap**                  |
+| ---------------------- | ------------ | ------------ | --------------- | -------------------------- |
+| **Data Ownership**     | OpenAI owns  | Notion owns  | Anthropic owns  | **You own**                |
+| **Open Source**        | ❌ No        | ❌ No        | ❌ No           | **✅ Yes (backend)**       |
+| **Self-Hosting**       | ❌ No        | ❌ No        | ❌ No           | **✅ Yes**                 |
+| **Context Limit**      | 32K tokens   | Page-scoped  | 200K tokens     | **∞ Infinite**             |
+| **Branching**          | ❌ No        | ❌ No        | ❌ No           | **✅ Yes**                 |
+| **Multi-Agent**        | Single model | Single model | Single model    | **✅ 15+ agents**          |
+| **Autonomous Actions** | ❌ No        | Limited      | ❌ No           | **✅ Yes (with approval)** |
+| **API Access**         | ✅ Yes ($)   | Limited      | ✅ Yes ($)      | **✅ Yes (free)**          |
+| **Bring Your Own AI**  | ❌ No        | ❌ No        | ❌ No           | **✅ Yes (Hub Protocol)**  |
+| **Marketplace**        | ❌ No        | ❌ No        | ❌ No           | **✅ Coming**              |
+| **Memory**             | Session only | Page-scoped  | Project-scoped  | **✅ Persistent**          |
+| **Cost**               | $20/mo       | $10/user     | $20/mo          | **€19/mo**                 |
+
+---
+
+## Vision for the Future
+
+### Short-Term (2025)
+
+**Goal:** Best multi-agent AI assistant with open foundation
+
+**Milestones:**
+
+- ✅ 15+ specialized agents operational
+- ✅ Infinite chat with branching
+- ✅ Open-source backend released
+- ✅ Hub Protocol v1 specification
+- 🔜 Marketplace beta (Q2 2025)
+- 🔜 Self-hosting guide (Q2 2025)
+
+### Medium-Term (2026)
+
+**Goal:** Platform for collaborative intelligence
+
+**Vision:**
+
+- **Agent Marketplace:** Community-created specialists
+- **Workflow Automation:** Visual builder for AI workflows
+- **Team Collaboration:** Shared conversations (opt-in)
+- **Advanced Memory:** Long-term learning and adaptation
+- **Integration Ecosystem:** Third-party tools and services
+
+### Long-Term (2027+)
+
+**Goal:** Operating system for knowledge work
+
+**Vision:**
+
+- **AI-Native Workspace:** Everything AI-enhanced
+- **Federated Intelligence:** Connect multiple data pods
+- **Collaborative AI:** Agents from different sources working together
+- **Knowledge Graphs:** Deep understanding of connections
+- **Proactive Intelligence:** AI anticipates needs
+
+---
+
+## Why Open Source + Hub Protocol Changes Everything
+
+### For Users
+
+- ✅ **Never Locked In:** Switch providers, export data, self-host
+- ✅ **Better AI:** Competition drives quality up, prices down
+- ✅ **Privacy Control:** Data stays where you want it
+- ✅ **Customization:** Modify and extend as needed
+
+### For Developers
+
+- ✅ **Build on Open Foundation:** Contribute, extend, monetize
+- ✅ **Standard Interface:** Hub Protocol = write once, work everywhere
+- ✅ **Marketplace Opportunity:** Sell specialized agents
+- ✅ **No Platform Risk:** Can't be shut down or de-platformed
+
+### For Organizations
+
+- ✅ **Data Sovereignty:** Keep sensitive data on-premises
+- ✅ **Compliance:** Meet regulatory requirements
+- ✅ **Integration:** Connect to internal systems
+- ✅ **Long-Term Viability:** Open source can't be discontinued
+
+### For the Industry
+
+- ✅ **AI Interoperability:** Standard protocol for AI services
+- ✅ **Innovation:** Lower barriers to entry
+- ✅ **Competition:** Break vendor lock-in monopolies
+- ✅ **User Empowerment:** Put control back in users' hands
+
+---
+
+## The Synap Difference: A Story
+
+**Alice (Startup Founder) Using ChatGPT:**
+
+```
+Week 1: "Research competitors" → Loses context after 20 messages
+Week 2: Starts new chat, repeats research
+Week 3: Wants to compare findings → Copies/pastes between chats
+Week 4: ChatGPT updates, conversation style changes
+Week 5: Considers switching to Claude → Must start over, no data export
+Outcome: Frustrated, fragmented, locked in
+```
+
+**Alice Using Synap:**
+
+```
+Week 1: "Research competitors" → Research Agent creates branch
+        Findings auto-saved, context preserved
+Week 2: "Write competitive analysis" → Writer Agent uses research branch
+        Seamless access to all research
+Week 3: "Create tasks from analysis" → Task Agent proposes actions
+        Alice approves, tasks created automatically
+Week 4: Decides to try marketplace CTO Agent for technical decisions
+        Hub Protocol connects instantly, full context available
+Week 5: Company pivot → Exports entire conversation history
+        Sets up on-premises instance for sensitive data
+Outcome: Productive, integrated, in control
+```
+
+---
+
+## Conclusion
+
+**Synap AI is not just another AI assistant.**
+
+It's a **new paradigm for collaborative intelligence:**
+
+- Built on **open-source** foundation (your data, your control)
+- Powered by **Hub Protocol** (bring any AI, avoid lock-in)
+- Enhanced with **multi-agent collaboration** (right expert for each task)
+- Designed for **infinite context** (never lose conversation thread)
+- Architected for **transparency** (AI proposes, you approve)
+
+**Our Mission:**
+
+> Make powerful AI assistance accessible, transparent, and under user control—without vendor lock-in or black-box limitations.
+
+**Our Commitment:**
+
+- Backend will always be open source
+- Hub Protocol will remain an open standard
+- Users will always own their data
+- No forced upgrades or platform risk
+
+**Join us in building the future of collaborative intelligence.**
+
+---
+
+_Synap: Your Intelligence, Your Rules_
+
+## Related
+
+- [AI Capabilities Guide](./ai-capabilities-guide.mdx) — user-facing capabilities overview
+- [Agent System](./agent-system.mdx) — concrete agent architecture
+- [External Agents](./external-agents.mdx) — integration architecture
+- [Hub Protocol](../platform/hub-protocol.mdx) — interoperability protocol

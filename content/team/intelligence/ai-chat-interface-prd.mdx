@@ -1,0 +1,1267 @@
+# AI Chat Interface: Complete Frontend PRD
+
+**Date**: 2026-01-08  
+**Purpose**: Comprehensive specification for AI chat visualization system  
+**Scope**: Data layer + Component specifications for AI-powered design generation
+
+---
+
+## 📋 Table of Contents
+
+1. [Part 1: Data Layer Analysis](#part-1-data-layer-analysis)
+2. [Part 2: Component Specifications](#part-2-component-specifications)
+3. [Part 3: Design Requirements](#part-3-design-requirements)
+
+---
+
+# Part 1: Data Layer Analysis
+
+## 🔍 Existing Frontend Infrastructure
+
+### Current Hooks (`synap-app/packages/synap-hooks/src/`)
+
+#### Chat-Related Hooks ✅
+
+**1. `useChatMessages.ts`**
+
+```typescript
+/**
+ * Fetch chat messages with infinite scroll
+ */
+export function useChatMessages(
+  chatId: string,
+  options?: { limit?: number; enabled?: boolean }
+) {
+  return trpc.chat.getMessages.useInfiniteQuery(
+    { chatId, limit },
+    {
+      enabled: enabled && !!chatId,
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+    }
+  );
+}
+```
+
+**Status**: ✅ Exists  
+**What it does**: Fetches messages with pagination  
+**Gap**: No support for branch messages, AI steps, tool calls
+
+---
+
+**2. `useSendMessage.ts`**
+
+```typescript
+/**
+ * Send chat messages with optimistic updates
+ */
+export function useSendMessage(chatId: string) {
+  return trpc.chat.sendMessage.useMutation({
+    onMutate: async (newMessage) => {
+      // Optimistic update
+      utils.chat.getMessages.setInfiniteData({ chatId }, (old) => ({
+        ...old,
+        pages: [
+          {
+            messages: [
+              ...old.pages[0].messages,
+              { id: "temp", role: "user", content: newMessage.content },
+            ],
+          },
+        ],
+      }));
+    },
+    onSuccess: () => {
+      utils.chat.getMessages.invalidate({ chatId });
+    },
+  });
+}
+```
+
+**Status**: ✅ Exists  
+**What it does**: Sends messages with optimistic UI  
+**Gap**: No support for streaming, AI steps, tool execution
+
+---
+
+**3. `useApprovals.ts`**
+
+```typescript
+/**
+ * Manage AI action approvals
+ */
+export function useApprovals(userId: string) {
+  // Fetch pending approvals
+  const { data: approvals } = trpc.approvals.getPending.useQuery({ userId });
+
+  // Approve action
+  const approve = trpc.approvals.approve.useMutation();
+
+  // Reject action
+  const reject = trpc.approvals.reject.useMutation();
+
+  return { approvals, approve, reject };
+}
+```
+
+**Status**: ✅ Exists  
+**What it does**: Manages AI action approvals  
+**Gap**: Not integrated with chat UI, no inline approval display
+
+---
+
+**4. `useDocumentProposals.ts`**
+
+```typescript
+/**
+ * Manage document edit proposals from AI
+ */
+export function useDocumentProposals(documentId?: string) {
+  const { data: proposals } = trpc.documents.getProposals.useQuery(
+    { documentId },
+    { enabled: !!documentId }
+  );
+
+  const accept = trpc.documents.acceptProposal.useMutation();
+  const reject = trpc.documents.rejectProposal.useMutation();
+
+  return { proposals, accept, reject };
+}
+```
+
+**Status**: ✅ Exists  
+**What it does**: Manages document proposals  
+**Gap**: Not integrated with chat, no diff visualization
+
+---
+
+**5. `useTypedEvents.ts`**
+
+```typescript
+/**
+ * Subscribe to real-time events
+ */
+export function useChatMessage(
+  threadId: string,
+  handler: (event: ChatMessageEvent) => void
+) {
+  useSocketEvent<ChatMessageEvent>("chat:message", filteredHandler, [threadId]);
+}
+
+export function useChatStream(
+  threadId: string,
+  handler: (event: ChatStreamEvent) => void
+) {
+  useSocketEvent<ChatStreamEvent>("chat:stream", filteredHandler, [threadId]);
+}
+```
+
+**Status**: ✅ Exists  
+**What it does**: Real-time message and streaming events  
+**Gap**: No events for AI steps, tool calls, branch creation
+
+---
+
+#### Missing Hooks ❌
+
+**1. `useChatThread.ts`** - NOT FOUND
+
+```typescript
+// NEEDED: Thread management with branching
+export function useChatThread(threadId: string) {
+  const { data: thread } = trpc.chat.getThread.useQuery({ threadId });
+  const { data: branches } = trpc.chat.getBranches.useQuery({
+    parentThreadId: threadId,
+  });
+  const createBranch = trpc.chat.createBranch.useMutation();
+  const mergeBranch = trpc.chat.mergeBranch.useMutation();
+
+  return { thread, branches, createBranch, mergeBranch };
+}
+```
+
+**2. `useAISteps.ts`** - NOT FOUND
+
+```typescript
+// NEEDED: Track AI assistant steps (thinking, tool calls, etc.)
+export function useAISteps(messageId: string) {
+  const { data: steps } = trpc.chat.getAISteps.useQuery({ messageId });
+
+  return { steps };
+}
+```
+
+**3. `useStreamingMessage.ts`** - NOT FOUND
+
+```typescript
+// NEEDED: Handle streaming AI responses
+export function useStreamingMessage(threadId: string) {
+  const [streamingContent, setStreamingContent] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  useChatStream(threadId, (event) => {
+    if (event.type === "start") setIsStreaming(true);
+    if (event.type === "chunk")
+      setStreamingContent((prev) => prev + event.content);
+    if (event.type === "end") setIsStreaming(false);
+  });
+
+  return { streamingContent, isStreaming };
+}
+```
+
+---
+
+### Current Stores (Zustand/Jotai)
+
+**Status**: NOT FOUND in hooks package
+
+**Needed Stores:**
+
+**1. Chat UI State Store**
+
+```typescript
+interface ChatUIStore {
+  // Active thread
+  activeThreadId: string | null;
+  setActiveThread: (id: string) => void;
+
+  // Branch visualization
+  showBranches: boolean;
+  toggleBranches: () => void;
+
+  // AI steps visibility
+  expandedSteps: Set<string>; // message IDs
+  toggleSteps: (messageId: string) => void;
+
+  // Parallel view
+  parallelThreads: string[]; // thread IDs shown side-by-side
+  addParallelThread: (id: string) => void;
+  removeParallelThread: (id: string) => void;
+}
+```
+
+**2. Streaming State Store**
+
+```typescript
+interface StreamingStore {
+  // Active streams by thread
+  streams: Map<
+    string,
+    {
+      messageId: string;
+      content: string;
+      steps: AIStep[];
+      isComplete: boolean;
+    }
+  >;
+
+  addChunk: (threadId: string, chunk: string) => void;
+  addStep: (threadId: string, step: AIStep) => void;
+  completeStream: (threadId: string) => void;
+  clearStream: (threadId: string) => void;
+}
+```
+
+---
+
+### Current Types (`@synap-core/types`)
+
+**Existing Types:**
+
+```typescript
+// From synap-hooks/src/types.ts
+export interface ChatMessageEvent {
+  chatId: string;
+  message: {
+    id: string;
+    role: "user" | "assistant" | "system";
+    content: string;
+    createdAt: Date;
+  };
+}
+
+export interface ChatStreamEvent {
+  chatId: string;
+  chunk: string;
+  isComplete: boolean;
+}
+```
+
+**Missing Types:**
+
+```typescript
+// AI Assistant Steps
+export interface AIStep {
+  id: string;
+  type:
+    | "thinking"
+    | "tool_call"
+    | "tool_result"
+    | "verification"
+    | "branch_proposal";
+  timestamp: Date;
+  data: AIStepData;
+}
+
+export type AIStepData =
+  | ThinkingStep
+  | ToolCallStep
+  | ToolResultStep
+  | VerificationStep
+  | BranchProposalStep;
+
+export interface ThinkingStep {
+  type: "thinking";
+  title: string; // "Analyzing request..."
+  description?: string;
+}
+
+export interface ToolCallStep {
+  type: "tool_call";
+  toolName: string; // "vector_search"
+  toolDescription: string; // "Searching knowledge base"
+  args: Record<string, any>;
+  status: "pending" | "running" | "complete" | "error";
+}
+
+export interface ToolResultStep {
+  type: "tool_result";
+  toolName: string;
+  result: any;
+  summary: string; // "Found 5 relevant documents"
+}
+
+export interface VerificationStep {
+  type: "verification";
+  action: {
+    type:
+      | "create_entity"
+      | "update_entity"
+      | "create_document"
+      | "update_document";
+    description: string;
+    data: any;
+  };
+  status: "pending" | "approved" | "rejected";
+  approvalId?: string;
+}
+
+export interface BranchProposalStep {
+  type: "branch_proposal";
+  purpose: string; // "Research competitors"
+  agentType: string; // "research-agent"
+  reason: string; // "This requires deep analysis"
+  status: "pending" | "accepted" | "rejected";
+  branchId?: string;
+}
+
+// Thread with branches
+export interface ChatThread {
+  id: string;
+  userId: string;
+  threadType: "main" | "branch";
+  parentThreadId?: string;
+  branchedFromMessageId?: string;
+  branchPurpose?: string;
+  agentId: string;
+  status: "active" | "merged" | "archived";
+  contextSummary?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Message with AI steps
+export interface ChatMessage {
+  id: string;
+  threadId: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  aiSteps?: AIStep[]; // AI assistant's thinking process
+  entities?: ExtractedEntity[]; // Entities mentioned/created
+  proposals?: ActionProposal[]; // Actions requiring approval
+  createdAt: Date;
+  hash: string;
+  previousHash?: string;
+}
+
+// Extracted entities
+export interface ExtractedEntity {
+  type: "task" | "contact" | "meeting" | "idea" | "project";
+  title: string;
+  description?: string;
+  properties?: Record<string, any>;
+  confidence: number; // 0-1
+}
+
+// Action proposals
+export interface ActionProposal {
+  id: string;
+  type:
+    | "create_entity"
+    | "update_entity"
+    | "create_document"
+    | "update_document";
+  description: string;
+  data: any;
+  status: "pending" | "approved" | "rejected";
+  createdAt: Date;
+}
+
+// Branch visualization
+export interface BranchNode {
+  thread: ChatThread;
+  children: BranchNode[];
+  messageCount: number;
+  lastActivity: Date;
+  status: "active" | "merged" | "archived";
+}
+```
+
+---
+
+## 📊 Data Flow Architecture
+
+### Current Flow (Simple Chat)
+
+```
+User Input
+    ↓
+useSendMessage() → tRPC → Backend
+    ↓
+Optimistic Update (local)
+    ↓
+Real Response → useChatMessages() → UI Update
+```
+
+### Needed Flow (AI Chat with Steps)
+
+```
+User Input
+    ↓
+useSendMessage() → tRPC → Backend → Intelligence Service
+    ↓                                      ↓
+Optimistic Update                    AI Processing
+    ↓                                      ↓
+useStreamingMessage()  ←─────  Real-time Events (Socket.IO)
+    ↓                                      ↓
+Streaming UI                         AI Steps Emitted:
+    ├─ Thinking: "Analyzing..."           - thinking
+    ├─ Tool Call: "Searching..."          - tool_call
+    ├─ Tool Result: "Found 5 docs"        - tool_result
+    ├─ Verification: "Create task?"       - verification
+    └─ Final Response                     - complete
+         ↓
+    useChatMessages() → Full Message with Steps
+```
+
+### Real-Time Events Needed
+
+```typescript
+// New socket events to add
+export interface AIStepEvent {
+  threadId: string;
+  messageId: string;
+  step: AIStep;
+}
+
+export interface BranchCreatedEvent {
+  parentThreadId: string;
+  branchThread: ChatThread;
+  reason: string;
+}
+
+export interface BranchMergedEvent {
+  branchId: string;
+  parentThreadId: string;
+  summary: string;
+}
+
+export interface VerificationRequestEvent {
+  threadId: string;
+  messageId: string;
+  proposal: ActionProposal;
+}
+```
+
+---
+
+# Part 2: Component Specifications
+
+## 🎨 Component Hierarchy
+
+```
+<ChatWorkspace>
+  ├─ <ChatThreadList>          # Sidebar: All threads
+  │   └─ <ThreadItem>          # Individual thread preview
+  │
+  ├─ <ChatView mode="single">  # Main chat area
+  │   ├─ <ChatHeader>          # Thread title, agent, actions
+  │   ├─ <MessageList>         # Scrollable messages
+  │   │   └─ <MessageBubble>   # Individual message
+  │   │       ├─ <MessageContent>
+  │   │       ├─ <AIStepsPanel>     # Expandable AI steps
+  │   │       │   ├─ <ThinkingStep>
+  │   │       │   ├─ <ToolCallStep>
+  │   │       │   ├─ <ToolResultStep>
+  │   │       │   └─ <VerificationStep>
+  │   │       ├─ <EntityExtraction>  # Extracted entities
+  │   │       └─ <ActionProposals>   # Approval UI
+  │   └─ <ChatInput>           # Message input
+  │
+  ├─ <ChatView mode="parallel"> # Parallel view
+  │   ├─ <ParallelColumn thread={thread1}>
+  │   ├─ <ParallelColumn thread={thread2}>
+  │   └─ <ParallelColumn thread={thread3}>
+  │
+  └─ <BranchVisualization>     # Tree/graph view
+      ├─ <BranchTree>          # Hierarchical tree
+      │   └─ <BranchNode>      # Individual branch
+      └─ <BranchTimeline>      # Temporal view
+```
+
+---
+
+## 📦 Component Specifications
+
+### 1. `<MessageBubble>`
+
+**Purpose**: Display a single chat message with AI steps, entities, and proposals
+
+**Props**:
+
+```typescript
+interface MessageBubbleProps {
+  message: ChatMessage;
+  isStreaming?: boolean;
+  onApprove?: (proposalId: string) => void;
+  onReject?: (proposalId: string) => void;
+  onCreateBranch?: (purpose: string, agentType: string) => void;
+}
+```
+
+**State**:
+
+```typescript
+interface MessageBubbleState {
+  stepsExpanded: boolean;
+  entitiesExpanded: boolean;
+  proposalsExpanded: boolean;
+}
+```
+
+**Visual Structure**:
+
+```
+┌─────────────────────────────────────────────┐
+│ 👤 User                        12:34 PM     │
+│                                             │
+│ Can you research our competitors?          │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ 🤖 AI Assistant (Research)     12:34 PM     │
+│                                             │
+│ I'll research your competitors. Let me     │
+│ start by searching your knowledge base.    │
+│                                             │
+│ ┌─ AI Steps (3) ────────────────────┐     │
+│ │ ✓ Thinking: Analyzing request      │     │
+│ │ ⟳ Tool: vector_search              │     │
+│ │   └─ Searching knowledge base...   │     │
+│ │ ⏸ Waiting: Create branch?          │     │
+│ └────────────────────────────────────┘     │
+│                                             │
+│ ┌─ Branch Proposal ──────────────────┐     │
+│ │ 📊 Research: "Competitor Analysis"  │     │
+│ │ Agent: research-agent               │     │
+│ │                                     │     │
+│ │ [Accept] [Reject]                   │     │
+│ └────────────────────────────────────┘     │
+└─────────────────────────────────────────────┘
+```
+
+**Design Requirements**:
+
+- **User messages**: Right-aligned, blue background
+- **AI messages**: Left-aligned, gray background
+- **Streaming**: Typing indicator, progressive text reveal
+- **Steps**: Collapsible panel with icons per step type
+- **Proposals**: Inline approval buttons with preview
+- **Entities**: Pill-style tags with entity type icons
+- **Animations**: Smooth expand/collapse, step transitions
+
+---
+
+### 2. `<AIStepsPanel>`
+
+**Purpose**: Show AI's thinking process and tool executions
+
+**Props**:
+
+```typescript
+interface AIStepsPanelProps {
+  steps: AIStep[];
+  isStreaming?: boolean;
+  expanded?: boolean;
+  onToggle?: () => void;
+}
+```
+
+**Step Types Visual Design**:
+
+**Thinking Step**:
+
+```
+┌─────────────────────────────────┐
+│ 🧠 Thinking                     │
+│ Analyzing your request...       │
+│ ────────────────────────── 2s   │
+└─────────────────────────────────┘
+```
+
+**Tool Call Step**:
+
+```
+┌─────────────────────────────────┐
+│ 🔧 vector_search                │
+│ Searching knowledge base        │
+│ ┌─ Args ─────────────────┐     │
+│ │ query: "competitors"    │     │
+│ │ limit: 10               │     │
+│ └─────────────────────────┘     │
+│ ⟳ Running... 1.2s               │
+└─────────────────────────────────┘
+```
+
+**Tool Result Step**:
+
+```
+┌─────────────────────────────────┐
+│ ✓ vector_search                 │
+│ Found 5 relevant documents      │
+│ ┌─ Results ───────────────┐     │
+│ │ • Competitor Analysis    │     │
+│ │ • Market Research 2024   │     │
+│ │ • Pricing Comparison     │     │
+│ │ [View All]               │     │
+│ └─────────────────────────┘     │
+│ ✓ Completed in 1.2s             │
+└─────────────────────────────────┘
+```
+
+**Verification Step**:
+
+```
+┌─────────────────────────────────┐
+│ ⏸ Verification Required         │
+│ Create entity: Task             │
+│ ┌─ Details ───────────────┐     │
+│ │ Title: "Research comp."  │     │
+│ │ Type: task               │     │
+│ │ Due: Tomorrow            │     │
+│ └─────────────────────────┘     │
+│ [Approve] [Reject]              │
+└─────────────────────────────────┘
+```
+
+**Design Requirements**:
+
+- **Icons**: Unique icon per step type (thinking, tool, verification)
+- **Status indicators**: Pending (⏸), Running (⟳), Complete (✓), Error (✗)
+- **Timing**: Show duration for each step
+- **Expandable details**: Click to see full args/results
+- **Progressive reveal**: Steps appear as they happen (streaming)
+- **Color coding**:
+  - Thinking: Blue
+  - Tool calls: Purple
+  - Results: Green
+  - Verification: Orange
+  - Errors: Red
+
+---
+
+### 3. `<VerificationStep>` / `<ActionProposals>`
+
+**Purpose**: Display AI action proposals requiring user approval
+
+**Props**:
+
+```typescript
+interface ActionProposalsProps {
+  proposals: ActionProposal[];
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onModify?: (id: string, data: any) => void;
+}
+```
+
+**Visual Design**:
+
+**Create Entity Proposal**:
+
+```
+┌─────────────────────────────────────────┐
+│ 📝 Create Task                          │
+│                                         │
+│ Title: "Research competitors"           │
+│ Description: "Analyze top 5 SaaS..."    │
+│ Due: Tomorrow, 5:00 PM                  │
+│                                         │
+│ [✓ Approve] [✗ Reject] [✏️ Modify]      │
+└─────────────────────────────────────────┘
+```
+
+**Update Document Proposal**:
+
+```
+┌─────────────────────────────────────────┐
+│ 📄 Update Document: "Pricing Strategy"  │
+│                                         │
+│ ┌─ Changes ──────────────────────┐     │
+│ │ - Old: "$99/month"              │     │
+│ │ + New: "$149/month"             │     │
+│ │                                 │     │
+│ │ - Old: "Basic features"         │     │
+│ │ + New: "Premium features"       │     │
+│ └─────────────────────────────────┘     │
+│                                         │
+│ [✓ Accept Changes] [✗ Reject] [👁 View] │
+└─────────────────────────────────────────┘
+```
+
+**Design Requirements**:
+
+- **Diff visualization**: Show before/after for updates
+- **Preview**: Inline preview of what will be created/updated
+- **Modify option**: Allow editing before approval
+- **Batch actions**: Approve/reject multiple proposals
+- **Undo**: Allow undoing approved actions
+- **Notifications**: Toast on approval/rejection
+
+---
+
+### 4. `<BranchVisualization>`
+
+**Purpose**: Visualize thread branching structure
+
+**Props**:
+
+```typescript
+interface BranchVisualizationProps {
+  rootThreadId: string;
+  mode: "tree" | "timeline" | "graph";
+  onSelectThread: (threadId: string) => void;
+  onMergeBranch: (branchId: string) => void;
+}
+```
+
+**Visual Modes**:
+
+**Tree Mode**:
+
+```
+Main Thread: "Build SaaS Product"
+├─ 📊 Research: "Competitor Analysis"
+│  ├─ 🔍 Deep Dive: "Stripe vs Paddle"
+│  └─ ✓ Merged: "Pricing Models"
+├─ 💰 Business: "Pricing Strategy"
+└─ ✍️ Marketing: "Landing Page Copy"
+   └─ 🎨 Design: "Hero Section"
+```
+
+**Timeline Mode**:
+
+```
+12:00 PM ─┬─ Main Thread
+          │
+12:15 PM ─┼─ Branch: Research
+          │  └─ Messages (5)
+          │
+12:30 PM ─┼─ Branch: Business
+          │  └─ Messages (3)
+          │
+12:45 PM ─┴─ Merged: Research → Main
+```
+
+**Graph Mode** (for complex branching):
+
+```
+     ┌─────────┐
+     │  Main   │
+     └────┬────┘
+          │
+     ┌────┴────┐
+     │         │
+┌────▼───┐ ┌──▼────┐
+│Research│ │Business│
+└────┬───┘ └───┬───┘
+     │         │
+     └────┬────┘
+          │
+     ┌────▼────┐
+     │ Merged  │
+     └─────────┘
+```
+
+**Design Requirements**:
+
+- **Interactive**: Click nodes to navigate
+- **Status indicators**: Active (blue), Merged (green), Archived (gray)
+- **Message counts**: Show number of messages per branch
+- **Agent icons**: Display agent type per thread
+- **Merge points**: Highlight where branches merged
+- **Animations**: Smooth transitions between modes
+- **Minimap**: Overview of entire tree for large structures
+
+---
+
+### 5. `<ParallelChatView>`
+
+**Purpose**: Show multiple threads side-by-side for parallel work
+
+**Props**:
+
+```typescript
+interface ParallelChatViewProps {
+  threads: string[]; // thread IDs
+  onAddThread: () => void;
+  onRemoveThread: (threadId: string) => void;
+  onReorderThreads: (newOrder: string[]) => void;
+}
+```
+
+**Visual Layout**:
+
+```
+┌──────────────┬──────────────┬──────────────┐
+│ Main Thread  │ Research     │ Business     │
+│              │              │              │
+│ User: Build  │ AI: Found 5  │ AI: Pricing  │
+│ a SaaS...    │ competitors  │ should be... │
+│              │              │              │
+│ AI: I'll     │ User: Tell   │ User: What   │
+│ help you...  │ me more...   │ about...     │
+│              │              │              │
+│ [Input]      │ [Input]      │ [Input]      │
+└──────────────┴──────────────┴──────────────┘
+```
+
+**Features**:
+
+- **Resizable columns**: Drag to resize
+- **Sync scroll**: Option to sync scrolling
+- **Cross-thread actions**: Drag messages between threads
+- **Merge indicator**: Show when threads can be merged
+- **Activity indicators**: Highlight active threads
+- **Collapse/expand**: Minimize inactive threads
+
+**Design Requirements**:
+
+- **Responsive**: 1 column on mobile, 2-3 on desktop
+- **Drag-and-drop**: Reorder columns
+- **Connection lines**: Show relationships between threads
+- **Unified input**: Option for single input that sends to all
+- **Status bar**: Show status of each thread
+
+---
+
+### 6. `<EntityExtraction>`
+
+**Purpose**: Display entities extracted from conversation
+
+**Props**:
+
+```typescript
+interface EntityExtractionProps {
+  entities: ExtractedEntity[];
+  onCreateEntity: (entity: ExtractedEntity) => void;
+  onDismiss: (entityId: string) => void;
+}
+```
+
+**Visual Design**:
+
+```
+┌─────────────────────────────────────────┐
+│ 🏷️ Extracted Entities (3)               │
+│                                         │
+│ ┌─────────────────────────────────┐   │
+│ │ 📋 Task: "Research competitors"  │   │
+│ │ Confidence: 95%                  │   │
+│ │ [Create] [Dismiss]               │   │
+│ └─────────────────────────────────┘   │
+│                                         │
+│ ┌─────────────────────────────────┐   │
+│ │ 👤 Contact: "Paul Smith"         │   │
+│ │ Email: paul@example.com          │   │
+│ │ Confidence: 87%                  │   │
+│ │ [Create] [Dismiss]               │   │
+│ └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+**Design Requirements**:
+
+- **Confidence indicator**: Visual bar or percentage
+- **Entity preview**: Show key properties
+- **Quick actions**: Create, dismiss, edit
+- **Batch operations**: Create all, dismiss all
+- **Undo**: Undo dismissed entities
+
+---
+
+### 7. `<StreamingIndicator>`
+
+**Purpose**: Show AI is actively processing
+
+**Props**:
+
+```typescript
+interface StreamingIndicatorProps {
+  status: "thinking" | "typing" | "tool_running" | "waiting";
+  currentStep?: string;
+}
+```
+
+**Visual States**:
+
+**Thinking**:
+
+```
+🧠 Thinking...
+```
+
+**Typing**:
+
+```
+💬 Typing...
+```
+
+**Tool Running**:
+
+```
+🔧 Running: vector_search
+⟳ Searching knowledge base...
+```
+
+**Waiting for Approval**:
+
+```
+⏸ Waiting for your approval
+```
+
+**Design Requirements**:
+
+- **Animated**: Pulsing, rotating, or typing animation
+- **Context-aware**: Different animation per status
+- **Subtle**: Not distracting
+- **Informative**: Show what AI is doing
+
+---
+
+## 🎨 Design System Requirements
+
+### Color Palette
+
+**Message Roles**:
+
+- User: `$blue9` (primary blue)
+- AI: `$gray8` (neutral gray)
+- System: `$yellow8` (warning yellow)
+
+**AI Steps**:
+
+- Thinking: `$blue7`
+- Tool Call: `$purple7`
+- Tool Result: `$green7`
+- Verification: `$orange7`
+- Error: `$red7`
+
+**Thread Status**:
+
+- Active: `$blue9`
+- Merged: `$green9`
+- Archived: `$gray6`
+
+### Typography
+
+**Message Content**:
+
+- Font: `$body` (Inter)
+- Size: `$4` (16px)
+- Line Height: `$6` (24px)
+
+**AI Steps**:
+
+- Font: `$mono` (JetBrains Mono)
+- Size: `$3` (14px)
+- Line Height: `$5` (20px)
+
+**Timestamps**:
+
+- Font: `$body`
+- Size: `$2` (12px)
+- Color: `$gray10`
+
+### Spacing
+
+**Message Bubbles**:
+
+- Padding: `$4` (16px)
+- Gap: `$3` (12px)
+- Border Radius: `$4` (12px)
+
+**AI Steps Panel**:
+
+- Padding: `$3` (12px)
+- Gap: `$2` (8px)
+- Border Radius: `$3` (8px)
+
+### Icons
+
+**Use Hugeicons**:
+
+- Thinking: `Brain02`
+- Tool: `Settings02`
+- Search: `Search01`
+- Document: `FileText`
+- Entity: `Tag01`
+- Approval: `CheckCircle`
+- Reject: `XCircle`
+- Branch: `GitBranch01`
+- Merge: `GitMerge`
+
+---
+
+## 🔄 State Management
+
+### Global State (Zustand)
+
+**Chat UI Store**:
+
+```typescript
+interface ChatUIStore {
+  // Active thread
+  activeThreadId: string | null;
+  setActiveThread: (id: string) => void;
+
+  // View mode
+  viewMode: "single" | "parallel" | "branches";
+  setViewMode: (mode: "single" | "parallel" | "branches") => void;
+
+  // Parallel threads
+  parallelThreads: string[];
+  addParallelThread: (id: string) => void;
+  removeParallelThread: (id: string) => void;
+
+  // UI preferences
+  showAISteps: boolean;
+  toggleAISteps: () => void;
+
+  expandedSteps: Set<string>; // message IDs
+  toggleSteps: (messageId: string) => void;
+}
+```
+
+**Streaming Store**:
+
+```typescript
+interface StreamingStore {
+  streams: Map<string, StreamingMessage>;
+
+  startStream: (threadId: string, messageId: string) => void;
+  addChunk: (threadId: string, chunk: string) => void;
+  addStep: (threadId: string, step: AIStep) => void;
+  completeStream: (threadId: string) => void;
+  clearStream: (threadId: string) => void;
+}
+
+interface StreamingMessage {
+  messageId: string;
+  content: string;
+  steps: AIStep[];
+  isComplete: boolean;
+  startedAt: Date;
+}
+```
+
+---
+
+## 📱 Responsive Design
+
+### Mobile (< 768px)
+
+- **Single column**: One thread at a time
+- **Collapsible steps**: AI steps collapsed by default
+- **Swipe gestures**: Swipe to switch threads
+- **Bottom sheet**: Proposals/entities in bottom sheet
+
+### Tablet (768px - 1024px)
+
+- **Two columns**: Main + one parallel thread
+- **Side panel**: Branches in side panel
+- **Expandable**: Tap to expand AI steps
+
+### Desktop (> 1024px)
+
+- **Three columns**: Main + two parallel threads
+- **Full visualization**: Branch tree always visible
+- **Hover states**: Hover to preview entities/proposals
+- **Keyboard shortcuts**: Navigate with keyboard
+
+---
+
+## 🎬 Animations
+
+### Message Appearance
+
+- **Slide in**: From bottom with fade
+- **Duration**: 300ms
+- **Easing**: `ease-out`
+
+### AI Steps
+
+- **Progressive reveal**: Steps appear one by one
+- **Duration**: 200ms per step
+- **Easing**: `ease-in-out`
+
+### Streaming
+
+- **Typing effect**: Character-by-character reveal
+- **Cursor**: Blinking cursor at end
+- **Duration**: Real-time (no delay)
+
+### Branch Creation
+
+- **Grow animation**: Branch node grows from parent
+- **Duration**: 500ms
+- **Easing**: `spring`
+
+### Approval/Rejection
+
+- **Success**: Green checkmark with scale
+- **Rejection**: Red X with shake
+- **Duration**: 400ms
+
+---
+
+## 🧪 Testing Requirements
+
+### Unit Tests
+
+- Message rendering with different roles
+- AI steps expansion/collapse
+- Proposal approval/rejection
+- Entity extraction display
+
+### Integration Tests
+
+- Streaming message flow
+- Real-time step updates
+- Branch creation and merging
+- Parallel thread synchronization
+
+### E2E Tests
+
+- Complete conversation flow
+- Branch and merge workflow
+- Approval workflow
+- Parallel chat usage
+
+---
+
+## 📊 Performance Requirements
+
+### Metrics
+
+- **Time to Interactive**: < 2s
+- **Message Render**: < 100ms
+- **Streaming Latency**: < 50ms
+- **Branch Visualization**: < 500ms
+
+### Optimizations
+
+- **Virtual scrolling**: For long message lists
+- **Lazy loading**: Load messages on scroll
+- **Memoization**: Memo expensive components
+- **Debouncing**: Debounce streaming updates
+
+---
+
+## 🚀 Implementation Priority
+
+### Phase 1: Core Chat (Week 1)
+
+1. ✅ `<MessageBubble>` - Basic message display
+2. ✅ `<ChatInput>` - Message input
+3. ✅ `<MessageList>` - Scrollable list
+4. ✅ Streaming support
+
+### Phase 2: AI Steps (Week 2)
+
+1. ✅ `<AIStepsPanel>` - Steps visualization
+2. ✅ `<ThinkingStep>`, `<ToolCallStep>`, `<ToolResultStep>`
+3. ✅ Real-time step updates
+4. ✅ Step expansion/collapse
+
+### Phase 3: Approvals (Week 3)
+
+1. ✅ `<VerificationStep>` - Approval UI
+2. ✅ `<ActionProposals>` - Proposal list
+3. ✅ Approval/rejection flow
+4. ✅ `<EntityExtraction>` - Entity display
+
+### Phase 4: Branching (Week 4)
+
+1. ✅ `<BranchVisualization>` - Tree view
+2. ✅ `<BranchNode>` - Branch display
+3. ✅ Branch creation flow
+4. ✅ Merge workflow
+
+### Phase 5: Parallel View (Week 5)
+
+1. ✅ `<ParallelChatView>` - Multi-column layout
+2. ✅ `<ParallelColumn>` - Individual column
+3. ✅ Thread synchronization
+4. ✅ Cross-thread actions
+
+---
+
+## 📝 Summary for AI Design Generation
+
+### Key Components to Design
+
+1. **Message Bubble** - User/AI messages with steps
+2. **AI Steps Panel** - Collapsible thinking/tool execution
+3. **Verification UI** - Inline approval/rejection
+4. **Branch Visualization** - Tree/timeline/graph views
+5. **Parallel Chat** - Side-by-side threads
+6. **Entity Extraction** - Extracted entity cards
+7. **Streaming Indicator** - Active processing states
+
+### Design Principles
+
+- **Progressive Disclosure**: Show details on demand
+- **Real-time Feedback**: Immediate visual feedback
+- **Contextual Actions**: Actions where they're needed
+- **Spatial Consistency**: Consistent layouts
+- **Temporal Awareness**: Show time/sequence clearly
+
+### Visual Hierarchy
+
+1. **Primary**: Message content
+2. **Secondary**: AI steps, entities
+3. **Tertiary**: Timestamps, metadata
+4. **Interactive**: Proposals, approvals
+
+### Interaction Patterns
+
+- **Expand/Collapse**: AI steps, entities, proposals
+- **Approve/Reject**: Inline buttons with confirmation
+- **Drag-and-Drop**: Reorder parallel threads
+- **Hover**: Preview details
+- **Click**: Navigate, expand, select
+
+---
+
+**This PRD provides complete specifications for AI-powered design generation of the chat interface.**

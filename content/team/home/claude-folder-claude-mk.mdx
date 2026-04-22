@@ -1,0 +1,80 @@
+# Synap
+
+Sovereign personal data infrastructure platform. Synap gives individuals full ownership of their data through sovereign data pods, event-sourced mutations, and an AI-native architecture with a conversational orchestrator.
+
+## Tech Stack
+- **Frontend**: Expo (mobile), React/Next.js (web), Tamagui (cross-platform UI)
+- **Backend**: Node.js/TypeScript, Inngest (event-driven functions)
+- **Database**: PostgreSQL + event store
+- **Auth**: Better Auth
+- **State**: TanStack Query
+- **Analytics**: PostHog
+- **AI**: LLM Gateway (fast/balanced/smart tiers), ORACLE command center
+
+## Architecture
+
+Synap uses **event chains instead of CRUD**. Every data mutation is an immutable event — enabling full provenance, time-travel, and surgical undo. There is no direct state mutation.
+
+**Core concepts:**
+- **Sovereign Data Pods**: User-owned data containers
+- **Workspaces**: Configurable lenses (NOT containers) over data
+- **Entities**: Custom-schema objects (22 types, 3 activation phases)
+- **Documents**: Versioned content with full history
+- **Channels**: Universal interaction surface
+- **Life Feed**: Unified inbox (TikTok/IG-style) aggregating all notifications
+- **Bento Grid Dashboards**: AI-generatable from JSON, per entity type or instance
+
+**Agent system:**
+- 86 Inngest functions powering the agent layer
+- LLM Gateway routes to fast/balanced/smart model tiers
+- ORACLE command center for orchestration
+- Telegram-accessible conversational orchestrator
+- Human-in-the-Loop is an architectural principle, not a feature
+
+## Key Directories
+- `packages/` — Shared packages (every feature = separate package)
+- `apps/mobile/` — Expo mobile app
+- `apps/web/` — Next.js web app
+- `apps/api/` — API server
+- `libs/events/` — Event chain definitions and handlers
+- `libs/entities/` — Entity schemas and types
+- `libs/ai/` — LLM Gateway, agent definitions, ORACLE
+
+## Commands
+- Dev: `pnpm dev`
+- Build: `pnpm build`
+- Test: `pnpm test`
+- Lint: `pnpm lint`
+- Test single package: `pnpm --filter @synap/[package] test`
+- Type check: `pnpm typecheck`
+
+## Code Conventions
+- TypeScript strict mode everywhere
+- Every new feature MUST be a separate package in `packages/`
+- Functional components with hooks (React)
+- Event-first: all state changes go through event chains, never direct DB writes
+- Zod for all input validation
+- No `any` types — use `unknown` if unsure
+
+## Git Conventions
+- Branches: `feat/`, `fix/`, `chore/`, `refactor/`
+- Commits: conventional commits (`feat(events): add undo chain`)
+- PRs require: passing tests, type check, at least one review
+
+<important>
+- NEVER write direct database mutations — ALL changes go through event chains
+- NEVER modify event chain handlers without considering downstream effects
+- Every new feature MUST be a separate package
+- Human-in-the-Loop must be preserved in all AI agent paths
+- Event chains are append-only — never delete or modify existing events
+- Always consider time-travel and undo implications of any data change
+</important>
+
+## Skills Reference
+- `/scaffold-package` — Create a new Synap package with proper structure
+- `/event-chain` — Design and implement a new event chain
+- `/entity-type` — Create a new entity type with schema
+- `/bento-dashboard` — Generate a bento grid dashboard from JSON
+- `/deploy` — Deployment workflow
+- `/pr-review` — Code review
+- `/plan` — Structured planning

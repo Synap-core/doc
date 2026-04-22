@@ -1,0 +1,131 @@
+# Notification System Deduplication - Summary of Changes
+
+## Problem
+4 different components were subscribing to Socket.IO `notification.new` event, causing 4x toast spam when notifications arrived.
+
+## Solution
+Consolidated to a SINGLE Socket.IO subscription in `UnifiedToastProvider`, which fans out notifications to:
+- Toast notifications (regular priority)
+- Urgent notification banners (high priority)
+
+## Files Modified
+
+### 1. synap-app/packages/core/notifications/src/UnifiedToastProvider.tsx
+**Changes:**
+- Added `UrgentNotificationsContext` to share urgent notifications with `NotificationBanner`
+- Added `useUrgentNotifications()` hook export for consuming urgent notifications
+- Added `urgentQueue` state to manage urgent notifications
+- Modified Socket.IO subscription to handle BOTH regular toasts AND urgent banners
+- Now filters urgent notifications by workspace and adds them to urgent queue
+
+**Result:** Single source of truth for ALL notification handling
+
+### 2. synap-app/packages/core/notifications/src/NotificationBanner.tsx
+**Changes:**
+- Removed `socketIO.subscribe("notification.new", ...)` - NO LONGER subscribes directly
+- Now uses `useUrgentNotifications()` from `UnifiedToastProvider`
+- Removed local queue state management (now uses context)
+- Made `workspaceId` prop deprecated (filtering handled by parent)
+- Updated dismiss logic to use context dismiss function
+
+**Result:** Receives urgent notifications via context instead of duplicate subscription
+
+### 3. synap-app/packages/core/notifications/src/CrossPlatformNotificationToastProvider.tsx
+**Changes:**
+- Removed `socketIO.subscribe("notification.new", ...)` - NO LONGER subscribes to notifications
+- Removed helper functions `rawPayloadToNotification` and `notificationToToast`
+- Removed unused `useRef` import and `workspaceIdRef`
+- Made `workspaceId` prop deprecated
+- Now only handles proactive AI toasts via `subscribeProactiveToast` event bus
+- Added deprecation notes
+
+**Result:** Only handles proactive AI toasts, not Socket.IO notifications
+
+### 4. synap-app/packages/core/notifications/src/NotificationToastProvider.tsx
+**Changes:**
+- Removed `socketIO.subscribe("notification.new", ...)` - NO LONGER subscribes to notifications
+- Removed unused `useRef` import and `workspaceIdRef`
+- Made `workspaceId` prop deprecated
+- Added deprecation note recommending `UnifiedToastProvider` instead
+- Now only handles proactive AI toasts
+
+**Result:** Deprecated provider, only handles proactive AI toasts
+
+### 5. synap-app/packages/core/notifications/src/NotificationService.tsx
+**Changes:**
+- Removed unused imports: `socketIO`, `subscribeProactiveToast`
+
+**Result:** Cleaner imports
+
+### 6. synap-app/packages/core/notifications/src/index.ts
+**Changes:**
+- Added export for `useUrgentNotifications` hook
+
+**Result:** Hook available for external use
+
+### 7. browser/electron/renderer/src/App.tsx
+**Changes:**
+- Restructured provider hierarchy - `NotificationBanner` and other banners now INSIDE `NotificationServiceProvider`
+- Removed `workspaceId` prop from `NotificationBanner` (no longer needed)
+
+**Result:** `NotificationBanner` can now access `useUrgentNotifications()` context
+
+## Provider Hierarchy (Browser App)
+
+```
+<TamaguiProvider>
+  <AppProvider>
+    <SynapProvider>
+      <NotificationServiceProvider>  <-- Single Socket.IO subscription here
+        <NotificationBanner />       <-- Receives urgent notifications via context
+        <TrialBanner />
+        <AnonBudgetBar />
+        <AppContainer />             <-- Regular toasts work here
+      </NotificationServiceProvider>
+    </SynapProvider>
+  </AppProvider>
+</TamaguiProvider>
+```
+
+## Key Benefits
+
+1. **Single Subscription:** Only ONE `socketIO.subscribe("notification.new", ...)` in the entire app
+2. **No Duplicates:** Eliminated 4x toast spam issue
+3. **Separation of Concerns:**
+   - `UnifiedToastProvider`: Handles all Socket.IO notification subscriptions
+   - `NotificationBanner`: Displays urgent notifications (consumes from context)
+   - Other providers: Only handle proactive AI toasts (different event bus)
+4. **Backwards Compatible:** Old providers still work but don't subscribe to Socket.IO
+
+## Testing Checklist
+
+- [ ] Regular notifications show as toasts (not duplicated)
+- [ ] Urgent notifications show as banners (not duplicated)
+- [ ] NotificationBell shows correct unread count
+- [ ] Proactive AI toasts still work
+- [ ] NotificationBanner dismiss works
+- [ ] Workspace filtering still works (handled by UnifiedToastProvider)
+
+## Migration Guide
+
+**Old way (causes duplicates):**
+```tsx
+<NotificationToastProvider>  // Subscribes to notification.new
+  <CrossPlatformNotificationToastProvider>  // Also subscribes
+    <NotificationBanner workspaceId={id} />  // Also subscribes
+      <App />
+    </NotificationBanner>
+  </CrossPlatformNotificationToastProvider>
+</NotificationToastProvider>
+```
+
+**New way (single subscription):**
+```tsx
+<NotificationServiceProvider workspaceId={id}>  // Single subscription
+  <NotificationBanner />  // Receives via context
+    <App />
+  </NotificationBanner>
+</NotificationServiceProvider>
+```
+
+Or use `UnifiedToastProvider` directly and consume urgent notifications with `useUrgentNotifications()`.

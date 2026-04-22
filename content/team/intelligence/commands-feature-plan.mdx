@@ -1,0 +1,1362 @@
+# Commands Feature Implementation Plan
+
+> **Date:** 2026-02-19
+> **Priority:** P0 - Core UX primitive for Intelligence app
+> **Reference:** Frontend Intelligence Integration Guide, INTELLIGENCE_APP_AUDIT_AND_IMPLEMENTATION_PLAN.md
+
+---
+
+## 1. Overview
+
+Commands are **reusable prompt templates** with Raycast-style placeholders. Users create commands once, then run them with different inputs. Every command run creates a thread for provenance.
+
+### User Flow
+
+1. User creates command: "Summarize {argument name='Topic'}"
+2. System parses template, derives inputs: `[{ name: "Topic", label: "Topic" }]`
+3. User runs command from Commands tab or Command Palette
+4. Run sheet shows form with "Topic" input field
+5. User fills in "Climate change" and submits
+6. Backend creates thread, compiles prompt, streams to Hub
+7. User sees real-time response
+8. Run history shows in Runs tab with link to thread
+
+---
+
+## 2. Data Model
+
+### 2.1 `intelligence_commands` Table
+
+```sql
+CREATE TABLE intelligence_commands (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_by UUID NOT NULL REFERENCES users(id),
+
+  -- Core fields
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+
+  -- Template (source of truth)
+  prompt_template TEXT NOT NULL,
+
+  -- Derived from template (computed on create/update)
+  compiled_template_ast JSONB NOT NULL DEFAULT '{}',
+  derived_inputs JSONB NOT NULL DEFAULT '[]',
+
+  -- User overrides for input labels/defaults/options
+  input_overrides JSONB DEFAULT '{}',
+
+  -- Permissions
+  permissions_profile VARCHAR(50) NOT NULL DEFAULT 'read_only', -- 'read_only' | 'propose_writes'
+  allowed_tools JSONB, -- null = all tools
+  allowed_entity_types JSONB, -- null = all types
+  max_entities_created_per_run INTEGER,
+  can_create_views BOOLEAN DEFAULT false,
+
+  -- Output
+  output_mode VARCHAR(50) NOT NULL DEFAULT 'text', -- 'text' | 'proposal' | 'view'
+
+  -- Sharing
+  shared_scope VARCHAR(50) NOT NULL DEFAULT 'workspace', -- 'workspace' | 'user'
+
+  -- Metadata
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_commands_workspace ON intelligence_commands(workspace_id);
+CREATE INDEX idx_commands_created_by ON intelligence_commands(created_by);
+```
+
+### 2.2 `command_runs` Table
+
+```sql
+CREATE TABLE command_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Links (thread_id is REQUIRED - every run has provenance)
+  thread_id UUID NOT NULL REFERENCES chat_threads(id),
+  command_id UUID NOT NULL REFERENCES intelligence_commands(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id),
+
+  -- Snapshot of permissions at run time (immutable audit)
+  permissions_snapshot JSONB NOT NULL DEFAULT '{}',
+
+  -- Run data
+  inputs JSONB NOT NULL DEFAULT '{}', -- argument values provided by user
+  selection_context_snapshot JSONB, -- selection at run time
+
+  -- Results
+  output_summary TEXT,
+  proposed_actions JSONB DEFAULT '[]',
+  approved_actions JSONB DEFAULT '[]',
+
+  -- Status
+  status VARCHAR(50) NOT NULL DEFAULT 'running', -- 'running' | 'completed' | 'failed'
+  error_message TEXT,
+
+  -- Timing
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_runs_command ON command_runs(command_id);
+CREATE INDEX idx_runs_workspace ON command_runs(workspace_id);
+CREATE INDEX idx_runs_user ON command_runs(user_id);
+CREATE INDEX idx_runs_thread ON command_runs(thread_id);
+CREATE INDEX idx_runs_started_at ON command_runs(started_at DESC);
+```
+
+### 2.3 TypeScript Types
+
+```typescript
+// @synap-core/types/intelligence.ts
+
+export interface IntelligenceCommand {
+  id: string;
+  workspaceId: string;
+  createdBy: string;
+  title: string;
+  description?: string;
+  promptTemplate: string;
+  compiledTemplateAst: CompiledTemplateAst;
+  derivedInputs: DerivedInput[];
+  inputOverrides: Record<string, InputOverride>;
+  permissionsProfile: "read_only" | "propose_writes";
+  allowedTools?: string[];
+  allowedEntityTypes?: string[];
+  maxEntitiesCreatedPerRun?: number;
+  canCreateViews: boolean;
+  outputMode: "text" | "proposal" | "view";
+  sharedScope: "workspace" | "user";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DerivedInput {
+  name: string;
+  label?: string;
+  type: "text" | "select" | "multiselect";
+  options?: string[];
+  default?: string;
+  required: boolean;
+}
+
+export interface InputOverride {
+  label?: string;
+  default?: string;
+  options?: string[];
+}
+
+export interface CompiledTemplateAst {
+  segments: TemplateSegment[];
+  hasSelection: boolean;
+  argumentNames: string[];
+}
+
+export type TemplateSegment =
+  | { type: "text"; value: string }
+  | { type: "argument"; name: string; options?: string[]; default?: string }
+  | { type: "selection"; modifier?: "trim" | "uppercase" | "raw" };
+
+export interface CommandRun {
+  id: string;
+  threadId: string;
+  commandId: string;
+  workspaceId: string;
+  userId: string;
+  permissionsSnapshot: CommandPermissions;
+  inputs: Record<string, string>;
+  selectionContextSnapshot?: SelectionContext;
+  outputSummary?: string;
+  proposedActions: ProposedAction[];
+  approvedActions: ProposedAction[];
+  status: "running" | "completed" | "failed";
+  errorMessage?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export interface CommandPermissions {
+  permissionsProfile: "read_only" | "propose_writes";
+  allowedTools?: string[];
+  allowedEntityTypes?: string[];
+  maxEntitiesCreatedPerRun?: number;
+  canCreateViews: boolean;
+}
+
+export interface SelectionContext {
+  type: "entities" | "viewRows" | "documents" | "text";
+  entityIds?: string[];
+  viewId?: string;
+  rowEntityIds?: string[];
+  documentIds?: string[];
+  text?: string;
+}
+
+export interface ProposedAction {
+  id: string;
+  toolName: string;
+  description: string;
+  args: unknown;
+  status: "pending" | "approved" | "rejected";
+}
+```
+
+---
+
+## 3. Backend Implementation
+
+### 3.1 Template Compiler
+
+**File:** `apps/backend/src/utils/command-template.ts`
+
+```typescript
+/**
+ * Command Template Compiler
+ *
+ * Parses Raycast-style placeholders and compiles templates.
+ *
+ * Placeholder syntax:
+ * - {argument name="Topic"} - required text input
+ * - {argument name="Tone" options="formal,casual" default="formal"} - select input
+ * - {selection} - current selection context
+ * - {selection:trim} - with modifier
+ */
+
+export interface ParseResult {
+  ast: CompiledTemplateAst;
+  derivedInputs: DerivedInput[];
+  errors: string[];
+}
+
+const ARGUMENT_REGEX = /\{argument\s+([^}]+)\}/g;
+const SELECTION_REGEX = /\{selection(?::(\w+))?\}/g;
+
+export function parseTemplate(template: string): ParseResult {
+  const segments: TemplateSegment[] = [];
+  const derivedInputs: DerivedInput[] = [];
+  const argumentNames: string[] = [];
+  const errors: string[] = [];
+  let hasSelection = false;
+
+  let lastIndex = 0;
+  const combined = new RegExp(
+    `${ARGUMENT_REGEX.source}|${SELECTION_REGEX.source}`,
+    "g"
+  );
+
+  let match;
+  while ((match = combined.exec(template)) !== null) {
+    // Add text before this match
+    if (match.index > lastIndex) {
+      segments.push({
+        type: "text",
+        value: template.slice(lastIndex, match.index),
+      });
+    }
+
+    if (match[0].startsWith("{argument")) {
+      // Parse argument attributes
+      const attrs = match[1];
+      const name = extractAttr(attrs, "name");
+      const options = extractAttr(attrs, "options");
+      const defaultVal = extractAttr(attrs, "default");
+
+      if (!name) {
+        errors.push(
+          `Argument at position ${match.index} missing name attribute`
+        );
+      } else {
+        argumentNames.push(name);
+        segments.push({
+          type: "argument",
+          name,
+          options: options?.split(",").map((o) => o.trim()),
+          default: defaultVal,
+        });
+
+        derivedInputs.push({
+          name,
+          label: name, // Can be overridden via inputOverrides
+          type: options ? "select" : "text",
+          options: options?.split(",").map((o) => o.trim()),
+          default: defaultVal,
+          required: !defaultVal,
+        });
+      }
+    } else if (match[0].startsWith("{selection")) {
+      hasSelection = true;
+      const modifier = match[2] as "trim" | "uppercase" | "raw" | undefined;
+      segments.push({ type: "selection", modifier });
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < template.length) {
+    segments.push({ type: "text", value: template.slice(lastIndex) });
+  }
+
+  return {
+    ast: { segments, hasSelection, argumentNames },
+    derivedInputs,
+    errors,
+  };
+}
+
+function extractAttr(attrs: string, name: string): string | undefined {
+  const regex = new RegExp(`${name}="([^"]+)"`);
+  const match = attrs.match(regex);
+  return match?.[1];
+}
+
+export function compileTemplate(
+  ast: CompiledTemplateAst,
+  values: Record<string, string>,
+  selectionContext?: SelectionContext
+): string {
+  return ast.segments
+    .map((segment) => {
+      switch (segment.type) {
+        case "text":
+          return segment.value;
+        case "argument":
+          return values[segment.name] ?? segment.default ?? `[${segment.name}]`;
+        case "selection":
+          return formatSelection(selectionContext, segment.modifier);
+      }
+    })
+    .join("");
+}
+
+function formatSelection(
+  context: SelectionContext | undefined,
+  modifier?: "trim" | "uppercase" | "raw"
+): string {
+  if (!context) return "[selection]";
+
+  let text: string;
+  switch (context.type) {
+    case "text":
+      text = context.text || "";
+      break;
+    case "entities":
+      text = `Selected entities: ${context.entityIds?.join(", ") || "none"}`;
+      break;
+    case "viewRows":
+      text = `Selected rows from view ${context.viewId}: ${context.rowEntityIds?.join(", ") || "none"}`;
+      break;
+    case "documents":
+      text = `Selected documents: ${context.documentIds?.join(", ") || "none"}`;
+      break;
+    default:
+      text = "[unknown selection]";
+  }
+
+  switch (modifier) {
+    case "trim":
+      return text.trim();
+    case "uppercase":
+      return text.toUpperCase();
+    default:
+      return text;
+  }
+}
+```
+
+### 3.2 Commands Router
+
+**File:** `apps/backend/src/routers/intelligence/commands.ts`
+
+```typescript
+import { router, protectedProcedure } from "../../trpc/trpc";
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { eq, and, desc } from "drizzle-orm";
+import {
+  db,
+  intelligenceCommands,
+  commandRuns,
+  chatThreads,
+} from "../../database";
+import { parseTemplate, compileTemplate } from "../../utils/command-template";
+
+export const commandsRouter = router({
+  /**
+   * List commands for a workspace
+   */
+  list: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid(),
+        limit: z.number().min(1).max(100).default(50),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const commands = await db.query.intelligenceCommands.findMany({
+        where: eq(intelligenceCommands.workspaceId, input.workspaceId),
+        orderBy: [desc(intelligenceCommands.createdAt)],
+        limit: input.limit,
+      });
+      return { commands };
+    }),
+
+  /**
+   * Get a single command
+   */
+  get: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const command = await db.query.intelligenceCommands.findFirst({
+        where: eq(intelligenceCommands.id, input.id),
+      });
+      if (!command) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Command not found",
+        });
+      }
+      return { command };
+    }),
+
+  /**
+   * Create a new command
+   */
+  create: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid(),
+        title: z.string().min(1).max(255),
+        description: z.string().optional(),
+        promptTemplate: z.string().min(1),
+        permissionsProfile: z
+          .enum(["read_only", "propose_writes"])
+          .default("read_only"),
+        outputMode: z.enum(["text", "proposal", "view"]).default("text"),
+        sharedScope: z.enum(["workspace", "user"]).default("workspace"),
+        allowedTools: z.array(z.string()).optional(),
+        allowedEntityTypes: z.array(z.string()).optional(),
+        maxEntitiesCreatedPerRun: z.number().optional(),
+        canCreateViews: z.boolean().default(false),
+        inputOverrides: z
+          .record(
+            z.object({
+              label: z.string().optional(),
+              default: z.string().optional(),
+              options: z.array(z.string()).optional(),
+            })
+          )
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Parse template to derive inputs
+      const { ast, derivedInputs, errors } = parseTemplate(
+        input.promptTemplate
+      );
+
+      if (errors.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Template parsing errors: ${errors.join(", ")}`,
+        });
+      }
+
+      const [command] = await db
+        .insert(intelligenceCommands)
+        .values({
+          workspaceId: input.workspaceId,
+          createdBy: ctx.userId,
+          title: input.title,
+          description: input.description,
+          promptTemplate: input.promptTemplate,
+          compiledTemplateAst: ast,
+          derivedInputs,
+          inputOverrides: input.inputOverrides || {},
+          permissionsProfile: input.permissionsProfile,
+          outputMode: input.outputMode,
+          sharedScope: input.sharedScope,
+          allowedTools: input.allowedTools,
+          allowedEntityTypes: input.allowedEntityTypes,
+          maxEntitiesCreatedPerRun: input.maxEntitiesCreatedPerRun,
+          canCreateViews: input.canCreateViews,
+        })
+        .returning();
+
+      return { command };
+    }),
+
+  /**
+   * Update a command
+   */
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string().min(1).max(255).optional(),
+        description: z.string().optional(),
+        promptTemplate: z.string().min(1).optional(),
+        permissionsProfile: z.enum(["read_only", "propose_writes"]).optional(),
+        outputMode: z.enum(["text", "proposal", "view"]).optional(),
+        inputOverrides: z
+          .record(
+            z.object({
+              label: z.string().optional(),
+              default: z.string().optional(),
+              options: z.array(z.string()).optional(),
+            })
+          )
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const existing = await db.query.intelligenceCommands.findFirst({
+        where: eq(intelligenceCommands.id, input.id),
+      });
+
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Command not found",
+        });
+      }
+
+      const updates: Partial<typeof intelligenceCommands.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+
+      if (input.title) updates.title = input.title;
+      if (input.description !== undefined)
+        updates.description = input.description;
+      if (input.permissionsProfile)
+        updates.permissionsProfile = input.permissionsProfile;
+      if (input.outputMode) updates.outputMode = input.outputMode;
+      if (input.inputOverrides) updates.inputOverrides = input.inputOverrides;
+
+      // Re-parse template if changed
+      if (input.promptTemplate) {
+        const { ast, derivedInputs, errors } = parseTemplate(
+          input.promptTemplate
+        );
+        if (errors.length > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Template parsing errors: ${errors.join(", ")}`,
+          });
+        }
+        updates.promptTemplate = input.promptTemplate;
+        updates.compiledTemplateAst = ast;
+        updates.derivedInputs = derivedInputs;
+      }
+
+      const [command] = await db
+        .update(intelligenceCommands)
+        .set(updates)
+        .where(eq(intelligenceCommands.id, input.id))
+        .returning();
+
+      return { command };
+    }),
+
+  /**
+   * Delete a command
+   */
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await db
+        .delete(intelligenceCommands)
+        .where(eq(intelligenceCommands.id, input.id));
+      return { success: true };
+    }),
+
+  /**
+   * Run a command
+   *
+   * 1. Create thread
+   * 2. Create run record
+   * 3. Compile prompt
+   * 4. Send to chat.sendMessage (which streams via Hub)
+   * 5. Update run on completion
+   */
+  run: protectedProcedure
+    .input(
+      z.object({
+        commandId: z.string().uuid(),
+        workspaceId: z.string().uuid(),
+        inputs: z.record(z.string()),
+        selectionContext: z
+          .object({
+            type: z.enum(["entities", "viewRows", "documents", "text"]),
+            entityIds: z.array(z.string()).optional(),
+            viewId: z.string().optional(),
+            rowEntityIds: z.array(z.string()).optional(),
+            documentIds: z.array(z.string()).optional(),
+            text: z.string().optional(),
+          })
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get command
+      const command = await db.query.intelligenceCommands.findFirst({
+        where: eq(intelligenceCommands.id, input.commandId),
+      });
+
+      if (!command) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Command not found",
+        });
+      }
+
+      // Validate required inputs
+      const ast = command.compiledTemplateAst as CompiledTemplateAst;
+      const derivedInputs = command.derivedInputs as DerivedInput[];
+
+      for (const derived of derivedInputs) {
+        if (derived.required && !input.inputs[derived.name]) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Missing required input: ${derived.name}`,
+          });
+        }
+      }
+
+      // Validate selection if template uses it
+      if (ast.hasSelection && !input.selectionContext) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This command requires a selection",
+        });
+      }
+
+      // Create thread for this run
+      const [thread] = await db
+        .insert(chatThreads)
+        .values({
+          workspaceId: input.workspaceId,
+          userId: ctx.userId,
+          title: `Run: ${command.title}`,
+          agentType: "default",
+        })
+        .returning();
+
+      // Snapshot permissions
+      const permissionsSnapshot = {
+        permissionsProfile: command.permissionsProfile,
+        allowedTools: command.allowedTools,
+        allowedEntityTypes: command.allowedEntityTypes,
+        maxEntitiesCreatedPerRun: command.maxEntitiesCreatedPerRun,
+        canCreateViews: command.canCreateViews,
+      };
+
+      // Create run record
+      const [run] = await db
+        .insert(commandRuns)
+        .values({
+          threadId: thread.id,
+          commandId: command.id,
+          workspaceId: input.workspaceId,
+          userId: ctx.userId,
+          permissionsSnapshot,
+          inputs: input.inputs,
+          selectionContextSnapshot: input.selectionContext,
+          status: "running",
+        })
+        .returning();
+
+      // Compile prompt
+      const compiledPrompt = compileTemplate(
+        ast,
+        input.inputs,
+        input.selectionContext
+      );
+
+      // Send to chat (this triggers Hub streaming)
+      // The chat.sendMessage handles Hub SSE → Socket.IO broadcast
+      const chatResult = await ctx.chatService.sendMessage({
+        threadId: thread.id,
+        content: compiledPrompt,
+        workspaceId: input.workspaceId,
+        userId: ctx.userId,
+        // Pass command permissions to Hub
+        commandPermissions: permissionsSnapshot,
+      });
+
+      // Update run with result
+      await db
+        .update(commandRuns)
+        .set({
+          status: chatResult.error ? "failed" : "completed",
+          completedAt: new Date(),
+          outputSummary: chatResult.content?.slice(0, 500),
+          proposedActions: chatResult.proposedActions || [],
+          errorMessage: chatResult.error,
+        })
+        .where(eq(commandRuns.id, run.id));
+
+      return {
+        runId: run.id,
+        threadId: thread.id,
+        status: chatResult.error ? "failed" : "completed",
+      };
+    }),
+});
+```
+
+### 3.3 Runs Router
+
+**File:** `apps/backend/src/routers/intelligence/runs.ts`
+
+```typescript
+import { router, protectedProcedure } from "../../trpc/trpc";
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { eq, desc } from "drizzle-orm";
+import {
+  db,
+  commandRuns,
+  intelligenceCommands,
+  chatThreads,
+} from "../../database";
+
+export const runsRouter = router({
+  /**
+   * List command runs for a workspace
+   */
+  list: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid(),
+        commandId: z.string().uuid().optional(),
+        status: z.enum(["running", "completed", "failed"]).optional(),
+        limit: z.number().min(1).max(100).default(50),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const where = [eq(commandRuns.workspaceId, input.workspaceId)];
+
+      if (input.commandId) {
+        where.push(eq(commandRuns.commandId, input.commandId));
+      }
+      if (input.status) {
+        where.push(eq(commandRuns.status, input.status));
+      }
+
+      const runs = await db.query.commandRuns.findMany({
+        where: and(...where),
+        orderBy: [desc(commandRuns.startedAt)],
+        limit: input.limit + 1, // +1 to check for next page
+        with: {
+          command: { columns: { id: true, title: true } },
+          thread: { columns: { id: true, title: true } },
+        },
+      });
+
+      const hasMore = runs.length > input.limit;
+      const items = hasMore ? runs.slice(0, -1) : runs;
+
+      return {
+        runs: items,
+        nextCursor: hasMore ? items[items.length - 1]?.id : undefined,
+      };
+    }),
+
+  /**
+   * Get a single run with full details
+   */
+  get: protectedProcedure
+    .input(z.object({ runId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const run = await db.query.commandRuns.findFirst({
+        where: eq(commandRuns.id, input.runId),
+        with: {
+          command: true,
+          thread: true,
+        },
+      });
+
+      if (!run) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Run not found" });
+      }
+
+      return { run };
+    }),
+});
+```
+
+---
+
+## 4. Frontend Implementation
+
+### 4.1 Package Structure
+
+```
+packages/features/commands/
+├── src/
+│   ├── components/
+│   │   ├── CommandList.tsx
+│   │   ├── CommandCard.tsx
+│   │   ├── CommandForm.tsx
+│   │   ├── CommandRunSheet.tsx
+│   │   ├── CommandRunner.tsx
+│   │   ├── InputField.tsx
+│   │   └── TemplateEditor.tsx
+│   ├── hooks/
+│   │   ├── useCommands.ts
+│   │   ├── useCommandRuns.ts
+│   │   └── useTemplateParser.ts
+│   ├── stores/
+│   │   └── commandsStore.ts
+│   ├── utils/
+│   │   └── templateCompiler.ts
+│   ├── types/
+│   │   └── index.ts
+│   └── index.ts
+├── package.json
+└── tsconfig.json
+```
+
+### 4.2 Hooks
+
+**`useCommands.ts`:**
+
+```typescript
+import { trpc } from "@synap/client";
+
+export function useCommands(workspaceId: string | undefined) {
+  const utils = trpc.useUtils();
+
+  const { data, isLoading, error } = trpc.intelligence.commands.list.useQuery(
+    { workspaceId: workspaceId! },
+    { enabled: !!workspaceId }
+  );
+
+  const createCommand = trpc.intelligence.commands.create.useMutation({
+    onSuccess: () => utils.intelligence.commands.list.invalidate(),
+  });
+
+  const updateCommand = trpc.intelligence.commands.update.useMutation({
+    onSuccess: () => utils.intelligence.commands.list.invalidate(),
+  });
+
+  const deleteCommand = trpc.intelligence.commands.delete.useMutation({
+    onSuccess: () => utils.intelligence.commands.list.invalidate(),
+  });
+
+  const runCommand = trpc.intelligence.commands.run.useMutation({
+    onSuccess: () => utils.intelligence.runs.list.invalidate(),
+  });
+
+  return {
+    commands: data?.commands ?? [],
+    isLoading,
+    error,
+    createCommand,
+    updateCommand,
+    deleteCommand,
+    runCommand,
+  };
+}
+```
+
+**`useCommandRuns.ts`:**
+
+```typescript
+import { trpc } from "@synap/client";
+
+export function useCommandRuns(
+  workspaceId: string | undefined,
+  options?: { commandId?: string; status?: "running" | "completed" | "failed" }
+) {
+  const { data, isLoading, error, fetchNextPage, hasNextPage } =
+    trpc.intelligence.runs.list.useInfiniteQuery(
+      {
+        workspaceId: workspaceId!,
+        commandId: options?.commandId,
+        status: options?.status,
+        limit: 20,
+      },
+      {
+        enabled: !!workspaceId,
+        getNextPageParam: (lastPage) => lastPage.nextCursor,
+      }
+    );
+
+  const runs = data?.pages.flatMap((page) => page.runs) ?? [];
+
+  return {
+    runs,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+  };
+}
+```
+
+### 4.3 Store
+
+**`commandsStore.ts`:**
+
+```typescript
+import { create } from "zustand";
+import type { SelectionContext, IntelligenceCommand } from "@synap-core/types";
+
+interface CommandsStore {
+  // Selection context (from workspace)
+  selectionContext: SelectionContext | null;
+
+  // Active command being run
+  activeRunId: string | null;
+  activeThreadId: string | null;
+
+  // Form state
+  commandFormOpen: boolean;
+  editingCommandId: string | null;
+  runSheetOpen: boolean;
+  runningCommand: IntelligenceCommand | null;
+
+  // Actions
+  setSelectionContext: (context: SelectionContext | null) => void;
+  setActiveRun: (runId: string | null, threadId: string | null) => void;
+  openCommandForm: (commandId?: string) => void;
+  closeCommandForm: () => void;
+  openRunSheet: (command: IntelligenceCommand) => void;
+  closeRunSheet: () => void;
+}
+
+export const useCommandsStore = create<CommandsStore>((set) => ({
+  selectionContext: null,
+  activeRunId: null,
+  activeThreadId: null,
+  commandFormOpen: false,
+  editingCommandId: null,
+  runSheetOpen: false,
+  runningCommand: null,
+
+  setSelectionContext: (context) => set({ selectionContext: context }),
+
+  setActiveRun: (runId, threadId) =>
+    set({ activeRunId: runId, activeThreadId: threadId }),
+
+  openCommandForm: (commandId) =>
+    set({
+      commandFormOpen: true,
+      editingCommandId: commandId ?? null,
+    }),
+
+  closeCommandForm: () =>
+    set({
+      commandFormOpen: false,
+      editingCommandId: null,
+    }),
+
+  openRunSheet: (command) =>
+    set({
+      runSheetOpen: true,
+      runningCommand: command,
+    }),
+
+  closeRunSheet: () =>
+    set({
+      runSheetOpen: false,
+      runningCommand: null,
+    }),
+}));
+```
+
+### 4.4 Components
+
+**`CommandList.tsx`:**
+
+```typescript
+"use client";
+
+import React from "react";
+import { YStack, XStack, SizableText, Button } from "@synap-core/ui-system";
+import { Plus, Play, Edit, Trash2 } from "lucide-react";
+import { useCommands } from "../hooks/useCommands";
+import { useCommandsStore } from "../stores/commandsStore";
+import type { IntelligenceCommand } from "@synap-core/types";
+
+interface CommandListProps {
+  workspaceId: string;
+  onRunCommand?: (command: IntelligenceCommand) => void;
+}
+
+export function CommandList({ workspaceId, onRunCommand }: CommandListProps) {
+  const { commands, isLoading, deleteCommand } = useCommands(workspaceId);
+  const { openCommandForm, openRunSheet } = useCommandsStore();
+
+  if (isLoading) {
+    return <SizableText color="$muted">Loading commands...</SizableText>;
+  }
+
+  return (
+    <YStack gap="$4" flex={1}>
+      <XStack justifyContent="space-between" alignItems="center">
+        <SizableText size="$6" fontWeight="600">Commands</SizableText>
+        <Button size="sm" onPress={() => openCommandForm()}>
+          <Plus size={16} />
+          <SizableText>New Command</SizableText>
+        </Button>
+      </XStack>
+
+      {commands.length === 0 ? (
+        <YStack padding="$6" alignItems="center" gap="$2">
+          <SizableText color="$muted">No commands yet</SizableText>
+          <Button variant="outline" onPress={() => openCommandForm()}>
+            Create your first command
+          </Button>
+        </YStack>
+      ) : (
+        <YStack gap="$2">
+          {commands.map((command) => (
+            <CommandCard
+              key={command.id}
+              command={command}
+              onRun={() => {
+                openRunSheet(command);
+                onRunCommand?.(command);
+              }}
+              onEdit={() => openCommandForm(command.id)}
+              onDelete={() => deleteCommand.mutate({ id: command.id })}
+            />
+          ))}
+        </YStack>
+      )}
+    </YStack>
+  );
+}
+
+function CommandCard({
+  command,
+  onRun,
+  onEdit,
+  onDelete,
+}: {
+  command: IntelligenceCommand;
+  onRun: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <XStack
+      padding="$3"
+      borderRadius="$3"
+      borderWidth={1}
+      borderColor="$borderColor"
+      alignItems="center"
+      gap="$3"
+      hoverStyle={{ backgroundColor: "$backgroundHover" }}
+    >
+      <YStack flex={1} gap="$1">
+        <SizableText fontWeight="600">{command.title}</SizableText>
+        {command.description && (
+          <SizableText size="$2" color="$muted">{command.description}</SizableText>
+        )}
+        <SizableText size="$1" color="$muted">
+          {command.derivedInputs.length} input{command.derivedInputs.length !== 1 ? "s" : ""}
+        </SizableText>
+      </YStack>
+
+      <XStack gap="$2">
+        <Button size="sm" variant="primary" onPress={onRun}>
+          <Play size={14} />
+        </Button>
+        <Button size="sm" variant="ghost" onPress={onEdit}>
+          <Edit size={14} />
+        </Button>
+        <Button size="sm" variant="ghost" onPress={onDelete}>
+          <Trash2 size={14} />
+        </Button>
+      </XStack>
+    </XStack>
+  );
+}
+```
+
+**`CommandRunSheet.tsx`:**
+
+```typescript
+"use client";
+
+import React, { useState } from "react";
+import { YStack, XStack, SizableText, Button, Input, Select } from "@synap-core/ui-system";
+import { Sheet } from "@synap-core/ui-system";
+import { Play, X } from "lucide-react";
+import { useCommands } from "../hooks/useCommands";
+import { useCommandsStore } from "../stores/commandsStore";
+import type { DerivedInput } from "@synap-core/types";
+
+interface CommandRunSheetProps {
+  workspaceId: string;
+  onRunStarted?: (runId: string, threadId: string) => void;
+}
+
+export function CommandRunSheet({ workspaceId, onRunStarted }: CommandRunSheetProps) {
+  const { runSheetOpen, runningCommand, selectionContext, closeRunSheet, setActiveRun } =
+    useCommandsStore();
+  const { runCommand } = useCommands(workspaceId);
+
+  const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [isRunning, setIsRunning] = useState(false);
+
+  if (!runningCommand) return null;
+
+  const derivedInputs = runningCommand.derivedInputs as DerivedInput[];
+  const inputOverrides = runningCommand.inputOverrides as Record<string, { label?: string }>;
+
+  const handleRun = async () => {
+    setIsRunning(true);
+    try {
+      const result = await runCommand.mutateAsync({
+        commandId: runningCommand.id,
+        workspaceId,
+        inputs,
+        selectionContext: selectionContext ?? undefined,
+      });
+
+      setActiveRun(result.runId, result.threadId);
+      onRunStarted?.(result.runId, result.threadId);
+      closeRunSheet();
+    } catch (error) {
+      console.error("Command run failed:", error);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <Sheet open={runSheetOpen} onOpenChange={(open) => !open && closeRunSheet()}>
+      <Sheet.Content>
+        <YStack gap="$4" padding="$4">
+          <XStack justifyContent="space-between" alignItems="center">
+            <SizableText size="$6" fontWeight="600">
+              Run: {runningCommand.title}
+            </SizableText>
+            <Button variant="ghost" size="sm" onPress={closeRunSheet}>
+              <X size={16} />
+            </Button>
+          </XStack>
+
+          {derivedInputs.length > 0 ? (
+            <YStack gap="$3">
+              {derivedInputs.map((input) => (
+                <YStack key={input.name} gap="$1">
+                  <SizableText size="$2" fontWeight="500">
+                    {inputOverrides[input.name]?.label || input.label || input.name}
+                    {input.required && <SizableText color="$red10">*</SizableText>}
+                  </SizableText>
+
+                  {input.type === "select" && input.options ? (
+                    <Select
+                      value={inputs[input.name] || input.default || ""}
+                      onValueChange={(value) =>
+                        setInputs((prev) => ({ ...prev, [input.name]: value }))
+                      }
+                    >
+                      {input.options.map((option) => (
+                        <Select.Item key={option} value={option}>
+                          {option}
+                        </Select.Item>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input
+                      value={inputs[input.name] || ""}
+                      onChangeText={(text) =>
+                        setInputs((prev) => ({ ...prev, [input.name]: text }))
+                      }
+                      placeholder={input.default || `Enter ${input.name}`}
+                    />
+                  )}
+                </YStack>
+              ))}
+            </YStack>
+          ) : (
+            <SizableText color="$muted">
+              This command has no inputs.
+            </SizableText>
+          )}
+
+          {runningCommand.compiledTemplateAst.hasSelection && (
+            <YStack gap="$1">
+              <SizableText size="$2" fontWeight="500">Selection</SizableText>
+              {selectionContext ? (
+                <SizableText size="$2" color="$muted">
+                  {selectionContext.type}: {
+                    selectionContext.entityIds?.length ||
+                    selectionContext.documentIds?.length ||
+                    selectionContext.rowEntityIds?.length ||
+                    (selectionContext.text ? "text selected" : "none")
+                  }
+                </SizableText>
+              ) : (
+                <SizableText size="$2" color="$warning">
+                  No selection. Select items before running.
+                </SizableText>
+              )}
+            </YStack>
+          )}
+
+          <Button
+            variant="primary"
+            onPress={handleRun}
+            disabled={isRunning}
+          >
+            <Play size={16} />
+            <SizableText>{isRunning ? "Running..." : "Run Command"}</SizableText>
+          </Button>
+        </YStack>
+      </Sheet.Content>
+    </Sheet>
+  );
+}
+```
+
+---
+
+## 5. Integration with Intelligence App
+
+### 5.1 Update CommandsTab
+
+**File:** `packages/apps/intelligence/src/tabs/CommandsTab.tsx`
+
+```typescript
+"use client";
+
+import React from "react";
+import { YStack } from "@synap-core/ui-system";
+import {
+  CommandList,
+  CommandForm,
+  CommandRunSheet,
+  useCommandsStore,
+} from "@synap/commands";
+
+interface CommandsTabProps {
+  workspaceId?: string;
+  onThreadChange?: (threadId: string) => void;
+}
+
+export function CommandsTab({ workspaceId, onThreadChange }: CommandsTabProps) {
+  const { commandFormOpen, editingCommandId, closeCommandForm } = useCommandsStore();
+
+  if (!workspaceId) {
+    return <YStack padding="$4">No workspace selected</YStack>;
+  }
+
+  return (
+    <YStack flex={1} padding="$4">
+      <CommandList
+        workspaceId={workspaceId}
+        onRunCommand={() => {
+          // Run sheet opens automatically via store
+        }}
+      />
+
+      <CommandForm
+        open={commandFormOpen}
+        workspaceId={workspaceId}
+        commandId={editingCommandId}
+        onClose={closeCommandForm}
+      />
+
+      <CommandRunSheet
+        workspaceId={workspaceId}
+        onRunStarted={(runId, threadId) => {
+          // Switch to Threads tab and open the thread
+          onThreadChange?.(threadId);
+        }}
+      />
+    </YStack>
+  );
+}
+```
+
+---
+
+## 6. Command Palette Integration
+
+### 6.1 Add Commands to Palette
+
+**File:** `apps/web/contexts/CommandPaletteContext.tsx` (or equivalent)
+
+```typescript
+// Add commands fetching
+const { commands } = useCommands(workspaceId);
+
+// Map commands to palette items
+const commandPaletteItems = commands.map((cmd) => ({
+  id: `run-command-${cmd.id}`,
+  label: `Run: ${cmd.title}`,
+  description: cmd.description,
+  icon: <Play size={16} />,
+  action: () => {
+    useCommandsStore.getState().openRunSheet(cmd);
+    // Navigate to Intelligence app
+    navigate(`/workspace?app=intelligence&tab=commands`);
+  },
+}));
+
+// Add "Create command" action
+const createCommandAction = {
+  id: "create-command",
+  label: "Create Command",
+  icon: <Plus size={16} />,
+  action: () => {
+    useCommandsStore.getState().openCommandForm();
+    navigate(`/workspace?app=intelligence&tab=commands&create=1`);
+  },
+};
+```
+
+---
+
+## 7. Testing Checklist
+
+### Backend
+
+- [ ] Template parser handles all placeholder formats
+- [ ] Commands CRUD works correctly
+- [ ] Run creates thread and run record
+- [ ] Permissions snapshot is saved
+- [ ] Streaming flows through to Socket.IO
+- [ ] Run status updates on completion/failure
+
+### Frontend
+
+- [ ] Command list displays correctly
+- [ ] Create/edit form validates inputs
+- [ ] Run sheet shows derived inputs
+- [ ] Selection context passed correctly
+- [ ] Streaming output displays in real-time
+- [ ] Run history shows in Runs tab
+- [ ] Command palette integration works
+
+---
+
+## 8. Timeline
+
+| Day | Tasks                                              |
+| --- | -------------------------------------------------- |
+| 1   | Backend: Schema, migrations, template compiler     |
+| 2   | Backend: Commands router, runs router              |
+| 3   | Frontend: Package setup, hooks, store              |
+| 4   | Frontend: CommandList, CommandForm                 |
+| 5   | Frontend: CommandRunSheet, streaming integration   |
+| 6   | Integration: CommandsTab, RunsTab, command palette |
+| 7   | Testing, bug fixes, polish                         |
+
+---
+
+_Document created: 2026-02-19_
+_Part of Intelligence Integration work_

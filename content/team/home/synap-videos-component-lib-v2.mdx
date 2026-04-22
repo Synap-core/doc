@@ -1,0 +1,516 @@
+# Synap Component Library V2
+
+Professional Remotion components for creating modern marketing videos.
+
+---
+
+## 🎨 Component Categories
+
+### 1. Entity Components (Isometric Blocks)
+
+Beautiful LEGO-style isometric blocks representing Synap's data entities.
+
+#### EntityBlock
+
+Individual entity block with icon and gradient colors.
+
+```tsx
+<EntityBlock
+  type="task" | "person" | "document" | "event" | "project" | "company" | "note"
+  size={80}
+  showStuds={true}
+  animateIn={true}
+  startFrame={0}
+  scale={1}
+  label="Task Name"
+  showLabel={false}
+/>
+```
+
+**Entity Types & Colors:**
+- **Task** (Green #34D399) - Checkbox icon
+- **Person** (Blue #60A5FA) - User icon
+- **Document** (Amber #F59E0B) - Document icon
+- **Event** (Violet #A78BFA) - Calendar icon
+- **Project** (Purple #8B5CF6) - Hexagon icon
+- **Company** (Teal #2DD4BF) - Building icon
+- **Note** (Yellow #FCD34D) - Sticky note icon
+
+#### EntityStack
+
+Vertical stack of entities showing hierarchy.
+
+```tsx
+<EntityStack
+  items={[
+    { type: "project", label: "Website Redesign" },
+    { type: "task", label: "Design UI" },
+    { type: "person", label: "Sarah" },
+  ]}
+  gap={2}
+  animateIn={true}
+  staggerDelay={5}
+  startFrame={0}
+  blockSize={80}
+/>
+```
+
+#### ConnectionLine
+
+Animated lines connecting entities with particles.
+
+```tsx
+<ConnectionLine
+  from={{ x: 100, y: 100 }}
+  to={{ x: 500, y: 300 }}
+  type="dependency" | "assignment" | "hierarchy" | "related"
+  state="idle" | "active" | "creating" | "dataFlowing"
+  showParticles={true}
+  curve="bezier" | "straight" | "arc"
+/>
+```
+
+**Connection Types:**
+- **Dependency** (Green) - Solid directional flow
+- **Assignment** (Blue) - Pulsing connection
+- **Hierarchy** (Purple) - Thick strong flow
+- **Related** (Amber) - Dotted non-directional
+
+---
+
+### 2. Concept Visualizations
+
+High-level components for explaining concepts.
+
+#### SaaSToolScatter
+
+Shows scattered SaaS tools drifting apart.
+
+```tsx
+<SaaSToolScatter
+  tools={[
+    { name: "Notion", icon: "📝", color: "#000000" },
+    { name: "Slack", icon: "💬", color: "#4A154B" },
+    // ...
+  ]}
+  state="together" | "scattering" | "scattered"
+  showBreakingConnections={true}
+  startFrame={0}
+/>
+```
+
+**Use case:** Scene showing the SaaS fragmentation problem
+
+#### DataPodArchitecture
+
+Hub-and-spoke visualization with data pod at center.
+
+```tsx
+<DataPodArchitecture
+  apps={[
+    { icon: "📱", label: "Mobile", color: "#60A5FA" },
+    { icon: "💻", label: "Desktop", color: "#34D399" },
+    // ...
+  ]}
+  showConnections={true}
+  orbitSpeed={0.01}
+  startFrame={0}
+  animateIn={true}
+/>
+```
+
+**Use case:** Scene explaining Synap's architecture
+
+---
+
+### 3. UI Components
+
+Reusable UI elements for videos.
+
+#### AnimatedCounter
+
+Counts up/down with smooth animation.
+
+```tsx
+<AnimatedCounter
+  from={0}
+  to={523}
+  duration={120}
+  startFrame={60}
+  prefix="$"
+  suffix="/month"
+  fontSize={120}
+  color="#F59E0B"
+  easing="spring" | "easeInOut" | "linear"
+/>
+```
+
+**Use case:** Showing costs, metrics, statistics
+
+#### FeatureCard
+
+Card highlighting a feature or benefit.
+
+```tsx
+<FeatureCard
+  icon="🔒"
+  title="Your Data Stays Yours"
+  description="On your infrastructure, under your control"
+  accentColor="#10B981"
+  startFrame={180}
+  size="small" | "medium" | "large"
+  variant="default" | "highlight" | "minimal"
+/>
+```
+
+**Variants:**
+- **default** - Solid card with shadow
+- **highlight** - Gradient background with glow
+- **minimal** - Transparent with border only
+
+#### BeforeAfter
+
+Split screen comparison.
+
+```tsx
+<BeforeAfter
+  before={<OldWayScene />}
+  after={<SynapWayScene />}
+  beforeLabel="Before"
+  afterLabel="After"
+  splitPosition={0.5}
+  animateSplit={true}
+  orientation="vertical" | "horizontal"
+/>
+```
+
+**Use case:** Comparing old vs new approaches
+
+---
+
+### 4. Text Components
+
+Text effects and animations.
+
+#### GradientText
+
+Text with gradient color.
+
+```tsx
+<GradientText
+  from="#38BDF8"
+  to="#10B981"
+  fontSize={72}
+  fontWeight={900}
+  angle={135}
+  animate="fadeIn" | "slideUp" | "none"
+  delay={0}
+>
+  Your Text Here
+</GradientText>
+```
+
+#### HighlightText
+
+Text with marker-pen highlight effect.
+
+```tsx
+<HighlightText
+  highlightColor="#38BDF8"
+  startFrame={60}
+  durationInFrames={20}
+  style={{ fontSize: 48, fontWeight: 800 }}
+>
+  Highlighted text
+</HighlightText>
+```
+
+#### TypewriterText
+
+Typewriter effect.
+
+```tsx
+<TypewriterText
+  text="Type this out character by character"
+  startFrame={0}
+  charactersPerFrame={0.5}
+  showCursor={true}
+/>
+```
+
+#### GlitchText
+
+Chromatic aberration glitch effect.
+
+```tsx
+<GlitchText
+  intensity={5}
+  startFrame={0}
+  style={{ fontSize: 64 }}
+>
+  Glitchy Text
+</GlitchText>
+```
+
+---
+
+### 5. Visual Effects
+
+Post-processing and particle effects.
+
+#### ParticleField
+
+Animated particles.
+
+```tsx
+<ParticleField
+  count={200}
+  speed={1}
+  color="#38BDF8"
+  opacity={0.3}
+  size={[2, 6]}
+  direction="up" | "down" | "left" | "right" | "random"
+/>
+```
+
+#### Vignette
+
+Dark edges effect.
+
+```tsx
+<Vignette intensity={0.6} />
+```
+
+#### FilmGrain
+
+Film grain texture.
+
+```tsx
+<FilmGrain opacity={0.1} scale={2} />
+```
+
+---
+
+## 🎬 Complete Scene Example
+
+Here's how to combine components in a scene:
+
+```tsx
+import React from "react";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
+import {
+  GradientText,
+  EntityStack,
+  DataPodArchitecture,
+  FeatureCard,
+  ParticleField,
+  Vignette,
+} from "../components";
+
+export const MyScene: React.FC = () => {
+  const frame = useCurrentFrame();
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#020617" }}>
+      {/* Background particles */}
+      <ParticleField
+        count={150}
+        speed={0.4}
+        color="#38BDF8"
+        opacity={0.1}
+        direction="up"
+      />
+
+      {/* Title */}
+      <div style={{ position: "absolute", top: 100, left: 0, right: 0, textAlign: "center" }}>
+        <GradientText from="#38BDF8" to="#10B981" fontSize={72} fontWeight={900}>
+          Your Architecture
+        </GradientText>
+      </div>
+
+      {/* Data pod visualization */}
+      <DataPodArchitecture
+        showConnections
+        orbitSpeed={0.008}
+        startFrame={40}
+        animateIn
+      />
+
+      {/* Feature cards */}
+      <div style={{ position: "absolute", bottom: 100, left: 100, display: "flex", gap: 30 }}>
+        <FeatureCard
+          icon="🔒"
+          title="Secure"
+          accentColor="#10B981"
+          startFrame={180}
+          size="medium"
+          variant="highlight"
+        />
+        <FeatureCard
+          icon="⚡"
+          title="Fast"
+          accentColor="#38BDF8"
+          startFrame={200}
+          size="medium"
+          variant="highlight"
+        />
+      </div>
+
+      {/* Vignette */}
+      <Vignette intensity={0.4} />
+    </AbsoluteFill>
+  );
+};
+```
+
+---
+
+## 🎥 "Death of SaaS" Video Structure
+
+The new professional version consists of 7 scenes:
+
+### Scene 1: Dramatic Opening (10s)
+- Cinematic title reveal
+- Particle effects with camera zoom
+- Sets the tone
+
+### Scene 2: Scattered Tools (20s)
+- SaaSToolScatter component
+- Tools drift apart
+- Shows the fragmentation problem
+
+### Scene 3: The Cost (20s)
+- AnimatedCounter showing $523/month
+- Pain point cards (context switching, lost data, no control)
+- Quantifies the problem
+
+### Scene 4: The Breaking Point (15s)
+- Wall of entity blocks explodes
+- Particles scatter
+- "There's a Better Way" reveal
+
+### Scene 5: New Architecture (25s)
+- DataPodArchitecture hub-and-spoke
+- "One backend, Your data, Any app" messaging
+- Shows the solution
+
+### Scene 6: Synap Reveal (20s)
+- Brand reveal
+- Entity stack showing all data types
+- Three key feature cards with highlights
+
+### Scene 7: Final Message (15s)
+- Powerful closing statement
+- "SaaS taught us to rent our tools. Synap teaches us to own our intelligence."
+- Call to action
+- Fade to black
+
+**Total Duration:** 125 seconds (2 minutes 5 seconds)
+
+---
+
+## 🚀 Usage
+
+### Running Remotion Studio
+
+```bash
+cd synap-videos
+npm start
+```
+
+Select **"DeathOfSaaS-V2"** from the composition list.
+
+### Rendering the Video
+
+```bash
+# Full quality render
+npm run build -- --codec=h264 --composition=DeathOfSaaS-V2
+
+# Draft quality (faster)
+npm run build -- --codec=h264 --composition=DeathOfSaaS-V2 --scale=0.5
+```
+
+---
+
+## 📦 Component File Structure
+
+```
+src/components/
+├── entities/
+│   ├── EntityBlock.tsx          # Isometric entity blocks
+│   ├── EntityStack.tsx          # Stacked entities
+│   └── ConnectionLine.tsx       # Animated connections
+├── concepts/
+│   ├── SaaSToolScatter.tsx      # Scattered tools visualization
+│   └── DataPodArchitecture.tsx  # Hub-and-spoke architecture
+├── ui/
+│   ├── AnimatedCounter.tsx      # Number counter
+│   ├── FeatureCard.tsx          # Feature highlight cards
+│   └── BeforeAfter.tsx          # Split screen comparison
+├── text/
+│   ├── GradientText.tsx         # Gradient text
+│   ├── HighlightText.tsx        # Marker highlight
+│   ├── TypewriterText.tsx       # Typewriter effect
+│   └── GlitchText.tsx           # Glitch effect
+├── effects/
+│   ├── ParticleField.tsx        # Particle systems
+│   ├── Vignette.tsx             # Vignette effect
+│   └── FilmGrain.tsx            # Film grain
+└── index.ts                     # Central exports
+```
+
+---
+
+## 🎨 Design System
+
+### Colors
+
+**Light Mode:**
+- Background: `#FFFFFF`
+- Surface: `#F5F4F1` (Warm white)
+- Text Primary: `#1C1917`
+- Text Secondary: `#57534E`
+
+**Dark Mode:**
+- Background: `#020617` (Slate-950)
+- Surface: `#1E293B` (Slate-800)
+- Text Primary: `#F1F5F9`
+- Text Secondary: `#CBD5E1`
+
+**Brand Colors:**
+- Primary (Cyan): `#38BDF8`
+- Success (Green): `#10B981`
+- Warning (Amber): `#F59E0B`
+- Error (Red): `#EF4444`
+
+### Typography
+
+- **Font Family:** Inter, sans-serif
+- **Title:** 72-120px, Weight 900
+- **Subtitle:** 24-48px, Weight 700-800
+- **Body:** 14-24px, Weight 400-600
+
+---
+
+## 💡 Best Practices
+
+1. **Always use frame-based animations** - Never use `useFrame()` from @react-three/fiber
+2. **Start with spring animations** - They look more natural than linear
+3. **Stagger entrances** - Use `startFrame` to create cascading animations
+4. **Keep particle counts reasonable** - 100-300 max for performance
+5. **Use gradients sparingly** - Accent colors should enhance, not overwhelm
+6. **Test at full resolution** - What works at 50% scale might look different at 100%
+
+---
+
+## 🔄 Next Steps
+
+With this component library, you can easily create:
+
+1. **Product explainer videos**
+2. **Feature announcement videos**
+3. **Technical concept explanations**
+4. **Before/after comparisons**
+5. **Social media clips**
+
+The components are modular and reusable across all your video content!

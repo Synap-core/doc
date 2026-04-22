@@ -1,0 +1,24 @@
+# ADR-0003 — Firewall manager: UFW default
+
+## Document control
+| Field | Value |
+|---|---|
+| ADR ID | ADR-0003 |
+| Title | Firewall manager: UFW default |
+| Status | Accepted |
+| Date | 2026-04-12 |
+
+## Context
+We need a secure default firewall posture with minimal complexity for single-host deployments.
+
+## Decision
+Use UFW as the default firewall manager for Ubuntu-based installs.
+
+## Consequences
+* Pros:
+    * Simpler UX and documentation for typical users.
+* Cons:
+    * Less flexible than zone-based firewalld for complex routing.
+
+## References
+* UFW vs firewalld: https://betterstack.com/community/guides/linux/ufw-vs-firewalld/

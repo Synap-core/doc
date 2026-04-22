@@ -21,6 +21,13 @@ toc: true
 
 ---
 
+## Related
+
+- **[Relay Architecture](/team/relay/architecture)** — technical architecture, data flow, store structure
+- **[Native OS Guide](/team/relay/native-os-guide)** — share sheet, spotlight, widgets, live activities
+- **[Cell System](/team/platform/cell-system)** — cells as universal rendering unit
+- **[Design System](/team/platform/ui-system)** — Tamagui tokens and shared components
+
 ## 1. Product Summary
 
 Relay is a relationship intelligence system. It passively captures interactions from channels you already use (Telegram, LinkedIn, phone), resolves them into unified person entities, and builds a living knowledge graph of your professional network.
@@ -327,7 +334,7 @@ Merges are non-destructive: original source entities preserved in event chain, m
 
 **Model:** Claude Sonnet (queries) / Claude Opus (complex multi-hop reasoning)
 
-### Proactive intelligence (3-surface model — see docs-internal/FEED-SYSTEM.md)
+### Proactive intelligence (3-surface model — see `/team/platform/feed-system`)
 - **Event prep briefings** → proactive feed channel (isProactiveFeed: true) — substantive AI content the user reads
 - **Reconnection nudges** → notifications table — ephemeral nudge, "Reconnect with John", deep-link to entity
 - **Morning briefing / weekly digest** → proactive feed channel — cron workers via postProactiveMessage()

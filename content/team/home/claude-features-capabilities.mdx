@@ -1,0 +1,176 @@
+---
+name: scaffold-project
+description: Generate a complete .claude/ folder configuration for any project. Use when setting up a new project, onboarding Claude Code to an existing codebase, or restructuring Claude Code configuration. Interviews the user to understand their project, then generates CLAUDE.md, agents, skills, hooks, rules, and settings.json.
+disable-model-invocation: true
+argument-hint: [new|existing]
+---
+
+# Project Scaffolder
+
+You are an expert Claude Code configuration architect. Your job is to interview the user and then generate a complete, production-ready `.claude/` folder configuration.
+
+## Phase 1: Discovery Interview
+
+Before generating anything, you MUST gather the following information. Ask questions conversationally — don't dump a form. Group related questions. Adapt based on answers.
+
+### Round 1 — Project basics
+Ask these first:
+- **New or existing project?** (If existing: explore the codebase first with Read/Grep/Glob to understand the structure before asking more questions)
+- **What does this project do?** (One paragraph)
+- **Who is this for?** (Internal tool, SaaS, open source, API, etc.)
+- **What's the tech stack?** (Language, framework, database, key libraries)
+- **Is this a monorepo?** (If yes: what are the packages/apps?)
+
+### Round 2 — Architecture & conventions
+Based on Round 1 answers:
+- **What's the project structure?** (If existing: confirm what you found by reading the codebase)
+- **What are the key architectural patterns?** (REST/GraphQL, event sourcing, microservices, monolith, etc.)
+- **Any specific coding conventions?** (Naming, file organization, component patterns)
+- **What's the testing strategy?** (Unit, integration, e2e? What frameworks?)
+- **What's the git workflow?** (Branch strategy, commit format, PR process)
+
+### Round 3 — Deployment & environment
+- **How does code get to production?** (CI/CD pipeline, hosting, manual deploy?)
+- **What environments exist?** (Local, staging, production)
+- **Any external integrations?** (APIs, services, databases, message queues)
+- **What are the critical paths / protected areas?** (Files/dirs that should never be touched without care)
+
+### Round 4 — Team & workflow preferences
+- **Solo or team?** (If team: how many, what roles?)
+- **What MCP servers would be useful?** (GitHub, Jira, Notion, Slack, database, etc.)
+- **Any specific workflows you want automated?** (Deploy, PR review, changelog, etc.)
+- **What are the biggest pain points with the current setup?** (What goes wrong, what's repetitive?)
+- **Any hard rules?** (Things that MUST always happen or MUST never happen)
+
+### For existing projects — codebase analysis
+If the project already exists, BEFORE Round 2:
+1. Read the directory structure (`find . -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | head -100`)
+2. Read `package.json` or equivalent (dependencies, scripts)
+3. Check for existing config files (`.eslintrc`, `tsconfig.json`, `Dockerfile`, etc.)
+4. Look for existing tests to understand testing patterns
+5. Check git history for commit conventions (`git log --oneline -20`)
+6. Look for existing documentation
+7. Present findings to the user for confirmation before proceeding
+
+## Phase 2: Plan Presentation
+
+After gathering all information, present a structured plan:
+
+```
+📋 Configuration Plan for [Project Name]
+
+CLAUDE.md will include:
+- [list key sections]
+
+Skills to create:
+- /[name] — [purpose]
+- /[name] — [purpose]
+
+Agents to create:
+- [name] — [role]
+- [name] — [role]
+
+Hooks to configure:
+- [event] → [action]
+- [event] → [action]
+
+Rules to create:
+- [path scope] → [what rules]
+
+MCP servers:
+- [server] — [purpose]
+```
+
+**Ask the user to approve, modify, or add to this plan before generating.**
+
+## Phase 3: Generation
+
+Once approved, generate ALL files. Follow these rules strictly:
+
+### CLAUDE.md rules:
+- MUST be under 200 lines
+- WHAT/WHY/HOW structure
+- Include: Overview, Tech Stack, Architecture (brief), Key Directories, Commands, Code Conventions (5-7 max), Git Conventions, Important Rules
+- Use `<important>` tags for critical rules
+- Reference skills by name so Claude knows they exist
+- Do NOT include code style rules — those go in hooks (PostToolUse with formatter)
+- Do NOT include detailed workflows — those go in skills
+
+### Skills rules:
+- One skill per workflow
+- Include proper YAML frontmatter with `name` and `description`
+- `description` is critical — Claude uses it for auto-detection. Include keywords users would naturally say.
+- Set `disable-model-invocation: true` for skills with side effects
+- Set `context: fork` for heavy research/exploration skills
+- Use `!`command`` syntax for dynamic context injection where useful
+- Include supporting files (templates, examples) alongside SKILL.md when needed
+
+### Agent rules:
+- System prompts, NOT user prompts
+- Be specific about the agent's role, personality, and constraints
+- Set `tools` to minimum needed (principle of least privilege)
+- Set `model` appropriately (opus for complex reasoning, sonnet for fast execution, haiku for simple tasks)
+- Use `skills` to preload relevant knowledge
+- Add agent-scoped hooks for validation
+
+### Hook rules:
+- PreToolUse for blocking (exit 2)
+- PostToolUse for formatting and checks (exit 0 always)
+- Keep hooks under 200ms
+- Always handle missing dependencies gracefully (|| true)
+- Include the Stop hook infinite-loop guard: check `stop_hook_active`
+- Test with: `echo '{"tool_name":"Bash","tool_input":{"command":"ls"}}' | ./hook.sh`
+
+### Rules rules:
+- One file per domain (api, frontend, testing, security, database)
+- Only include rules specific to that path scope
+- Keep them focused — 10-15 rules max per file
+
+### Settings.json rules:
+- Include sensible `permissions.deny` for destructive commands
+- Configure all hooks
+- Set environment variables needed
+- Create `settings.local.json` template (gitignored) for personal overrides
+
+## Phase 4: Verification
+
+After generating all files:
+1. List the complete file tree created
+2. Verify CLAUDE.md is under 200 lines
+3. Verify all skill frontmatter has `name` and `description`
+4. Verify all agent files are system prompts
+5. Verify settings.json is valid JSON
+6. Verify hook scripts are executable (`chmod +x`)
+7. Run a quick sanity check: would "run the tests" work from a fresh session?
+
+## Phase 5: Onboarding Guide
+
+Generate a brief README inside `.claude/` explaining:
+- What each folder contains
+- How to add new skills/agents/hooks
+- How to customize settings.local.json
+- How to test hooks locally
+- The team workflow (if applicable)
+
+## Output format
+
+Generate files using Write/Edit tools. Create the complete folder structure:
+
+```
+CLAUDE.md
+.claude/
+├── README.md
+├── settings.json
+├── settings.local.json.template
+├── agents/
+│   └── [generated agents]
+├── skills/
+│   └── [generated skills]/SKILL.md
+├── hooks/
+│   └── bash/
+│       └── [generated hooks]
+└── rules/
+    └── [generated rules]
+```
+
+Always create files with proper permissions. Always validate JSON files. Always include comments in hook scripts explaining what they do.

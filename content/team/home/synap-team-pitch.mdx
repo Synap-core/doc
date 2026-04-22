@@ -1,0 +1,95 @@
+
+SYNAP
+Personal Infrastructurefor Sovereign Intelligence
+
+
+A technical vision document for people who want to build the next layer of personal computing.
+
+March 2026
+Antoine — Founder & CTO
+
+The Problem Nobody Has Solved
+Every AI product in 2026 asks you to send your data to someone else’s server, use someone else’s interface, and hope they don’t change the rules. Your conversations disappear when you switch providers. Your workflow resets when you start a new chat. Your data sits in silos you don’t control.
+The tools that manage your work — CRMs, project managers, note apps — are rigid. They give you their schema, their views, their workflow. If you want something different, you hire a developer or learn to code. If you want to connect AI, you plug in a chatbot that knows nothing about your data.
+And the infrastructure underneath all of this — databases, APIs, authentication — is fragmented. Every app reinvents it. Every integration is custom. Every migration is painful.
+What if you owned the infrastructure? What if your data, your views, your AI, and your workflows all lived on a platform you controlled — and that platform was smart enough to build itself around you?
+
+
+What Synap Is
+Synap is personal data infrastructure. Not an app — a platform. Not a tool — a foundation.
+At its core: a data pod you own, with structured entities you define, versioned documents, typed relations, and views you design. Everything is event-sourced — every mutation goes through a validation chain, every state is reconstructable, nothing is ever lost.
+On top of that: workspaces that act as lenses on your data. Each workspace defines its own entity types, views, permissions, and design. One file can bootstrap an entire working environment — CRM, project tracker, knowledge base, anything.
+And through it all: AI agents that live on your data. They remember every conversation across sessions. They create entities, draft documents, build dashboards — all through proposals you approve. They spawn specialist agents for parallel work. And they get smarter because the event chain gives them feedback on their own performance.
+The data pod is open source. The hub protocol — 50+ endpoints, the single API surface for all data access — is open and already enables any external agent or service to connect. The intelligence service is proprietary. That’s our layer.
+
+What Makes This Different
+The Bento Grid
+Most platforms give you a table and a kanban board. Synap gives you a fully customizable dashboard for any entity type — or any specific entity. Drag widgets, configure parameters, set sizes, add charts, text, metrics, activity feeds. No code. Just JSON under the hood, which means the AI can generate complete dashboards from a natural language description.
+A CRM dashboard, a project tracker, a personal analytics view, a team overview — all built from the same entity data, all configurable per workspace or per entity. The same contacts that appear in your pipeline table can power a relationship dashboard with interaction history, deal velocity, and next-action recommendations.
+The Event Chain
+Synap doesn’t do CRUD. Every mutation — from any user, any agent, any service — goes through a validation pipeline. The system records the intent (who wants what and why), runs it through rules and permissions, and makes a decision: accept, propose, or refuse. The full chain is stored.
+This means time travel — reconstruct any entity or workspace at any point in time. Surgical undo — reverse one specific change from last week without losing anything since. Full provenance — every entity carries its complete history. Click any field and see who changed it, when, why, and whether an AI proposed it.
+This is also the foundation for the blockchain layer. The event chain is already structured with full context. Moving from database to blockchain is adding cryptographic verification, not building new infrastructure.
+Session-Scoped AI Memory
+Every AI product in 2026 has the same problem: the context window fills up and the AI forgets. Synap solves this with a compacted state system. Every conversation is distilled into five structured memory blocks — identity, user model, continuity, goals, and entity context. Each session, the AI starts fresh with a clean bootstrap assembled from these blocks. The user experiences one continuous relationship; the infrastructure is clean, efficient, and never degrades.
+The AI has its own workspace — a staging area where it creates freely. Drafts, research, intermediate entities. Work graduates to the user’s space only through proposals. The user’s workspace stays clean. The AI is productive without being invasive.
+The Hub Protocol
+50+ typed endpoints. Every read and write goes through it. Scoped by API keys and permissions. Already in production. This is the surface that enables everything — any agent (ours, external, custom-built) connects through the same protocol. Any view package, any integration, any automation talks to the hub protocol. It’s the USB-C of personal data infrastructure.
+
+What Exists Today
+This is not a pitch deck for an idea. The core platform is built and running.
+
+50+
+Hub Protocol Endpoints
+Typed, scoped, production-ready
+11
+AI Tools
+Entity, document, search, memory, graph
+7
+Agent Types
+Orchestrator + 6 specialists
+5
+Memory Blocks
+Session-scoped compaction system
+8
+Channel Types
+AI, branch, A2AI, direct, external...
+∞
+Event History
+Every mutation stored with full context
+
+
+BUILT AND RUNNING
+Event-sourced data pod with entity system, documents, relations, and views. Hub protocol with 50+ endpoints and typed client. Channel system with all types (AI, branch, A2AI, direct, external). Agent runtime with orchestrator, 6 specialists, and ReAct loop. Knowledge facts with pgvector and semantic search. MCP integration for tool access. Proposal governance system. Agent configuration per user and workspace.
+IMPLEMENTED, FEATURE-FLAGGED
+Session-scoped memory with compacted states (5 blocks, parallel compaction). Bootstrap assembler (deterministic, <100ms). Session manager with parallel compaction trick (zero-latency). Full hub protocol endpoints for sessions and states.
+DESIGNED, PRD-READY
+Agent workspace pair (staging area for AI work). Full branching system with parallel execution and cross-communication. Branch-aware compaction. Bento grid generation by AI. Multi-workspace agent system. Complete UX for session continuity, tool disclosures, branch cards, and memory inspector.
+VISION, ARCHITECTURALLY PLANNED
+Team pods with shared agents and per-user channels. Cross-pod collaboration. Agent and package ecosystem. Blockchain verification layer for trustless pod-to-pod collaboration.
+
+Where This Goes
+Phase 1 (now): Personal AI on your own data pod. Session memory, parallel branches, agent workspace, bento grid generation. One user, full power.
+Phase 2: Team pods. Multiple users, workspace agents serving everyone with per-user channels and global team memory. Your personal agent travels with you into team contexts.
+Phase 3: Cross-pod collaboration. Your personal pod connects to team pods. Agents operate across boundaries with inherited permissions. Data references span sovereign units.
+Phase 4: Ecosystem. External agents through hub protocol (already technically possible). View packages, workspace templates, widget marketplace. Anyone can build on Synap.
+Phase 5: Sovereign network. Every event on chain. Trustless pod-to-pod collaboration. Peer-to-peer discovery. Decentralized identity for agents and users. The personal data web.
+
+The end state: anyone can have infrastructure that thinks for them, remembers for them, builds for them — on data they own, with agents they control, verified by cryptography they can trust.
+
+
+Why Now
+Three things converged in 2025–2026 that make this possible:
+AI agents are real. Not chatbots — agents that use tools, maintain memory, work in parallel, and produce real output. The research matured (MemGPT, AgeMem, Focus), the protocols standardized (MCP, A2A), and the models got good enough (200K+ context windows, reliable tool use). The intelligence layer is no longer theoretical.
+Data sovereignty matters. GDPR enforcement accelerated. Users care about where their data lives. Enterprises need jurisdiction-specific guarantees. The EU data sovereignty market alone is projected at €4.2B by 2028. Sovereignty isn’t a niche concern — it’s a market driver.
+No one built the infrastructure. Everyone built apps. CRMs, project managers, note tools, AI chatbots. Nobody built the layer underneath — the personal data platform that any of those apps could run on. That’s the gap. That’s Synap.
+
+The Invitation
+Synap is early. The infrastructure is built, the architecture is proven, the AI layer is working. What’s needed now is the team to take it from working system to product that changes how people relate to their data and their AI.
+I’m looking for people who think in systems. Who see a data pod and immediately think about what can be built on top of it. Who hear “event-sourced personal infrastructure” and get excited, not confused. Who want to build something that lasts — not another SaaS that gets acqui-hired in two years.
+
+WHAT YOU’D WORK ON
+The real product. Turning architecture into experience. Making the bento grid feel magical. Making the AI assistant feel like a trusted partner, not a chatbot. Making event-sourced data accessible to people who’ve never heard the term. Making workspace templates so good that setting up a team CRM takes 30 seconds.
+And the deep infrastructure. Multi-pod agent routing. Cross-workspace memory. The blockchain verification layer. Package system for community-built views. The problems get harder and more interesting as the platform grows.
+WHAT THIS ISN’T
+This isn’t a corporation with a ping-pong table. It’s an early-stage infrastructure project with real code, real architecture, and real ambition. The pace is fast. The scope is large. The decisions matter. If you want to build something you’re genuinely proud of, on problems most teams don’t even know exist, this is it.

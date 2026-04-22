@@ -1,0 +1,1128 @@
+# Synap Intelligence Hub — Architecture, Capabilities & Roadmap
+
+> **Complete reference for what the system does, how it works, what the frontend can build,
+> how to connect external agents, and where to go next.**
+>
+> Last updated: 2026-03-23 — All 5 enhancement phases complete · Production hardening complete · 54/54 tests passing
+
+---
+
+## Table of Contents
+
+1. [System Overview](#1-system-overview)
+2. [The Two Services](#2-the-two-services)
+3. [Hub ↔ Backend Protocol — All Endpoints](#3-hub--backend-protocol--all-endpoints)
+4. [Intelligence Hub Internals](#4-intelligence-hub-internals)
+5. [All Tools & Agent Types](#5-all-tools--agent-types)
+6. [Document Handling](#6-document-handling)
+7. [What Is Production-Ready Now](#7-what-is-production-ready-now)
+8. [Frontend Capabilities & Demo User Stories](#8-frontend-capabilities--demo-user-stories)
+9. [External Agent Integration](#9-external-agent-integration)
+10. [What Needs Work (Backend vs Frontend)](#10-what-needs-work-backend-vs-frontend)
+11. [Building Your Own Intelligence Layer](#11-building-your-own-intelligence-layer)
+12. [Graph Database Analysis: FalkorDB + Graphiti](#12-graph-database-analysis-falkordb--graphiti)
+13. [Recommended Architecture Evolution](#13-recommended-architecture-evolution)
+
+---
+
+## 1. System Overview
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Client (Web/Mobile/IDE Extension)                                    │
+│    POST /api/chat/stream  •  POST /api/orchestrate  •  SSE events    │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │  HTTP (HUB_PROTOCOL_API_KEY)
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  Intelligence Hub  (Node 20, Hono, Vercel AI SDK + OpenRouter)       │
+│                                                                       │
+│  ┌──────────────────┐  ┌────────────────────┐  ┌─────────────────┐  │
+│  │  Agents          │  │  Tools (14 built-in│  │  Services       │  │
+│  │  OrchestratorAgt │  │  + dynamic skills) │  │  ContextCompr.  │  │
+│  │  MVPChatAgent    │  │  remember_fact     │  │  EmbeddingsSvc  │  │
+│  │  ResearchAgent   │  │  memory_search     │  │  MemoryService  │  │
+│  │  CodeAgent       │  │  graph_traverse    │  │                 │  │
+│  │  WritingAgent    │  │  dispatch_agent    │  │                 │  │
+│  │  KnowledgeSearch │  │  search_unified    │  │                 │  │
+│  │  ActionAgent     │  │  + 8 more...       │  │                 │  │
+│  └──────────────────┘  └────────────────────┘  └─────────────────┘  │
+└────────────────────────────────┬─────────────────────────────────────┘
+                                 │  REST  /api/hub/*
+                                 ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  Synap Backend  (Node 20, Hono, Drizzle ORM, PostgreSQL + pgvector) │
+│                                                                       │
+│  Hub REST Adapter /api/hub/*                                         │
+│  threads · entities · documents · memory · search · graph · skills  │
+│                     │                                                 │
+│        Event Pipeline (Inngest self-hosted)                          │
+│        requested → globalValidator → validated → executor → done    │
+│                     │                                                 │
+│  PostgreSQL + pgvector  ·  Typesense  ·  MinIO  ·  Redis            │
+│  entities · documents · knowledge_facts · chat_threads              │
+│  conversation_messages · thread_entities · relations · proposals    │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Key design principle:** The Intelligence Hub is **stateless** — it has no database of its own.
+All state (threads, entities, documents, memory, skills) lives in the Synap Backend.
+The hub is pure reasoning: context in → LLM reasoning + tool calls → structured output out.
+
+---
+
+## 2. The Two Services
+
+### 2a. Synap Backend (Data Pod)
+
+The backend is the **source of truth**. All clients (including the hub) interact with it through
+the Hub REST Adapter at `/api/hub/*`.
+
+**Capabilities:**
+
+- Entity CRUD (tasks, contacts, meetings, ideas, projects, notes) via event pipeline
+- Document CRUD with versioning (text, markdown, code, pdf, docx)
+- Chat threads + conversation messages (full history, branching, parent-child hierarchy)
+- `knowledge_facts` table — long-term AI memory with 1536-dim pgvector embeddings
+- Thread ↔ entity/document sidebar linking (idempotent, with relationship types)
+- Skills — user-created AI tools stored in DB, executed at runtime
+- Proposals — AI-suggested actions pending human approval
+- Unified full-text search via Typesense (entities, documents, projects, threads, agents)
+- Vector/semantic search via pgvector cosine distance
+- Entity relation graph — BFS traversal up to 3 hops
+- Cross-thread notifications via event pipeline + Inngest
+- Workspace membership + permission validation on all writes
+- Event watermark persistence (no replay on restart)
+
+**Open-source components:**
+PostgreSQL + pgvector · Inngest (self-hosted) · Typesense · MinIO · Drizzle ORM · Hono
+
+### 2b. Intelligence Hub (AI Layer)
+
+The hub is the **reasoning layer**. It calls tools, assembles context, and streams responses.
+
+**Capabilities:**
+
+- Streaming SSE chat with context-aware pre-prompt injection (conversation summary + personality fingerprint + linked entities/docs + memory)
+- 7 agent types: orchestrator, mvp-chat, research, code, writing, knowledge-search, action
+- 14 built-in tools (read + write + coordination categories)
+- Dynamic user-defined skills loaded at runtime from the backend
+- Proposal workflow: AI suggests → human approves → AI executes
+- Multi-agent dispatch: orchestrator spawns specialist sub-agents in child threads
+- Entity graph traversal tool
+- Semantic memory search (pgvector cosine via embedding generation on hub)
+- Personality fingerprint caching (6h TTL in thread metadata)
+- Rolling thread summary (fire-and-forget after each context compression)
+- Context inheritance for child threads (inherits parent messages)
+- All LLMs via OpenRouter (Claude, GPT-4, DeepSeek, Gemini, open-source — switchable per agent)
+
+**Proprietary components (your IP):**
+
+- Agent prompting strategy and orchestration logic
+- Context compression algorithm + personality fingerprinting
+- Tool framework and backend integration mapping
+- Pre-prompt assembly pipeline with multi-layer context injection
+- Multi-agent hierarchy protocol (parentThreadId + child thread creation)
+
+---
+
+## 3. Hub ↔ Backend Protocol — All Endpoints
+
+### Authentication
+
+All Hub → Backend calls: `Authorization: Bearer <HUB_PROTOCOL_API_KEY>`
+Scopes: `hub-protocol.read` · `hub-protocol.write`
+
+### Thread & Context
+
+| Method  | Path                         | Purpose                                                                     |
+| ------- | ---------------------------- | --------------------------------------------------------------------------- |
+| `GET`   | `/threads/:id/context`       | Thread + messages + linked entities/docs + contextSummary + metadata        |
+| `PATCH` | `/threads/:id/context`       | Update thread contextSummary and/or personalityFingerprint (JSONB metadata) |
+| `GET`   | `/threads/:id/messages`      | Raw conversation messages                                                   |
+| `POST`  | `/threads`                   | Create thread (parentThreadId, agentType, branchPurpose optional)           |
+| `POST`  | `/threads/:id/messages`      | Inject system/assistant message into thread (for sub-agent result posting)  |
+| `POST`  | `/threads/:id/link-entity`   | Link entity to thread sidebar (idempotent)                                  |
+| `POST`  | `/threads/:id/link-document` | Link document to thread sidebar (idempotent)                                |
+
+### User & Entities
+
+| Method  | Path                  | Purpose                                           |
+| ------- | --------------------- | ------------------------------------------------- |
+| `GET`   | `/users/:id/context`  | User preferences + recent entities + workspaces   |
+| `GET`   | `/users/:id/entities` | User's entities (filterable by type, workspaceId) |
+| `POST`  | `/entities`           | Create entity — fires event pipeline              |
+| `PATCH` | `/entities/:id`       | Update entity — fires event pipeline              |
+
+### Documents
+
+| Method | Path                   | Purpose                                                   |
+| ------ | ---------------------- | --------------------------------------------------------- |
+| `POST` | `/documents`           | Create document (types: text, markdown, code, pdf, docx)  |
+| `GET`  | `/documents/:id`       | Get document with full content                            |
+| `POST` | `/documents/proposals` | Create document edit proposal (AI diff, pending approval) |
+
+### Search
+
+| Method | Path                 | Purpose                                                              |
+| ------ | -------------------- | -------------------------------------------------------------------- |
+| `GET`  | `/search`            | Unified Typesense search (all collections)                           |
+| `GET`  | `/search/collection` | Search single collection (entities, documents, views, chat_threads…) |
+| `GET`  | `/search/documents`  | Document-specific search by type                                     |
+| `GET`  | `/vector-search`     | pgvector semantic similarity search (entity types filter supported)  |
+
+### Memory (Long-Term Knowledge Facts)
+
+| Method   | Path             | Purpose                                                                |
+| -------- | ---------------- | ---------------------------------------------------------------------- |
+| `POST`   | `/memory`        | Store fact with 1536-dim embedding                                     |
+| `GET`    | `/memory`        | Recall facts (keyword relevance search)                                |
+| `POST`   | `/memory/search` | **Semantic recall** — POST embedding vector → pgvector cosine distance |
+| `DELETE` | `/memory/:id`    | Delete fact                                                            |
+
+### Entity Graph
+
+| Method | Path              | Purpose                                                                             |
+| ------ | ----------------- | ----------------------------------------------------------------------------------- |
+| `GET`  | `/graph/traverse` | BFS traversal from startEntityId, maxDepth (1-3), optional relationshipTypes filter |
+
+### Skills & Proposals
+
+| Method  | Path                  | Purpose                                       |
+| ------- | --------------------- | --------------------------------------------- |
+| `GET`   | `/skills/getSkills`   | List user skills                              |
+| `GET`   | `/skills/getSkill`    | Get single skill definition + code            |
+| `POST`  | `/skills/createSkill` | Create skill (AI-generated or custom)         |
+| `GET`   | `/proposals`          | List pending proposals (filterable by status) |
+| `PATCH` | `/proposals/:id`      | AI revises a pending proposal                 |
+
+### Health
+
+| Method | Path      | Purpose                |
+| ------ | --------- | ---------------------- |
+| `GET`  | `/health` | Health check (no auth) |
+
+### Critical: Workspace-scoped writes
+
+Entity create/update flows through the event pipeline. Always include `userId` + `workspaceId`
+in the body — the backend uses the real `userId`, not the API key's `"system"` userId,
+for workspace membership checks.
+
+---
+
+## 4. Intelligence Hub Internals
+
+### Agent Execution Pipeline
+
+```
+AgentContext: { userId, threadId, parentThreadId?, workspaceId, message, history? }
+                    │
+                    ▼
+        assembleContext()  [8-second timeout via Promise.race]
+            ├── fetchThreadMessages(threadId)  [3s abort]
+            ├── memoryService.recall(query, userId)  → semantic search + keyword fallback
+            ├── hubProtocol.getThreadContext(threadId)  → linked entities/docs
+            ├── generateConversationSummary(messages)  → cached in chat_threads.contextSummary
+            ├── extractPersonalityFingerprint(messages)  → cached in metadata (6h TTL)
+            └── fire-and-forget: hubProtocol.updateThreadContext(threadId, { contextSummary, personalityFingerprint })
+                    │
+                    ▼
+        buildSystemPrompt(assembled, context)
+            ├── ## Conversation History Summary
+            ├── ## Your Communication Style  [personality fingerprint]
+            ├── ## Active Context — Linked Entities
+            ├── ## Active Context — Linked Documents
+            └── ## Long-Term Memory
+                    │
+                    ▼
+        generateText(model, systemPrompt, history + message, tools)
+            ├── Tool calls auto-execute (context tools) or propose (action tools)
+            ├── AIStep tracking: thinking → tool_call → tool_result
+            └── Streaming callbacks: onThinking, onContent, onProposal
+                    │
+                    ▼
+        AgentResponse: { content, aiSteps[], proposals[], branchDecision, requiresApproval }
+```
+
+### Context Caching Strategy
+
+| What                    | Where                                          | TTL/Trigger                                          |
+| ----------------------- | ---------------------------------------------- | ---------------------------------------------------- |
+| Conversation summary    | `chat_threads.context_summary`                 | Re-generated when messages ≥ 6; fire-and-forget save |
+| Personality fingerprint | `chat_threads.metadata.personalityFingerprint` | 6-hour TTL; re-extracted only when stale             |
+| Memory facts            | `knowledge_facts` + pgvector                   | Recalled per request (semantic search)               |
+| Thread context          | Backend API call                               | Per-request (lightweight, just a DB read)            |
+
+### LLM Request Pipeline
+
+```
+User message arrives
+       │
+       ▼
+classifyComplexity(message)  →  simple | normal | complex
+       │                         │         │         │
+       │                     free model  DeepSeek  GPT-4o/Opus
+       │
+       ▼
+llmCircuitBreaker.check()  →  circuit open? → fast-fail with retryAfterSeconds
+       │
+       ▼
+llmSemaphore.acquire(userId, priority)
+   ├── Global cap: 20 concurrent (OPENROUTER_CONCURRENCY)
+   ├── Per-customer cap: 4 concurrent (LLM_MAX_PER_CUSTOMER)
+   ├── Priority: "interactive" served before "background"
+   └── Timeout: 45s max queue wait (LLM_ACQUIRE_TIMEOUT_MS)
+       │
+       ▼
+streamText() / generateText()  →  OpenRouter  →  response
+       │
+       ▼
+semaphore.release() + circuitBreaker.onSuccess()
+```
+
+- **Dynamic complexity routing**: simple queries hit free models, complex ones get powerful models
+- **Circuit breaker**: 5 consecutive failures → 30s open → half_open probe → auto-reset
+- **Fair semaphore**: per-customer cap prevents tenant monopolization, priority queue ensures interactive users aren't blocked by background sub-agents
+
+---
+
+## 5. All Tools & Agent Types
+
+### Tool Registry
+
+#### Action Tools (write ops — may require approval or propose)
+
+| Tool                      | Auto-exec | Purpose                                        |
+| ------------------------- | --------- | ---------------------------------------------- |
+| `create_entity`           | No        | Create entity via event pipeline               |
+| `update_entity`           | No        | Update entity via event pipeline               |
+| `create_document`         | No        | Create doc (text/markdown/code/pdf/docx)       |
+| `update_document`         | No        | Update document content                        |
+| `create_skill`            | No        | Generate + store new user skill (JS)           |
+| `remember_fact`           | **Yes**   | Store fact in knowledge_facts with embedding   |
+| `dispatch_agent`          | No        | Spawn specialist sub-agent in child thread     |
+| `update_proposal`         | No        | Revise a pending proposal before user approves |
+| `link_entity_to_thread`   | **Yes**   | Link entity to thread sidebar                  |
+| `link_document_to_thread` | **Yes**   | Link document to thread sidebar                |
+
+#### Context Tools (read-only — always auto-execute silently)
+
+| Tool               | Purpose                                                                  |
+| ------------------ | ------------------------------------------------------------------------ |
+| `search_unified`   | Typesense search across all collections — **primary investigation tool** |
+| `search_entities`  | Entity-specific search                                                   |
+| `search_documents` | Document-specific search with optional type filter                       |
+| `vector_search`    | pgvector semantic similarity (cosine distance)                           |
+| `get_document`     | Fetch full document content by ID                                        |
+| `memory_search`    | Semantic recall from knowledge_facts (embedding + fallback)              |
+| `graph_traverse`   | BFS traversal of entity relation graph (maxDepth 1-3, type filter)       |
+
+#### Dynamic Skill Tools
+
+User-defined JavaScript tools stored in the `skills` table, loaded at runtime.
+Each skill becomes a callable tool visible to agents and validated by Zod.
+
+### Agent Types & Tool Sets
+
+| Agent                | Type Key           | Tools                                                                                                         | Max Steps | Purpose                                                  |
+| -------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- | --------- | -------------------------------------------------------- |
+| OrchestratorAgent    | `meta`             | ALL (14 built-in + skills)                                                                                    | 10        | Co-founder AI — proactive reasoning, strategy, proposals |
+| MVPChatAgent         | `default`          | search_unified, get_document, create_entity, update_entity, create_document, update_document, memory_search   | 10        | Single-agent MVP for main chat                           |
+| ResearchAgent        | (standalone)       | Search + synthesis                                                                                            | 5         | Multi-subtopic deep research with confidence scoring     |
+| CodeAgent            | `code`             | search_documents, create_document, update_document                                                            | 8         | Code generation, review, analysis                        |
+| WritingAgent         | `writing`          | search_documents, create_document, update_document                                                            | 8         | Document drafting and editing                            |
+| KnowledgeSearchAgent | `knowledge-search` | vector_search, search_unified, search_entities, search_documents, get_document, memory_search, graph_traverse | 6         | Read-only knowledge synthesis                            |
+| ActionAgent          | `action`           | search_unified, search_entities, create_entity, update_entity                                                 | 5         | CRUD operations                                          |
+
+### dispatch_agent — Multi-Agent Hierarchy
+
+When the orchestrator calls `dispatch_agent`:
+
+1. A **child thread** is created with `parentThreadId = orchestratorThreadId`
+2. The specialist agent runs with `threadId = childThreadId`
+3. Sub-agent result posted back to parent thread as a `system` message
+4. `childThreadId` returned in tool output (frontend can link to it)
+5. Falls back to parent thread if child creation fails (non-fatal)
+
+---
+
+## 6. Document Handling
+
+### Supported Document Types
+
+| Type       | MIME                           | AI Readable | Notes                                                          |
+| ---------- | ------------------------------ | ----------- | -------------------------------------------------------------- |
+| `text`     | text/plain                     | ✅          | Plain UTF-8 text                                               |
+| `markdown` | text/markdown                  | ✅          | Markdown, rendered for AI                                      |
+| `code`     | application/code               | ✅          | Source code + optional language field                          |
+| `pdf`      | application/pdf                | ⚠️          | Stored in MinIO; content extraction not yet implemented in hub |
+| `docx`     | application/vnd.openxmlformats | ⚠️          | Stored in MinIO; content extraction not yet implemented        |
+
+### Storage Architecture
+
+Documents follow a **dual-storage** model:
+
+- **MinIO/R2 object storage**: raw file bytes (all types)
+- **PostgreSQL**: metadata + working content (for text/markdown/code)
+- **Yjs CRDT**: `working_state` binary dump for collaborative editing state
+
+Schema fields:
+
+```
+documents
+  id, userId, workspaceId, entityId?
+  type, title, mimeType
+  storageUrl, storageKey, size
+  content (TEXT — for text/markdown/code)
+  currentVersion, lastSavedVersion
+  workingState, workingStateUpdatedAt  (Yjs CRDT)
+  metadata (JSONB)
+```
+
+### AI Access to Documents
+
+- **Reading**: `get_document` tool fetches full `content` field via hub-protocol REST
+- **Writing**: `create_document` / `update_document` tools POST to backend
+- **Proposals**: Document edits are proposed (diff-based) before applying, requiring user approval
+- **Full-text search**: All documents indexed in Typesense at write time
+- **Semantic search**: `vector_search` searches `entity_vectors` table (documents with entities)
+
+### What's Missing for Full Document AI Support
+
+| Gap                                                  | Effort | Priority |
+| ---------------------------------------------------- | ------ | -------- |
+| PDF text extraction (pdfjs-dist or pdf-parse)        | Medium | High     |
+| DOCX text extraction (mammoth or docx2txt)           | Small  | High     |
+| Image understanding (vision models)                  | Large  | Low      |
+| Slide/presentation extraction (LibreOffice headless) | Large  | Medium   |
+| Chunked reading for large docs (>100k tokens)        | Medium | Medium   |
+
+**Recommended immediate fix** (2 files, no migration):
+
+1. Add `pdf-parse` to hub package
+2. In `get_document` tool: if `type === "pdf"` and no `content`, fetch from `storageUrl`, extract text, cache back to content field
+3. Same pattern for `docx` via `mammoth`
+
+---
+
+## 7. What Is Production-Ready Now
+
+### Backend
+
+| Feature                                                    | Status |
+| ---------------------------------------------------------- | ------ |
+| Entity CRUD via event pipeline                             | ✅     |
+| Document CRUD with versioning                              | ✅     |
+| Chat threads with branching + parent-child hierarchy       | ✅     |
+| Knowledge facts (memory) with pgvector 1536-dim embeddings | ✅     |
+| Semantic memory search (cosine distance)                   | ✅ NEW |
+| Keyword memory search (fallback)                           | ✅     |
+| Thread context summary (cached, rolling)                   | ✅ NEW |
+| Personality fingerprint caching (6h TTL)                   | ✅ NEW |
+| Thread sidebar linking (entities + documents)              | ✅     |
+| Unified full-text search (Typesense)                       | ✅     |
+| Semantic vector search (pgvector)                          | ✅     |
+| Entity relation graph (BFS traversal)                      | ✅ NEW |
+| Multi-agent child thread creation                          | ✅ NEW |
+| Sub-agent result posting back to parent                    | ✅ NEW |
+| Proposal workflow (suggest → approve → execute)            | ✅     |
+| User-defined skills (dynamic tools)                        | ✅     |
+| Cross-thread notifications                                 | ✅     |
+| Event watermark persistence                                | ✅     |
+| All 54 integration tests passing                           | ✅     |
+
+### Hub
+
+| Feature                                                  | Status |
+| -------------------------------------------------------- | ------ |
+| Streaming SSE chat                                       | ✅     |
+| Non-streaming orchestrate endpoint                       | ✅     |
+| Context-aware pre-prompt (Phase A complete)              | ✅     |
+| Personality continuity (fingerprint in every request)    | ✅     |
+| Semantic memory recall (embedding → cosine search)       | ✅ NEW |
+| Rolling thread summary (fire-and-forget save)            | ✅ NEW |
+| 7 agent types                                            | ✅     |
+| 14 built-in tools                                        | ✅     |
+| graph_traverse tool                                      | ✅ NEW |
+| dispatch_agent → child thread → result posted back       | ✅ NEW |
+| Dynamic user skill tools                                 | ✅     |
+| Multi-LLM via OpenRouter (Claude, GPT-4, DeepSeek, etc.) | ✅     |
+| Fair semaphore (per-customer + priority queue)           | ✅ NEW |
+| Circuit breaker (auto-open on provider failures)         | ✅ NEW |
+| Dynamic complexity routing (simple→free, complex→Opus)   | ✅ NEW |
+| Bounded caches (TTLCache replaces unbounded Maps)        | ✅ NEW |
+| Per-category tool timeouts (8s/12s/20s by category)      | ✅ NEW |
+
+---
+
+## 8. Frontend Capabilities & Demo User Stories
+
+### What the Frontend Receives
+
+#### SSE Stream Events
+
+```typescript
+// Content chunk (stream text token by token)
+{ type: "content", content: "partial text chunk" }
+
+// AI thinking step (tool call, search, reasoning)
+{ type: "step", step: { id: "step-1", type: "thinking"|"tool_call"|"tool_result", content: "...", timestamp: "..." } }
+
+// Proposal (action pending user approval)
+{ type: "proposal", data: { id: "uuid", toolName: "create_entity", description: "Create task: ...", args: { type: "task", title: "..." } } }
+
+// Branch suggestion (AI recommends spawning a sub-agent)
+{ type: "branch", decision: { shouldBranch: true, agentType: "research", purpose: "...", reasoning: "..." } }
+```
+
+#### Non-Streaming Response
+
+```typescript
+{
+  content: string;           // Full text response
+  aiSteps: AIStep[];         // Array of thinking/tool steps
+  proposals: Proposal[];     // Pending actions awaiting approval
+  branchDecision?: {         // AI's branch recommendation
+    shouldBranch: boolean;
+    agentType: string;
+    purpose: string;
+    reasoning: string;
+  };
+  requiresApproval: boolean;
+  threadId: string;
+}
+```
+
+### User Stories — What the Frontend Can Demo Today
+
+---
+
+#### US-01: Live Streaming Chat with Thinking Steps
+
+**Story**: User sends a message. The chat shows:
+
+1. A "🧠 Assembling context..." spinner (thinking step)
+2. Tool call indicators: "🔍 Searching for related entities..."
+3. Tool result indicators: "Found 3 related tasks"
+4. Streaming text response appearing token by token
+
+**What to render:**
+
+- `aiSteps[]` → render as a collapsible "AI Thinking" panel above the response
+- Each step: icon + content + timestamp
+- `step.type === "tool_call"` → show tool name + args summary
+- `step.type === "tool_result"` → show result summary (collapsed by default)
+
+**Data**: `POST /api/chat/stream` with `stream: true` → parse SSE events
+
+---
+
+#### US-02: Entity Proposal → Approval Flow
+
+**Story**: User asks "Create a task to write the pitch deck by Friday".
+AI proposes creating an entity. User sees a proposal card:
+
+```
+📋 PROPOSAL: Create Entity
+   Type: task
+   Title: "Write the pitch deck by Friday"
+   [Approve ✓]  [Reject ✗]  [Edit]
+```
+
+On approve: `PATCH /api/hub/proposals/:id` → entity created → event pipeline fires.
+
+**What to render:**
+
+- `proposals[]` array in response → render as proposal cards in the chat
+- Each proposal: icon (based on toolName) + description + args preview
+- Approve → POST to backend → update UI optimistically
+- `update_proposal` → allow inline edit before approving
+
+**Proposal tool types**: `create_entity`, `update_entity`, `create_document`, `update_document`, `create_skill`, `create_branch`
+
+---
+
+#### US-03: Thread Sidebar — Linked Entities & Documents
+
+**Story**: As the AI references entities/documents in a conversation, they appear in the thread sidebar. User can click to navigate to them.
+
+**What to render:**
+
+- Call `GET /api/hub/threads/:id/context` → `linkedEntities[]` + `linkedDocuments[]`
+- Sidebar panel: "Active Context" with entity chips and document icons
+- Each entity: `[type icon] [title]` → click → navigate to entity detail
+- Each document: `[doc icon] [title]` → click → open document viewer
+
+**Backend**: `link_entity_to_thread` and `link_document_to_thread` tools auto-fire as AI mentions items
+
+---
+
+#### US-04: Multi-Agent Dispatch — Sub-Agent Progress
+
+**Story**: User asks "Research our top 3 competitors and analyze their pricing". Orchestrator dispatches a research sub-agent.
+
+1. User sees: "🤖 Dispatching research agent..." thinking step
+2. Sub-agent creates child thread (visible as a branch in UI)
+3. Research runs (with its own tool steps)
+4. Result posted back to parent as system message
+5. Orchestrator synthesizes and presents findings
+
+**What to render:**
+
+- `dispatch_agent` tool_call step → show with sub-agent type indicator
+- Tool result includes `childThreadId` → show "View research thread →" link
+- Parent thread receives system message with `[Sub-agent: research]` prefix → render differently (muted/system style)
+- Child thread can be opened separately showing full research tool steps
+
+---
+
+#### US-05: Document Creation & Editing Proposals
+
+**Story**: User asks "Draft a blog post about our product launch". AI creates a document proposal.
+
+**What to render:**
+
+- Proposal card: `create_document` → show title + content preview (first 200 chars)
+- On approve → document created → navigate to document editor
+- For `update_document` proposals → show diff (before/after)
+
+**Document types**: text, markdown (with preview), code (with syntax highlighting)
+
+---
+
+#### US-06: Entity Graph Traversal Visualization
+
+**Story**: User asks "What is everything connected to our SaaS project?". AI calls `graph_traverse`.
+
+**What to render:**
+
+- `graph_traverse` tool_result → `{ startEntityId, byDepth: { 1: [...], 2: [...] }, nodes }`
+- Render as a mini graph/tree: root → depth 1 nodes → depth 2 nodes
+- Each node: `[entity type icon] [title]` + relationship type label on edge
+- Click node → open entity detail
+
+---
+
+#### US-07: Long-Term Memory — Memory Facts Panel
+
+**Story**: AI recalls a fact the user mentioned 3 weeks ago ("User prefers TypeScript over JavaScript").
+
+**What to render:**
+
+- `## Long-Term Memory` section in assembled context → surface as a "Memory" sidebar panel
+- Show top-N facts recalled for the current query
+- Allow user to delete facts (`DELETE /api/hub/memory/:id`)
+- `remember_fact` tool step → flash a memory-add notification
+
+---
+
+#### US-08: Branch / Child Thread Navigation
+
+**Story**: Orchestrator recommends branching for deep research. User accepts.
+
+**What to render:**
+
+- `branchDecision.shouldBranch === true` in response → show "🌿 Open research thread" CTA
+- On click: `POST /api/hub/threads` with `parentThreadId` → redirect to new thread
+- Thread list: show parent-child hierarchy (indented, with branch purpose label)
+- Child thread: show "← Back to main thread" + parent thread summary in context panel
+
+---
+
+#### US-09: User Skills — Custom Tool Creation
+
+**Story**: User asks "Create a tool that fetches my calendar events". AI creates a skill.
+
+**What to render:**
+
+- `create_skill` tool → proposal card showing the JS code
+- On approve: skill saved to DB, becomes available as a tool in future conversations
+- Skills list page: `GET /api/hub/skills/getSkills` → show name, description, status (active/error)
+- Each skill card: enable/disable toggle, view code, test execution
+
+---
+
+#### US-10: Proposal Management — Pending Queue
+
+**Story**: Multiple proposals from a complex AI analysis.
+
+**What to render:**
+
+- Proposals panel (floating or sidebar): all `status: PENDING` proposals from `GET /api/hub/proposals`
+- Batch approve/reject (checkboxes)
+- Proposal groups: "Entities to create", "Documents to create", "Updates to apply"
+- Each with estimated impact: "This will create 3 tasks and link them to the active project"
+
+---
+
+#### US-11: Search — Unified Results with Type Filters
+
+**Story**: User searches "pitch deck" from the command bar.
+
+**What to render:**
+
+- Call `GET /api/hub/search?query=pitch deck`
+- Results grouped by collection: 📄 Documents · 📌 Entities · 💬 Threads
+- Each result: title, excerpt, type icon, timestamp, relevance score
+- Click → navigate to the item or open in thread context
+- Filters: entity type, date range, workspace
+
+---
+
+#### US-12: AI Channels — Agent-Specific Threads
+
+**Story**: User creates a dedicated "Code Review" channel running the code agent.
+
+**What to render:**
+
+- Thread creation with `agentType: "code"` → renders with code-agent branding
+- Threads list: show agent type badge on each thread
+- Typing indicator changes based on agent type
+- `agentType: "research"` → research-themed UI with "📚" indicator
+- `agentType: "writing"` → writing-themed UI with document icon
+
+**Backend**: `POST /api/hub/threads` with `agentType` field
+
+---
+
+### Chat Response Rendering Specification
+
+```
+Message bubble layout:
+┌──────────────────────────────────────────────────────┐
+│ AI Response Content (markdown rendered)               │
+│                                                       │
+│ [Thinking Steps ▼]  (collapsible)                    │
+│   🧠 Assembling context...           [timestamp]      │
+│   🔍 search_unified("pitch deck")   [timestamp]      │
+│   ✅ Found: 3 documents, 2 entities  [timestamp]      │
+│                                                       │
+│ [Proposals ▼]                                        │
+│   📋 Create task: "Write pitch deck by Friday"       │
+│      [Approve]  [Reject]  [Edit]                     │
+│                                                       │
+│ [Branch Recommendation]  (if shouldBranch)           │
+│   🌿 Research agent recommended for deep analysis     │
+│      [Open Research Thread]                           │
+└──────────────────────────────────────────────────────┘
+```
+
+---
+
+## 9. External Agent Integration
+
+The hub is designed as an **open intelligence bus**. Any external agent can be integrated via two patterns:
+
+### Pattern A: External Agent as a Tool
+
+Expose any external service as a custom tool in the `tools/actions/` directory. The orchestrator can then call it like any other tool.
+
+**Example: Perplexity as a tool**
+
+```typescript
+// tools/actions/perplexity-search.ts
+export const perplexitySearchTool = defineTool({
+  name: "perplexity_search",
+  category: "context",
+  description:
+    "Real-time web search with AI synthesis. Use for current events, live data, or information not in the knowledge base.",
+  parameters: z.object({
+    query: z.string().describe("Web search query"),
+    focus: z.enum(["internet", "news", "academic"]).default("internet"),
+  }),
+  async execute(args) {
+    const response = await fetch("https://api.perplexity.ai/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}` },
+      body: JSON.stringify({
+        model: "sonar-medium-online",
+        messages: [{ role: "user", content: args.query }],
+      }),
+    });
+    const data = await response.json();
+    return {
+      answer: data.choices[0].message.content,
+      citations: data.citations,
+    };
+  },
+});
+```
+
+Then register in `tool-registry.ts` and add to the orchestrator's tool list.
+
+**Other tools to build this way:**
+
+- `brave_search` — Brave Search API (privacy-focused web search)
+- `calculator` — Wolfram Alpha for computation
+- `github_search` — GitHub API for code search
+- `notion_read` — Read Notion pages
+- `slack_message` — Send Slack messages
+- `calendar_check` — Google/Microsoft Calendar
+
+### Pattern B: External Agent as a Specialist (dispatch_agent)
+
+Add a new agent type to the `agent-registry.ts` that wraps an external service. The orchestrator's `dispatch_agent` tool can then delegate to it.
+
+**Example: Perplexity as a research sub-agent**
+
+```typescript
+// agents/specialist/perplexity-agent.ts
+export class PerplexityAgent {
+  async execute(context: AgentContext): Promise<AgentResponse> {
+    // Call Perplexity API directly
+    const response = await perplexityClient.chat({
+      model: "sonar-large-online",
+      messages: [{ role: "user", content: context.message }],
+    });
+
+    // Post result to child thread (for audit trail)
+    await hubProtocol.postMessage({
+      threadId: context.threadId,
+      role: "assistant",
+      content: response.content,
+      userId: context.userId,
+    });
+
+    return { content: response.content, aiSteps: [] };
+  }
+}
+```
+
+Register in `agent-registry.ts`:
+
+```typescript
+case "perplexity": return new PerplexityAgent();
+```
+
+Add `"perplexity"` to `dispatchAgentTool`'s `agentTypeEnum`.
+
+### Pattern C: External Agent as a Backend Trigger (Webhook/Event)
+
+For agents that operate asynchronously (webhooks, long-running processes, domain-specific services):
+
+1. External agent calls `POST /api/hub/threads/:id/messages` to inject findings into a thread
+2. Frontend sees the new system message in real-time
+3. Orchestrator can reference it in the next turn
+
+**Use cases:**
+
+- Code analysis bots (run on every commit, post findings to a "code review" thread)
+- Monitoring agents (alert on anomaly → post to "infrastructure" thread)
+- Domain-specific AI (medical, legal, financial) → post analysis to dedicated thread
+
+### External AI Models via OpenRouter
+
+The hub already routes ALL LLM calls through OpenRouter. Any model available on OpenRouter
+can be used by simply adding it to `models.ts`:
+
+```typescript
+// models.ts — add any OpenRouter model
+const MODELS = {
+  // Already available:
+  deepseek: "deepseek/deepseek-chat", // $0.14/M
+  claude37: "anthropic/claude-3.7-sonnet", // Best quality
+  gpt4o: "openai/gpt-4o", // Best code
+  // Add these:
+  gemini: "google/gemini-2.0-flash-exp:free", // Free, fast
+  llama: "meta-llama/llama-3.3-70b-instruct", // Open source
+  perplexity: "perplexity/sonar-large", // Web search built-in
+  qwen: "qwen/qwen-2.5-72b-instruct", // Strong multilingual
+  mistral: "mistralai/mistral-large-2411", // EU-based, privacy-focused
+  // Domain-specific:
+  medpalm: "google/medpalm-2", // Medical
+  codestral: "mistralai/codestral-latest", // Code specialist
+};
+```
+
+Assign different models to different agents in `getModel()`:
+
+```typescript
+// Research agent → Perplexity (live web access)
+"research-web": "perplexity/sonar-pro-online",
+// Medical agent → MedPaLM
+"medical": "google/medpalm-2",
+// Code agent → GPT-4o (best code)
+"code": MODELS.gpt4o,
+```
+
+### Domain-Specific Agent Patterns
+
+**Pattern: Domain Specialist with Custom System Prompt + Restricted Tool Set**
+
+```typescript
+// agents/specialist/medical-agent.ts
+class MedicalAgent extends BaseAgent {
+  constructor() {
+    super({
+      agentType: "knowledge-search",
+      systemPrompt: `You are a medical information specialist.
+        ALWAYS: cite sources, note uncertainty, recommend consulting a doctor.
+        NEVER: provide diagnosis, dosage advice, or treatment plans.`,
+      tools: [
+        "search_unified",
+        "vector_search",
+        "get_document",
+        "memory_search",
+      ],
+      maxSteps: 6,
+    });
+  }
+}
+```
+
+The same pattern works for:
+
+- **Legal agent**: searches legal documents, cites case law, flags jurisdiction
+- **Financial agent**: reads P&L documents, queries financial entities, proposes reports
+- **Technical agent**: reads codebases, proposes PRs, analyzes architecture
+- **Data analyst agent**: reads CSV documents (stored as code/text), generates analysis
+
+---
+
+## 10. What Needs Work (Backend vs Frontend)
+
+### ✅ Backend — Fully Ready
+
+The backend is feature-complete for a production MVP. No breaking changes needed.
+All new features (semantic memory, graph traversal, child threads, rolling summary, fingerprint caching)
+are deployed and passing tests.
+
+**Only small additions worth doing before launch:**
+
+| Item                                        | Effort             | Impact                            |
+| ------------------------------------------- | ------------------ | --------------------------------- |
+| PDF text extraction in `get_document`       | 1 day              | High — AI can read PDFs           |
+| DOCX text extraction                        | 0.5 day            | Medium — AI can read Word docs    |
+| Perplexity tool                             | 2 hours            | High — live web search for agents |
+| Rate limiting per userId (not just API key) | 1 day              | Medium — prevents abuse           |
+| `research` as valid agentType in DB enum    | 30 min + migration | Low — currently maps to "default" |
+
+### 🔧 Frontend — All the Work Is Here
+
+The backend exposes everything needed. The frontend needs to render it.
+
+**Priority 1 — Core Chat Rendering**
+
+- [ ] SSE stream parser (parse `data: {...}` events)
+- [ ] Thinking steps panel (collapsible, with tool name + args)
+- [ ] Streaming text with cursor
+- [ ] Proposal cards with approve/reject/edit actions
+- [ ] Branch recommendation CTA (`branchDecision`)
+
+**Priority 2 — Context & Sidebar**
+
+- [ ] Thread sidebar with linked entities + documents
+- [ ] Memory facts panel (show recalled facts, delete button)
+- [ ] Context summary display (show `contextSummary` if exists)
+- [ ] `parentThreadId` → breadcrumb navigation
+
+**Priority 3 — Data Management**
+
+- [ ] Entity detail view (type-specific templates)
+- [ ] Document viewer/editor (markdown preview, code highlight)
+- [ ] Proposal queue (list + batch approve/reject)
+- [ ] Skills management page (list, view code, create, toggle)
+
+**Priority 4 — Advanced Features**
+
+- [ ] Graph visualization for `graph_traverse` results
+- [ ] Child thread list (branches from parent)
+- [ ] Agent type selector when creating threads
+- [ ] Search overlay (unified search across all collections)
+- [ ] Memory management page (view all facts, search, delete)
+
+**Priority 5 — Polish**
+
+- [ ] Agent type badges on threads
+- [ ] Sub-agent progress indicator during dispatch
+- [ ] Document diff viewer for update proposals
+- [ ] `childThreadId` in dispatch result → "View sub-agent work" link
+
+---
+
+## 11. Building Your Own Intelligence Layer
+
+Any service can connect to the Synap Backend as an intelligence layer.
+
+### Minimum Viable Integration
+
+```typescript
+// 1. Init client
+const client = new HubProtocolClient({
+  dataPodUrl: "https://your-backend.com",
+  apiKey: "synap_hub_live_...", // hub-protocol.read + hub-protocol.write scopes
+});
+
+// 2. Read thread context (history + linked entities + summary + memory)
+const ctx = await client.getThreadContext(threadId);
+// Returns: { thread, contextSummary, metadata, messages, linkedEntities, linkedDocuments, ... }
+
+// 3. Semantic memory recall
+const embedding = await embeddingService.generateEmbedding("user's question");
+const facts = await client.recallFactsSemantic({ userId, embedding, limit: 5 });
+
+// 4. Store a new fact
+await client.rememberFact({ userId, fact: "...", embedding, confidence: 0.9 });
+
+// 5. Create entity (fires event pipeline)
+await client.createEntity({
+  userId,
+  workspaceId,
+  type: "task",
+  title: "My task",
+});
+
+// 6. Create child thread (for sub-agent work)
+const child = await client.createThread({
+  userId,
+  workspaceId,
+  parentThreadId: parentThread.id,
+  agentType: "research",
+  branchPurpose: "Research competitor pricing",
+});
+
+// 7. Post result back to parent
+await client.postMessage({
+  threadId: parentThread.id,
+  role: "system",
+  content: "[Research complete] Found 3 competitor pricing models...",
+  userId,
+});
+
+// 8. Traverse entity graph
+const connected = await client.traverseGraph({
+  userId,
+  startEntityId: "entity-uuid",
+  maxDepth: 2,
+  relationshipTypes: ["depends_on", "belongs_to_project"],
+});
+```
+
+### Adding a New Agent
+
+```typescript
+class MyAgent extends BaseAgent {
+  constructor() {
+    super({
+      agentType: "meta",
+      systemPrompt: "You are a specialist in...",
+      tools: ["search_unified", "remember_fact", "graph_traverse"],
+      maxSteps: 8,
+    });
+  }
+}
+```
+
+The `assembleContext()` pipeline runs automatically with:
+
+- Conversation summary + personality fingerprint (from cache)
+- Linked entities + documents (from thread sidebar)
+- Relevant memory facts (semantic search)
+- Parent thread context inheritance (if parentThreadId set)
+
+### Adding a New Tool
+
+```typescript
+// tools/actions/my-tool.ts
+export const myTool = defineTool({
+  name: "my_tool",
+  category: "action",
+  description: "...",
+  parameters: z.object({ input: z.string() }),
+  async execute(args, context) {
+    // context.userId, context.threadId, context.workspaceId available
+    return { success: true, result: "..." };
+  },
+});
+
+// Register in tool-registry.ts:
+export const toolRegistry = { ...existing, my_tool: myTool as Tool<unknown, unknown> };
+
+// Add to relevant agent tool lists in getToolsForAgent():
+meta: [...existing, "my_tool"],
+```
+
+---
+
+## 12. Graph Database Analysis: FalkorDB + Graphiti
+
+### What Graphiti does
+
+Graphiti (by Zep) is a **temporal knowledge graph framework** built on graph databases
+(Neo4j, FalkorDB, Kuzu). It stores:
+
+- **Episodes**: discrete interactions, timestamped
+- **Entities**: extracted nodes (people, projects, concepts)
+- **Relations**: edges with timestamps + invalidation (newer fact supersedes older)
+
+Key capability: **bi-temporal model** — tracks when something happened AND when it was
+ingested. Enables queries like "what did the AI know about project X as of last Tuesday?"
+
+Graphiti uses **hybrid retrieval**: BM25 full-text + semantic embeddings + graph traversal.
+
+### Current State vs Graphiti
+
+| Our Current System                    | With Graphiti + FalkorDB                      |
+| ------------------------------------- | --------------------------------------------- |
+| `knowledge_facts` flat table          | Temporal knowledge graph                      |
+| Cosine distance search (pgvector)     | BM25 + embeddings + graph traversal           |
+| No contradiction handling             | Temporal edge invalidation                    |
+| Entity relations in `relations` table | Full entity → relation → entity graph         |
+| No episodic memory                    | Episodic memory (each conversation = episode) |
+
+### Recommendation: Incremental Path
+
+**Now (done):** pgvector cosine distance on `knowledge_facts`. Good enough for MVP.
+
+**Phase D (short-term):** Skills workspace scoping, message queue per thread.
+
+**Phase E (when you have product-market fit):**
+
+- Run Graphiti as a Python sidecar (Docker Compose, REST API)
+- FalkorDB as backing store (lighter than Neo4j, sub-ms graph traversal)
+- Replace `MemoryService` to call Graphiti REST
+- `HubProtocolClient.rememberFact()` interface unchanged — swap implementation only
+
+---
+
+## 13. Recommended Architecture Evolution
+
+### ✅ Complete (2026-03-23)
+
+| Feature                              | Notes                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| Phase A: Context & Memory Foundation | Summary + fingerprint + linked context + memory                                        |
+| Phase B: Multi-Agent Hierarchy       | dispatch_agent → child thread → result back to parent                                  |
+| Phase C: Entity Graph Traversal      | graph_traverse tool + BFS endpoint                                                     |
+| Phase D: Infrastructure Hardening    | Event watermark · Semantic memory · Fingerprint caching · Rolling summary              |
+| All 54 integration tests passing     | 0 failures, 3 skips (proposals/SSE ambiguity)                                          |
+| Phase F: Production Hardening        | Fair semaphore · circuit breaker · complexity routing · bounded caches · tool timeouts |
+
+### Near Term (next sprint)
+
+- [ ] **PDF/DOCX extraction** in `get_document` tool — unblock AI reading of uploaded files
+- [ ] **Perplexity tool** — add live web search capability to agents
+- [ ] **Frontend MVP** — chat UI with SSE parsing, proposals, sidebar (see §8)
+- [ ] **`research` DB enum** — add "research" to `ChatThreadAgentType` + migration (minor)
+- [ ] **Rate limiting per userId** — prevent API key sharing abuse
+
+### Medium Term
+
+- [ ] **Message queue per thread** — prevent duplicate concurrent processing
+- [ ] **Skills workspace scoping** — namespace skills by workspace to prevent name collisions
+- [ ] **Gemini/Llama models** via OpenRouter for cost reduction on bulk tasks
+- [ ] **Domain-specific agents** — medical, legal, financial, code specialist
+- [ ] **External agent webhooks** — Pattern C integration (async agents posting to threads)
+
+### Long Term (Phase E)
+
+- [ ] Graphiti + FalkorDB for temporal knowledge graph
+- [ ] Multi-workspace agent (one AI across multiple backends)
+- [ ] Agent-to-agent protocol (cross-hub communication via REST)
+- [ ] Image understanding (vision models for document screenshots, diagrams)
+- [ ] Slide/presentation extraction (LibreOffice headless or Google Slides API)
+
+---
+
+_Last updated: 2026-03-23 — All enhancement phases complete. Production hardening complete. 54/54 tests passing._
+_Backend: fully feature-complete for MVP. Frontend: all rendering work remains._

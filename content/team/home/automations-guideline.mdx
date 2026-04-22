@@ -1,0 +1,109 @@
+hat You Have (That Others Don't)                                                                                 
+                                                                                                                    
+  Most AI assistants (ChatGPT, Notion AI, Linear's AI) are stateless action executors: user asks → AI does one thing
+   → done. They can't react to the world, can't chain actions, can't observe and automate.                          
+                                                                                                                    
+  Synap has all five layers needed for real automation:                                                             
+                                                                                                                    
+  ┌──────────────┬────────────────────────────────────────────────────────────┬──────────┐                          
+  │    Layer     │                       Infrastructure                       │  Status  │                          
+  ├──────────────┼────────────────────────────────────────────────────────────┼──────────┤                          
+  │ Event bus    │ 55 event types, Inngest, two-stage (requested/validated)   │ Complete │                          
+  ├──────────────┼────────────────────────────────────────────────────────────┼──────────┤
+  │ Workers      │ 7 core + extensible, retry/DLQ                             │ Complete │                          
+  ├──────────────┼────────────────────────────────────────────────────────────┼──────────┤                          
+  │ Governance   │ Proposals, RBAC, auto-approve whitelist, audit trail       │ Complete │                          
+  ├──────────────┼────────────────────────────────────────────────────────────┼──────────┤                          
+  │ External I/O │ Webhooks (HMAC-signed), MCP servers, n8n integration       │ Complete │                        
+  ├──────────────┼────────────────────────────────────────────────────────────┼──────────┤                          
+  │ Scheduling   │ Background tasks (cron/event/interval), execution tracking │ Complete │                        
+  └──────────────┴────────────────────────────────────────────────────────────┴──────────┘                          
+                                                                                                                  
+  Plus the command system (schema ready, needs UI) and skills (instruction + code, scoped, dynamic loading). The    
+  browser has a 4-mode capture system with offline queueing.                                                      
+                                                                                                                    
+  This means you can do what nobody else can: AI proposes automations that the user governs, not just one-shot      
+  actions.
+                                                                                                                    
+  The Vision: Three Tiers of Automation                                                                             
+  
+  Tier 1 — Internal Reactions (ready today)                                                                         
+                                                                                                                  
+  "When a task is marked done, archive it and notify the project."                                                  
+                                                                                                                  
+  - Trigger: entities.update.validated event (entity property changes)                                              
+  - Condition: entity.profileSlug === "task" && properties.status === "done"                                      
+  - Actions: update_entity (archive), create_entity (notification/log)                                              
+  - Governance: Auto-approved (internal, reversible)                                                                
+                                                                                                                    
+  You already have event subscriptions + workers + the proposal pipeline. The missing piece is a user-facing rule   
+  builder — but the engine exists.                                                                                  
+                                                                                                                    
+  Tier 2 — AI-Generated Automations (the differentiator)                                                          
+
+  User says: "Whenever I save a LinkedIn contact in the browser, create a person entity and link it to my CRM       
+  pipeline."
+                                                                                                                    
+  AI generates:                                                                                                     
+  Trigger:  entities.create.validated WHERE profileSlug = "bookmark" AND url CONTAINS "linkedin.com"
+  Action 1: extract_entity(content, profileSlug: "person")                                                          
+  Action 2: create_relation(source: newPerson, target: crmPipeline, type: "stage:new-lead")                         
+                                                                                                                    
+  This is shown as a proposal card (same design as ProposedActionRow) — the user reviews the automation, not just   
+  one entity. The AI explains: "This will watch for LinkedIn bookmarks and automatically create contacts in your    
+  pipeline."                                                                                                        
+                                                                                                                    
+  Tier 3 — External Bridges (browser + webhooks + MCP)                                                              
+  
+  "When I receive a Stripe payment webhook, create an invoice entity and update the deal status."                   
+                                                                                                                  
+  - Inbound: Webhook subscription receives Stripe event                                                             
+  - Processing: Worker triggers command (extract data, map to entities)                                           
+  - Outbound: Could notify via webhook, update external CRM via MCP                                                 
+                                                                                                                    
+  The browser save model is the first "courier" — it bridges external content into the entity system. Future        
+  couriers: email parsing, calendar sync, RSS feeds, API polling.                                                   
+                                                                                                                    
+  What Needs Building                                                                                               
+  
+  Here's my honest assessment of what's ready vs. what needs work:                                                  
+                                                                                                                  
+  Ready to ship (wiring + UI only)                                                                                  
+                                                                                                                  
+  1. Command execution via AI — schema exists (intelligence-commands), agent tools exist. Need: command creation UI 
+  + agent binding to execute templates                                                                            
+  2. Browser capture → entity extraction chain — capture modal works, entity extraction works. Need: wire them      
+  together so saving a page auto-proposes entity extraction                                                         
+  3. Background task creation via AI — schema + scheduler complete. Need: AI tool to create_background_task +
+  minimal monitoring UI                                                                                             
+                                                                                                                  
+  Needs design + build                                                                                              
+                                                                                                                  
+  4. Automation rule builder — the "When X happens, do Y" UI. Three approaches:                                     
+    - Chat-first (recommended): User describes rule in natural language → AI generates the trigger/condition/action
+  chain → shown as proposal → user approves → background task created                                               
+    - Visual builder (later): Node-based flow editor (you have flow view type already)                            
+    - Template gallery (quick win): Pre-built automation templates user can enable                                  
+  5. Automation proposal card — New card type for ProposedActionRow that shows: trigger description + condition +   
+  action chain + "Enable" / "Dismiss" buttons. Same design language as entity/document cards.                       
+  6. Execution visibility — Currently workers execute silently. Need: execution log per automation, success/failure 
+  indicators, run history.                                                                                          
+                                                                                                                  
+  Progressive Disclosure Path                                                                                       
+                                                                                                                  
+  This is key — you don't dump an automation builder on users. You reveal it naturally:                             
+  
+  Level 0 — Invisible: AI auto-approves entity creation, linking. User just sees cards appearing. They're already   
+  experiencing automation without knowing it.                                                                     
+                                                                                                                    
+  Level 1 — Suggested: After the 3rd time a user manually does the same pattern, AI says: "I notice you always link 
+  bookmarks to contacts. Want me to do this automatically?" → One-click enable.
+                                                                                                                    
+  Level 2 — Described: User says "Whenever I..." in chat → AI creates the automation → proposal card shows the rule 
+  → user approves.
+                                                                                                                    
+  Level 3 — Composed: Power users open the automation panel, see their active rules, can edit                       
+  triggers/conditions/actions, enable/disable, see execution history.
+                                                                                                                    
+  Level 4 — External: User connects webhooks, MCP servers, browser capture → automations can bridge internal and    
+  external worlds.

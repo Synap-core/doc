@@ -1,0 +1,359 @@
+# Project Hestia — Complete
+
+> All architectural decisions resolved. Ready for implementation.
+
+## What We Have
+
+### 1. Reorganized Documentation (`hestia/` folder)
+
+```
+hestia/
+├── README.md                           # Project Hestia overview
+├── docs/
+│   ├── DOC-01-vision.md                # Vision & North Star
+│   ├── DOC-02-architecture.md          # System Architecture
+│   ├── DOC-03-phase1-prd.md            # Phase 1: Foundation
+│   ├── DOC-04-phase2-prd.md            # Phase 2: Core + Gateway
+│   ├── DOC-05-phase3-prd.md            # Phase 3: Builder
+│   ├── DOC-06-integration-contract.md  # APIs & Security
+│   ├── DOC-07-build-install-blueprint.md # Installation
+│   ├── DOC-08-test-plan.md             # Testing
+│   ├── PACKAGE-ARCHITECTURE.md         # Package system spec
+│   ├── INTEGRATION-PLAN.md             # Backend integration
+│   ├── BACKEND-EXTENSION-SPEC.md       # Exact API specs
+│   ├── DECISIONS-RESOLVED.md             # All 8 decisions ✓
+│   └── IMPLEMENTATION-QUICKSTART.md    # Day-by-day plan
+├── adr/                                # 4 ADRs
+├── schemas/                            # 3 JSON schemas
+└── usb/examples/                       # Ventoy templates
+```
+
+### 2. Key Architectural Decisions Made ✓
+
+| Decision | Chosen | Implication |
+|----------|--------|-------------|
+| **CLI Architecture** | **Option C** — Modular with plugins | CP is a plugin, not required |
+| **Entity System** | **Option A** — Pure entities | No new DB tables needed |
+| **Backend Scope** | **Agnostic** | Any IS provider works |
+| **Intelligence** | **Agnostic** | OpenAI-compatible endpoints |
+| **Install Method** | **Script primary, USB wrapper** | Script is foundation |
+| **Multi-Node** | **Single → redundancy → fleet** | Progressive scaling |
+| **OpenClaw** | **Part of triptick** | One of three pillars |
+| **Control Plane** | **Optional connector** | For redundancy only |
+
+### 3. Package-Based Architecture
+
+**Everything is a package:**
+
+```
+Hestia = Core Package + Gateway Package + Builder Package + Intelligence Package
+
+Core Package (hestia-core) → Synap Backend
+Gateway Package (openclaw)  → Multi-channel communication
+Builder Package (openclaude) → AI artifact generation
+Intelligence Package → ollama | openrouter | anthropic | custom
+```
+
+**Each package handles its own logic.** The CLI assembles them.
+
+### 4. Agnostic Intelligence
+
+Any fire can warm the hearth:
+
+```yaml
+# Local (default)
+intelligence:
+  provider: ollama
+  endpoint: http://localhost:11434
+
+# Cloud (optional)
+intelligence:
+  provider: openrouter
+  api_key: ${OPENROUTER_KEY}
+
+# Custom (any OpenAI-compatible)
+intelligence:
+  provider: custom
+  endpoint: http://my-llm:8000/v1
+```
+
+Backend provides uniform interface: `POST /api/hub/intelligence/query`
+
+### 5. Entity-First Backend Integration
+
+**No new database tables.** Everything is entities:
+
+- `hearth_node` → Entity with `hearth_node` profile
+- `package_instance` → Entity with `package_instance` profile
+- `intelligence_provider` → Entity with `intelligence_provider` profile
+- `hearth_deployment` → Entity with `hearth_deployment` profile
+
+### 6. Script-First Installation
+
+```
+hestia-cli/packages/
+├── install/        # PRIMARY: Script installer
+│   ├── install.sh
+│   ├── phases/
+│   │   ├── phase1.sh (foundation)
+│   │   ├── phase2.sh (core + gateway)
+│   │   └── phase3.sh (builder)
+│   └── wizard/
+│       └── first-fire.sh (TUI)
+│
+└── usb/            # WRAPPER: USB boot
+    ├── create-usb.sh
+    └── ventoy/
+        └── autoinstall/
+            └── late-command.sh → calls install.sh
+```
+
+USB is just a wrapper that calls the script installer.
+
+---
+
+## What We Need to Build
+
+### Phase 1: Foundation (Week 1)
+
+**Backend (synap-backend)**:
+1. Create `templates/hestia-os.json` (workspace template)
+2. Create `/packages/api/src/routers/hub-protocol/hearth.ts` (endpoints)
+3. Create `/packages/api/src/routers/hub-protocol/intelligence.ts` (agnostic IS)
+4. Add `HEARTH_*` scopes to API keys
+5. Mount routers in `hub-protocol-rest.ts`
+
+**CLI (hestia-cli)**:
+1. Create `packages/core/` — CLI framework, package management
+2. Create `packages/install/` — Script installer
+3. Create `packages/registry/` — Package discovery
+4. Implement `hestia init` command
+
+### Phase 2: Intelligence & Gateway (Week 2)
+
+1. Create `packages/install/` phase2 (adds Gateway)
+2. Create `plugins/openclaw/` — Gateway commands
+3. Create `ollama` package
+4. Create `openclaw` package
+5. Test: Message from Telegram works
+
+### Phase 3: Builder (Week 3)
+
+1. Create `packages/install/` phase3 (adds Builder)
+2. Create `plugins/openclaude/` — Builder commands
+3. Create `openclaude` package
+4. Test: "Build a website" → deployed URL
+
+### Phase 4: USB & Polish (Week 4)
+
+1. Create `packages/usb/` — USB creation tool
+2. Create `first-fire.sh` wizard
+3. Create Ventoy configs
+4. Test: Flash USB → boot → wizard → working system
+
+---
+
+## Exact Backend Changes
+
+### Files to Create
+
+1. **`templates/hestia-os.json`**
+   - 4 profiles: `hearth_node`, `intelligence_provider`, `package_instance`, `hearth_deployment`
+   - 5 views: bento dashboard, tables, kanban
+
+2. **`/packages/api/src/routers/hub-protocol/hearth.ts`**
+   - `POST /hearth/register` — Register hearth node
+   - `POST /hearth/heartbeat` — Health updates
+   - `GET /hearth/status/:id` — Get status
+   - `POST /packages/register` — Register package
+   - `POST /hearth/deploy` — Trigger deployment
+
+3. **`/packages/api/src/routers/hub-protocol/intelligence.ts`**
+   - `POST /intelligence/query` — Agnostic IS interface
+   - Provider handlers: ollama, openrouter, anthropic, custom
+
+### Files to Modify
+
+1. **`/packages/api/src/routers/hub-protocol-rest.ts`**
+   ```typescript
+   import hearthRouter from './hub-protocol/hearth';
+   import intelligenceRouter from './hub-protocol/intelligence';
+   
+   app.route('/hearth', hearthRouter);
+   app.route('/intelligence', intelligenceRouter);
+   ```
+
+2. **`/packages/api/src/utils/api-keys.ts`**
+   - Add: `HEARTH_READ`, `HEARTH_WRITE`, `HEARTH_DEPLOY`, `INTELLIGENCE_QUERY`, `PACKAGE_MANAGE`
+
+**No database migrations required** — pure entity system.
+
+---
+
+## Exact CLI Structure
+
+```
+hestia-cli/
+├── packages/
+│   ├── core/
+│   │   ├── src/
+│   │   │   ├── commands/
+│   │   │   │   ├── init.ts
+│   │   │   │   ├── add.ts
+│   │   │   │   ├── remove.ts
+│   │   │   │   ├── status.ts
+│   │   │   │   └── config.ts
+│   │   │   ├── lib/
+│   │   │   │   ├── packages.ts
+│   │   │   │   ├── config.ts
+│   │   │   │   └── hearth.ts
+│   │   │   └── index.ts
+│   │   └── package.json
+│   │
+│   ├── install/
+│   │   ├── src/
+│   │   │   ├── install.sh
+│   │   │   ├── phases/
+│   │   │   │   ├── phase1.sh
+│   │   │   │   ├── phase2.sh
+│   │   │   │   └── phase3.sh
+│   │   │   ├── lib/
+│   │   │   │   ├── detect.sh
+│   │   │   │   ├── docker.sh
+│   │   │   │   └── packages.sh
+│   │   │   └── wizard/
+│   │   │       └── first-fire.sh
+│   │   └── package.json
+│   │
+│   ├── usb/
+│   │   ├── src/
+│   │   │   ├── create-usb.sh
+│   │   │   ├── ventoy/
+│   │   │   │   ├── ventoy.json
+│   │   │   │   └── autoinstall/
+│   │   │   │       ├── safe.yaml
+│   │   │   │       └── wipe.yaml
+│   │   │   └── wrapper/
+│   │   │       └── late-command.sh
+│   │   └── package.json
+│   │
+│   └── registry/
+│       └── src/
+│           ├── client.ts
+│           └── cache.ts
+│
+├── plugins/
+│   ├── openclaw/
+│   │   └── src/
+│   │       ├── commands/
+│   │       │   └── channel.ts
+│   │       └── lib/
+│   │           └── openclaw.ts
+│   │
+│   ├── openclaude/
+│   │   └── src/
+│   │       ├── commands/
+│   │       │   ├── build.ts
+│   │       │   └── deploy.ts
+│   │       └── lib/
+│   │           └── openclaude.ts
+│   │
+│   └── control-plane/
+│       └── src/
+│           ├── commands/
+│           │   ├── fleet.ts
+│           │   └── backup.ts
+│           └── lib/
+│               └── cp-client.ts
+│
+└── hestia.ts
+```
+
+---
+
+## Commands
+
+```bash
+# Core (always available)
+hestia init
+hestia add <package>
+hestia remove <package>
+hestia status
+hestia config
+hestia ignite
+
+# Install
+hestia install phase1
+hestia install phase2
+hestia install phase3
+
+# USB
+hestia usb create
+
+# Plugins (when installed)
+hestia gateway channel add telegram
+hestia builder build ./my-site
+hestia fleet status
+```
+
+---
+
+## Implementation Timeline
+
+| Week | Focus | Deliverable |
+|------|-------|-------------|
+| 1 | Foundation | Backend endpoints, CLI core, installer package |
+| 2 | Intelligence & Gateway | Ollama package, OpenClaw package, messaging works |
+| 3 | Builder | OpenClaude package, builds deploy |
+| 4 | USB | USB wrapper, first-fire wizard, complete install |
+| 5 | Testing | E2E tests, bug fixes, polish |
+| 6 | Documentation | User guides, API docs, release |
+
+**Total: 6 weeks for single developer**
+
+---
+
+## Success Criteria
+
+By end of implementation:
+
+- ✅ User can install via script in 15 minutes
+- ✅ User can install via USB in 45 minutes
+- ✅ Hearth node registers and heartbeats
+- ✅ Any intelligence provider works (Ollama, OpenRouter, etc.)
+- ✅ Messages from channels receive responses
+- ✅ "Build a site" → approval → deployed URL
+- ✅ All actions logged
+- ✅ Works without Control Plane
+
+---
+
+## Next Immediate Actions
+
+**Today**:
+1. Review `DECISIONS-RESOLVED.md` — confirm all decisions
+2. Review `BACKEND-EXTENSION-SPEC.md` — confirm API specs
+3. Review `PACKAGE-ARCHITECTURE.md` — confirm package system
+
+**Tomorrow**:
+1. Create `templates/hestia-os.json` in synap-backend
+2. Create `packages/api/src/routers/hub-protocol/hearth.ts` stub
+3. Begin CLI `packages/core/` structure
+
+**This Week**:
+1. Implement `/api/hub/hearth/register` endpoint
+2. Implement `hestia init` command
+3. Test: Create hearth node entity via CLI
+
+---
+
+## Questions?
+
+All documentation is in `hestia/docs/`:
+- `PACKAGE-ARCHITECTURE.md` — How the package system works
+- `INTEGRATION-PLAN.md` — How Hestia connects to backend
+- `BACKEND-EXTENSION-SPEC.md` — Exact API specs with code
+- `DECISIONS-RESOLVED.md` — All 8 decisions documented
+- `IMPLEMENTATION-QUICKSTART.md` — Day-by-day execution plan
+
+**Ready to forge the first packages?** 🔥

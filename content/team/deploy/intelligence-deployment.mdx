@@ -1,0 +1,184 @@
+# Intelligence Hub Deployment Guide
+
+## Deployment Modes
+
+The Intelligence Hub supports two deployment architectures:
+
+### 1. **Colocated Mode** (Demo/Dev)
+
+Run on the same server as the backend for cost savings and easier debugging.
+
+**Characteristics:**
+
+- Shares the backend's Caddy reverse proxy
+- Accessed via backend domain: `https://backend.example.com/intelligence/*`
+- No separate SSL/DNS configuration needed
+- Uses backend's Docker network
+
+**When to use:**
+
+- Demo environments
+- Development/testing
+- Cost-sensitive deployments
+- Single-server setups
+
+### 2. **Standalone Mode** (Production)
+
+Run on a separate server with its own domain and Caddy instance.
+
+**Characteristics:**
+
+- Independent infrastructure
+- Own domain: `https://intelligence.example.com`
+- Separate SSL certificate
+- Isolated Docker network
+
+**When to use:**
+
+- Production deployments
+- High-traffic environments
+- When scaling independently
+
+---
+
+## Quick Start
+
+### Colocated Deployment
+
+```bash
+# 1. Ensure backend is running
+cd /opt/synap-backend/deploy
+docker compose ps
+
+# 2. Deploy intelligence hub in colocated mode
+cd /opt/intelligence-hub/deploy
+docker compose -f docker-compose.yml -f docker-compose.colocated.yml up -d
+
+# 3. Verify
+curl http://localhost/intelligence/health
+```
+
+**Access:** `https://your-backend-domain.com/intelligence/`
+
+### Standalone Deployment
+
+```bash
+# 1. Configure environment
+cd /opt/intelligence-hub/deploy
+cp .env.example .env
+nano .env  # Set DOMAIN, LETSENCRYPT_EMAIL, etc.
+
+# 2. Deploy with standalone profile
+docker compose --profile standalone up -d
+
+# 3. Verify
+curl https://your-intelligence-domain.com/health
+```
+
+**Access:** `https://your-intelligence-domain.com/`
+
+---
+
+## Architecture Diagrams
+
+### Colocated Architecture
+
+```
+                    Internet
+                       │
+                       ▼
+              ┌────────────────┐
+              │  Backend Caddy │ :80, :443
+              └────────┬───────┘
+                       │
+         ┌─────────────┴─────────────┐
+         │                           │
+         ▼                           ▼
+  ┌──────────┐            ┌──────────────────┐
+  │ Backend  │            │ Intelligence Hub │
+  │ Service  │            │    Service       │
+  │  :4000   │            │     :3001        │
+  └──────────┘            └──────────────────┘
+```
+
+**Path:** `https://api.example.com/intelligence/`
+
+### Standalone Architecture
+
+```
+        Backend Server               Intelligence Server
+              │                              │
+              ▼                              ▼
+     ┌────────────────┐           ┌────────────────────┐
+     │ Backend Caddy  │           │ Intelligence Caddy │
+     └────────┬───────┘           └──────────┬─────────┘
+              │                              │
+              ▼                              ▼
+       ┌──────────┐              ┌──────────────────────┐
+       │ Backend  │              │  Intelligence Hub    │
+       │ Service  │──────────────│      Service         │
+       └──────────┘              └──────────────────────┘
+```
+
+---
+
+## Troubleshooting
+
+### Port 80 Already Allocated
+
+**Problem:** `Bind for 0.0.0.0:80 failed: port is already allocated`
+
+**Solution:** Use colocated mode instead:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.colocated.yml up -d
+```
+
+### Service Not Reachable in Colocated Mode
+
+1. **Verify network connection:**
+
+```bash
+docker network inspect deploy_synap-net | grep intelligence-service
+```
+
+2. **Check service health:**
+
+```bash
+docker compose ps
+docker compose logs intelligence-service
+```
+
+3. **Test direct access:**
+
+```bash
+docker exec deploy_backend_1 wget -O- http://intelligence-service:3001/health
+```
+
+---
+
+## Switching Between Modes
+
+### From Colocated to Standalone
+
+```bash
+# Stop colocated
+docker compose -f docker-compose.yml -f docker-compose.colocated.yml down
+
+# Deploy standalone
+docker compose --profile standalone up -d
+```
+
+### From Standalone to Colocated
+
+```bash
+# Stop standalone
+docker compose --profile standalone down
+
+# Deploy colocated
+docker compose -f docker-compose.yml -f docker-compose.colocated.yml up -d
+```
+
+---
+
+For more details, see the full documentation.

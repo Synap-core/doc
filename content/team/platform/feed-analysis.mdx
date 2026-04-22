@@ -410,7 +410,7 @@ synap-app/packages/features/signal-feed/
 
 **Remove outdated docs:**
 - `synap-backend/docs/signal-feed/` (entire folder)
-- Consider archiving: `docs-internal/SIGNAL-FEED-*.md`
+- Consider archiving: `docs-internal/SIGNAL-FEED-*.md` (all migrated to `/team/platform/signal-feed-*`)
 
 ### 4.4 Impact Summary
 
@@ -619,3 +619,10 @@ const existingInOtherFeeds = await db.query.messages.findMany({
 ---
 
 *Analysis completed on 2026-04-12*
+
+## Related
+
+- [Unified Feed](./unified-feed.mdx) — Cross-surface feed architecture
+- [Feed System](./feed-system.mdx) — 3-surface feed model
+- [Signal Feed Architecture](./signal-feed-architecture.mdx) — RSSHub + channel integration
+- [Signal Feed Implementation](./signal-feed-impl.mdx) — Pipeline details and implementation guide

@@ -1,0 +1,605 @@
+# Package Architecture Specification
+
+> Hestia is a composition of packages. This document defines the package system.
+
+## Core Philosophy
+
+**Everything is a package.** The Hestia CLI doesn't install "Hestia" — it assembles packages into a functioning hearth.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    YOUR DIGITAL HEARTH                     │
+├─────────────────────────────────────────────────────────────┤
+│  Core Package (Required)                                    │
+│  ├─ hestia-core (Synap Backend)                             │
+│  └─ Provides: data, memory, temporal knowledge               │
+├─────────────────────────────────────────────────────────────┤
+│  Gateway Package (Optional)                                  │
+│  ├─ openclaw                                                │
+│  └─ Provides: telegram, discord, slack channels            │
+├─────────────────────────────────────────────────────────────┤
+│  Builder Package (Optional)                                  │
+│  ├─ openclaude                                              │
+│  └─ Provides: code generation, deployment, artifacts        │
+├─────────────────────────────────────────────────────────────┤
+│  Intelligence Package (Required, swappable)                │
+│  ├─ ollama (default) OR openrouter OR anthropic OR custom  │
+│  └─ Provides: LLM inference, AI capabilities               │
+├─────────────────────────────────────────────────────────────┤
+│  Infrastructure Packages (Optional)                        │
+│  ├─ router (caddy)                                          │
+│  ├─ monitor (netdata)                                       │
+│  └─ Provides: routing, TLS, observability                  │
+├─────────────────────────────────────────────────────────────┤
+│  Redundancy Packages (Future)                               │
+│  ├─ control-plane (fleet management)                       │
+│  └─ Provides: multi-pod, backup, blockchain                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Package Lifecycle
+
+### 1. Discovery
+
+Packages are discovered from:
+- **Built-in registry** — Blessed packages maintained by core team
+- **GitHub repos** — Community packages
+- **Local paths** — Development/testing
+
+```yaml
+# ~/.hestia/registry.yaml
+sources:
+  official:
+    url: https://registry.hestia.sh/official.yaml
+    trusted: true
+  
+  community:
+    url: https://registry.hestia.sh/community.yaml
+    trusted: false
+  
+  local:
+    path: ~/hestia-packages
+```
+
+### 2. Resolution
+
+The CLI resolves package dependencies:
+
+```bash
+$ hestia add gateway
+
+# Resolves:
+# 1. gateway requires: core >= 1.0.0
+# 2. gateway recommends: router >= 2.0.0
+# 3. Installing: core (already present), gateway, router
+```
+
+### 3. Installation
+
+Each package provides an installer:
+
+```typescript
+// Package interface
+interface HestiaPackage {
+  name: string;
+  version: string;
+  
+  // Installation
+  install(): Promise<void>;
+  configure(config: PackageConfig): Promise<void>;
+  
+  // Can be:
+  // - Docker Compose (most packages)
+  // - Binary download (intelligence providers)
+  // - Ansible playbook (system packages)
+  // - Shell script (custom packages)
+}
+```
+
+### 4. Configuration
+
+Packages export their configuration schema:
+
+```yaml
+# Package: openclaw
+config_schema:
+  type: object
+  properties:
+    channels:
+      type: array
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+            enum: [telegram, discord, slack]
+          token:
+            type: string
+            secret: true
+```
+
+### 5. Integration
+
+Packages declare what they connect to:
+
+```yaml
+# Package: openclaw
+integration:
+  requires:
+    - core: "Provides entity storage for channel context"
+    - intelligence: "For AI responses"
+  provides:
+    - gateway: "Multi-channel communication"
+    - webhook_receiver: "HTTP endpoints for channels"
+  connects_via:
+    - http: "http://localhost:3000"
+    - websocket: "ws://localhost:3001"
+```
+
+### 6. Lifecycle Management
+
+```bash
+# Start all packages
+hestia start
+
+# Start specific package
+hestia start gateway
+
+# Check status
+hestia status
+
+# View logs
+hestia logs gateway --follow
+
+# Update package
+hestia update gateway
+
+# Remove package
+hestia remove gateway
+```
+
+## Package Types
+
+### Type 1: Core Package (`hestia-core`)
+
+**Purpose**: The non-negotiable foundation
+
+**Responsibilities**:
+- Entity storage
+- Temporal memory
+- Knowledge graph
+- Hub Protocol API
+
+**Installation**: Docker Compose with persistent volumes
+
+**Configuration**:
+```yaml
+packages:
+  core:
+    enabled: true
+    database:
+      type: postgres
+      persistent: true
+    api:
+      port: 4000
+      host: localhost
+```
+
+### Type 2: Gateway Package (`openclaw`)
+
+**Purpose**: Multi-channel communication
+
+**Responsibilities**:
+- Telegram bot
+- Discord bot  
+- Slack app
+- Channel message normalization
+- Session management
+
+**Installation**: Docker Compose or binary
+
+**Configuration**:
+```yaml
+packages:
+  gateway:
+    enabled: true
+    channels:
+      telegram:
+        bot_token: ${TELEGRAM_TOKEN}
+        webhook_url: https://home.example.com/webhook/telegram
+      discord:
+        bot_token: ${DISCORD_TOKEN}
+```
+
+### Type 3: Builder Package (`openclaude`)
+
+**Purpose**: AI-powered artifact generation
+
+**Responsibilities**:
+- Code generation
+- Workspace management
+- Deployment orchestration
+- Approval workflows
+
+**Installation**: Docker Compose with volume mounts
+
+**Configuration**:
+```yaml
+packages:
+  builder:
+    enabled: true
+    workspace_root: /srv/hestia-builds
+    approval_mode: required
+    allowed_commands:
+      - git
+      - npm
+      - docker
+```
+
+### Type 4: Intelligence Package (Agnostic)
+
+**Purpose**: LLM inference (swappable)
+
+**Providers**:
+- `ollama` — Local inference (default)
+- `openrouter` — Multi-provider routing
+- `anthropic` — Claude API
+- `openai` — GPT API
+- `custom` — Any OpenAI-compatible endpoint
+
+**Interface**: All providers implement:
+
+```typescript
+interface IntelligenceProvider {
+  // Standard OpenAI-compatible chat completions
+  chatCompletions(request: ChatRequest): Promise<ChatResponse>;
+  
+  // Embeddings (optional)
+  embeddings?(text: string): Promise<number[]>;
+  
+  // Health check
+  health(): Promise<boolean>;
+  
+  // Model info
+  listModels(): Promise<ModelInfo[]>;
+}
+```
+
+**Configuration**:
+```yaml
+packages:
+  intelligence:
+    enabled: true
+    provider: ollama
+    config:
+      endpoint: http://localhost:11434
+      model: llama3.1:8b
+      # Or for cloud providers:
+      # api_key: ${OPENROUTER_KEY}
+      # model: anthropic/claude-3-opus
+```
+
+### Type 5: Infrastructure Package
+
+**Purpose**: System-level capabilities
+
+**Examples**:
+- `router` (caddy) — Reverse proxy, TLS, routing
+- `monitor` (netdata) — Health, logs, dashboards
+- `backup` (restic) — Automated backups
+- `dns` (optional) — Dynamic DNS
+
+**Configuration**:
+```yaml
+packages:
+  router:
+    enabled: true
+    type: caddy
+    domain: home.example.com
+    tls: automatic
+    
+  monitor:
+    enabled: true
+    type: netdata
+    port: 19999
+```
+
+### Type 6: Connector Package (Future)
+
+**Purpose**: Connect to external services
+
+**Examples**:
+- `control-plane` — Fleet management, redundancy
+- `cloud-backup` — S3, Google Drive sync
+- `notification` — Pushover, email alerts
+
+**Configuration**:
+```yaml
+packages:
+  control-plane:
+    enabled: false  # Optional, for fleet management
+    url: https://cp.hestia.sh
+    redundancy_mode: backup  # main, backup, or fleet
+```
+
+## Package Registry Format
+
+```yaml
+# registry.yaml
+api_version: 1.0
+packages:
+  hestia-core:
+    versions:
+      1.0.0:
+        source:
+          type: docker_compose
+          url: https://github.com/synap-core/backend
+          compose_file: docker-compose.yml
+        checksum: sha256:...
+        config_schema: https://schemas.hestia.sh/core-1.0.0.json
+        requires: []
+        provides: [core, storage, api]
+    
+  openclaw:
+    versions:
+      2026.3.12:
+        source:
+          type: docker_compose
+          url: https://github.com/openclaw/openclaw
+          compose_file: docker-compose.yml
+        requires: [core]
+        recommends: [router]
+        provides: [gateway, channels]
+    
+  ollama:
+    versions:
+      0.3.0:
+        source:
+          type: docker_compose
+          url: https://ollama.ai
+          compose_file: docker-compose.yml
+        requires: []
+        provides: [intelligence, embeddings]
+```
+
+## Package Directory Structure
+
+Each package lives in its own directory:
+
+```
+~/.hestia/packages/
+├── hestia-core/
+│   ├── 1.0.0/
+│   │   ├── package.yaml       # Package manifest
+│   │   ├── docker-compose.yml # Runtime definition
+│   │   ├── config/
+│   │   │   └── schema.json    # Configuration schema
+│   │   └── hooks/
+│   │       ├── pre-install.sh
+│   │       ├── post-install.sh
+│   │       └── health-check.sh
+│   └── current -> 1.0.0/      # Symlink to active version
+│
+├── openclaw/
+│   └── 2026.3.12/
+│       ├── package.yaml
+│       ├── docker-compose.yml
+│       └── ...
+│
+└── registry.lock              # Currently installed packages
+```
+
+## Package Manifest (`package.yaml`)
+
+```yaml
+name: openclaw
+version: 2026.3.12
+type: gateway
+description: Multi-channel AI gateway
+
+source:
+  type: docker_compose
+  compose_file: docker-compose.yml
+  env_template: .env.example
+
+config:
+  schema: config/schema.json
+  defaults: config/defaults.yaml
+
+lifecycle:
+  install:
+    - check_docker
+    - pull_images
+    - create_volumes
+  start:
+    - docker_compose_up
+  stop:
+    - docker_compose_down
+  health:
+    - check_http: http://localhost:3000/health
+    - check_logs: "Listening on port"
+
+integration:
+  requires:
+    - name: hestia-core
+      version: ">=1.0.0"
+      reason: "Needs entity storage"
+  provides:
+    - gateway
+    - webhook_receiver
+  connects:
+    - name: hestia-core
+      via: http
+      endpoint: http://localhost:4000
+
+secrets:
+  - name: TELEGRAM_TOKEN
+    required_if: channels.telegram.enabled
+  - name: DISCORD_TOKEN
+    required_if: channels.discord.enabled
+```
+
+## The Script Installer (Package)
+
+The script installer is itself a package:
+
+```
+hestia-cli/packages/install/
+├── install.sh              # Main entry point
+├── lib/
+│   ├── detect.sh           # OS/environment detection
+│   ├── docker.sh             # Docker installation
+│   ├── packages.sh           # Package installation logic
+│   └── config.sh             # Configuration management
+├── phases/
+│   ├── phase1.sh             # Foundation
+│   ├── phase2.sh             # Core + Gateway
+│   └── phase3.sh             # Builder
+└── wizard/
+    └── wizard.sh             # First-fire TUI
+```
+
+**The USB installer wraps the script installer**:
+
+```
+hestia-cli/packages/usb/
+├── create-usb.sh             # USB creation tool
+├── ventoy/
+│   ├── ventoy.json           # Boot configuration
+│   └── scripts/
+│       └── ubuntu-autoinstall.yaml
+└── wrapper/
+    └── late-command.sh       # Calls install.sh phase1
+```
+
+## CLI Package Commands
+
+```bash
+# Package management
+hestia package list              # List available packages
+hestia package info openclaw     # Show package details
+hestia package add openclaw      # Install package
+hestia package remove openclaw   # Uninstall package
+hestia package update openclaw   # Update to latest
+hestia package update --all      # Update all
+
+# Or shorthand:
+hestia add openclaw
+hestia remove openclaw
+
+# Package configuration
+hestia config openclaw         # Edit package config
+hestia config openclaw --set channels.telegram.enabled=true
+
+# Package status
+hestia status                  # Status of all packages
+hestia status openclaw       # Status of specific package
+
+# Package logs
+hestia logs openclaw --follow
+```
+
+## Intelligence Provider Agnosticism
+
+The key insight: **Intelligence is just another package.**
+
+```yaml
+# Any OpenAI-compatible endpoint works
+packages:
+  intelligence:
+    enabled: true
+    provider: custom
+    config:
+      endpoint: http://my-custom-llm:8000/v1
+      api_key: ${CUSTOM_KEY}
+      model: default
+```
+
+The Gateway and Builder packages don't care — they call the standard interface:
+
+```typescript
+// Builder package calls intelligence
+const response = await intelligence.chatCompletions({
+  model: config.model,
+  messages: [
+    { role: 'system', content: 'You are a helpful builder' },
+    { role: 'user', content: 'Generate a React component...' }
+  ],
+  tools: availableTools,
+});
+```
+
+## Redundancy & Fleet (Future)
+
+When you're ready for multiple hearths:
+
+```yaml
+# Primary hearth
+hearth:
+  id: hearth-alpha
+  role: primary
+  
+packages:
+  core:
+    enabled: true
+    
+  control-plane:
+    enabled: true
+    mode: primary
+    backup_hearths:
+      - hearth-beta
+      - hearth-gamma
+```
+
+```yaml
+# Backup hearth
+hearth:
+  id: hearth-beta
+  role: backup
+  
+packages:
+  core:
+    enabled: true
+    sync_from: hearth-alpha
+    
+  control-plane:
+    enabled: true
+    mode: backup
+    primary: hearth-alpha
+```
+
+## Implementation Priority
+
+### Phase 1: Foundation
+1. **Core Package** — hestia-core (Synap Backend)
+2. **Intelligence Package** — ollama (default)
+3. **Router Package** — caddy
+4. **Install Package** — script installer
+
+### Phase 2: Communication
+5. **Gateway Package** — openclaw
+
+### Phase 3: Building
+6. **Builder Package** — openclaude
+
+### Phase 4: Completeness
+7. **USB Package** — wraps installer
+8. **Monitor Package** — netdata
+9. **First-Fire Wizard** — TUI config
+
+### Phase 5: Scale
+10. **Control Plane Package** — fleet, redundancy, blockchain
+
+## Key Principles
+
+1. **Agnostic Intelligence**: Any provider, any model, any endpoint
+2. **Script First**: USB is a wrapper, script is the foundation
+3. **Package Autonomy**: Each package handles its own lifecycle
+4. **Composable**: Mix, match, extend
+5. **Sovereign**: Works offline, no CP required
+6. **Extensible**: Add new packages easily
+7. **Discoverable**: Registry of blessed packages
+
+---
+
+**Next**: See [INTEGRATION-PLAN.md](INTEGRATION-PLAN.md) for how packages connect to Synap Backend.

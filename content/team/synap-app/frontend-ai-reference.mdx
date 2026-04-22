@@ -1,0 +1,300 @@
+# Synap Frontend Development Reference
+
+**Purpose:** This document enables an AI to help generate or update any frontend feature in Synap. Read it at the start of any feature task.
+
+**Scope:** Frontend-focused (React, Next.js, UI packages).
+
+---
+
+## 1. ALWAYS USE THE UI SYSTEM PACKAGE
+
+**Rule: All UI components, layout primitives, and theming MUST come from `@synap-core/ui-system`.**
+
+- **Import from:** `@synap-core/ui-system` (or `@synap/ui-system` if aliased)
+- **Never use:** Raw HTML elements for styling, Tailwind, inline hex colors, or third-party UI kits
+- **Layout primitives:** `YStack`, `XStack`, `Card`, `Panel`, `Resizable`, `AppLayout`
+- **Components:** `Button`, `Input`, `Badge`, `Modal`, `Select`, `TagList`, `AvatarGroup`, `StatusPill`, `ProgressBar`, `EmptyState`, etc.
+- **Typography:** Always use `SizableText`, `Paragraph`, `Text`, `Label`—never raw `<div>` or `<span>` for text
+- **Theming:** Use theme tokens (`$background`, `$primary`, `$muted`, etc.)—never hardcode colors
+
+See `THEME_SYSTEM_GUIDE.md` and `.claude/skills/front-end/SKILL.md` for detailed usage.
+
+---
+
+## 2. DESIGN PRINCIPLES AND UX GUIDELINES
+
+### 2.1 Design Philosophy
+
+**"Simple, Human-Centered, Beautiful"**
+
+1. **Simplicity First** — Remove everything unnecessary. Less is more.
+2. **Human-Centered** — Warm, approachable, comfortable. Natural interactions.
+3. **Visual Clarity** — Hierarchy through size and weight, not color. Purposeful color.
+
+**Core Principle:** "Invisible Interface, Visible Intelligence" — UI fades into the background; content and intelligence take center stage.
+
+### 2.2 Key Design Decisions
+
+| Rule | Do | Don't |
+|------|-----|-------|
+| **No Shadows** | Use subtle borders and backgrounds for depth | Use `shadowOpacity`, `shadowRadius`, etc. |
+| **Neutral-First** | 90% neutrals, 10% purposeful color | Use saturated colors as default |
+| **Muted Primaries** | Use 300–400 level tokens | Use 500+ for emphasis only |
+| **AI = Emerald Gradient** | AI features use emerald gradient (`#10B981` → `#34D399`) | Use other gradients for AI |
+| **Generous Whitespace** | `$4` (24px) default gap, `$6` (36px) card padding | Cramped spacing |
+| **Rounded Corners** | `$3`–`$4` (12–16px) radius | Sharp corners |
+
+### 2.3 Typography
+
+- **Body text:** `fontSize="$3"` (15px)
+- **Headings:** Use `fontWeight="$semibold"` or `$medium`, not color
+- **Line height:** 1.6+ for body text
+- **Always use:** `SizableText`, `Paragraph`, `Text`—never raw text in `YStack`/`div`
+
+### 2.4 Bonding & Consistency
+
+- **Entity Field System:** Use `@synap/entity-card` for field detection and rendering. `FieldRenderer`, `prepareFieldsForDisplay`, `detectEntityFields` are the single source of truth. Never reimplement field rendering logic in views.
+- **Property Display:** Use `@synap/property-renderer` for `PropertyField`, `PropertyFieldEditor`, and field displays (`TextDisplay`, `DateDisplay`, etc.).
+- **Icons:** Use `@synap-core/icons` with `LazyIcon` for consistent icon loading.
+
+### 2.5 Accessibility
+
+- Color contrast: WCAG AA (4.5:1 normal text, 3:1 large text)
+- Focus states: Visible outlines, no double-ring (avoid border + outline)
+- Keyboard navigation: Tab, Enter/Space, Escape for modals
+- Semantic HTML: Use `button`, `nav`, `h1`–`h6`, not divs with onClick
+
+---
+
+## 3. PACKAGE STRUCTURE — WHERE TO FIND THINGS
+
+The monorepo has **three package layers**: Core, Features, and Applications.
+
+### 3.1 Core Packages (`packages/core/`)
+
+**Infrastructure and shared primitives. Dependencies of everything.**
+
+| Package | Purpose | Key Exports |
+|---------|---------|-------------|
+| `ui-system` | **CRITICAL** — All UI components, layout, themes | `YStack`, `XStack`, `Button`, `Card`, `Input`, `Badge`, `Modal`, `useTheme`, `ThemePortal` |
+| `entity-card` | Entity presentation, field rendering | `EntityCard`, `EntityIcon`, `FieldRenderer`, `prepareFieldsForDisplay`, `EntityPropertiesDisplay`, `EntityMetadataTableModal` |
+| `property-renderer` | Property display/edit components | `PropertyField`, `PropertyFieldEditor`, `TextDisplay`, `DateDisplay`, etc., `detectFieldType`, `formatFieldLabel` |
+| `view-renderer` | View orchestration | `ViewRenderer`, `StructuredViewRenderer`, adapters (Kanban, List, Table, etc.) |
+| `command-palette` | Global command palette | `useCommandPalette`, `useCommands` |
+| `icons` | Icon registry | `LazyIcon`, icon names |
+| `workspace` | Panel layout, workspace shell | `Panel`, `ResizablePanelContainer`, `usePanelWorkspace` |
+| `profile-management` | Entity profiles, property definitions | `ProfileEditor`, `ProfileSelector`, `ProfileManagementPage` |
+| `feed` | Activity feed | `FeedView`, `FeedCard` |
+| `markdown-engine` | Rich text editor | Tiptap-based editor, mentions, blocks |
+
+### 3.2 Feature Packages (`packages/features/`)
+
+**Vertical features composed from core packages.**
+
+| Package | Purpose | Key Exports |
+|---------|---------|-------------|
+| `entity-views` | Entity CRUD, full view, creation form | `EntityViewer`, `EntityFullView`, `EntityCreationForm`, `EntityFloatingPanel` |
+| `search` | Unified search | `SearchApp`, `useSearch`, `useUnifiedSearch` |
+| `floating-panels` | Floating filter/selector panels | `FloatingPanel`, `EntitySelector`, `ViewSelector` |
+| `document` | Document collaboration, versions | `useDocumentCollaboration`, `useDocumentVersions`, `documentStore` |
+| `chat-interface` | Chat bubbles, input | `ChatInput`, `MessageBubble`, `MessageList` |
+| `proposals` | AI proposals, approvals | `ProposalList`, `ProposalCard`, `useProposals` |
+| `template-engine` | Document templates | `LayoutEngine`, `useTemplates`, `templateStore` |
+| `views-management` | Create/edit views | `ViewsManagementPage`, `CreateViewDialog` |
+
+### 3.3 View Packages (`packages/views/`)
+
+**View implementations** — each renders entities in a specific layout. Used by `view-renderer`.
+
+| Package | Purpose | Key Exports |
+|---------|---------|-------------|
+| `list` | List view | `ListView`, `ListItem` |
+| `kanban` | Kanban board | `KanbanBoard`, `KanbanCard`, `KanbanColumn` |
+| `table` | Table/pivot view | `EntityTableView`, `StandardTableView`, `PivotTableView` |
+| `grid` | Grid view | `GridView`, `GridItem` |
+| `graph` | Force-directed graph | `GraphCanvas`, `RevolutionaryEntityGraph` |
+| `bento` | Bento block layout | `BentoView`, `BentoBlock` |
+| `calendar` | Calendar view | `CalendarView` |
+| `flow` | Flow diagram | `FlowView` |
+| `timeline` | Timeline view | `TimelineView`, `TimelineNode` |
+
+### 3.4 Application Packages (`packages/apps/`)
+
+**Domain-specific apps** — embeddable in the workspace.
+
+| Package | Purpose | Key Exports |
+|---------|---------|-------------|
+| `ai-chat` | AI Chat app | Chat components, branching, proposals, `chatStore`, `useChatThread` |
+| `whiteboard` | Infinite canvas (tldraw) | `WhiteboardCanvas`, shapes, `WhiteboardContext` |
+| `data` | Data app (entity management) | `DataApp`, `DataTableView`, `DataListView`, `DataGraphView` |
+| `docs` | Documents app | `DocsApp`, `DocsSidebar`, `DocumentCard` |
+| `views-management` | View creation/management | `ViewsManagementPage`, `CreateViewDialog` |
+
+### 3.5 Shared Infrastructure
+
+| Package | Purpose | Key Exports |
+|---------|---------|-------------|
+| `synap-client` | tRPC client, TanStack Query, Socket.IO | `createTRPCClient`, `useQuery`, `useMutation` |
+| `synap-hooks` | Composite hooks (client + stores) | `useEntity`, `useWorkspaceData`, `usePermissions`, `useRealtimeSync`, `useRelationships` |
+| `synap-stores` | Zustand stores | `workspaceStore`, `viewStore`, `viewConfigStore`, `uiStore`, `permissionsStore`, `notificationStore` |
+
+---
+
+## 4. DATA FLOW AND PATTERNS
+
+### 4.1 Three-Layer Data Pattern
+
+```
+Component
+    → @synap/hooks (useEntity, useWorkspaceData, etc.)
+        → @synap/client (tRPC + TanStack Query) → Backend
+        → @synap/stores (Zustand) → Ephemeral UI state
+```
+
+- **Hooks:** Primary API. Use `useEntity`, `useWorkspaceData`, `usePermissions`, etc.
+- **Client:** Don't call tRPC directly in components; use hooks.
+- **Stores:** For UI state (panel open/closed, selections, zoom). Not for server data.
+
+### 4.2 Entity Model
+
+- **Entity:** Universal model — `id`, `type`, `title`, `properties`, `createdAt`, `updatedAt`, etc.
+- **`entity.properties`:** Source of truth for typed properties (profile-driven).
+- **Profile:** Defines property schema (slug, valueType, uiHints) per entity type.
+
+### 4.3 Field Rendering Pattern
+
+**Preferred:** Parent prepares fields, child renders.
+
+```tsx
+import { prepareFieldsForDisplay, FieldRenderer } from '@synap/entity-card';
+
+function MyView({ entity }) {
+  const fields = prepareFieldsForDisplay(entity, { mode: 'dynamic', variant: 'default' });
+  return (
+    <YStack gap="$2">
+      {fields.map((field) => (
+        <FieldRenderer key={field.key} fieldKey={field.key} value={field.value} label={field.label} />
+      ))}
+    </YStack>
+  );
+}
+```
+
+---
+
+## 5. MAIN APPLICATION STRUCTURE
+
+### 5.1 Web App (`apps/web/`)
+
+- **Framework:** Next.js 16 (App Router), React 19
+- **Entry:** `app/layout.tsx`, `app/providers.tsx`
+- **Auth:** `(auth)/login`, `(auth)/registration`, etc.
+- **Workspace:** `app/workspace/page.tsx` — main workspace shell
+  - Uses `WorkspaceOS`, `ResizablePanelContainer`, `FloatingSidebar`
+  - Panels: Document, Chat, Home, etc.
+- **Routes:**
+  - `/workspace` — Main workspace
+  - `/workspace/settings/*` — Settings (entities, permissions, integrations, sharing, etc.)
+  - `/whiteboard` — Whiteboard app
+  - `/graph` — Graph view
+  - `/templates/*` — Template editor
+
+### 5.2 Workspace Model
+
+- **Single workspace** — No team separation. Roles: Owner, Admin, Member, Guest.
+- **Apps:** Whiteboard (Canvas), Data, Docs, Views, AI Chat, Dashboard.
+- **Organization:** Projects (hierarchical), Tags (flat), Relationships (typed), Search.
+
+---
+
+## 6. HOW TO ADD OR UPDATE A FEATURE
+
+### 6.1 Adding a New Component
+
+1. **Check core packages first** — Does `ui-system`, `entity-card`, or `property-renderer` already provide it?
+2. **If new:** Create in the appropriate package:
+   - Generic UI → `packages/core/ui-system`
+   - Entity-related → `packages/core/entity-card` or `entity-views`
+   - View-specific → corresponding `packages/views/*`
+3. **Always use** `@synap-core/ui-system` for layout and primitives.
+4. **Export** from package `index.ts`.
+
+### 6.2 Adding a New View
+
+1. Create package under `packages/views/` (e.g. `packages/views/my-view/`).
+2. Implement components that consume entities and use `FieldRenderer` / `prepareFieldsForDisplay`.
+3. Register adapter in `packages/core/view-renderer` if it should be selectable as a view type.
+4. Depend on: `@synap-core/ui-system`, `@synap/entity-card`, `@synap-core/types`.
+
+### 6.3 Adding a New Page or Route
+
+1. Add route under `apps/web/app/` (e.g. `app/workspace/my-feature/page.tsx`).
+2. Use existing layout (`app/workspace/layout.tsx`) or create a new layout.
+3. Compose from feature packages and core packages.
+4. Use `@synap/hooks` for data; avoid direct tRPC in page components.
+
+### 6.4 Adding State
+
+- **Server state:** Use tRPC via `@synap/hooks`. No manual fetching in components.
+- **UI state:** Add to `@synap/stores` (Zustand) if shared across routes/panels.
+- **Local state:** `useState`, `useReducer` for component-local state.
+
+---
+
+## 7. IMPORTANT CONVENTIONS
+
+### 7.1 Imports
+
+```tsx
+// UI — always from ui-system
+import { YStack, XStack, Button, Card, SizableText } from '@synap-core/ui-system';
+
+// Entity/field rendering
+import { FieldRenderer, prepareFieldsForDisplay, EntityCard } from '@synap/entity-card';
+import { PropertyField, PropertyFieldEditor } from '@synap/property-renderer';
+
+// Data
+import { useEntity, useWorkspaceData } from '@synap/hooks';
+
+// Icons
+import { LazyIcon } from '@synap-core/icons';
+```
+
+### 7.2 File Naming
+
+- Components: `PascalCase.tsx`
+- Hooks: `useCamelCase.ts`
+- Utils: `camelCase.ts`
+- Types: `index.ts` or `types.ts` in package
+
+### 7.3 Client Components
+
+- Use `"use client"` for components that use hooks, event handlers, or browser APIs.
+- Keep server components where possible (no `"use client"`).
+
+---
+
+## 8. REFERENCE DOCUMENTS
+
+| Document | Purpose |
+|----------|---------|
+| `.claude/skills/front-end/SKILL.md` | Detailed design system, Tamagui patterns, color/typography |
+| `THEME_SYSTEM_GUIDE.md` | Theme tokens, light/dark, customization |
+| `STYLING_SYSTEM.md` | Styling cascade (system → view → instance) |
+| `apps/web/Synap UX Specification.md` | Full UX spec, app layouts, flows |
+| `CLAUDE.md` | Architecture, commands, tech stack |
+| `packages/core/view-renderer/doc/` | View system architecture |
+
+---
+
+## 9. QUICK CHECKLIST FOR NEW FEATURES
+
+- [ ] Use only `@synap-core/ui-system` for UI
+- [ ] Use theme tokens, no hardcoded colors
+- [ ] Use `SizableText`/`Paragraph` for text, not raw divs
+- [ ] Use `FieldRenderer` / `prepareFieldsForDisplay` for entity fields
+- [ ] Use `@synap/hooks` for data, not direct tRPC
+- [ ] Add responsive scaling (`$gtSm`, `$gtMd`) where appropriate
+- [ ] No shadows; use subtle borders
+- [ ] Test light and dark modes
+- [ ] Accessibility: contrast, focus states, keyboard nav

@@ -1,0 +1,507 @@
+# 3D Components Guide for Remotion
+
+This guide explains how to properly use 3D components in Remotion for video production.
+
+---
+
+## ⚠️ Critical Rules for 3D in Remotion
+
+Remotion is **NOT** a standard React app. It renders videos frame-by-frame, and **every frame must be 100% deterministic**.
+
+### ❌ NEVER DO THIS:
+
+```tsx
+// ❌ WRONG: Using standard React Three Fiber Canvas
+import { Canvas, useFrame } from '@react-three/fiber';
+
+function BadComponent() {
+  const meshRef = useRef();
+
+  // ❌ WRONG: useFrame is non-deterministic
+  useFrame((state, delta) => {
+    meshRef.current.rotation.y += delta;
+  });
+
+  // ❌ WRONG: Using time from clock
+  const time = state.clock.getElapsedTime();
+
+  return (
+    <Canvas> {/* ❌ WRONG: Not ThreeCanvas */}
+      <mesh ref={meshRef}>
+        <boxGeometry />
+      </mesh>
+    </Canvas>
+  );
+}
+```
+
+**Why this fails:**
+- `useFrame()` runs asynchronously based on browser refresh rate
+- Rendering the same frame twice gives different results
+- Videos will flicker and be inconsistent
+
+---
+
+### ✅ ALWAYS DO THIS:
+
+```tsx
+// ✅ CORRECT: Using Remotion's ThreeCanvas and frame-based animation
+import { useCurrentFrame, useVideoConfig } from 'remotion';
+import { ThreeCanvas } from '@remotion/three';
+
+function GoodComponent() {
+  const frame = useCurrentFrame(); // ✅ Frame-based animation
+  const { width, height } = useVideoConfig();
+
+  // ✅ Deterministic rotation based on frame number
+  const rotation = frame * 0.02;
+
+  return (
+    <ThreeCanvas width={width} height={height}> {/* ✅ Remotion's ThreeCanvas */}
+      <mesh rotation={[0, rotation, 0]}>
+        <boxGeometry />
+        <meshStandardMaterial />
+      </mesh>
+    </ThreeCanvas>
+  );
+}
+```
+
+**Why this works:**
+- Frame number is always the same for a given point in time
+- Rendering frame 100 always gives identical output
+- Videos are consistent and reproducible
+
+---
+
+## 📦 Available 3D Components
+
+### 1. DataPod3D
+
+A rotating, glowing icosahedron representing Synap's data pod architecture.
+
+**Props:**
+
+```typescript
+interface DataPod3DProps {
+  scale?: number;              // Size of the pod (default: 1)
+  rotationSpeed?: number;      // Rotation speed (default: 0.01)
+  glowIntensity?: number;      // Glow brightness 0-1 (default: 0.8)
+  color?: string;              // Primary color (default: "#38BDF8")
+  animateIn?: boolean;         // Animate entrance (default: true)
+  startFrame?: number;         // Start frame (default: 0)
+  state?: "idle" | "active" | "processing"; // Animation state
+  cameraDistance?: number;     // Camera distance (default: 5)
+}
+```
+
+**Usage:**
+
+```tsx
+import { DataPod3D } from "../components/3d/DataPod3D";
+
+<DataPod3D
+  scale={1.5}
+  rotationSpeed={0.015}
+  glowIntensity={0.9}
+  color="#38BDF8"
+  state="active"
+  animateIn
+  startFrame={30}
+/>
+```
+
+**States:**
+- `idle` - Slow rotation, minimal glow
+- `active` - Faster rotation (1.5x speed)
+- `processing` - Fastest rotation (2.5x) with pulsing scale
+
+---
+
+### 2. Particles3D
+
+A field of animated particles in 3D space.
+
+**Props:**
+
+```typescript
+interface Particles3DProps {
+  count?: number;              // Number of particles (default: 100)
+  color?: string;              // Particle color (default: "#38BDF8")
+  size?: number;               // Particle size (default: 0.1)
+  speed?: number;              // Animation speed (default: 1)
+  direction?: "up" | "down" | "explode" | "implode" | "orbit";
+  radius?: number;             // Spawn radius (default: 5)
+  opacity?: number;            // Particle opacity (default: 0.6)
+  startFrame?: number;         // Start frame (default: 0)
+  animateIn?: boolean;         // Fade in (default: true)
+}
+```
+
+**Usage:**
+
+```tsx
+import { Particles3D } from "../components/3d/Particles3D";
+
+{/* Rising particles */}
+<Particles3D
+  count={200}
+  color="#38BDF8"
+  direction="up"
+  size={0.15}
+  speed={1}
+  radius={5}
+/>
+
+{/* Exploding particles */}
+<Particles3D
+  count={150}
+  color="#F59E0B"
+  direction="explode"
+  speed={2}
+/>
+
+{/* Orbiting particles */}
+<Particles3D
+  count={100}
+  color="#10B981"
+  direction="orbit"
+  speed={1}
+/>
+```
+
+**Directions:**
+- `up` - Particles rise continuously (wrapping)
+- `down` - Particles fall continuously
+- `explode` - Particles move outward from center
+- `implode` - Particles converge to center
+- `orbit` - Particles orbit around center with vertical bobbing
+
+---
+
+### 3. OrbitingObjects
+
+Multiple objects orbiting around a central hub. Perfect for visualizing hub-and-spoke architecture.
+
+**Props:**
+
+```typescript
+interface OrbitingObject {
+  id: string;                  // Unique identifier
+  color?: string;              // Object color
+  size?: number;               // Object size (default: 0.5)
+  radius?: number;             // Orbit radius (default: 3)
+  startAngle?: number;         // Initial angle in radians
+  shape?: "sphere" | "box" | "octahedron";
+}
+
+interface OrbitingObjectsProps {
+  objects: OrbitingObject[];   // Array of objects to orbit
+  speed?: number;              // Orbit speed (default: 0.01)
+  showLines?: boolean;         // Show connection lines (default: true)
+  lineColor?: string;          // Line color (default: "#38BDF8")
+  startFrame?: number;         // Start frame (default: 0)
+  animateIn?: boolean;         // Animate entrance (default: true)
+  cameraDistance?: number;     // Camera distance (default: 8)
+  tiltX?: number;              // Tilt orbit plane X (default: 0.3)
+  tiltY?: number;              // Tilt orbit plane Y (default: 0)
+}
+```
+
+**Usage:**
+
+```tsx
+import { OrbitingObjects } from "../components/3d/OrbitingObjects";
+
+<OrbitingObjects
+  objects={[
+    {
+      id: "notion",
+      color: "#F59E0B",
+      size: 0.6,
+      radius: 3,
+      startAngle: 0,
+      shape: "box",
+    },
+    {
+      id: "slack",
+      color: "#10B981",
+      size: 0.6,
+      radius: 3,
+      startAngle: Math.PI / 2,
+      shape: "sphere",
+    },
+    {
+      id: "airtable",
+      color: "#EF4444",
+      size: 0.6,
+      radius: 3,
+      startAngle: Math.PI,
+      shape: "octahedron",
+    },
+  ]}
+  speed={0.015}
+  showLines
+  lineColor="#38BDF8"
+  cameraDistance={9}
+  tiltX={0.4}
+/>
+```
+
+---
+
+## 🎬 Complete Scene Example
+
+Here's how to combine multiple 3D components in a scene:
+
+```tsx
+import React from "react";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { DataPod3D } from "../components/3d/DataPod3D";
+import { Particles3D } from "../components/3d/Particles3D";
+import { GradientText } from "../components/text/GradientText";
+
+export const Scene3DExample: React.FC = () => {
+  const frame = useCurrentFrame();
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#0A0A0A" }}>
+      {/* Background particles */}
+      <Particles3D
+        count={150}
+        color="#38BDF8"
+        direction="orbit"
+        size={0.1}
+        speed={0.5}
+        opacity={0.4}
+      />
+
+      {/* Main data pod - changes state over time */}
+      <DataPod3D
+        scale={1.2}
+        rotationSpeed={0.015}
+        color="#38BDF8"
+        state={frame < 90 ? "idle" : frame < 180 ? "active" : "processing"}
+        animateIn
+        startFrame={0}
+      />
+
+      {/* Title overlay */}
+      <div
+        style={{
+          position: "absolute",
+          top: 100,
+          left: 0,
+          right: 0,
+          textAlign: "center",
+          zIndex: 10,
+        }}
+      >
+        <GradientText
+          from="#38BDF8"
+          to="#10B981"
+          fontSize={72}
+          fontWeight={900}
+        >
+          Your Data Pod
+        </GradientText>
+      </div>
+    </AbsoluteFill>
+  );
+};
+```
+
+---
+
+## 🔧 Technical Implementation Patterns
+
+### Pattern 1: Separating Logic from Rendering
+
+Always separate frame-based logic from mesh rendering:
+
+```tsx
+// ✅ CORRECT PATTERN
+const MyComponent = () => {
+  const frame = useCurrentFrame(); // Get frame ONCE
+  const rotation = frame * 0.02;   // Calculate values
+
+  return (
+    <ThreeCanvas width={width} height={height}>
+      <MyMesh rotation={rotation} /> {/* Pass as props */}
+    </ThreeCanvas>
+  );
+};
+
+const MyMesh = ({ rotation }) => {
+  // NO useFrame here, just render
+  return (
+    <mesh rotation={[0, rotation, 0]}>
+      <boxGeometry />
+    </mesh>
+  );
+};
+```
+
+### Pattern 2: Time-based Variations
+
+Use frame number with math functions for complex motion:
+
+```tsx
+const frame = useCurrentFrame();
+
+// Sinusoidal motion (smooth oscillation)
+const y = Math.sin(frame * 0.05) * 2;
+
+// Rotation with multiple axes
+const rotX = frame * 0.01;
+const rotY = frame * 0.02;
+const rotZ = Math.sin(frame * 0.03) * 0.5;
+
+// Pulsing scale
+const scale = 1 + Math.sin(frame * 0.1) * 0.2;
+
+return <mesh position={[0, y, 0]} rotation={[rotX, rotY, rotZ]} scale={scale} />;
+```
+
+### Pattern 3: State-based Animation
+
+Change behavior based on time ranges:
+
+```tsx
+const frame = useCurrentFrame();
+
+// Different states at different times
+const state =
+  frame < 60 ? "entering" :
+  frame < 120 ? "idle" :
+  frame < 180 ? "active" :
+  "exiting";
+
+// State affects animation parameters
+const speed =
+  state === "entering" ? 0.005 :
+  state === "active" ? 0.03 :
+  0.01;
+
+const rotation = frame * speed;
+```
+
+### Pattern 4: Using Random with Seeds
+
+For deterministic "randomness":
+
+```tsx
+import { random } from "remotion";
+
+// ✅ CORRECT: Seeded random (always same result)
+const x = random("seed-x") * 10;
+const y = random("seed-y") * 10;
+
+// ❌ WRONG: Non-deterministic
+const x = Math.random() * 10;
+```
+
+---
+
+## 🎯 Performance Tips
+
+1. **Keep particle counts reasonable**: 50-300 particles max
+2. **Use low-poly geometries**: `<icosahedronGeometry args={[1, 1]} />` (low subdivisions)
+3. **Minimize transparency**: Transparency is expensive
+4. **Limit light count**: 2-3 lights per scene maximum
+5. **Avoid shadows in most cases**: Only enable when critical
+6. **Use smaller canvas for drafts**: `scale={0.5}` in render settings
+
+---
+
+## 🐛 Troubleshooting
+
+### Issue: "Cannot read properties of undefined (reading 'S')"
+
+**Cause:** Using `<Canvas>` instead of `<ThreeCanvas>`
+
+**Fix:**
+```tsx
+// ❌ Wrong
+import { Canvas } from '@react-three/fiber';
+
+// ✅ Correct
+import { ThreeCanvas } from '@remotion/three';
+```
+
+---
+
+### Issue: Flickering or inconsistent rendering
+
+**Cause:** Using `useFrame()` or time-based animations
+
+**Fix:**
+```tsx
+// ❌ Wrong
+useFrame((state, delta) => {
+  meshRef.current.rotation.y += delta;
+});
+
+// ✅ Correct
+const frame = useCurrentFrame();
+const rotation = frame * 0.02;
+return <mesh rotation={[0, rotation, 0]} />;
+```
+
+---
+
+### Issue: ThreeCanvas not rendering (black screen)
+
+**Causes:**
+1. Missing width/height props
+2. No lighting
+3. Camera too far/close
+
+**Fix:**
+```tsx
+const { width, height } = useVideoConfig();
+
+<ThreeCanvas
+  width={width}        // ✅ Required
+  height={height}      // ✅ Required
+  camera={{
+    position: [0, 0, 5], // ✅ Position camera
+    fov: 45
+  }}
+>
+  <ambientLight intensity={0.5} />      {/* ✅ Add lights */}
+  <directionalLight position={[5, 5, 5]} />
+  {/* Your meshes */}
+</ThreeCanvas>
+```
+
+---
+
+## 📚 Resources
+
+- **Remotion Docs**: https://remotion.dev/docs/three
+- **Three.js Docs**: https://threejs.org/docs/
+- **React Three Fiber**: https://docs.pmnd.rs/react-three-fiber (read for patterns, but adapt for Remotion)
+- **Demo Video**: See `3DShowcase` composition in `npm start`
+
+---
+
+## ✅ Checklist for New 3D Components
+
+When creating new 3D components:
+
+- [ ] Use `<ThreeCanvas>` from `@remotion/three`
+- [ ] Pass `width` and `height` props to ThreeCanvas
+- [ ] Use `useCurrentFrame()` for all animations
+- [ ] NEVER use `useFrame()` from @react-three/fiber
+- [ ] All calculations based on frame number, not time
+- [ ] Include proper lighting (ambient + directional)
+- [ ] Support `animateIn` with spring animations
+- [ ] Support `startFrame` for sequence timing
+- [ ] Add TypeScript types for all props
+- [ ] Document props and usage examples
+- [ ] Test rendering consistency (same frame = same output)
+
+---
+
+**Remember:** Remotion is deterministic video rendering, not interactive 3D. Every frame must render identically every time.

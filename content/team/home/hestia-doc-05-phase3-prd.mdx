@@ -1,0 +1,78 @@
+# DOC-05 — Phase 3 PRD: Builder (OpenClaude) + Safe Execution
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-05 |
+| Title | Phase 3 PRD — Builder & Artifact Deployment |
+| Status | Draft |
+| Version | 0.3 |
+| Date | 2026-04-12 |
+
+## 1) Phase goal
+Enable "AI that builds" with strict controls:
+* OpenClaude installed and reachable
+* workspace-bounded operations
+* approval gate for risky actions
+* deploy artifacts and return URLs
+* full audit trail
+
+## 2) Safety-first execution model
+
+### 2.1 Workspace policy
+Default workspace root: `/srv/synap-workspaces`
+
+Rules:
+* OpenClaude can read/write only inside the workspace by default.
+* Writing outside workspace requires approval.
+* Secrets are never directly readable by OpenClaude; Orchestrator mediates via scoped injection.
+
+### 2.2 Command allowlist (default)
+| Category | Allowed | Notes |
+|---|---|---|
+| File ops | `mkdir`, `cp`, `mv`, `rm` (workspace only) | enforce path guards |
+| Build tools | `node`, `npm`, `pnpm`, `python3`, `pip` | no global installs by default |
+| Git | `git clone`, `git status`, `git diff` | credentials via read-only tokens (future) |
+| Containers | `docker compose up/down` (project scope) | requires approval if exposing ports |
+| System | none | all system-level changes require approval |
+
+### 2.3 Risk classification (minimum)
+| Risk | Examples | Default |
+|---|---|---|
+| Low | edit workspace files, run unit tests | auto-allow |
+| Medium | start containers, write to /srv/www | approval |
+| High | apt install, firewall changes, open ports, write /etc | approval + explicit confirmation |
+
+## 3) Approval UX (channel-native)
+When approval is required:
+* Orchestrator sends an approval request to OpenClaw in the same chat thread.
+* User replies with "approve" or clicks an action (where supported).
+* Orchestrator continues or aborts run.
+
+## 4) Artifact publishing models
+
+### 4.1 Static site publishing (default)
+* Publish to `/srv/www/<artifact_id>/`
+* Reverse proxy maps:
+    * `https://<artifact_id>.<base_domain>/` → that directory
+
+### 4.2 Containerized publishing (optional)
+* Create a compose stack under workspace:
+    * `/srv/synap-workspaces/<artifact_id>/docker-compose.yml`
+* Reverse proxy routes to container port
+* Port exposure to LAN/Public requires explicit approval
+
+## 5) Acceptance criteria
+* User message "build a simple site" results in:
+    * generated files in workspace
+    * artifact published behind proxy
+    * URL returned in channel
+    * audit log records:
+        * files changed
+        * commands executed
+        * approvals
+
+## 6) References
+* OpenClaude repository: https://github.com/Gitlawb/openclaude
+* API key/secret safety practices: https://blog.gitguardian.com/secrets-api-management/
+* OpenClaw channels (approval UX): https://docs.openclaw.ai/channels

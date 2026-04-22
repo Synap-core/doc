@@ -1,0 +1,333 @@
+# Command Palette — Architecture, Vision & Roadmap
+
+## Vision
+
+The command palette is the **universal entry point** to everything in Synap. Inspired by Raycast, it replaces context switching with a single keyboard-first surface that adapts to what you're doing.
+
+Core principles:
+
+- **One shortcut, infinite depth** — `Cmd+K` is all you need to know
+- **Scope narrows, never redirects** — scoped searches filter the palette in-place, never navigate away
+- **Commands trigger context, not pages** — running an AI command opens the result thread inline; creating an entity opens it as a panel; not a page transition
+- **Extensible by design** — any feature package can register panels and commands without touching core palette code
+
+---
+
+## Architecture
+
+### Package layout
+
+```
+packages/core/command-palette/src/
+├── components/
+│   ├── CommandPalette.tsx        # Main UI, glassmorphism, split-pane, scope chip
+│   ├── CommandList.tsx           # Grouped result list
+│   ├── CommandItem.tsx           # Single result row
+│   ├── CommandQuickRunForm.tsx   # Inline form for commands with variables
+│   └── ScopeChip.tsx             # Colored pill shown when a scope prefix is active
+├── hooks/
+│   ├── useCommandPalette.ts      # isOpen state + Cmd+K binding
+│   └── useCommands.ts            # searchCommands (fuzzy), groupCommandsByCategory
+├── registry/
+│   └── palettePanelRegistry.ts   # Runtime panel registration (subscribe/register/unregister)
+├── types/
+│   ├── command.ts                # Command, CommandMetadata, CommandAction
+│   └── scope.ts                  # SCOPE_DEFINITIONS, detectScope, buildScopedQuery
+└── index.ts                      # Public API
+```
+
+### Global wiring
+
+The palette is mounted exactly **once** at:
+
+```
+apps/web/app/components/CommandPaletteProvider.tsx
+```
+
+This provider:
+
+1. Holds `isOpen` state (from `useCommandPalette` hook — Cmd+K binds here)
+2. Builds all `Command[]` arrays (app navigation, scoped search results from Typesense, AI commands, system)
+3. Renders `<CommandPalette>` with `commands={allCommands}`
+4. Dynamically registers the intelligence panel (`import("@synap/intelligence")`) on mount
+
+**Nothing else in the app should mount a `<CommandPalette>` or a second `useCommandPalette`.** The workspace page and other routes do NOT touch the palette.
+
+---
+
+## Two Extension Mechanisms
+
+### 1. `panelId` — Split-pane panels
+
+When a `Command` has `metadata.panelId`, selecting it **opens a registered panel** in the right pane of a split layout instead of executing + closing.
+
+```typescript
+// Any feature registers a panel:
+registerPalettePanel("intelligence-commands", IntelligenceCommandsPanel, {
+  label: "AI Commands",
+  icon: "Terminal",
+});
+
+// A command points to that panel:
+{
+  id: "run-ai-command",
+  metadata: {
+    title: "Run AI Command",
+    panelId: "intelligence-commands",   // ← opens split pane
+  },
+  action: () => {},
+}
+```
+
+The `PanelComponent` receives `{ onClose, workspaceId, query, initialMode }`.
+
+### 2. `fillQuery` — Scope activation
+
+When a `Command` has `metadata.fillQuery`, selecting it **sets the palette query** to that value instead of executing or closing. Used for the 6 "Search [X]" shortcut commands that activate scoped mode.
+
+```typescript
+{
+  id: "scope-search-entities",
+  metadata: {
+    title: "Search Entities",
+    fillQuery: "e:",   // ← fills query, shows scope chip
+  },
+  action: () => {},
+}
+```
+
+---
+
+## Scope System
+
+### Single source of truth: `types/scope.ts`
+
+All 7 scopes are defined in one place:
+
+| Scope ID    | Prefixes        | Color             | Typesense collection | Client-only |
+| ----------- | --------------- | ----------------- | -------------------- | ----------- |
+| `entities`  | `e:`, `entity:` | Amber `#F59E0B`   | `entities`           | —           |
+| `views`     | `v:`, `view:`   | Indigo `#6366F1`  | `views`              | —           |
+| `commands`  | `cmd:`, `c:`    | Emerald `#10B981` | —                    | ✓           |
+| `threads`   | `t:`, `thread:` | Sky `#0EA5E9`     | `chat_threads`       | —           |
+| `documents` | `d:`, `doc:`    | Violet `#8B5CF6`  | `documents`          | —           |
+| `actions`   | `/`             | Slate `#64748B`   | —                    | ✓           |
+| `run`       | `>`             | Emerald `#10B981` | —                    | ✓           |
+
+Each scope definition drives:
+
+- Prefix detection (`detectScope(query)` → strips prefix, returns `cleanQuery`)
+- The `ScopeChip` visual indicator (color, label)
+- Dynamic search input placeholder
+- Typesense `collections` filter (when not `clientOnly`)
+
+### User interaction flow
+
+```
+User types "e:"
+  → detectScope("e:") returns { scope: entities, cleanQuery: "" }
+  → ScopeChip [⬡ Entities ×] appears in search bar
+  → Placeholder changes to "Search entities…"
+  → searchCommands uses cleanQuery ("") for local filtering
+  → useUnifiedSearch filters to collection: ["entities"]
+
+User types "e:meeting"
+  → cleanQuery = "meeting"
+  → Local fuzzy search against "meeting"
+  → Typesense fires with query="meeting", collections=["entities"]
+
+User presses Esc
+  → Query resets to "e:" (scope stays active)
+  → User presses Esc again → query cleared entirely, palette stays open
+  → User presses Esc again → palette closes
+
+User clicks × on ScopeChip
+  → Query resets to cleanQuery (scope dismissed)
+```
+
+---
+
+## Panel Registry
+
+```typescript
+// Register (returns unregister cleanup function)
+const unregister = registerPalettePanel("my-panel", MyComponent, {
+  label: "My Panel",
+  icon: "Zap",
+  keywords: ["my", "feature"],
+});
+
+// Lookup
+const reg = getPalettePanel("my-panel"); // { component, meta }
+
+// Subscribe to changes (used in CommandPalette to re-render when panels register late)
+const unsub = subscribeToPalettePanelRegistry(() => {
+  /* re-render */
+});
+```
+
+Currently registered panels:
+
+- `intelligence-commands` → `IntelligenceCommandsPanel` (list/run/create AI commands)
+
+### `IntelligenceCommandsPanel` — three-mode split UI
+
+```
+Left pane (300px)           Right pane (flex)
+┌────────────────────┐      ┌──────────────────────────────────┐
+│ [Search commands]  │      │  mode=list: empty state prompt    │
+│ + New command      │  or  │  mode=run: fill inputs, run       │
+│ ─────────────────  │      │  mode=create: PromptTemplateEditor│
+│ [command list]     │      │                                   │
+└────────────────────┘      └──────────────────────────────────┘
+```
+
+The create form uses `PromptTemplateEditor` from `@synap/commands` — typed `{` triggers a picker for `{selection}` / `{argument name="..."}` placeholders.
+
+---
+
+## Known Issue: Unsynced Query State
+
+There is a structural gap: `useCommandPalette` in `CommandPaletteProvider` has its own internal `query` state, and the `<CommandPalette>` component has a separate internal `query` state. The provider's `useUnifiedSearch` is driven by the hook's `query`, which never receives user input typed in the component.
+
+**Impact**: Typesense scoped search results (entities, views, threads, documents) currently don't appear. Client-side `searchCommands` (local fuzzy match) still works for all registered commands.
+
+**Fix**: Add a controlled `query` prop + `onQueryChange` callback to `CommandPaletteProps`, remove the internal `useState("")`, and thread it up to `CommandPaletteProvider`. This would make Typesense scoped search fully functional.
+
+---
+
+## User Stories (current)
+
+| Story                            | How it works                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| "I want to navigate to a view"   | `Cmd+K` → type "roadmap" → select view result                                                  |
+| "I want to run an AI command"    | `Cmd+K` → type "run" → select "Run AI Command" → split pane → pick command → fill vars → run   |
+| "I want to create an AI command" | `Cmd+K` → type "create command" → split pane opens in create mode → use `PromptTemplateEditor` |
+| "I want to search only entities" | `Cmd+K` → type "e:" or select "Search Entities" command → scope chip appears → type name       |
+| "I want to search AI commands"   | `Cmd+K` → type "cmd:" → filtered to intelligence commands only                                 |
+| "I want to create a note fast"   | `Cmd+K` → type text → "Create note" appears at top → Enter                                     |
+| "I want to ask AI with context"  | `Cmd+K` → type question → Tab or click "Ask AI" → navigates to Intelligence with query         |
+
+---
+
+## What's Next — Roadmap & Analysis
+
+### Priority 1: Fix the query sync issue
+
+Without this, Typesense scoped search is dead. Add `query` + `onQueryChange` props to `CommandPalette`, let `CommandPaletteProvider` own the state. All scope filtering then works end-to-end.
+
+### Priority 2: Per-scope accent theming
+
+When a scope chip is active, the entire palette UI can shift its accent color to match the scope:
+
+- Entities active → amber tint on glow, chip, input caret, result highlights
+- Views active → indigo tint
+- Threads active → sky blue tint
+
+This is achievable by passing `accentColor` from the active scope's `color` field into `PortalContent` and applying it to: gradient glow, input caret, selected item highlight, "Ask AI" pill border.
+
+### Priority 3: Scope-specific result renderers
+
+Instead of every result using the same generic `CommandItem`, each scope registers a result renderer component. Entities could show status + assignee avatars; Views could show the view type icon; Threads could show last message preview + timestamp.
+
+**Architecture**: Extend `ScopeDefinition` with `resultComponent?: React.ComponentType<ScopeResultItemProps>`. If absent, fall back to `CommandItem`.
+
+### Priority 4: Multi-step scoped filtering (the big one)
+
+The vision: scope → type/profile → instance. Like Raycast's "breadcrumb" navigation.
+
+```
+e:           → all entities (step 1)
+e:task:      → entities of profile "task" (step 2)
+e:task:meet  → tasks matching "meet" (step 3)
+```
+
+```
+v:           → all views (step 1)
+v:kanban:    → only kanban views (step 2)
+```
+
+Implementation requires:
+
+1. Extending `detectScope` to recognize multi-segment prefixes (`e:task:`)
+2. A filter chip chain in the search bar (instead of single `ScopeChip`, a `FilterBreadcrumbs` component)
+3. Fetching entity profiles / view types as the second-level filter options
+4. Typesense filter: `collections=["entities"] + filter="profile:task"`
+
+**Data model for this**:
+
+```typescript
+interface ActiveFilter {
+  scopeId: PaletteScopeId;
+  subFilter?: {
+    label: string; // "Task", "Kanban"
+    typesenseFilter: string; // "profile:task"
+    color?: string; // inherits or overrides
+  };
+}
+```
+
+### Priority 5: Scope Search Registry (parallel to Panel Registry)
+
+A `ScopeSearchRegistry` that parallels `palettePanelRegistry` — each scope (or feature package) can register:
+
+```typescript
+interface ScopeSearchRegistration {
+  scopeId: PaletteScopeId;
+  /** Custom result item renderer */
+  ResultItem?: React.ComponentType<ScopeResultItemProps>;
+  /** Custom empty state */
+  EmptyState?: React.ComponentType;
+  /** Sub-filter options (for multi-step) */
+  getSubFilters?: (workspaceId: string) => Promise<SubFilter[]>;
+  /** Optional full custom results panel (overrides list entirely) */
+  ResultsPanel?: React.ComponentType<ScopeResultsPanelProps>;
+}
+```
+
+This enables:
+
+- Whiteboard features registering entity result items with canvas previews
+- Documents scope showing rendered document thumbnails
+- Graph scope showing entity relationship previews
+
+### Priority 6: Context-aware suggestions
+
+When the palette opens, the current workspace context (open entity, active view, active document) can pre-populate scope-relevant suggestions:
+
+```
+Palette opens while viewing a "Project" entity:
+→ Suggest: "Create task in this project"
+→ Suggest: "Ask AI about [Project Name]"
+→ Suggest: "Open linked views"
+```
+
+This uses `useWorkspaceOpenStateStore` to read the current context and inject context-specific commands at the top of the list.
+
+---
+
+## Design System Notes
+
+- Palette uses glassmorphism: `$glassBackground`, `$glassBorder`, `backdropFilter: blur(20px)`
+- Scope chip colors are hardcoded in `SCOPE_DEFINITIONS` (not theme tokens) — intentional, scopes have fixed brand colors that don't invert with dark/light mode
+- Split-pane container expands from `720px` to `min(90vw, 1100px)` when panel is active
+- All panel components receive `PalettePanelProps: { onClose, workspaceId?, query?, initialMode? }`
+- Footer hints update based on state: normal → "Navigate / Select / Open Split View"; panel open → "Back (Esc) / Select"
+
+---
+
+## Adding a New Panel (checklist)
+
+1. Create `MyFeaturePalettePanel.tsx` implementing `PalettePanelProps`
+2. Call `registerPalettePanel("my-panel-key", MyFeaturePalettePanel, { label, icon, keywords })` — returns cleanup
+3. Register cleanup in a `useEffect` (or in `CommandPaletteProvider`'s dynamic import)
+4. Add a `Command` with `metadata.panelId: "my-panel-key"` to any commands array
+5. Done — no changes to `CommandPalette.tsx` needed
+
+## Adding a New Scope (checklist)
+
+1. Add an entry to `SCOPE_DEFINITIONS` in `types/scope.ts`
+2. Add the scope ID to the `PaletteScopeId` union
+3. If non-clientOnly: ensure the `collections` value matches a `CollectionType` in `@synap/search`
+4. Optionally add a "Search [X]" command in `CommandPaletteProvider` with `fillQuery: buildScopedQuery("my-scope")`
+5. Done — `detectScope`, `ScopeChip`, placeholder, and Typesense filtering all pick it up automatically

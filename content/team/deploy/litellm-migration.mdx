@@ -1,0 +1,222 @@
+# LiteLLM Migration — When and How to Leave OpenRouter
+
+> **You are reading this because an alert fired.** Monthly LLM spend has crossed
+> 80% of the `COST_ALERT_THRESHOLD_USD` set in `.env.swarm`. This document
+> explains the decision, the economics, and the exact steps to migrate.
+
+---
+
+## Why We're Using OpenRouter (and Why It Made Sense)
+
+OpenRouter was the right choice at launch because:
+
+- **Single integration** — one `OPENROUTER_API_KEY` + a model string gives access to
+  Claude, GPT-4o, Gemini, and 100+ others. No per-provider auth to manage.
+- **Automatic fallbacks** — if Anthropic rate-limits us, OpenRouter re-routes
+  transparently.
+- **Zero infrastructure** — no extra Swarm service, no config to maintain.
+- **Negligible latency tax** — the extra 50–100 ms hop is invisible against
+  10–60 s LLM calls.
+
+The trade-off is a **~10–20% markup** on top of provider pricing. At low volume,
+the engineering cost of removing that markup exceeds the savings. At scale, it
+doesn't.
+
+---
+
+## The Threshold Logic
+
+| Monthly Spend            | Action                                             |
+| ------------------------ | -------------------------------------------------- |
+| < $4 000 (80% of $5 000) | Nothing — OpenRouter overhead is acceptable        |
+| $4 000–$5 000            | Warning alert fires — plan the migration sprint    |
+| > $5 000                 | Critical alert fires — execute migration this week |
+
+These numbers are configurable via `COST_ALERT_THRESHOLD_USD` in `.env.swarm`.
+Adjust for your actual margin — if you're billing customers at 3× LLM cost,
+the threshold could be higher.
+
+---
+
+## The Migration: OpenRouter → LiteLLM Proxy
+
+LiteLLM is an open-source Python proxy that exposes an OpenAI-compatible API,
+routes to any provider (Anthropic, OpenAI, Google, etc.) directly, and gives
+you budget tracking, retries, and Prometheus metrics — with no vendor markup.
+
+**What changes in the IS:** one environment variable.
+**What changes in `docker-stack.yml`:** one new service.
+**Downtime:** zero (rolling update).
+
+### Step 1 — Create `deploy/litellm/config.yml`
+
+```yaml
+model_list:
+  # Primary models — direct to provider (no markup)
+  - model_name: anthropic/claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: anthropic/claude-opus-4
+    litellm_params:
+      model: anthropic/claude-opus-4
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: openai/gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  # Fallback — keep OpenRouter for exotic/new models not yet direct
+  - model_name: openrouter/*
+    litellm_params:
+      model: openrouter/*
+      api_key: os.environ/OPENROUTER_API_KEY
+
+litellm_settings:
+  # Forward provider response headers so IS cost tracker still works
+  forward_client_headers_to_llm_api: true
+  # Per-customer spend limits (matches your quota-guard logic)
+  max_budget: 500 # USD per customer per month (adjust per tier)
+  budget_duration: 1mo
+
+general_settings:
+  # Prometheus metrics on :4001/metrics — add to prometheus.yml scrape config
+  enable_prometheus_system_metrics: true
+```
+
+### Step 2 — Add LiteLLM to `docker-stack.yml`
+
+```yaml
+litellm:
+  image: ghcr.io/berriai/litellm:main-latest
+  command:
+    ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
+  environment:
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    OPENAI_API_KEY: ${OPENAI_API_KEY}
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY} # keep as fallback
+    DATABASE_URL: ${LITELLM_DATABASE_URL:-} # optional: LiteLLM own DB for spend tracking
+  volumes:
+    - ./litellm/config.yml:/app/config.yaml:ro
+  networks:
+    - synap_internal
+  deploy:
+    replicas: 1
+    resources:
+      limits:
+        memory: 512M
+    restart_policy:
+      condition: on-failure
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
+```
+
+### Step 3 — Change one env var in `.env.swarm`
+
+```bash
+# Before:
+# (no OPENROUTER_BASE_URL — defaults to https://openrouter.ai/api/v1)
+
+# After:
+OPENROUTER_BASE_URL=http://litellm:4000
+```
+
+The IS reads `OPENROUTER_BASE_URL` as the `baseURL` for the OpenAI-compatible
+client. LiteLLM speaks the same protocol — no IS code changes required.
+
+### Step 4 — Deploy and verify
+
+```bash
+# Deploy LiteLLM service
+docker stack deploy -c deploy/docker-stack.yml synap --with-registry-auth
+
+# Wait for LiteLLM to be healthy
+docker service ls | grep litellm
+
+# Rolling update IS replicas to pick up new OPENROUTER_BASE_URL
+./synap.sh swarm-update intelligence-hub <current-image>
+
+# Check logs — should see requests routing through LiteLLM
+./synap.sh swarm-logs intelligence-hub | grep "litellm"
+
+# Verify cost tracking still works (LiteLLM forwards x-openrouter-cost for OpenRouter models,
+# and adds x-litellm-cost for direct provider calls)
+curl http://localhost:3001/metrics | grep is_llm_cost
+```
+
+### Step 5 — Add LiteLLM to Prometheus scrape config
+
+In `deploy/prometheus/prometheus.yml`, add:
+
+```yaml
+- job_name: litellm
+  static_configs:
+    - targets: ["litellm:4001"]
+  metrics_path: /metrics
+```
+
+---
+
+## Cost Comparison Example
+
+Assuming 50M output tokens/month (current scale estimate):
+
+| Provider                   | Model             | Rate         | Monthly Cost     |
+| -------------------------- | ----------------- | ------------ | ---------------- |
+| OpenRouter → Anthropic     | claude-sonnet-4-5 | ~$3.75/M out | $187.50          |
+| Direct Anthropic           | claude-sonnet-4-5 | ~$3.00/M out | $150.00          |
+| **Savings per 50M tokens** |                   |              | **$37.50 (20%)** |
+
+At the $5 000 threshold this represents **~$1 000/month saved** — worth a
+half-day migration sprint.
+
+---
+
+## What We Keep From OpenRouter
+
+Even after switching, keep OpenRouter as a **fallback** in LiteLLM config for:
+
+- New models not yet available direct (first-day access)
+- Emergency fallback if Anthropic/OpenAI have an outage
+- Models from providers without direct API access
+
+The LiteLLM config above already does this via the `openrouter/*` wildcard entry.
+
+---
+
+## Rollback Plan
+
+If LiteLLM causes issues:
+
+```bash
+# Remove OPENROUTER_BASE_URL from .env.swarm (or set to OpenRouter URL)
+# Rolling update IS replicas — reverts to direct OpenRouter in seconds
+./synap.sh swarm-update intelligence-hub <image>
+```
+
+No data migration required. The IS is stateless.
+
+---
+
+## Monitoring After Migration
+
+After the switch, update the cost alert threshold in `.env.swarm` to reflect
+the new lower per-token rates. The `is_llm_monthly_cost_usd` gauge will continue
+to update from LiteLLM's cost headers.
+
+For LiteLLM's own spend dashboard:
+
+```bash
+docker exec $(docker ps -q -f name=synap_litellm) litellm --spend_logs
+```
+
+---
+
+_Decision logged: 2026-03-09. Revisit when monthly LLM spend > $5 000/month._
+_Owner: infra / AI platform team._

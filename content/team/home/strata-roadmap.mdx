@@ -1,0 +1,236 @@
+# Strata — Roadmap
+
+Honest current state, MVP definition, and path to V1. Written for co-founders and engineers.
+
+---
+
+## The co-founder test (V1 gate)
+
+> "Point Strata at `synap-backend/` + `synap-app/`. Create a feature called 'Whiteboard'. Tag the relevant types, tables, routes, hooks, and components. Switch to Feature View. Can you see the full Whiteboard feature surface — every layer of the stack — in one view? Can you click any node and jump to the code? If yes, you have a product you can use for your own development."
+
+Everything below is measured against this test. **Infrastructure is complete. Edge quality is the blocker.**
+
+---
+
+## Current state (as of 2026-03)
+
+### What's built and working
+
+| Feature | Status | Notes |
+|---|---|---|
+| 3-step onboarding wizard | ✅ Working | Browse → Modules → Configure |
+| File system browser (Step 1) | ✅ Working | Git repos highlighted in amber |
+| Module detection + tagging (Step 2) | ✅ Working | Eye toggle, tag picker, persisted to `.strata/config.json` |
+| Scope × layer zone config (Step 3) | ✅ Working | 5 scopes × 11 layer types, pattern editor |
+| Zone config persistence | ✅ Working | Saved alongside module config |
+| TypeScript type parser | ✅ Working | Interfaces, type aliases, enums |
+| Drizzle schema parser | ✅ Working | `pgTable()` with column names + types |
+| Route parser | ✅ Working | tRPC `.query/.mutation`, Hono/Express HTTP verbs |
+| Hook parser | ✅ Built | `use*` exports, tRPC calls, hook calls, type refs |
+| Component parser | ✅ Working | Exported React FC/arrow components, props + hooks |
+| Name-based type↔table edges | ✅ Working | `User` → `users`, high confidence if ≥2 fields match |
+| FK detection edges | ✅ Working | `workspace_id` column → `workspaces` table |
+| Import-based edge analysis | ✅ Built | See "Edge quality" section below |
+| Graph persistence | ✅ Working | `.strata/graph.json`, auto-loaded on re-open |
+| Re-analyze button | ✅ Working | Uses stored zones, spinner feedback |
+| Dashboard view | ✅ Working | Full graph, Dagre LR layout, confidence filter |
+| Entity view | ✅ Working | BFS depth-3 subgraph from selected node |
+| Feature view | ✅ Built | TB layered layout of feature-tagged nodes |
+| Detail panel | ✅ Working | Node metadata, Trace button, edges list, Add to feature |
+| Feature schema + persistence | ✅ Built | `.strata/features.json`, tRPC load/save endpoints |
+| ReactFlow canvas | ✅ Working | Custom node types, minimap, zoom, pan |
+| Custom node visuals | ✅ Working | Type (blue), Table (green), Route (purple), Hook (cyan), Component (amber) |
+
+### Edge quality — the active problem
+
+The import analyzer exists and runs. Whether it produces meaningful edges depends entirely on how well it resolves paths in the target project.
+
+**Relative imports** (e.g., `import { User } from "../../types/user"`) — resolved correctly, high confidence.
+
+**Path aliases** (e.g., `import { User } from "@/types"` or `import { User } from "@synap/types"`) — falls back to name-matching. Produces edges but may match incorrectly on common names.
+
+**The gap:** Most real codebases use path aliases everywhere. The high-confidence path (file resolution) is rarely triggered. Until we handle `tsconfig.json` path aliases, most edges will be medium-confidence name matches.
+
+**Result:** The co-founder test may pass for simpler codebases with relative imports. It likely fails on `synap-backend/` until path alias resolution is added.
+
+---
+
+## Sprint 1 — MVP (priority order)
+
+**Goal:** Pass the co-founder test against `synap-backend/`.
+
+### P0: Path alias resolution in import analyzer
+
+**Problem:** `@synap/types`, `@/components`, `~/utils` — these never resolve to files. Only name-matching fallback fires.
+
+**Fix:** Read `tsconfig.json` (or `tsconfig.paths.json`) from the project root. Parse `compilerOptions.paths` to build an alias → absolute path map. Use it in `resolveImportPath()` before falling back to name matching.
+
+```typescript
+// server/src/services/import-analyzer.ts
+function loadPathAliases(projectPath: string): Map<string, string> {
+  const tsconfigPath = join(projectPath, "tsconfig.json");
+  if (!existsSync(tsconfigPath)) return new Map();
+  const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf-8"));
+  const paths = tsconfig.compilerOptions?.paths ?? {};
+  const baseUrl = tsconfig.compilerOptions?.baseUrl ?? ".";
+  // ...
+}
+```
+
+**Acceptance:** Import `{ User } from "@synap/types"` in a route file → produces `imports` edge to the `User` TypeNode.
+
+### P0: Validate edge output on a real project
+
+Run Strata against `synap-backend/`. Expected result:
+- `User` type → `users` table (name-based, should work already)
+- `users.list` route → `User` type (import-based, needs alias fix)
+- `UserCard` component → `User` type (import-based, needs alias fix)
+- FK: `workspace_id` column → `workspaces` table (should work already)
+
+Log the counts. If import edges are near zero, the alias fix is blocking everything.
+
+### P1: "Open in editor" — detail panel
+
+Every node has a `filePath` + `line`. A single button that opens `code {filePath}:{line}` (VS Code) or copies the path. This makes the graph useful immediately: click a node, jump to code.
+
+```typescript
+// In detail panel
+const openInEditor = () => {
+  // Try VS Code deep link: vscode://file/{path}:{line}
+  window.open(`vscode://file/${node.filePath}:${node.line}`);
+};
+```
+
+### P1: Edge labels on canvas
+
+Edges show kind labels (`maps to`, `queries`, `renders`, `uses`) on hover or always-visible for Entity view. Currently labels are defined but may not render visibly depending on ReactFlow version.
+
+### P2: Confidence indicator in detail panel
+
+The detail panel shows edges. Add confidence badge (green/amber/gray) per edge. Helps users understand why an edge exists.
+
+---
+
+## Sprint 2 — Feature UX + Edge depth
+
+### Feature creation UI
+
+The schema and persistence are built. What's missing is the UI:
+- Toolbar button: "New Feature" → modal to enter name + pick color
+- Feature list in sidebar: click to enter Feature View focused on that feature
+- Load features from `.strata/features.json` on project open (alongside graph auto-load)
+
+### Path alias resolution (monorepo)
+
+Workspaces with multiple `tsconfig.json` files (e.g., `packages/*/tsconfig.json`). Walk up from each source file to find the nearest tsconfig. Also handle `pnpm-workspace.yaml` / `package.json` `workspaces` for package name → path resolution.
+
+### Re-export tracking
+
+```typescript
+// packages/types/index.ts
+export { User } from "./user";
+export { Workspace } from "./workspace";
+```
+
+A route imports from the index barrel: `import { User } from "@synap/types"`. Currently resolves to `index.ts` but can't follow the re-export to `user.ts` where the `User` node lives. Need to follow re-export chains.
+
+### File watcher (chokidar)
+
+`server/package.json` already has `chokidar` installed but unwired. When a watched file changes, re-run the relevant parser and emit the updated nodes/edges via WebSocket or SSE. Frontend subscribes and patches the graph live.
+
+### Sidebar polish
+
+- Collapse sidebar button (store action exists, no toolbar button yet)
+- Node search / filter in sidebar
+- Group nodes by kind with counts
+
+### Story view (planned)
+
+Select a type + follow all connections to tell the full "story" of an entity across the stack. Different from Entity view — Story view is curated, shows the narrative arc (type → table → routes → components that render it), not just raw BFS.
+
+### Technology view (planned)
+
+Group all nodes by the technology they use: tRPC routes, Drizzle tables, Tamagui components. Shows tech distribution across the codebase.
+
+---
+
+## Sprint 3 — Documentation layer
+
+### Per-node markdown notes
+
+`.strata/docs/{nodeId}.md` — engineer can write context about any node. Rendered in detail panel using TipTap (`@synap/markdown-engine` is already a dep but not wired).
+
+### Edge annotations
+
+`.strata/bindings/` — manually confirmed or manually created edges. Lets the team correct wrong auto-detected edges and add edges the analyzer missed.
+
+### AI-powered summaries
+
+For each node: "This type is used in 3 routes and rendered by 2 components. It maps to the `users` table. Key fields: `id`, `email`, `workspaceId`." Auto-generated, stored in `.strata/docs/`.
+
+---
+
+## V1 definition
+
+V1 is the product you can use for your own development — to understand your own codebase in one view and navigate it by feature.
+
+**V1 requirements:**
+
+1. ✅ Parsing: types, tables, routes, hooks, components
+2. ✅ Name-based edges: type↔table, FK detection
+3. ✅ Hook parser — hooks as first-class nodes (tRPC calls, type refs)
+4. ✅ Feature schema + persistence — create features, tag nodes manually
+5. ✅ Feature View — layered TB layout (types → tables → routes → hooks → components)
+6. 🔲 Import-based edges on path-alias codebases — `tsconfig.json` resolution (Sprint 1 P0)
+7. 🔲 Open in editor from detail panel — `vscode://file/{path}:{line}` (Sprint 1 P1)
+8. 🔲 Feature creation UI — toolbar button to create a feature, name it, set color (Sprint 2)
+9. 🔲 Feature View loads features from disk on project open (Sprint 2)
+10. 🔲 Works on: Next.js, Remix, plain Express — not just tRPC (Sprint 2)
+
+**V1 is NOT:**
+- AI feature auto-discovery (nice to have — manual tagging alone is enough for V1)
+- Multi-user / cloud sync
+- GitHub integration
+- Per-node markdown docs (Sprint 3)
+- Story view / Technology view
+
+---
+
+## What deliberately waits
+
+These are real product ideas. They don't move until V1 ships.
+
+| Feature | Why it waits |
+|---|---|
+| Multi-repo support | Need single-repo to work first |
+| GitHub PR integration | Needs cloud infra |
+| AI summarization | Needs stable graph first |
+| VS Code extension | Distribution problem, not product problem |
+| Team sharing / comments | Multi-user infra not built |
+| Custom node types | Current 5 types cover 95% of cases |
+| Non-TypeScript (Python, Go) | ts-morph is TS-only; different AST toolchain |
+
+---
+
+## Known bugs
+
+| Bug | Severity | Notes |
+|---|---|---|
+| `FunctionNode` falls back to `TypeNode` visual | Low | No distinct visual yet |
+| Import analyzer misses barrel re-exports | High | Blocks edge quality |
+| `glob` pattern `**/*.ts` may include `node_modules` if project root is misconfigured | Medium | findFiles() already skips `node_modules`, but pattern accuracy depends on zone config |
+| Edge deduplication uses id-map; if two edges have same id but different metadata, later one wins | Low | IDs are deterministic so this is stable |
+| Re-analyze uses `lastZones` from store; if page is refreshed, zones are lost | Medium | Should persist zones alongside graph.json |
+
+---
+
+## Metrics to track
+
+Once the graph produces edges, measure:
+
+- **Edge density**: edges / nodes (target: > 1.5 for a well-connected project)
+- **High-confidence %**: what fraction of edges are `high` vs `medium` vs `low`
+- **Type coverage**: what % of TypeNodes have at least one edge
+- **Route coverage**: what % of RouteNodes have at least one edge to a TypeNode or TableNode
+
+These numbers tell you objectively whether the analyzer is working.

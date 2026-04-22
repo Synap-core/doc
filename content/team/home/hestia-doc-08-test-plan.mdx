@@ -1,0 +1,51 @@
+# DOC-08 — QA & Test Plan (Runnable Harness Specs)
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-08 |
+| Title | QA & Test Plan |
+| Status | Draft |
+| Version | 0.3 |
+| Date | 2026-04-12 |
+
+## 1) Goals
+* Validate USB autoinstall safely in VMs before touching real hardware.
+* Ensure script installs are idempotent.
+* Validate split-brain remote brain behavior early.
+* Validate Phase 2 chat+memory, Phase 3 build+publish.
+
+## 2) "No real channels in CI" rule
+CI must not depend on Telegram/Discord secrets.
+Use a local channel simulator that POSTs canonical events to Orchestrator.
+
+## 3) Mock Brain endpoint (deterministic)
+Create `tests/mock-brain/`:
+* A tiny HTTP server that returns fixed completions.
+* Used to validate orchestration and error handling.
+
+## 4) System test: USB autoinstall in QEMU
+We validate:
+* SAFE template stops at storage interaction (expected)
+* WIPE template proceeds without stopping (expected if kernel cmdline includes autoinstall)
+
+Note: Subiquity may show a confirmation prompt unless `autoinstall` is on the kernel cmdline.
+
+## 5) Integration test: Phase 2
+* Bring up Synap + OpenClaw (Docker) + Orchestrator (if present).
+* Send a canonical event.
+* Assert:
+    * response returned
+    * Synap write performed
+
+## 6) Integration test: Phase 3
+* Trigger build intent.
+* OpenClaude produces workspace outputs (stub if needed).
+* Assert:
+    * URL formed (can be mocked)
+    * audit log contains commands/files
+
+## 7) References
+* Zero-touch autoinstall safeguard: https://canonical-subiquity.readthedocs-hosted.com/en/latest/explanation/zero-touch-autoinstall.html
+* OpenClaw Docker install (health checks + persistence): https://docs.openclaw.ai/install/docker
+* Ubuntu autoinstall reference (storage + match specs): https://canonical-subiquity.readthedocs-hosted.com/en/latest/reference/autoinstall-reference.html

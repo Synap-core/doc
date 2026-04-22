@@ -36,3 +36,9 @@ Migrations are strict. Follow these rules for every schema change.
 ## Background
 
 See `src/scripts/migrate.ts` for the runner. The "recoverable errors" silent-skip behavior has been removed — failed migrations are now logged loudly and block the runner. See `src/utils/schema-coherence.ts` for the startup tripwire that runs after migrations and before the HTTP server starts listening. See `migrations-drizzle/0099_schema_reconciliation.sql` for the catch-up migration that reconciles older pods.
+
+## Related
+
+- [Deployment Strategies](../deploy/deployment-strategies.mdx) — Pod deployment and update strategies
+- [Rollback Strategy](../backend/rollback-strategy.mdx) — Schema rollback procedures
+- [Infrastructure Architecture](../devops/infrastructure-architecture.mdx) — Docker and infrastructure overview

@@ -1,0 +1,205 @@
+# Connections Tab — Audit & Recommendations
+
+**Purpose:** Define what happens when a user clicks "Add connection", audit related settings pages, and propose a unified, clear user story.
+
+---
+
+## 1. Current State
+
+### 1.1 When User Clicks "Add connection"
+
+- **Location:** Intelligence app → Connections tab
+- **Current behavior:** `onAddConnection` is a no-op (`// TODO: Open add connection form (Phase 4)`)
+- **Empty state:** Shows "Add connection" (primary CTA) and "Create your own intelligence service" (secondary → opens control plane guide `/guides/connections`)
+
+### 1.2 Connections Tab Contents
+
+- **CurrentServiceBlock:** Shows effective intelligence service (name, version, capabilities) + "Create your own intelligence service" link
+- **IntelligenceEmptyState:** Empty state with Add connection CTA (currently no-op)
+
+### 1.3 Backend APIs Available
+
+| API                                 | Purpose                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `intelligence.getEffectiveService`  | Current service manifest for workspace (name, version, capabilities)                  |
+| `intelligenceRegistry.list`         | List registered intelligence services (admin)                                         |
+| `intelligenceRegistry.register`     | Register new intelligence service (serviceId, name, webhookUrl, apiKey, capabilities) |
+| `intelligenceRegistry.update`       | Update service                                                                        |
+| `intelligenceRegistry.unregister`   | Remove service                                                                        |
+| `workspaces.setIntelligenceService` | Link workspace to a service (owner/admin only)                                        |
+| `capabilities.list`                 | Core features + available intelligence services (public)                              |
+
+---
+
+## 2. Settings Pages Audit
+
+### 2.1 Integrations (`/workspace/settings/integrations`)
+
+**Content:** n8n, Activepieces, "Build your own app" cards  
+**Purpose:** **Outbound** integrations — Synap → external automation tools (webhooks, HTTP nodes)  
+**Relation to Connections:** None. Integrations = Synap calling out to n8n/Activepieces. Connections = AI service that powers chat/commands.
+
+### 2.2 API Access (`/workspace/settings/api-access`)
+
+**Content:** API keys for programmatic access (read/write entities, etc.)  
+**Relation to Connections:** Separate. API keys are for clients calling Synap; intelligence services use their own auth (apiKey in `intelligence_services` table).
+
+### 2.3 Advanced (`/workspace/settings/advanced`)
+
+**Content:** UI preferences (animations, compact mode), cache  
+**Relation to Connections:** None.
+
+### 2.4 Gap: No Settings Page for Intelligence Service
+
+There is **no** Settings page dedicated to:
+
+- Selecting which intelligence service the workspace uses
+- Viewing/adding registered intelligence services
+- Configuring AI / Intelligence
+
+---
+
+## 3. Conceptual Clarification
+
+| Term                              | Meaning                                                                         | Where                   |
+| --------------------------------- | ------------------------------------------------------------------------------- | ----------------------- |
+| **Connection** (Intelligence app) | Intelligence service = Hub Protocol endpoint that powers chat, commands, agents | Connections tab         |
+| **Integration** (Settings)        | Outbound: Synap → n8n, Activepieces, custom apps                                | Settings → Integrations |
+| **API Access**                    | Keys for clients to call Synap                                                  | Settings → API Access   |
+
+**Connections** and **Integrations** are different concepts. Unifying them under one page would be confusing.
+
+---
+
+## 4. User Stories for "Add connection"
+
+### Story A: Select / Switch Intelligence Service (Common)
+
+- **Actor:** Workspace owner or admin
+- **Scenario:** Workspace has multiple registered services; user wants to pick which one powers chat/commands
+- **Flow:** List available services → Select one → `workspaces.setIntelligenceService`
+- **Data:** `capabilities.list` or `intelligenceRegistry.list` + `workspaces.setIntelligenceService`
+
+### Story B: Register a New Intelligence Service (Advanced)
+
+- **Actor:** Admin who runs their own synap-intelligence-service or custom Hub Protocol implementation
+- **Scenario:** New Hub Protocol endpoint is deployed; admin registers it so workspaces can use it
+- **Flow:** "Add connection" → Form (serviceId, name, webhookUrl, apiKey, capabilities) → `intelligenceRegistry.register`
+- **Data:** `intelligenceRegistry.register` (protected procedure)
+
+### Story C: Use Default (Most Users)
+
+- **Actor:** Typical user
+- **Scenario:** Workspace uses default "Synap Intelligence" (bundled or hosted)
+- **Flow:** No action needed. CurrentServiceBlock shows "Connected to: Synap Intelligence"
+- **Note:** "Add connection" may still make sense if they want to switch to a different provider in the future
+
+---
+
+## 5. Recommendations
+
+### 5.1 What "Add connection" Should Do
+
+**Primary:** Open a modal/sheet that lets the user either:
+
+1. **Select** an existing registered service for the workspace (Story A), or
+2. **Register** a new intelligence service (Story B — admin/advanced path)
+
+**Progressive disclosure:**
+
+- Default view: List of available services + "Use this" for each
+- Collapsible "Register new service" section for admins (or a separate "Register" button that opens a different form)
+
+### 5.2 Connections Tab Layout (When Populated)
+
+- **Header:** "Add connection" button (opens AddConnectionSheet)
+- **Current service block:** Keep (shows effective service)
+- **List of available services:** Cards with name, capabilities, status; "Use" / "Select" for workspace
+- **Empty state:** Only when no services exist (rare — default is always present)
+
+### 5.3 Unified Handling Across App & Settings
+
+**Option A: Single entry point (Intelligence app)**
+
+- Connections tab is the **only** place to manage intelligence services
+- Settings → Integrations stays focused on n8n/Activepieces
+- Add a small link in Integrations: "AI / Intelligence service configuration → Open Intelligence app (Connections tab)"
+
+**Option B: Dual entry points**
+
+- Connections tab (in-context when using Intelligence)
+- New Settings page: "Intelligence" or "AI Service" under External section
+- Both show the same content (list, select, add) — shared component
+- Pros: Discoverable from Settings; Cons: Duplication risk
+
+**Option C: Settings as canonical (recommended)**
+
+- New Settings page: **"Intelligence"** (`/workspace/settings/intelligence`)
+- Content: Current service block + list of available services + "Add connection" (register) + "Select" per service
+- Connections tab: Shows CurrentServiceBlock + "Manage connections" button → navigates to Settings → Intelligence
+- Rationale: Connection/Intelligence config is a workspace-level setting; Settings is where users expect to configure workspace behavior
+- Connections tab stays lightweight: status + deep link to full management
+
+### 5.4 Recommended Flow Summary
+
+1. **Connections tab (Intelligence app)**
+   - CurrentServiceBlock (effective service + capabilities)
+   - Empty state or list of available services (read-only preview)
+   - "Add connection" / "Manage connections" → **navigate to** `/workspace/settings/intelligence`
+   - Secondary: "Create your own intelligence service" → external guide
+
+2. **New Settings page: Intelligence** (`/workspace/settings/intelligence`)
+   - Current service + capabilities
+   - List of registered services (from `capabilities.list` or `intelligenceRegistry.list`)
+   - Per service: "Use for this workspace" (calls `workspaces.setIntelligenceService`)
+   - "Add connection" → AddConnectionSheet (register form for Story B)
+   - Link to guide: "Create your own intelligence service"
+
+3. **Settings → Integrations**
+   - Keep as-is (n8n, Activepieces, Build your own app)
+   - Optional: Add one line: "To configure which AI powers your workspace, see [Intelligence](/workspace/settings/intelligence)."
+
+---
+
+## 6. Implementation Phases
+
+### Phase 4a: Wire "Add connection" (Quick Win)
+
+- `onAddConnection` → navigate to `/workspace/settings/integrations` (temporary)  
+  OR create minimal `/workspace/settings/intelligence` with a placeholder and navigate there
+- Ensures CTA does something instead of nothing
+
+### Phase 4b: New Settings → Intelligence Page
+
+- Create `/workspace/settings/intelligence`
+- Add to Settings layout (External section)
+- Content: Current service block + list from `capabilities.list` + "Use" per service
+- "Add connection" opens AddConnectionSheet (register form)
+
+### Phase 4c: AddConnectionSheet Component
+
+- Form: serviceId, name, webhookUrl, apiKey, capabilities (multi-select)
+- Calls `intelligenceRegistry.register`
+- Validation, error handling, success toast
+
+### Phase 4d: Connection List in Connections Tab
+
+- When services exist: Show list (or compact cards) with "Manage" → Settings
+- When only default: Keep empty state, "Add connection" → Settings
+
+---
+
+## 7. Copy & UX Notes
+
+- **"Add connection"** = Add/register a new intelligence service (admin)
+- **"Select service"** / **"Use for workspace"** = Switch workspace to a different registered service
+- **"Manage connections"** = Go to full management (Settings → Intelligence)
+- Avoid overloading "connection" — in Integrations it means something different
+
+---
+
+## 8. Open Questions
+
+1. **Permission model:** Who can call `intelligenceRegistry.register`? Currently `protectedProcedure` — any authenticated user. Should it be workspace owner/admin or system admin only?
+2. **Default service visibility:** Should "Synap Intelligence" (default) appear in the list with a "Use" option, or is it implicit when no custom service is selected?
+3. **Health check:** Backend has `lastHealthCheck` on services. Should we show connection status (connected/pending/error) in the UI?

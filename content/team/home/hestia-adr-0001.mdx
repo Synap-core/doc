@@ -1,0 +1,22 @@
+# ADR-0001 — Orchestrator location (inside Synap vs standalone service)
+
+## Document control
+| Field | Value |
+|---|---|
+| ADR ID | ADR-0001 |
+| Title | Orchestrator location (inside Synap vs standalone service) |
+| Status | Proposed |
+| Date | 2026-04-12 |
+
+## Context
+* The system needs a single component to enforce policy, coordinate OpenClaw ↔ Synap ↔ OpenClaude ↔ Brain calls, and produce a consistent audit trail.
+
+## Decision options
+* **Option A: Orchestrator inside Synap Backend**: tighter product coherence, fewer deployed services, easiest to keep "memory + policy" consistent.
+* **Option B: Standalone `synap-orchestrator`**: clearer separation, easier to iterate routing logic independently, can be replaced without touching Synap core.
+
+## Proposed decision (initial)
+* Start with **Option B (standalone)** for faster iteration and clearer boundaries, then consider merging into Synap once interfaces stabilize.
+
+## Consequences
+* Option B adds one more service to deploy and secure, but reduces coupling and accelerates early experimentation across external channel integrations.

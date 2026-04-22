@@ -1,0 +1,133 @@
+# DOC-06 — Integration Contract (Interfaces, Events, Security)
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-06 |
+| Title | Integration Contract |
+| Status | Draft |
+| Version | 0.2 |
+| Date | 2026-04-12 |
+
+## 1) Scope and goals
+* This contract defines how **OpenClaw (channels)**, **Synap Backend (temporal memory)**, **OpenClaude (builder/executor)**, and the **Brain endpoint (LLM)** interoperate via an **Orchestrator** with strict security, auditability, and reproducibility requirements.
+* The contract is designed to support **single-node** and **split-brain** topologies where inference runs on a different host than memory/routing/build.
+
+## 2) Actors and roles
+* **OpenClaw Gateway**: multi-channel ingress/egress, session routing, skills/tooling surface; it is the default user interaction layer through chat apps.
+* **Synap Backend**: system-of-record for events, entities, relationships, and time-indexed knowledge; provides retrieval and write APIs used by the Orchestrator.
+* **Brain endpoint**: chat-completions-style inference service, either local (Ollama) or remote (GPU box); treated as a dependency with health checks and timeouts.
+* **OpenClaude**: coding agent with headless server capability used for artifact generation and controlled host actions.
+* **Orchestrator**: a thin control-plane component that enforces policy, coordinates calls, and produces an immutable audit trail.
+
+## 3) Transport and authentication (baseline)
+* All internal HTTP/gRPC calls must run on a private network interface (localhost or LAN/VPN), never directly exposed to the internet, and must require authentication by default.
+* Service-to-service authentication baseline: **Bearer tokens** (per-service) stored in root-only secrets file; optional future upgrade to **mTLS** without changing the contract shapes.
+* Every request must carry `correlation_id` and `event_id` headers for traceability and audit linking across services.
+
+## 4) Canonical event model (Orchestrator internal)
+* The Orchestrator normalizes all inbound messages (from any channel) into a single canonical schema to avoid per-channel logic leaks.
+
+Canonical schema (JSON):
+```json
+{
+  "event_id": "uuid",
+  "correlation_id": "uuid",
+  "timestamp": "2026-04-12T12:00:00Z",
+  "source": {
+    "gateway": "openclaw",
+    "channel": "telegram",
+    "channel_thread_id": "string",
+    "channel_message_id": "string"
+  },
+  "actor": {
+    "user_id": "string",
+    "display_name": "string",
+    "tenant_id": "default"
+  },
+  "input": {
+    "text": "string",
+    "attachments": [
+      { "type": "file|image|url", "name": "string", "uri": "string", "mime": "string" }
+    ]
+  },
+  "intent": "chat|query|build|admin",
+  "context": {
+    "time_range": { "from": "ISO-8601|null", "to": "ISO-8601|null" },
+    "refs": [
+      { "type": "synap_node|doc|artifact|url", "id": "string" }
+    ]
+  },
+  "policy": {
+    "risk_mode": "approval|required|trusted",
+    "allowed_tools": ["read_workspace", "write_workspace", "docker_compose_up"],
+    "network_access": "deny|allow",
+    "max_runtime_seconds": 900
+  }
+}
+```
+
+## 5) Required Orchestrator interfaces
+* The Orchestrator must expose an **inbound event endpoint** for OpenClaw to call (direct webhook or plugin), with strict auth and rate limits.
+* Suggested minimal Orchestrator HTTP API (internal):
+    * `POST /v1/events/inbound`
+    * `GET /v1/health`
+    * `GET /v1/runs/{correlation_id}` (audit view)
+* Orchestrator must implement a **deterministic run-state machine** so failures can resume safely (idempotent steps, retries with backoff, explicit terminal states).
+
+## 6) Synap interfaces (minimum contract)
+* Synap must provide APIs (or internal module calls) for: write event memory, retrieve context, store artifacts and build logs, and query temporal slices.
+* Minimum Synap API contract:
+    * `POST /v1/memory/events`
+    * `POST /v1/context/query`
+    * `POST /v1/artifacts`
+    * `GET /v1/artifacts/{id}`
+* Retrieval must support time filters to enable "what changed since X" workflows as a first-class capability.
+
+## 7) Brain endpoint interfaces (local or remote)
+* The Brain endpoint must be configurable as `local` or `remote` via `/etc/synap-stack/config.yaml`, and all callers must treat it as a dependency with health checks and timeouts.
+* Baseline interface: OpenAI-style Chat Completions compatible contract (even if backed by Ollama or other), to keep UI and gateway integration interchangeable.
+* Required Orchestrator behavior:
+    * Request timeouts (e.g., 60–180 seconds depending on model).
+    * Circuit breaker when remote brain is unavailable (fail fast + notify user).
+    * Never log prompts that include secrets; redact token-like strings.
+
+## 8) OpenClaude interfaces (builder jobs)
+* OpenClaude must be invoked only via the Orchestrator, never directly from channels, to ensure policies, approvals, and workspace constraints are enforced.
+* Minimum build-job lifecycle contract:
+    * `SubmitJob(goal, workspace, constraints, context_bundle) -> job_id`
+    * `StreamJobLogs(job_id)`
+    * `GetJobResult(job_id) -> { summary, files_changed, commands_executed, deployment }`
+* OpenClaude workspace model must default to **workspace-only filesystem access**, and any expansion (e.g., system packages, firewall changes) must require an explicit approval flow.
+
+## 9) Approval protocol (risk gating)
+* Default risk mode is `approval` where the Orchestrator pauses before executing "risky" operations and requests confirmation through OpenClaw back to the originating channel.
+* Risky operations include (minimum): package installs, firewall changes, exposing ports, writing outside workspace, secrets access, and deploying persistent services.
+* Approval message schema (Orchestrator → OpenClaw):
+```json
+{
+  "correlation_id": "uuid",
+  "request_id": "uuid",
+  "type": "approval_request",
+  "summary": "OpenClaude wants to run: docker compose up -d",
+  "risk": "medium",
+  "details": {
+    "commands": ["docker compose -f /srv/projects/site/docker-compose.yml up -d"],
+    "files": ["..."]
+  },
+  "approve_action": "POST /v1/approvals/{request_id}:approve",
+  "deny_action": "POST /v1/approvals/{request_id}:deny",
+  "expires_at": "ISO-8601"
+}
+```
+
+## 10) Audit logging and observability (minimum)
+* Orchestrator must write an append-only JSONL audit log at `/var/log/synap-stack/audit.jsonl` with `correlation_id` and redaction applied, and optionally mirror summaries into Synap artifacts for long-term recall.
+* Each run must record: inbound event, context retrieval query, brain calls (metadata only), tool approvals, OpenClaude actions (commands + file diffs), and published endpoints/URLs.
+
+## 11) Error handling contract
+* All integrations must implement: deterministic retry policy (bounded), idempotency keys on writes, and explicit user-facing error messages via OpenClaw when a run cannot complete.
+* Split-brain failure mode: if remote brain is unreachable, Orchestrator must return a "Brain Offline" message, propose fallback (smaller local model if installed), and store the failed run state for later resumption.
+
+## 12) Versioning and compatibility
+* The canonical event schema is versioned via `schema_version` (e.g., `v1`), and Orchestrator must accept older versions for at least one minor release window.

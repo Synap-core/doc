@@ -21,7 +21,7 @@ Eve turns a **bare server** into a **coherent self-hosted stack** centered on th
 
 ## Design principles
 
-1. **Synap as exclusive memory** — Every agent reads from and writes to Synap via REST API. No agent (OpenClaw, Hermes, opencode) runs its own SQLite, Vector DB, or external state store. This is non-negotiable.
+1. **Synap as exclusive memory** — Every agent reads from and writes to Synap via REST API. No agent (OpenClaw, Hermes, opencode/OpenClaude) runs its own SQLite, Vector DB, or external state store. This is non-negotiable.
 
 2. **Sovereignty** — Operator controls the machine, data residency, and whether cloud models are used at all for local tooling. No mandatory cloud dependency beyond what the operator chooses.
 
@@ -43,7 +43,7 @@ Eve turns a **bare server** into a **coherent self-hosted stack** centered on th
 |------|---------|------------|
 | **Brain** | `@eve/brain` | Synap Backend (PostgreSQL, Redis) |
 | **Arms** | `@eve/arms` | OpenClaw |
-| **Builder** | `@eve/builder` | Hermes Agent + opencode (replaces v1.0 OpenClaude orchestration) |
+| **Builder** | `@eve/builder` | Hermes Agent + codegen tools (opencode or OpenClaude; replaces v1.0 OpenClaude orchestration) |
 | **Eyes** | `@eve/eyes` | RSSHub |
 | **Legs** | `@eve/legs` | Traefik + Pangolin |
 
@@ -54,8 +54,8 @@ Eve turns a **bare server** into a **coherent self-hosted stack** centered on th
 | Agent | Handles | Does NOT handle |
 |-------|---------|-----------------|
 | **OpenClaw (Arms)** | Messaging (WhatsApp, iMessage, Telegram), voice memos, user-facing reasoning | Coding tasks, database access, direct communication with other agents |
-| **Hermes Agent (Builder)** | Headless dev orchestration, task queue polling, spawning opencode, writing results to Synap | Messaging apps, user-facing UI, direct communication with other agents |
-| **opencode** | Code generation (invoked via subprocess by Hermes) | Orchestration, queue management, persistence |
+| **Hermes Agent (Builder)** | Headless dev orchestration, task queue polling, spawning codegen tool (opencode or OpenClaude), writing results to Synap | Messaging apps, user-facing UI, direct communication with other agents |
+| **opencode / OpenClaude** | Code generation (invoked via subprocess by Hermes) | Orchestration, queue management, persistence |
 
 ---
 

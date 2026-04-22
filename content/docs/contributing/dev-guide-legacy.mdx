@@ -1,0 +1,493 @@
+# Synap Developer Guide
+
+> Use-case oriented reference for the Synap monorepo.
+> Start here. Use [MonoHub](#monohub) for everything else.
+
+---
+
+## Table of Contents
+
+1. [I want to create a new capability](#1-create-a-new-capability)
+2. [I want to monitor workspace health](#2-monitor-workspace-health)
+3. [I want to publish packages](#3-publish-packages)
+4. [I want to understand the architecture](#4-architecture-overview)
+5. [I want to work on the AI / agent layer](#5-ai--agent-layer)
+6. [I want to work on the backend](#6-backend)
+7. [I want to run the app locally](#7-running-locally)
+8. [MonoHub — developer terminal](#monohub)
+9. [CI / GitHub Actions](#ci--github-actions)
+10. [Key conventions](#key-conventions)
+
+---
+
+## 1. Create a New Capability
+
+A **capability** is a self-contained UI feature that can appear as:
+
+| Display mode | Where |
+|---|---|
+| `widget` | Bento tile (bento grid layout) |
+| `panel` | Sidebar panel or slide-over |
+| `full-page` | Standalone full-width view |
+
+### Fastest path — MonoHub wizard
+
+```
+monohub          # open dashboard
+# press G        # open Generate Wizard (8-step interactive)
+```
+
+Or non-interactively:
+
+```bash
+monohub generate capability 'Analytics Dashboard' --modes=widget,panel --category=data
+monohub generate capability 'KanbanView' --location=views --modes=full-page
+```
+
+### What gets scaffolded
+
+The generator creates a package at the right location and patches 5 existing files automatically:
+
+| Action | Files |
+|---|---|
+| **Created** | `package.json`, `src/index.ts`, `src/register.ts`, `src/Widget.tsx`, `tsconfig.json` |
+| **Patched** | `@synap/capabilities` types + widgets, `@synap/cells` builtinPackages, `next.config.ts`, `pnpm-workspace.yaml` |
+
+### After generation
+
+```bash
+pnpm install           # sync lockfile
+pnpm type-check        # verify no TS errors
+```
+
+Then implement your component in `src/Widget.tsx`. The `register.ts` wires it into the cell registry automatically.
+
+### Manual checklist (if not using the generator)
+
+1. Create package under `synap-app/packages/features/` (or `views/`, `apps/`)
+2. Add `WidgetTypeKey` to `@synap/capabilities/src/types.ts`
+3. Add `WidgetCapabilityDef` to `@synap/capabilities/src/widgets.ts`
+4. Register in `@synap/cells/src/builtinPackages.ts` using `cell()` helper (typed)
+5. Add package to `synap-app/apps/web/next.config.ts` → `transpilePackages`
+6. Add glob pattern to `pnpm-workspace.yaml` if needed
+7. Run `pnpm install` + `pnpm type-check`
+
+### Display modes explained
+
+```typescript
+// Widget: renders in bento tiles — receives width/height from grid
+// Panel:  renders in sidebar panels — receives close() callback
+// Full-page: renders as full view — receives full viewport
+
+// In register.ts, export all modes you support:
+export const widgetConfig = { defaultWidth: 4, defaultHeight: 4 };
+export const panelConfig  = { defaultWidth: 320 };
+```
+
+### AI / MCP
+
+If Claude Desktop or Cursor is configured with MonoHub MCP, use:
+
+```
+monohub_generate_capability({ name: "Analytics", category: "data", displayModes: ["widget"] })
+```
+
+---
+
+## 2. Monitor Workspace Health
+
+### Quick overview
+
+```bash
+monohub              # open dashboard → Repos tab for project grid
+monohub health       # package health scores (0–100, grade A–F)
+monohub lint         # circular deps + stale packages
+monohub outdated     # external npm dep staleness
+monohub audit        # npm security audit
+```
+
+### Package health scores
+
+Four dimensions, each 0–100:
+
+| Dimension | What it checks |
+|---|---|
+| Type strictness | `tsconfig.strict`, no `any` |
+| Test coverage | presence of test files |
+| Freshness | dep versions, recent commits |
+| Dep hygiene | no peer dep conflicts, clean lock |
+
+```bash
+monohub health @synap/channels   # single package
+monohub health --json            # CI-friendly output
+```
+
+### Circular dependency detection
+
+```bash
+monohub lint           # warns on stale, errors on circular
+monohub lint --strict  # also errors on stale (CI strict mode)
+monohub lint --json    # for CI scripts
+```
+
+Circular deps block topological sort → always fix before planning a release.
+
+### Impact analysis
+
+```bash
+monohub impact @synap/capabilities   # who breaks if this changes?
+```
+
+Risk levels: `critical` (10+ deps) · `high` (published, depth ≤2) · `medium` (feature/app) · `low`
+
+### Live watch
+
+```bash
+monohub watch   # real-time file change feed
+# or press W inside monohub dashboard
+```
+
+### Type surface diff
+
+```bash
+monohub exports @synap/client    # list all exported types + functions
+monohub diff @synap/client       # compare vs saved baseline (breaking changes)
+```
+
+---
+
+## 3. Publish Packages
+
+### Release flow
+
+```bash
+monohub plan-release          # see what needs publishing
+monohub publish @synap/foo    # publish one (auto-bumps version)
+monohub publish --stale       # publish all stale (topological order)
+monohub publish --dry-run     # preview without executing
+```
+
+Publish order respects internal dependency graph automatically.
+
+### Interactive release planner
+
+```
+monohub          # press P from home screen
+```
+
+Select packages, review changelogs, bump versions, publish — all in one flow.
+
+### Dependency version management
+
+```bash
+# After publishing a package, bump its ref in all dependents:
+monohub update-deps @synap/capabilities
+
+# Temporarily switch from local workspace dep to npm version:
+monohub switch --npm @synap/client        # dry run
+monohub switch --npm @synap/client --apply  # execute
+monohub switch --local @synap/client --apply  # revert
+```
+
+### Changelog
+
+```bash
+monohub changelog                        # all packages
+monohub changelog --since=2026-01-01     # since date
+monohub changelog --packages=@synap/channels,@synap/cells --output=RELEASE.md
+```
+
+---
+
+## 4. Architecture Overview
+
+### Monorepo structure
+
+```
+synap/                           ← workspace root
+├── synap-app/                   ← frontend monorepo (pnpm)
+│   ├── packages/
+│   │   ├── core/                ← @synap/capabilities, @synap/cell-runtime, @synap/cells…
+│   │   ├── features/            ← channels, sidebar, bento, entities…
+│   │   ├── views/               ← bento-view, kanban, calendar, whiteboard…
+│   │   └── apps/                ← fluid, billing, agent-os…
+│   └── apps/
+│       └── web/                 ← Next.js main app
+├── synap-backend/               ← Hono + tRPC backend
+├── synap-intelligence-service/  ← AI agent hub
+├── synap-control-plane-api/     ← SaaS control plane (billing, provisioning)
+├── browser/                     ← Electron desktop app
+└── monohub/                     ← Developer tooling (this CLI)
+```
+
+### Capability architecture
+
+```
+@synap/capabilities              ← single source of truth
+  ├── types.ts                   ← WidgetTypeKey, ViewTypeKey (44 widgets, 14 views)
+  ├── widgets.ts                 ← WIDGET_DEFINITIONS with config schemas
+  ├── views.ts                   ← VIEW_DEFINITIONS
+  ├── manifest.ts                ← generateCapabilitiesManifest()
+  └── contract.ts                ← CapabilityContract, deriveContract()
+
+@synap/cell-runtime              ← SynapPackage, packageRegistry
+@synap/cells                     ← BUILTIN_PACKAGES, BUILTIN_CONTRACTS
+@synap/bento-view                ← bento grid renderer
+```
+
+API endpoint: `GET /api/capabilities` (supports `?compact=true`, `?summary=true`)
+
+### Three-layer data model
+
+```
+@synap/client (tRPC)   ← typed API calls
+@synap/stores (Zustand) ← client state + caching
+@synap/hooks            ← composition layer, used by UI
+```
+
+Rule: **Features → Core** (never the reverse). Cross-layer imports break the build.
+
+### Generate architecture docs
+
+```bash
+monohub docs                    # generates architecture.md + opens browser
+monohub graph                   # interactive HTML dependency graph
+```
+
+---
+
+## 5. AI / Agent Layer
+
+Location: `synap-intelligence-service/apps/intelligence-hub/`
+
+### Agent types
+
+| Key | Agent | Role |
+|---|---|---|
+| `meta` / `orchestrator` | OrchestratorAgent | Workspace-generalist co-founder AI |
+| `cto`, `marketing`, `sales`, `pm` | PersonaAgent | Domain-expert personas (branch-only) |
+
+### Hub Protocol
+
+The backend exposes a typed Hub Protocol (`/hub-protocol/`) for all IS→backend operations:
+
+- context · search · entities · documents · branches · channels · linking · skills · backgroundTasks · proposals · services · views · profiles · relations · sessions · compactedStates
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `agents/base/agent-registry.ts` | Agent type → class routing |
+| `agents/base/tool-registry.ts` | Tools available per agent type |
+| `lib/hub-protocol.ts` | Client for backend Hub Protocol |
+| `lib/context-manager.ts` | Assembles system prompt context |
+| `lib/session-manager.ts` | Session-scoped memory |
+| `lib/compaction-engine.ts` | Context compression |
+
+### Adding a new tool
+
+1. Create `tools/actions/<your-tool>.ts` implementing `AgentTool`
+2. Register in `tool-registry.ts` for the appropriate agent types
+3. Implement permission check via `checkPermissionOrPropose()` for write operations
+
+---
+
+## 6. Backend
+
+Location: `synap-backend/`
+
+### Key patterns
+
+```typescript
+// tRPC procedures
+workspaceProcedure   // requires workspace membership
+userProcedure        // requires authenticated user
+publicProcedure      // no auth
+
+// JSONB settings — no migration needed for new fields:
+workspace.settings.myNewField = value;  // just use it
+
+// Drizzle JSONB update — use drizzleSql (not sql from postgres.js):
+import { sql as drizzleSql } from "drizzle-orm";
+.set({ settings: drizzleSql`${col} || ${JSON.stringify(patch)}::jsonb` })
+```
+
+### Adding a new workspace setting
+
+1. Add field to `WorkspaceSettings` interface in `schema/workspaces.ts`
+2. Use it directly via `workspace.settings.yourField` — JSONB merges automatically
+3. No migration required (JSONB column, additive changes are free)
+
+### Key routes
+
+| File | Purpose |
+|---|---|
+| `routers/hub-protocol/` | IS↔backend data operations (16 sub-routers) |
+| `routers/channels.ts` | Chat + AI message flow |
+| `routers/entities.ts` | Entity CRUD |
+| `routers/views.ts` | View config + execution |
+| `utils/permission-check.ts` | RBAC + proposal flow |
+
+---
+
+## 7. Running Locally
+
+### Prerequisites
+
+- pnpm 9+, Node 20+
+- PostgreSQL (or Docker)
+- Copy `.env.example` → `.env` in each sub-repo
+
+### Start everything
+
+```bash
+# From repo root
+pnpm install
+
+# Backend
+cd synap-backend && pnpm dev
+
+# Intelligence service
+cd synap-intelligence-service && pnpm dev
+
+# Frontend (Next.js)
+cd synap-app/apps/web && pnpm dev
+```
+
+### Type-check everything
+
+```bash
+cd synap-app && pnpm type-check
+cd synap-backend && pnpm type-check
+cd synap-intelligence-service && pnpm type-check
+```
+
+### Workspace validation
+
+```bash
+monohub workspace init   # checklist: pnpm-workspace.yaml ✓, capabilities built ✓, packages registered ✓
+```
+
+---
+
+## MonoHub
+
+MonoHub is the terminal dashboard CLI for the Synap monorepo.
+
+```bash
+monohub          # interactive dashboard
+monohub --help   # full command reference
+```
+
+### Inside the dashboard
+
+| Key | Action |
+|---|---|
+| `?` | **This help** (in-app guide organized by use case) |
+| `G` | Generate capability wizard |
+| `H` | Health dashboard |
+| `W` | Watch mode (live file feed) |
+| `P` | Plan release |
+| `O` | Open web dashboard in browser |
+| `R` | Refresh workspace |
+| `Q` | Quit |
+
+### MCP server (Claude Desktop / Cursor)
+
+```json
+// ~/Library/Application Support/Claude/claude_desktop_config.json
+{
+  "mcpServers": {
+    "monohub": {
+      "command": "monohub",
+      "args": ["serve", "--mcp"],
+      "cwd": "/path/to/synap"
+    }
+  }
+}
+```
+
+Available MCP tools: `monohub_list_packages` · `monohub_get_package` · `monohub_impact_analysis` · `monohub_lint` · `monohub_check_outdated` · `monohub_publish_order` · `monohub_architecture_docs` · `monohub_changelog` · `monohub_get_capabilities` · `monohub_generate_capability`
+
+### Web dashboard
+
+```bash
+monohub open             # starts server + opens browser
+monohub serve            # server only (port 7433)
+monohub serve --port=8080
+```
+
+Dashboard: `http://localhost:7433/`
+Graph: `http://localhost:7433/graph`
+API: `/packages` · `/lint` · `/stats` · `/impact/:name`
+
+---
+
+## CI / GitHub Actions
+
+### Workflows
+
+| File | Trigger | Jobs |
+|---|---|---|
+| `.github/workflows/ci.yml` | PR + push | lint, type-check, unit tests, build, integration |
+| `.github/workflows/monohub.yml` | PR + push | MonoHub lint, capability validation, impact report |
+
+### MonoHub CI jobs
+
+**`monohub-lint`** — fails the PR if circular deps are found. Warns on stale packages.
+
+**`capability-check`** — builds `@synap/capabilities`, validates all template JSON files in `synap-control-plane-api/templates/` against the manifest. Fails on unknown widget or view types.
+
+**`impact-report`** — posts a PR comment with blast radius analysis for any changed packages.
+
+### Local CI run
+
+```bash
+monohub lint --json        # same check as CI
+monohub ci                 # full CI report locally
+monohub ci --strict        # treat stale as errors
+```
+
+---
+
+## Key Conventions
+
+### TypeScript
+
+- All capability keys are typed: use `cell(key: WidgetTypeKey, ...)` in `builtinPackages.ts`
+- `registryCell()` = untyped (for internal-only, non-bento cells)
+- `tsconfig.strict: true` everywhere — no implicit `any`
+- Drizzle enum columns: use the TypeScript enum value, not the string literal
+
+### Package naming
+
+- Frontend packages: `@synap/<name>` (scoped)
+- Backend packages: `@synap-backend/<name>`
+- Core shared types: `@synap-core/<name>`
+
+### Dependency rules
+
+- Features may import Core. Core must never import Features.
+- Backend must never import frontend packages.
+- `@synap/capabilities` is source-only (no build, no React). Import freely from any TS context.
+
+### Settings / JSONB
+
+- `workspace.settings` is a JSONB column — add new fields freely, no migration needed
+- `trpc.workspaces.update` merges settings with existing (use partial objects)
+- Backend: use `drizzleSql` (from `drizzle-orm`) for JSONB updates, NOT `sql` from `postgres.js`
+
+### Hono route order
+
+Static routes (e.g. `/config`, `/handshake`) MUST be registered before dynamic routes (`/:id`).
+
+### tRPC
+
+- `WORKSPACE_SCOPED_ROUTERS` in `workspaceLink.ts` — any `workspaceProcedure` router must be listed or returns 400
+- Raw `fetch()` to tRPC wraps input as `{ json: <value> }` (superjson transformer)
+- `entities.list` max = 100; `views.execute` needs `retry: false`
+
+---
+
+*Keep this guide updated when adding new layers or changing conventions.*
+*In-app: press `?` inside `monohub` for the interactive version of this guide.*

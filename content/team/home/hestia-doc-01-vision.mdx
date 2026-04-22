@@ -1,0 +1,92 @@
+# DOC-01 — Master Vision & North Star
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-01 |
+| Title | Master Vision & North Star |
+| Status | Draft |
+| Version | 0.2 |
+| Date | 2026-04-12 |
+| Owners | Product + Tech Lead |
+
+## 1) Vision (one sentence)
+A self-hosted, agent-native stack that anyone can install (USB or script) to get private AI, temporal memory, and safe autonomous building—accessible from the chat apps they already use.
+
+## 2) North Stars
+* **Time-aware intelligence:** the system must model, store, and query knowledge over time, not only current snapshots.
+* **Sovereign-by-default:** local-first operation, with explicit opt-in for external services and connectors.
+* **Build capability:** the system must be able to produce deployable artifacts (websites, dashboards, services) on the server, not just chat responses.
+* **Channel-native UX:** users interact via channels (Telegram/Discord/Slack/etc.) without needing to expose a public admin UI.
+* **Split-brain support:** inference (GPU) may run on a separate machine; the rest of the stack must function with remote brain endpoints.
+
+## 3) Product statement (what we are building)
+We are building a reproducible server stack that combines:
+* A temporal knowledge backend (Synap Backend) for long-term memory and evolving context.
+* A multi-channel gateway (OpenClaw) to talk to the system from existing chat apps.
+* A builder/executor (OpenClaude) that can generate and deploy artifacts under strict policy.
+* A "brain endpoint" that can be local or remote (for performance and hardware flexibility).
+* A minimal orchestrator that routes requests, enforces policy, and produces an audit trail.
+
+## 4) Why now
+* Users want private, local AI but do not want to become sysadmins.
+* AI agents need durable, structured memory and safe tool use.
+* Commodity hardware (old PCs + GPUs) can host high-value personal/team systems.
+
+## 5) Target users and scenarios
+* Homelab and privacy-first builders: repurpose spare PCs into a private AI hub.
+* Small teams: private agent that can access internal repos and docs.
+* Power users: unify personal knowledge, communications, and artifact generation.
+
+## 6) Primary user journeys (v1 to v3)
+
+### Journey A: "Chat + Memory" (Phase 2)
+* User messages the system from a channel.
+* The system responds and persists the conversation and relevant entities in temporal memory.
+
+### Journey B: "Build + Publish" (Phase 3)
+* User asks for a dashboard/site/service.
+* The system builds it in a workspace, deploys it behind a reverse proxy, and returns a URL.
+* All actions are logged and attributable.
+
+### Journey C: "Split-brain performance"
+* User runs the brain endpoint on a GPU box and keeps routing/memory/build on another server.
+
+## 7) Principles (engineering + product)
+* **Idempotent installs:** rerunnable installers with safe re-entry points.
+* **Minimal early coupling:** stable contracts between gateway, memory, builder, and brain.
+* **Secure defaults:** deny-by-default network exposure; explicit allowlists.
+* **Auditability:** every run is traceable via correlation IDs and durable logs.
+* **Progressive complexity:** USB provisioning is optional; "script mode" is the fast path.
+
+## 8) Scope boundaries
+
+### In-scope (initial releases)
+* USB + script install options
+* Split-brain brain endpoint configuration
+* Synap + OpenClaw integration (Phase 2)
+* OpenClaude integration with approvals and workspace safety (Phase 3)
+
+### Explicitly out-of-scope (initial releases)
+* Kubernetes/multi-node orchestration
+* Full enterprise IAM/SSO suite by default
+* Fully autonomous "no-approval" system actions
+* Replacing all consumer cloud services on day one
+
+## 9) Success metrics
+* Install success rate > 95% on supported hardware.
+* Time-to-first-channel-message:
+    * Script mode: < 30 minutes
+    * USB mode: < 60 minutes (including OS install)
+* "Hello World" end-to-end:
+    * Channel message → response
+    * Memory persisted in Synap with timestamp
+* "Builder" end-to-end:
+    * Generate a static site/dashboard → URL returned
+    * Build logs and diffs stored and auditable
+
+## References
+* OpenClaw docs: https://docs.openclaw.ai/start/getting-started
+* OpenClaw channels: https://docs.openclaw.ai/channels
+* Synap Backend repository: https://github.com/Synap-core/backend
+* OpenClaude repository: https://github.com/Gitlawb/openclaude

@@ -1,0 +1,168 @@
+# Intelligence / Automation App – Vision & Implementation
+
+**Goal:** Evolve the current AI Chat app into a full **Intelligence** (or Automation) application: dashboard of agents and actions, user-defined prompts with variables (Raycast-style), internal automations (pre-prompt + data binding to views/entities/documents), and optional external integrations (webhooks, N8N, Activepieces) with metadata stored in the backend.
+
+**References:** [AI_CHAT_UPDATE_PLAN.md](./AI_CHAT_UPDATE_PLAN.md), [AI_CHAT_FLOW_AUDIT.md](./AI_CHAT_FLOW_AUDIT.md), [BENTO_GRID_DEV_PLAN.md](../../../docs/BENTO_GRID_DEV_PLAN.md).
+
+---
+
+## 1. Opinion: Why This Direction Makes Sense
+
+- **Chat alone is reactive.** Users ask one-off questions. Adding **agents + actions** turns Synap into a place where work gets **automated and repeatable**: “every time I have a table of tasks, I can run ‘Create my week plan’ with that view as input.”
+- **Guides and docs are passive.** Letting users **create runnable actions** (prompt + variables + data binding) turns the same ideas into **executable workflows** inside the app. That’s the missing layer.
+- **Raycast proved the pattern.** Custom AI Commands with placeholders (`{selection}`, `{argument name="Topic"}`) are exactly “pre-prompt + variables filled at launch.” Doing the same **plus** binding to Synap data (views, entities, documents) gives a unique advantage: actions that see the user’s actual workspace.
+- **External integrations are optional but valuable.** Storing “this workspace connected N8N / Activepieces / webhook X” in the backend enables: future UI to show “Connected automations,” audit, and eventually triggering or listing runs from Synap. Start with **metadata only** (what was connected, when, by whom); execution can stay in the external tool.
+
+So: **yes, this is a strong direction.** Implement in phases: (1) dashboard + agents, (2) internal actions (prompts + variables + data binding), (3) external integration metadata.
+
+---
+
+## 2. Raycast Comparison (AI Commands)
+
+Raycast’s model (v1.53+ and current docs):
+
+- **Custom AI Commands:** User creates a command with a **single prompt**.
+- **Dynamic placeholders** in the prompt:
+  - `{selection}` – selected text.
+  - `{clipboard}` – clipboard content.
+  - `{argument name="Topic"}` – up to three **named arguments**; Raycast shows a form to fill before running.
+- **Examples:**
+  - `translate {selection} to French`
+  - `write a blog post about {argument name="Topic"} for {argument name="Target Audience"}`
+- **Import/Export:** Commands are JSON (title, prompt, creativity, icon, model); placeholders live inside the prompt string.
+
+**What we can do similarly in Synap:**
+
+- **Prompt template** with placeholders, e.g. `{argument name="Subject"}` or a simpler syntax like `{{subject}}` or `[Subject]`.
+- **At launch:** Show a small form (or reuse command palette) to fill arguments, then substitute into the prompt and send to the AI (new thread or existing).
+- **Extra we add:** **Data binding** – e.g. “Use **this view** as context” (table of tasks), “Use **these documents**,” “Use **this entity**.” So the prompt is not only “user text + arguments” but “user text + arguments + structured Synap data (view rows, document content, entity fields).”
+
+So: **same idea as Raycast (prompt + variables), plus first-class binding to views/entities/documents.**
+
+---
+
+## 3. Product Shape (High Level)
+
+### 3.1 Home of the Intelligence App: Dashboard (Not Only Threads)
+
+- **Current:** Opening “AI Chat” shows thread list + chat.
+- **Target:** Opening “Intelligence” (or “AI” / “Automations”) shows a **dashboard** with:
+  - **Agents:** List/cards of available agents (orchestrator, research, code, writing, custom…). User can enable/disable, create, update agents (metadata: name, description, model, system prompt, capabilities).
+  - **Actions:** User-created “AI commands” – prompt template + arguments + optional data binding. One click or command-palette entry runs the action (creates thread, injects prompt + context, streams reply).
+  - **Threads:** Still available (e.g. “Recent threads” or a tab), so chat remains central but is not the only entry point.
+
+This can align with the **Bento Grid** and **Home** work: the Intelligence app could expose a **widget** “Agents & Actions” for the home dashboard, and the full app view is the full dashboard.
+
+### 3.2 Internal Actions (Core)
+
+- **Action =**
+  - **Name** (e.g. “Create week plan from tasks”).
+  - **Prompt template** with variables, e.g.  
+    `Using the following tasks, create my week plan. Focus on [Focus].`  
+    with `[Focus]` (or `{{focus}}`) as a user-filled argument.
+  - **Arguments:** List of argument definitions (name, label, optional default, type: text / number / date / etc.).
+  - **Data binding (optional):**
+    - **View:** “Use the current view’s query result” (e.g. table of entities) as context.
+    - **Documents:** “Attach these documents” (user picks from workspace).
+    - **Entity:** “Use this entity” (e.g. current selection or pick one).
+  - **Agent:** Which agent (orchestrator, research, etc.) runs this action.
+- **Execution:** User triggers the action (from dashboard, command palette, or from a view’s “Run action” menu). UI collects arguments, resolves data binding (load view rows, document content, entity), builds the final prompt + context, creates a thread (or uses existing), sends to backend, streams response.
+
+**Examples:**
+
+- “Extract entities from the selected documents” – arguments: none or “entity type”; data: selected documents.
+- “Analyze these entities and create a report” – data: current view (table of entities).
+- “Create a calendar view from this task list” – data: view (tasks); arguments: “date field”, “title field”.
+- “Create my week plan” – data: view (tasks); arguments: “Focus” (e.g. “deep work only”).
+- “Draft social posts from this content” – data: view or documents; arguments: “platform”, “tone”.
+
+### 3.3 External Integrations (Metadata Only, First)
+
+- **Goal:** Know that “this workspace has connected external automation X” without Synap executing it.
+- **Use cases:** User configures N8N / Activepieces / Zapier / webhook to call Synap or to be called by Synap later. We store:
+  - **Workspace ID**, **user ID** (who connected).
+  - **Kind:** e.g. `n8n` | `activepieces` | `webhook` | `zapier`.
+  - **Display name**, **optional URL** (e.g. webhook URL or dashboard link).
+  - **Secrets:** Not stored in plain text; only that “a webhook was set” and maybe a hashed or external reference.
+- **UI (later):** “Connected services” in workspace settings or Intelligence dashboard; list and revoke. No execution in v1.
+
+**Feasibility:** Yes. Backend table e.g. `workspace_integrations` or `workspace_connected_services` (workspace_id, user_id, kind, name, config_encrypted_or_ref, created_at). Frontend: “Connect N8N” could redirect to N8N OAuth or paste webhook URL; we save metadata and optionally a secure reference to the webhook.
+
+---
+
+## 4. Implementation Outline
+
+### 4.1 Phase 1: Agents Dashboard + List
+
+- **Backend:**
+  - Agents are already implied by `agentId` / `agentType` on threads. Formalize: either **config-driven** (list of agents from control plane or config) or a small **agents** table (id, workspace_id optional, name, slug, description, agent_type, system_prompt_override, model_override, enabled). Prefer starting **config-driven** (no new table): agents list from env/config or from intelligence service capability.
+  - **API:** `chat.getAgents` or `intelligence.getAgents` returning list of agents available in the workspace (or globally).
+- **Frontend:**
+  - New “Intelligence” app **home**: dashboard with “Agents” section (cards/list).
+  - Reuse existing thread list as “Recent threads” or a tab.
+  - No new “actions” yet; just navigation and structure.
+
+### 4.2 Phase 2: Internal Actions – Schema + CRUD
+
+- **Backend:**
+  - **Table:** `intelligence_actions` (or `workspace_actions`):
+    - id, workspace_id, created_by, name, slug, description (optional),
+    - prompt_template (text with placeholders),
+    - arguments (JSONB: array of { name, label, type, default }),
+    - data_binding (JSONB: e.g. { viewId?, documentIds?, entityId?, type: 'view'|'documents'|'entity'|'none' }),
+    - agent_id (or agent_type),
+    - created_at, updated_at.
+  - **API:** `intelligence.createAction`, `updateAction`, `deleteAction`, `listActions` (by workspace).
+  - **Execution:** Either extend `chat.sendMessage` (e.g. `actionId` + `argumentValues` + optional overrides) or new `intelligence.runAction` that builds the prompt, resolves data binding (load view rows, docs, entity), then calls the same sendMessage path. Prefer **runAction** for clarity and future webhooks.
+
+- **Placeholder syntax:** Pick one and stick to it, e.g.
+  - `{{argumentName}}` or
+  - `{argument name="ArgumentName"}` (Raycast-like).  
+    Parse and substitute at runtime; validate that all required arguments are provided.
+
+### 4.3 Phase 3: Internal Actions – UI
+
+- **Dashboard:** “Actions” section: list of user-created actions; click to run or edit.
+- **Create/Edit action:**
+  - Form: name, description, prompt template (with hint: “Use {{argName}} for arguments”).
+  - Arguments: add/remove rows (name, label, type, default).
+  - Data binding: dropdown “None / View / Documents / Entity” + pick view or documents or entity when needed.
+  - Agent: dropdown from getAgents.
+- **Run action:**
+  - Modal or inline form: fill argument values; show which view/documents/entity will be attached.
+  - On submit: call `intelligence.runAction`; open new thread (or reuse) and show stream.
+- **Command palette:** “Run action: &lt;name&gt;” – same run flow with argument form.
+
+### 4.4 Phase 4: Data Binding Execution
+
+- **Backend (runAction):**
+  - Load view by id → run view query (or use existing view API) → get entity rows (and optionally document content for linked docs).
+  - Load documents by ids → fetch content (from storage or document_versions).
+  - Load entity by id → get entity + linked document if any.
+  - Inject into “context” block in the prompt (e.g. “## View data\n…” or “## Documents\n…”) and append to prompt_template after substituting arguments.
+  - Call existing sendMessage (or intelligence stream) with the final prompt and context.
+
+- **Frontend:** When user picks “View” as data binding, show view picker (list of views in workspace). Same for documents (picker) and entity (picker or “current selection”).
+
+### 4.5 Phase 5: External Integrations (Metadata)
+
+- **Backend:**
+  - Table: `workspace_integrations` (id, workspace_id, user_id, kind, name, config_json_encrypted_or_ref, created_at).
+  - API: `integrations.create`, `list`, `delete` (no execution).
+- **Frontend:** Workspace settings or Intelligence dashboard: “Connected services” – list, “Add” (N8N / Activepieces / Webhook), store name + kind; do not store raw secrets in DB (use env or vault later).
+
+---
+
+## 5. Summary
+
+| Idea                                               | Verdict                       | Notes                                                    |
+| -------------------------------------------------- | ----------------------------- | -------------------------------------------------------- |
+| Dashboard with agents (not only threads)           | ✅ Do it                      | First-class agents list; threads become one tab/section. |
+| User-created actions (prompt + variables)          | ✅ Do it                      | Raycast-style; use `{{arg}}` or `{argument name="X"}`.   |
+| Data binding (view, documents, entity)             | ✅ Do it                      | Differentiator; implement in runAction + UI.             |
+| External integrations (N8N, Activepieces, webhook) | ✅ Start with metadata        | Store “connected” only; execution out of scope at first. |
+| Pre-prompt + variables in app                      | ✅ Core of “internal actions” | Same as “actions” above.                                 |
+
+**Suggested order:** (1) Agents dashboard + API, (2) Actions schema + CRUD + runAction (with argument substitution only), (3) Data binding in runAction + UI, (4) Action create/edit/run UI and command palette, (5) External integration metadata and “Connected services” UI.
+
+If you want to proceed, the next concrete step is **Phase 1 (Agents dashboard)** plus a small **Phase 2** slice: `intelligence_actions` table and `listActions` / `createAction` / `runAction` (prompt + arguments only, no data binding yet).

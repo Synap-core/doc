@@ -1,0 +1,145 @@
+# Installation Guide
+
+## Prerequisites
+
+Free up disk space: You'll need approximately **500MB** for the advanced packages.
+
+## Step 1: Install Advanced Remotion Packages
+
+```bash
+cd synap-videos
+
+# Core 3D and effects packages
+npm install @remotion/three @remotion/lottie @remotion/transitions @remotion/noise
+
+# Three.js ecosystem
+npm install three @types/three @react-three/fiber @react-three/drei
+
+# Optional: Audio helpers
+npm install @remotion/media-utils
+```
+
+## Step 2: Verify Installation
+
+```bash
+npx tsc --noEmit
+```
+
+Should complete without errors.
+
+## Step 3: Download Assets
+
+### Lottie Animations (Free)
+1. Go to https://lottiefiles.com
+2. Search and download:
+   - "broken chain" → Save as `public/lottie/broken-chain.json`
+   - "confused robot" → Save as `public/lottie/confused-robot.json`
+   - "file search" → Save as `public/lottie/file-search.json`
+   - "checkmark success" → Save as `public/lottie/checkmark.json`
+   - "data flow" → Save as `public/lottie/data-flow.json`
+
+### 3D Models (Free)
+1. Go to https://poly.pizza or https://sketchfab.com
+2. Search and download:
+   - "server cube" or "data center" → Save as `public/models/data-pod.glb`
+   - "geometric shapes" → Save as `public/models/shapes.glb`
+
+### Music & SFX
+
+**Option 1: Free (with attribution)**
+- **Music:** YouTube Audio Library → "Cinematic"
+- **SFX:** https://freesound.org
+  - Search: "glass shatter", "whoosh", "electric buzz", "bass drop"
+
+**Option 2: Premium (no attribution)**
+- **Artlist** ($9.99/month) - Best for music + SFX
+- **Epidemic Sound** ($15/month) - Huge library
+- **AudioJungle** ($19-49 per track) - One-time purchase
+
+Download music to: `public/audio/music/`
+Download SFX to: `public/audio/sfx/`
+
+### Voiceover
+
+**Option 1: AI Voice (Budget - $0-22)**
+1. Go to https://elevenlabs.io
+2. Sign up (free tier: 10k characters)
+3. Use "Adam" or "Charlotte" voice
+4. Paste the script from `SCRIPT-DEATH-OF-SAAS.md`
+5. Settings: Stability 75%, Similarity 80%
+6. Download as MP3 → Save to `public/audio/voiceover/death-of-saas.mp3`
+
+**Option 2: Human Voice (Premium - $100-300)**
+1. Go to https://fiverr.com
+2. Search "documentary voiceover"
+3. Filter: English, Pro, Video duration 2-3 min
+4. Send the script with timing markers
+5. Request: 48kHz, 16-bit WAV format
+
+## Step 4: Folder Structure
+
+Create these folders:
+
+```bash
+mkdir -p public/lottie
+mkdir -p public/models
+mkdir -p public/audio/music
+mkdir -p public/audio/sfx
+mkdir -p public/audio/voiceover
+mkdir -p public/textures
+mkdir -p public/images/logos
+```
+
+## Step 5: Test the Setup
+
+```bash
+npm start
+```
+
+Open http://localhost:3000 - you should see the compositions load.
+
+## Disk Space Requirements
+
+| Package Group | Size |
+|--------------|------|
+| @remotion packages | ~50MB |
+| three.js + helpers | ~30MB |
+| Lottie files | ~5MB |
+| 3D models (.glb) | ~20MB |
+| Music (1 track) | ~10MB |
+| SFX (10 files) | ~5MB |
+| Voiceover (MP3) | ~3MB |
+| **Total** | **~123MB** |
+
+## Troubleshooting
+
+### ENOSPC (No space left on device)
+```bash
+# Check disk space
+df -h
+
+# Clear npm cache
+npm cache clean --force
+
+# Clear node_modules and reinstall
+rm -rf node_modules
+npm install
+```
+
+### TypeScript errors
+```bash
+# Regenerate tsconfig
+rm tsconfig.tsbuildinfo
+npx tsc --noEmit
+```
+
+### Remotion won't start
+```bash
+# Clear Remotion cache
+rm -rf .remotion
+npm start
+```
+
+## Next Steps
+
+Once installed, proceed to build the component library: `src/components/`

@@ -1,0 +1,107 @@
+# Debug: "Lost" updates (header, doc collaboration, workspace state)
+
+## 1. Webpack cache warning – **not** the cause
+
+The warning:
+
+```text
+[webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: Unable to snapshot resolve dependencies
+```
+
+means webpack **failed to write** the pack cache (e.g. due to pnpm symlinks or filesystem).  
+When that happens, webpack **does not use** that cache; it rebuilds. So this warning does **not** make the app serve old code. It can only make builds a bit slower.
+
+---
+
+## 2. What’s actually in the repo (as of last check)
+
+- **Workspace state / panel workspace**
+  - `apps/web/app/workspace/page.tsx` uses `usePanelWorkspace`, `workspaceState`, passes `usePanelWorkspace={true}` and `workspaceState={workspaceState}` to `WorkspaceOS`.
+  - `WorkspaceOS` renders `PanelWorkspace` when `usePanelWorkspace && workspaceState && ...` are set.  
+    So panel workspace state is present in the codebase.
+
+- **Panel headers**
+  - `createPersonalizedHeader` and `getCustomHeader={createPersonalizedHeader}` are passed to `WorkspaceOS` / `PanelWorkspace`.  
+    So per-panel headers are wired in code.
+
+- **Docs**
+  - `DocsApp` is rendered from the workspace with `selectedDocumentId`, `onCreateDocument`, `onDocumentClick`, etc.
+  - Yjs is mentioned in `next.config.ts` (singleton).  
+    Doc collaboration would live inside `@synap/docs-app` or document packages.
+
+- **Root layout**
+  - `app/layout.tsx` only has fonts + `Providers`; there is no global “app header” in the root layout.  
+    If you had a global header bar above the workspace, it may have been in uncommitted changes or in a stash.
+
+---
+
+## 3. Likely causes of “everything looks different”
+
+1. **Stale build (most likely)**  
+   Next.js is serving an old build from `apps/web/.next`. The source on disk is new, but the running app is from an older build.
+
+2. **Runtime state**  
+   Panel layout and active app are persisted (e.g. localStorage). If that was cleared or the key changed, the UI would look “reset” (e.g. no panels, default app).
+
+3. **Code never committed**  
+   If “header”, “doc collaboration”, or other UI lived only in uncommitted edits or in a branch that wasn’t merged, git wouldn’t have them. Your last commit is `659e13e feat: doc-entity + fix issues at build`; you have 4 modified files and many stashes.
+
+---
+
+## 4. What to do (in order)
+
+### A. Rule out stale build (do this first)
+
+```bash
+cd /Users/antoine/Documents/Code/synap/synap-app
+
+# Stop the dev server (Ctrl+C), then:
+rm -rf apps/web/.next
+rm -rf .turbo
+pnpm dev
+```
+
+Open the workspace and check if the panel layout, headers, and docs behave as expected. If they do, the issue was a stale build.
+
+### B. Check for uncommitted / stashed “header” or layout code
+
+```bash
+cd /Users/antoine/Documents/Code/synap/synap-app
+
+# List stashes (newest first)
+git stash list
+
+# See what’s in the latest stash (lint-staged backup)
+git stash show -p stash@{0} --name-only
+
+# If you see something useful (e.g. layout, header), you can apply it
+# git stash show -p stash@{0}   # full diff
+# git stash apply stash@{0}      # apply and keep stash
+```
+
+If you had a global header or other layout only in uncommitted/stashed changes, it would not be in the current committed tree.
+
+### C. Confirm what’s “missing”
+
+- **Header**  
+  Do you mean (a) the bar above the whole app (root layout), (b) the panel title/header per tab, or (c) something inside a specific app (e.g. Docs)?  
+  (a) is not in the current root layout; (b) is in the code via `getCustomHeader`.
+
+- **Doc collaboration**  
+  Confirm whether the problem is: docs not opening, or real-time collab (Yjs) not working. The doc app and Yjs wiring are present; collab could be broken by backend/WebSocket or by a change inside the docs package.
+
+- **Workspace state only**  
+  If “workspace state only” means “only workspace state is working, rest is missing”, that matches “stale build or runtime state”: the part that’s persisted (workspace state) is correct, the rest might be from an old bundle or different state.
+
+---
+
+## 5. Summary
+
+| Suspect                               | Conclusion                                                                                                  |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Webpack PackFileCacheStrategy warning | Does **not** cause old code to run. Safe to ignore for “lost updates.”                                      |
+| Stale `.next` build                   | **Very likely.** Clear `apps/web/.next` (and optionally `.turbo`) and run `pnpm dev`.                       |
+| Code never committed / in stash       | Possible for a global header or one-off layout. Check `git status` and `git stash list` / `git stash show`. |
+| Runtime state cleared                 | Possible if the UI “resets” but code is correct; check persistence (e.g. localStorage) and keys.            |
+
+**Recommended first step:** run the commands in section 4A, then re-test. If the problem remains, use 4B and 4C to track down which exact feature is missing and whether it ever existed in committed code.

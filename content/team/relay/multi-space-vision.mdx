@@ -1,0 +1,337 @@
+# Synap Mobile — Multi-Space Architecture Vision
+
+## The Concept
+
+Today, Relay is a single-purpose mobile app: relationship intelligence. But the Synap platform can power ANY data-driven workflow. The mobile app should evolve from "Relay" into "Synap Mobile" — a shell that hosts multiple **spaces**, each serving a different purpose.
+
+A space = a workspace on the pod, seeded from a definition, with its own tab layout, profiles, views, and automations.
+
+```
+┌─────────────────────────────────────┐
+│ Synap Mobile                         │
+│                                      │
+│ ┌─ Space Bar ──────────────────────┐│
+│ │ [🤝 Relay]  [📋 Ops]  [🔬 Lab] ││
+│ └──────────────────────────────────┘│
+│                                      │
+│ Active: Relay                        │
+│ ┌──────────────────────────────────┐│
+│ │ Feed | People | 🔍 | Camps | ⚙  ││
+│ │                                  ││
+│ │ (Relay's tab layout)             ││
+│ └──────────────────────────────────┘│
+│                                      │
+│ Switch to: Ops                       │
+│ ┌──────────────────────────────────┐│
+│ │ Tasks | Projects | Graph | Cal | ⚙││
+│ │                                  ││
+│ │ (Ops's tab layout)              ││
+│ └──────────────────────────────────┘│
+└─────────────────────────────────────┘
+```
+
+## Why This Matters
+
+1. **One app, infinite uses** — Users don't need separate apps for networking, task management, research, sales. One install, one pod, multiple contexts.
+
+2. **Shared data** — Pod-wide entities (person, company, event) are visible across ALL spaces. A person you met (Relay) can be assigned a task (Ops) and linked to research (Lab). The data graph connects everything.
+
+3. **Synap's business model** — Each space preset can be a "package" in the marketplace. Users discover and install new workflows. This drives engagement and monetization.
+
+4. **Developer platform** — Third parties can create space definitions. A VC firm creates a "Deal Flow" space. A recruiter creates a "Talent Pipeline" space. The mobile app renders them all.
+
+## Architecture
+
+### What Already Exists
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Workspace creation from definition | Done | `createFromDefinition` in backend |
+| Workspace presets (6 types) | Done | Browser onboarding |
+| Workspace switching | Done | Browser (workspace switcher in sidebar) |
+| Pod-wide entities | Done | `entityScope: 'pod'` on profiles |
+| Workspace-scoped entities | Done | `entityScope: 'workspace'` |
+| Layout config per workspace | Done | `workspace.settings.layoutConfig` |
+| tRPC workspace header | Done | `x-workspace-id` header scopes all queries |
+| Multiple workspaces per user | Done | `workspace_members` table |
+
+### What Needs to Be Built
+
+#### 1. Space Switcher UI
+
+A horizontal bar at the top of the app (or a drawer) showing all spaces:
+
+```typescript
+// SpaceBar component
+const spaces = useWorkspaces(); // fetches all user's workspaces
+const [activeSpace, setActiveSpace] = useActiveSpace();
+
+<ScrollView horizontal>
+  {spaces.map(space => (
+    <SpaceChip
+      key={space.id}
+      icon={space.icon}
+      label={space.name}
+      active={space.id === activeSpace.id}
+      onPress={() => switchSpace(space.id)}
+    />
+  ))}
+  <AddSpaceChip onPress={showCreateSpaceModal} />
+</ScrollView>
+```
+
+When switching spaces:
+1. Update the session's `workspaceId`
+2. Recreate the tRPC client (new workspace header)
+3. Invalidate all query caches
+4. Re-render the tab layout
+
+#### 2. Dynamic Tab Layout
+
+Each workspace definition includes a `mobileLayout` config:
+
+```typescript
+// In the workspace definition (like RELAY_DEFINITION):
+mobileLayout: {
+  tabs: [
+    { id: 'feed', icon: 'Rss', label: 'Feed', screen: 'FeedScreen' },
+    { id: 'people', icon: 'Users', label: 'People', screen: 'PeopleScreen' },
+    { id: 'search', icon: 'Search', label: 'Search', screen: 'SearchScreen' },
+    { id: 'campaigns', icon: 'Target', label: 'Campaigns', screen: 'CampaignsScreen' },
+    { id: 'settings', icon: 'Settings', label: 'Settings', screen: 'SettingsScreen' },
+  ],
+  fab: { icon: 'Plus', action: 'capture' },
+}
+```
+
+The app reads this config and renders the tab bar dynamically:
+
+```typescript
+function DynamicTabs({ layout }) {
+  return (
+    <Tabs>
+      {layout.tabs.map(tab => (
+        <Tab key={tab.id} icon={tab.icon} label={tab.label}>
+          <ScreenRegistry screen={tab.screen} />
+        </Tab>
+      ))}
+    </Tabs>
+  );
+}
+```
+
+#### 3. Screen Registry
+
+A mapping of screen IDs to React components:
+
+```typescript
+const SCREEN_REGISTRY: Record<string, React.ComponentType> = {
+  FeedScreen: lazy(() => import('./screens/FeedScreen')),
+  PeopleScreen: lazy(() => import('./screens/PeopleScreen')),
+  SearchScreen: lazy(() => import('./screens/SearchScreen')),
+  CampaignsScreen: lazy(() => import('./screens/CampaignsScreen')),
+  TasksScreen: lazy(() => import('./screens/TasksScreen')),
+  ProjectsScreen: lazy(() => import('./screens/ProjectsScreen')),
+  GraphScreen: lazy(() => import('./screens/GraphScreen')),
+  CalendarScreen: lazy(() => import('./screens/CalendarScreen')),
+  NotesScreen: lazy(() => import('./screens/NotesScreen')),
+  SettingsScreen: lazy(() => import('./screens/SettingsScreen')),
+};
+```
+
+New spaces can reuse existing screens in different combinations.
+
+#### 4. Space Definitions
+
+```typescript
+// Relay (already exists)
+export const RELAY_DEFINITION = { ... };
+
+// Ops — project & task management
+export const OPS_DEFINITION: WorkspaceDefinitionInput = {
+  workspaceName: 'Ops',
+  profiles: [
+    { slug: 'task', displayName: 'Task', ... },
+    { slug: 'project', displayName: 'Project', ... },
+  ],
+  views: [
+    { name: 'Tasks Board', type: 'kanban', scopeProfileSlug: 'task', config: { groupBy: 'status' } },
+    { name: 'Projects', type: 'table', scopeProfileSlug: 'project' },
+    { name: 'Calendar', type: 'calendar', scopeProfileSlug: 'event' },
+  ],
+  mobileLayout: {
+    tabs: [
+      { id: 'tasks', icon: 'CheckSquare', label: 'Tasks', screen: 'TasksScreen' },
+      { id: 'projects', icon: 'Folder', label: 'Projects', screen: 'ProjectsScreen' },
+      { id: 'graph', icon: 'Share2', label: 'Graph', screen: 'GraphScreen' },
+      { id: 'calendar', icon: 'Calendar', label: 'Calendar', screen: 'CalendarScreen' },
+      { id: 'settings', icon: 'Settings', label: 'Settings', screen: 'SettingsScreen' },
+    ],
+  },
+};
+
+// Research — knowledge management
+export const RESEARCH_DEFINITION: WorkspaceDefinitionInput = {
+  workspaceName: 'Research',
+  profiles: [
+    { slug: 'note', displayName: 'Note', ... },
+    { slug: 'bookmark', displayName: 'Bookmark', ... },
+  ],
+  views: [
+    { name: 'Knowledge Graph', type: 'graph' },
+    { name: 'Notes', type: 'masonry', scopeProfileSlug: 'note' },
+    { name: 'Bookmarks', type: 'table', scopeProfileSlug: 'bookmark' },
+  ],
+  mobileLayout: {
+    tabs: [
+      { id: 'notes', icon: 'FileText', label: 'Notes', screen: 'NotesScreen' },
+      { id: 'graph', icon: 'Share2', label: 'Graph', screen: 'GraphScreen' },
+      { id: 'search', icon: 'Search', label: 'Search', screen: 'SearchScreen' },
+      { id: 'captures', icon: 'Camera', label: 'Captures', screen: 'CapturesScreen' },
+      { id: 'settings', icon: 'Settings', label: 'Settings', screen: 'SettingsScreen' },
+    ],
+  },
+};
+```
+
+## User Flow
+
+### First Launch
+
+```
+1. Onboarding (current Relay flow)
+2. "What do you need?"
+   [Networking] [Task Management] [Research] [All of the above]
+3. Creates workspace(s) from selected presets
+4. Lands on the first space
+```
+
+### Adding a New Space
+
+```
+Settings → Spaces → [+ New Space]
+  → Choose preset (Relay, Ops, Research, Custom)
+  → Name it
+  → createFromDefinition
+  → Space appears in the space bar
+```
+
+### Switching Spaces
+
+```
+Tap a space chip in the space bar
+  → Tab layout changes
+  → Data re-scopes to that workspace
+  → Pod-wide entities (people, events) remain visible
+  → Workspace-scoped entities (campaigns, projects) switch
+```
+
+## Data Model
+
+### Pod-Wide (shared across all spaces)
+
+These entities are visible everywhere:
+- **Person** — contacts you know
+- **Company** — organizations
+- **Event** — calendar events
+- **Note** — captured thoughts
+- **Task** — action items (could be pod-wide or workspace-scoped)
+
+### Workspace-Scoped (per space)
+
+These entities live in one space:
+- **Campaign** (Relay) — outreach tracking
+- **Project** (Ops) — project grouping
+- **Deal** (Sales) — sales pipeline
+- **Custom profiles** — whatever the space definition creates
+
+### Cross-Space References
+
+A person entity (pod-wide) can be:
+- A campaign contact in Relay
+- A task assignee in Ops
+- A research subject in Lab
+
+The **relations** connect them across spaces. The person exists once, but has edges to entities in multiple workspaces.
+
+## Progressive Disclosure
+
+The multi-space system should be INVISIBLE for simple users:
+
+| User Type | Experience |
+|-----------|-----------|
+| **New user** | Sees only Relay. No space bar. Single-purpose app. |
+| **Power user** | Goes to Settings → discovers "Spaces". Creates a second space. Space bar appears. |
+| **Team user** | Invited to a shared workspace. Space bar shows both personal and team spaces. |
+| **Developer** | Creates custom space definitions via the CLI or Browser. Installs via marketplace. |
+
+The space bar only appears when `workspaces.length > 1`.
+
+## Implementation Phases
+
+### Phase 1: Foundation (v1.5, ~1 week)
+- Add `mobileLayout` field to `WorkspaceDefinitionInput`
+- Create `useWorkspaces()` hook (list all user workspaces)
+- Create `useActiveSpace()` hook (track + switch active workspace)
+- Space switcher in Settings only (not in tab bar yet)
+- "Create Space" flow with preset picker
+
+### Phase 2: Dynamic Tabs (v2.0, ~2 weeks)
+- Screen Registry with lazy loading
+- Dynamic tab bar from `mobileLayout.tabs`
+- Space bar at top of screen (when >1 workspace)
+- Shared screens (Search, Settings) work across all spaces
+- Space-specific screens (Campaigns, Tasks, Projects) load per workspace
+
+### Phase 3: Screen Library (v2.1, ~3 weeks)
+- TasksScreen — kanban + list view for tasks
+- ProjectsScreen — project cards with linked tasks/people
+- GraphScreen — relationship graph visualization (simplified from Browser's graph view)
+- CalendarScreen — event calendar with attendees
+- NotesScreen — masonry/list view for notes + quick capture
+
+### Phase 4: Marketplace (v3.0, ~future)
+- Browse space presets from the Synap marketplace
+- Install a preset → creates workspace with full definition
+- Community-created presets (e.g., "VC Deal Flow", "Recruiter Pipeline", "Event Organizer")
+- Preset updates via the marketplace (versioned)
+
+## How This Connects to the Browser
+
+The Browser and mobile app share the same pod and workspaces. A space created on mobile appears in the Browser's workspace switcher, and vice versa.
+
+```
+Browser                          Mobile
+┌──────────────────────┐        ┌──────────────────┐
+│ Workspace: Relay     │        │ Space: Relay     │
+│ - Dashboard          │  same  │ - Feed           │
+│ - People table       │  pod   │ - People grid    │
+│ - Campaign kanban    │  data  │ - Pipeline board  │
+│ - Graph view         │ ←────→ │ - Search + AI    │
+│ - Full automation    │        │ - Read-only auto  │
+│   editor             │        │   transparency    │
+└──────────────────────┘        └──────────────────┘
+```
+
+The Browser is the power tool (full editing, workflows, graph). Mobile is the daily driver (capture, browse, pipeline). Same data, different interfaces.
+
+## Key Principle
+
+**The mobile app doesn't try to replicate the Browser.** It provides the screens that make sense on mobile:
+- Quick capture (voice, text, camera)
+- Browse and search (lists, cards)
+- Pipeline management (swipe, tap)
+- AI queries (natural language)
+- Notifications and briefings
+
+Heavy editing (automation flows, complex views, data structure management) stays in the Browser. The mobile app provides read-only transparency into those systems.
+
+## Success Metrics
+
+| Metric | What it validates |
+|--------|-------------------|
+| Spaces created per user | Are users expanding beyond Relay? |
+| Space switches per session | Are multiple spaces valuable? |
+| Cross-space entity references | Is the shared data model working? |
+| Marketplace installs | Is the ecosystem growing? |
+| Mobile → Browser handoff rate | Is the complementary model working? |

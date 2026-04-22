@@ -1,0 +1,613 @@
+# Synap Cloud User Flows & Status
+
+> Last updated: 2026-02-24
+> Scope: Cloud users (Control Plane at synap.live), Browser (Electron) app
+
+---
+
+## Table of Contents
+
+1. [Flow Overview](#1-flow-overview)
+2. [Authentication & Account](#2-authentication--account)
+3. [Subscription & Billing](#3-subscription--billing)
+4. [Pod Provisioning](#4-pod-provisioning)
+5. [Onboarding (First-Time User)](#5-onboarding-first-time-user)
+6. [Workspace Creation](#6-workspace-creation)
+7. [Template & Package System](#7-template--package-system)
+8. [AI Workspace Generation](#8-ai-workspace-generation)
+9. [Workspace Experience](#9-workspace-experience)
+10. [Intelligence & AI Features](#10-intelligence--ai-features)
+11. [Settings & Management](#11-settings--management)
+12. [Self-Hosted Path](#12-self-hosted-path)
+13. [Status Summary](#13-status-summary)
+14. [Known Gaps & TODOs](#14-known-gaps--todos)
+
+---
+
+## 1. Flow Overview
+
+```
+                    +-----------------+
+                    |  Open Browser   |
+                    +--------+--------+
+                             |
+                    +--------v--------+
+                    |   Welcome Page  |
+                    +--------+--------+
+                             |
+              +--------------+--------------+
+              |                             |
+   +----------v----------+     +-----------v-----------+
+   | Sign in with Synap  |     | Self-Hosted Pod URL   |
+   | (Control Plane)     |     | (escape hatch)        |
+   +----------+----------+     +-----------+-----------+
+              |                             |
+   +----------v----------+     +-----------v-----------+
+   | Better Auth Login/  |     | Kratos Auth at Pod    |
+   | Registration        |     +-----------+-----------+
+   +----------+----------+                 |
+              |                  Auto-create blank ws
+   +----------v----------+                 |
+   | Fetch Pod Config    |     +-----------v-----------+
+   +----------+----------+     | Celebration + Done    |
+              |                +------------------------+
+     +--------+--------+
+     |                  |
++----v----+    +--------v---------+
+| Active  |    | Provisioning     |
+| Pod     |    | (1-3 min)        |
++----+----+    +--------+---------+
+     |                  |
+     |         +--------v---------+
+     |         | ProvisioningProg |
+     |         | (real-time steps)|
+     |         +--------+---------+
+     |                  |
+     +--------+---------+
+              |
+   +----------v----------+
+   | Handshake + Connect |
+   +----------+----------+
+              |
+   +----------v----------+
+   | Fetch Subscription  |
+   | Check Packages      |
+   +----------+----------+
+              |
+     +--------+--------+
+     |                  |
++----v------+   +-------v--------+
+| Packages  |   | No Packages    |
+| Installed |   | → Method       |
+| → Cele-   |   |   Chooser      |
+| bration   |   +-------+--------+
++----+------+           |
+     |          +-------+--------+--------+
+     |          |                |        |
+     |   +------v-----+  +------v---+ +--v------+
+     |   | Templates  |  | AI Chat  | | Blank   |
+     |   +------+-----+  +------+---+ +--+------+
+     |          |                |        |
+     |   +------v-----+  +------v------+ |
+     |   | Preview    |  | Proposal    | |
+     |   +------+-----+  +------+------+ |
+     |          |                |        |
+     |          +-------+--------+--------+
+     |                  |
+     |       +----------v----------+
+     |       | Create Workspace    |
+     |       | (9-step pipeline    |
+     |       |  or server-side)    |
+     |       +----------+----------+
+     |                  |
+     +--------+---------+
+              |
+   +----------v----------+
+   | Celebration Screen  |
+   | "Your workspace is  |
+   |  ready"             |
+   +----------+----------+
+              |
+   +----------v----------+
+   | Workspace Loads     |
+   | (Dashboard / Bento) |
+   +---------------------+
+```
+
+---
+
+## 2. Authentication & Account
+
+### 2.1 Control Plane Auth (Better Auth)
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Login (email + password) | DONE | Via IPC `signInWithBetterAuth()` |
+| Registration (email + password + name) | DONE | Via IPC `signUpWithBetterAuth()` |
+| Credential storage (OS keychain) | DONE | `saveCredentialWithPassword()` for auto-reconnect |
+| Biometric unlock on return | DONE | Prompts Touch ID / password to re-auth silently |
+| Session validation on startup | DONE | `checkSession()` via IPC `getBetterAuthSession()` |
+| Logout | DONE | Clears session + keychain credentials |
+| Password reset | NOT DONE | No "forgot password" flow in browser |
+| OAuth / social login | NOT DONE | Only email+password supported |
+
+### 2.2 Pod Auth (Kratos — Self-Hosted)
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Login with Kratos flow | DONE | Creates flow, extracts CSRF, submits |
+| Registration with Kratos | DONE | Dual mode toggle (login/register) |
+| Existing session detection | DONE | Auto-skips login if valid session found |
+| Error extraction from flow | DONE | Parses `ui.messages` and `node.messages` |
+
+### 2.3 Handshake Token Exchange
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Token generation (Control Plane) | DONE | 5-min JWT with `aud=podUrl`, `iss=synap-control-plane` |
+| Token exchange at pod (IPC) | DONE | `exchangeHandshakeToken(podUrl, token)` creates Kratos session |
+| Pod ownership validation | DONE | Cross-references target hostname against user's pods |
+
+---
+
+## 3. Subscription & Billing
+
+### 3.1 Pricing Tiers
+
+| Tier | Price | Stripe Product | Purchasable |
+|------|-------|----------------|-------------|
+| Solo | 50/mo | `price_1Sri3m...` | YES |
+| Pro | 100/mo | (none) | NO — "not yet available" |
+| Team | 500/mo | (none) | NO — "not yet available" |
+| Enterprise | Custom | (none) | NO — "contact sales" |
+
+### 3.2 Checkout Flow
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| `POST /billing/checkout` | DONE | Creates Stripe checkout session |
+| Stripe customer create/retrieve | DONE | Stores `stripeCustomerId` on user |
+| Promotion codes | DONE | Supported in checkout session |
+| Redirect to Stripe | DONE | Opens in external browser via IPC |
+| Success redirect | DONE | `/account?success=true` |
+| Cancel redirect | DONE | `/pricing?canceled=true` |
+
+### 3.3 Subscription Management
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| `GET /billing/subscription` | DONE | Returns tier, status, period dates |
+| `POST /billing/portal` | DONE | Stripe billing portal (manage, cancel, invoices) |
+| `GET /billing/pricing` | DONE | Returns all tiers + add-ons from `@synap-core/pricing` |
+| Admin bypass (testing) | DONE | `antoine.srvt@gmail.com` → enterprise with all features |
+
+### 3.4 Browser Billing UI
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Current plan display | DONE | Tier name, status badge, renewal date |
+| Plan comparison grid | DONE | All 4 tiers with feature highlights |
+| Upgrade button → checkout | DONE | `openCheckout(tierId)` |
+| Manage billing → portal | DONE | `openBillingPortal()` |
+| Past due / trial warnings | DONE | Color-coded banners |
+| Add-ons display | DONE | Shows add-ons from pricing config (display only) |
+
+### 3.5 Subscription Gaps
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Pro/Team/Enterprise checkout | NOT DONE | No Stripe products created |
+| Add-on purchase flow | NOT DONE | No checkout for add-ons (ZeroClaw, etc.) |
+| Feature gating by subscription | PARTIAL | `features[]` defined but not enforced in UI |
+| Trial creation | NOT DONE | `trialEnd` field exists, no creation logic |
+| Payment history | NOT DONE | Empty in web view |
+| Webhook handler (Stripe) | UNKNOWN | Not verified if webhook updates DB |
+| Invoice download in app | NOT DONE | Only via Stripe portal |
+
+---
+
+## 4. Pod Provisioning
+
+### 4.1 Trigger.dev Job Pipeline
+
+| Step | Backend Name | Duration | Status |
+|------|-------------|----------|--------|
+| 1. Create server | `create_server` | ~3-5 min | DONE (Hetzner API) |
+| 2. Configure DNS | `configure_dns` | ~30 sec | DONE (Cloudflare API) |
+| 3. Verify DNS | `verify_dns` | ~1-4 min | DONE (polling with timeout) |
+| 4. Deploy services | `deploy_services` | ~3-5 min | DONE (cloud-init script) |
+| 5. Health check | `wait_health` | ~2-3 min | DONE (polls `/health` x60) |
+| 6. Seed plugins | `seed_plugin` | ~1-2 min/pkg | DONE (`workspaces.seedPlugin`) |
+| 7. Sync intelligence | `sync_intelligence` | ~30 sec | DONE (registers ZeroClaw if enabled) |
+| 8. Send invitation | `send_invitation` | ~10 sec | STUB (TODO: email not sent) |
+
+### 4.2 Status Tracking
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| `provisioning_logs` table | DONE | One entry per step with status/output/timestamps |
+| `GET /pods/:id/status` | DONE | Returns step-by-step progress from logs |
+| `GET /pods/:id/logs` | DONE | Returns raw provisioning logs |
+| `GET /pods` | DONE | Returns pods list with installed packages |
+| Pod status enum (13 states) | DONE | pending → active → error/deleted |
+
+### 4.3 Browser Provisioning UI
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| `ProvisioningProgress` component | DONE | 8-step vertical stepper with animations |
+| Real-time polling (4s interval) | DONE | `startProvisioningPolling(podId)` |
+| Weighted progress bar | DONE | Steps have relative weights for accurate % |
+| Step states (pending/running/completed/failed) | DONE | Animated icons per state |
+| Error state + retry button | DONE | Shows `statusMessage`, calls `onRetry` |
+| Auto-transition when active | DONE | 1.5s delay then reconnects |
+| "Close safely" notice | DONE | Provisioning continues in background |
+
+### 4.4 `@synap-core/control-plane-types` Package
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Package created | DONE | `synap-control-plane-api/packages/control-plane-types/` |
+| Types: pods, provisioning, billing, packages | DONE | Mirrors DB schema enums |
+| Workspace link for dev | DONE | In `pnpm-workspace.yaml` |
+| Browser Vite alias + tsconfig | DONE | Resolves to source |
+| Published to npm | NOT YET | Will be `@synap-core/control-plane-types` (private) |
+
+---
+
+## 5. Onboarding (First-Time User)
+
+### 5.1 Steps
+
+| Step | Name | Content | Status |
+|------|------|---------|--------|
+| 0 | Welcome | "Welcome to Synap" + Get Started | DONE |
+| 1 | Pod Setup | Sign in / self-hosted / skip | DONE |
+| 2 | Method Chooser | Templates / AI / Blank | DONE |
+| 3 | Creation | Template grid, AI chat, or preview | DONE |
+| 4 | Complete | Celebration + auto-redirect | DONE |
+
+### 5.2 Pod Setup Branches
+
+| Branch | Flow | Status |
+|--------|------|--------|
+| Sign in with Synap | Better Auth → fetch pod → connect/provision | DONE |
+| Self-hosted URL | Enter URL → Kratos auth → blank workspace | DONE |
+| Skip pod setup | Local-only mode, no sync | DONE |
+
+### 5.3 State Persistence
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Step persisted across sessions | DONE | `appStore.onboarding.currentStep` via Zustand persist |
+| `completed` flag | DONE | Prevents re-showing onboarding |
+| `skippedPodSetup` flag | DONE | Allows step 2+ without pod |
+| Step validation on mount | DONE | Falls back if state is inconsistent |
+
+---
+
+## 6. Workspace Creation
+
+### 6.1 Creation Methods
+
+| Method | Description | Status |
+|--------|-------------|--------|
+| Template (built-in) | 6 hardcoded templates (CRM, Second Brain, Content OS, PM, Personal, Blank) | DONE |
+| Template (registry) | Fetched from Control Plane package registry | DONE |
+| AI Chat | Conversational workspace generation | DONE |
+| Blank | Empty workspace with default layout | DONE |
+
+### 6.2 Creation Pipeline
+
+| Path | When Used | Status |
+|------|-----------|--------|
+| Server-side (`createFromDefinition`) | Registry packages with `definition` | DONE |
+| Client-side (9-step sequential) | AI proposals, built-in templates | DONE |
+
+### 6.3 Client-Side Pipeline Steps
+
+| Step | Action | Status |
+|------|--------|--------|
+| 1 | Create workspace with settings | DONE |
+| 2 | Create profiles | DONE |
+| 3 | Create property definitions + link | DONE |
+| 4 | Create display templates | DONE |
+| 5 | Create standard views (table, kanban, etc.) | DONE |
+| 6 | Create home bento dashboard | DONE |
+| 7 | Create seed entities + resolve cross-refs | DONE |
+| 8 | Create flow views with entity IDs | DONE |
+| 9 | Create relations between entities | DONE |
+
+### 6.4 Returning User Flows
+
+| Scenario | Component | Status |
+|----------|-----------|--------|
+| 0 workspaces on pod | `WorkspaceCreationFlow` | DONE |
+| 2+ workspaces on pod | `WorkspacePicker` | DONE |
+| 1 workspace on pod | Auto-select, skip picker | DONE |
+| Packages pending (provisioned) | `ProvisioningWaitScreen` polls workspaces.list | DONE |
+
+---
+
+## 7. Template & Package System
+
+### 7.1 Control Plane Registry API
+
+| Endpoint | Method | Status |
+|----------|--------|--------|
+| `GET /api/packages` | List public packages | DONE |
+| `GET /api/packages/available` | Tier-gated packages for user | DONE |
+| `GET /api/packages/:slug` | Full package with definition | DONE |
+| `GET /api/packages/:slug/:version` | Specific version | DONE |
+| `POST /api/packages` | Publish new package | DONE |
+| `POST /api/packages/:slug/install` | Increment install counter | DONE |
+
+### 7.2 Template Conversion Pipeline
+
+```
+RegistryPackageFull
+  → packageToProposal()
+    → WorkspaceProposal
+      → normalizeWorkspaceProposal()
+        → validateWorkspaceProposal() (Zod)
+          → useCreateWorkspaceFromProposal.execute()
+```
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| `useRegistryTemplates` hook | DONE | Two-stage fetch (list + parallel detail) |
+| `packageToProposal()` converter | DONE | Maps registry format → proposal format |
+| Template normalization | DONE | Handles legacy aliases, format conversions |
+| Zod validation | DONE | `workspace-proposal-schema.ts` |
+| Registry replaces hardcoded | DONE | If registry has templates, they override built-ins |
+
+### 7.3 Template Gaps
+
+| Aspect | Status |
+|--------|--------|
+| Edit/update published packages | NOT DONE |
+| Package versioning UI | NOT DONE |
+| Marketplace publish wizard | NOT DONE (hook exists, no UI) |
+| Package uninstall/rollback | NOT DONE |
+| User custom template storage | NOT DONE (store exists, no UI) |
+| Template sharing between users | NOT DONE |
+
+---
+
+## 8. AI Workspace Generation
+
+### 8.1 AIChatStep Flow
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Availability gate | Checks `intelligence.getEffectiveService` | DONE |
+| Emerald intro animation | 1.5s sparkle + fade-in prompt | DONE |
+| OnboardingChat | Streaming conversation with AI | DONE |
+| `propose_workspace` tool | AI generates `WorkspaceProposal` JSON | DONE |
+| Preview step | User reviews proposal before creation | DONE |
+| Fallback if no AI | "Connect to pod" or "Use template" | DONE |
+
+### 8.2 AI Agent Types
+
+| Agent | Context | Status |
+|-------|---------|--------|
+| `onboarding` | First-time user, asks opening question | DONE |
+| `workspace-creation` | Existing user creating new workspace | DONE |
+
+### 8.3 Socket.IO Events
+
+| Event | Purpose | Status |
+|-------|---------|--------|
+| `chat:stream` | Real-time text chunks | DONE |
+| `ai:step` | Tool execution (including `propose_workspace`) | DONE |
+
+---
+
+## 9. Workspace Experience
+
+### 9.1 Available Apps
+
+| App | View ID | Requires Pod | Status |
+|-----|---------|--------------|--------|
+| Home (Dashboard) | `dashboard` | No | DONE |
+| Browser | `browser` | No | DONE |
+| Settings | `settings` | No | DONE |
+| Terminal | `terminal` | Optional | DONE |
+| Vault | `vault` | Yes | DONE |
+| Data Explorer | `data` | Yes | DONE |
+| Intelligence (AI) | `intelligence` | Yes | PARTIAL |
+| Extensions | `extensions` | No | DONE |
+| Whiteboard | `whiteboard` | Yes | PLANNED |
+| Document Editor | `document` | Yes | PLANNED |
+| Calendar | `calendar` | Yes | PLANNED |
+| Files | `files` | Yes | PLANNED |
+| Embedded Apps | `embedded-app` | No | DONE |
+
+### 9.2 Dashboard (Bento Grid)
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Bento grid layout | DONE | 4-column, draggable, resizable |
+| 15+ widget types | DONE | Clock, pod-status, weather, quick-actions, notes, etc. |
+| Edit mode (drag/resize/add/remove) | DONE | Toggle via Edit button |
+| Widget configuration | DONE | Gear icon per widget |
+| Default dashboards by profile type | DONE | Personal, Work, Streaming, Datapod presets |
+| Persist to profileStore | DONE | Changes saved to localStorage |
+
+### 9.3 Navigation
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| ActivityBar (left sidebar) | DONE | 64px collapsed / 220px expanded |
+| Profile switcher | DONE | Dropdown with color dots |
+| Command palette (Cmd+K) | DONE | Quick app/workspace switching |
+| Entity panel (floating/side/fullscreen) | DONE | Three display modes |
+| Browser tabs in sidebar | DONE | Scrollable tab list |
+
+### 9.4 Profile System
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Profile types | DONE | personal, work, streaming, datapod, custom |
+| Create/edit/delete profiles | DONE | In Settings |
+| Link profiles to pods/workspaces | DONE | `createSpaceForWorkspace()` |
+| Profile-specific dashboards | DONE | Each profile has own widget config |
+| Space type chooser (new space) | DONE | Browser-only vs full workspace modal |
+
+---
+
+## 10. Intelligence & AI Features
+
+| Feature | Status | Details |
+|---------|--------|---------|
+| AI chat threads | PARTIAL | UI exists, requires pod + subscription |
+| AI commands | PARTIAL | Framework exists |
+| Agent registry (3 agents) | PARTIAL | Data, task, integration agents defined |
+| Memory tool (`memory_search`) | DONE | Recall facts from context |
+| API keys management | DONE | Create, list, revoke keys |
+| ZeroClaw agent integration | PARTIAL | Registration on provisioning, UI components exist |
+
+---
+
+## 11. Settings & Management
+
+### 11.1 Settings Sections
+
+| Section | Status | Details |
+|---------|--------|---------|
+| Appearance (theme, search engine, start page) | DONE | Dark/Light/System + 4 search engines |
+| Profiles | DONE | Full CRUD with color picker |
+| Privacy | DONE | Privacy settings |
+| Data (pod sync, disconnect, clear) | DONE | Pod management |
+| Extensions | DONE | Load, list, remove browser extensions |
+| Subscription | DONE | Plan display, upgrade, manage billing |
+| API Keys | DONE | Create, display prefix, revoke |
+| Integrations | PLANNED | Third-party service config |
+| About | DONE | App version, platform info |
+
+### 11.2 API Key Management
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| `GET /intelligence/keys` | DONE | List active keys |
+| `POST /intelligence/keys` | DONE | Create key (`sk_synap_...`), shown once |
+| `DELETE /intelligence/keys/:keyId` | DONE | Revoke key |
+| Copy-to-clipboard | DONE | One-time display of full key |
+| Sync to Intelligence Hub | DONE | Keys synced when pod exists |
+
+---
+
+## 12. Self-Hosted Path
+
+| Aspect | Status | Details |
+|--------|--------|---------|
+| Manual URL entry | DONE | `https://` auto-added if missing |
+| Kratos auth at pod | DONE | Login/register with flow management |
+| Auto-create blank workspace | DONE | Deferred `BlankWorkspaceCreator` pattern |
+| Skip method chooser | DONE | Directly creates blank workspace |
+| No subscription needed | DONE | Self-hosted = local management |
+| "Subscription managed separately" | DONE | Settings shows appropriate message |
+
+---
+
+## 13. Status Summary
+
+### By Category
+
+| Category | Done | Partial | Not Done | Total |
+|----------|------|---------|----------|-------|
+| Authentication | 8 | 0 | 2 | 10 |
+| Billing & Subscription | 10 | 1 | 7 | 18 |
+| Pod Provisioning | 12 | 0 | 1 | 13 |
+| Onboarding | 10 | 0 | 0 | 10 |
+| Workspace Creation | 14 | 0 | 0 | 14 |
+| Template System | 9 | 0 | 5 | 14 |
+| AI Generation | 7 | 0 | 0 | 7 |
+| Workspace Apps | 9 | 2 | 4 | 15 |
+| Intelligence/AI | 2 | 4 | 0 | 6 |
+| Settings | 8 | 0 | 1 | 9 |
+| **TOTAL** | **89** | **7** | **20** | **116** |
+
+### Overall: **~83% complete** (89 done + 7 partial out of 116 items)
+
+---
+
+## 14. Known Gaps & TODOs
+
+### Critical (blocks user flow)
+
+| Gap | Impact | Priority |
+|-----|--------|----------|
+| Pro/Team/Enterprise Stripe products | Can't upgrade beyond Solo | HIGH |
+| Stripe webhook handler verification | Subscription may not update after payment | HIGH |
+| Admin invitation email (step 8) | Users don't receive setup email | MEDIUM |
+| Password reset flow | Users locked out if password forgotten | HIGH |
+
+### Important (degrades experience)
+
+| Gap | Impact | Priority |
+|-----|--------|----------|
+| Feature gating by subscription | All features accessible regardless of tier | MEDIUM |
+| Add-on purchase flow (ZeroClaw) | Can't buy add-ons through app | MEDIUM |
+| Trial creation logic | No free trial onramp | MEDIUM |
+| Whiteboard app | Planned, not implemented | LOW |
+| Document editor app | Planned, not implemented | LOW |
+| Calendar app | Planned, not implemented | LOW |
+| Files app | Planned, not implemented | LOW |
+
+### Nice to Have
+
+| Gap | Impact | Priority |
+|-----|--------|----------|
+| OAuth / social login | Convenience | LOW |
+| Template marketplace publish wizard | Community templates | LOW |
+| Package versioning UI | Developer experience | LOW |
+| Package uninstall/rollback | Data management | LOW |
+| Invoice download in app | Accounting | LOW |
+| Payment history page | Billing transparency | LOW |
+| Template sharing between users | Collaboration | LOW |
+
+---
+
+## Architecture Reference
+
+### Key Packages
+
+| Package | Path | Purpose |
+|---------|------|---------|
+| `@synap-core/control-plane-types` | `synap-control-plane-api/packages/control-plane-types/` | Shared types for Control Plane API |
+| `@synap-core/pricing` | `synap-control-plane-api/packages/pricing/` | Tier/add-on/pricing definitions |
+| `@synap-core/types` | `synap-backend/packages/types/` | Shared entity/property types |
+| `@synap-core/api-types` | `synap-backend/packages/api-types/` | Generated tRPC router types |
+| `@synap/billing` | `synap-app/packages/apps/billing/` | Billing UI components |
+| `@synap/onboarding` | `synap-app/packages/features/onboarding/` | Onboarding + workspace creation |
+
+### Key Files (Browser)
+
+| File | Purpose |
+|------|---------|
+| `stores/platformStore.ts` | Control Plane state (auth, pod, subscription, provisioning) |
+| `stores/platformClient.ts` | Control Plane API calls (tRPC + direct fetch) |
+| `stores/connectionStore.ts` | Pod connection state + IPC handlers |
+| `stores/profileStore.ts` | Browser profiles, workspaces, dashboards |
+| `stores/appStore.ts` | App state (onboarding, views, settings) |
+| `components/onboarding/OnboardingFlow.tsx` | First-time user onboarding |
+| `components/onboarding/ProvisioningProgress.tsx` | Real-time provisioning stepper |
+| `components/onboarding/WorkspaceCreationFlow.tsx` | Returning user workspace creation |
+| `components/onboarding/WorkspacePicker.tsx` | Multi-workspace selection |
+| `components/connection/PlatformAuthView.tsx` | Better Auth login/register |
+| `components/connection/KratosAuthView.tsx` | Kratos auth for self-hosted pods |
+| `components/views/SettingsView.tsx` | Full settings (2500+ lines) |
+| `components/views/DashboardView/index.tsx` | Bento dashboard with widgets |
+
+### Key Files (Control Plane)
+
+| File | Purpose |
+|------|---------|
+| `src/routes/billing.ts` | Stripe checkout, subscription, portal |
+| `src/routes/pods.ts` | Pod CRUD, status, handshake, logs |
+| `src/routes/packages.ts` | Package registry API |
+| `src/routes/intelligence.ts` | API key management |
+| `src/jobs/provision-pod.ts` | Trigger.dev provisioning job (8 steps) |
+| `src/db/schema/pods.ts` | Pod, provisioning logs, tokens schema |
+| `src/services/billing/stripe.ts` | Stripe SDK integration |

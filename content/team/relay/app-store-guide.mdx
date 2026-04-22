@@ -1,0 +1,253 @@
+# Relay — App Store Publishing Guide
+
+Everything you need to do to publish Relay on the App Store and Play Store.
+
+## Pre-requisites
+
+### Accounts
+
+| Account | URL | Cost | What for |
+|---------|-----|------|----------|
+| Apple Developer Program | https://developer.apple.com/programs/ | $99/year | iOS App Store |
+| Google Play Console | https://play.google.com/console/ | $25 one-time | Google Play Store |
+| Expo (EAS) | https://expo.dev/signup | Free tier works | Build + submit |
+
+### Install tools
+
+```bash
+npm install -g eas-cli
+eas login
+cd relay-app
+eas init  # Creates project ID — updates app.json automatically
+```
+
+---
+
+## Step 1: Create App Assets
+
+You need 3 image files in `relay-app/assets/`:
+
+| File | Size | Notes |
+|------|------|-------|
+| `icon.png` | 1024x1024 | App icon. No transparency on iOS. Dark background (#0C0A09) with Relay logo |
+| `splash.png` | 1284x2778 | Launch screen. Dark background with centered logo + "Relay" |
+| `adaptive-icon.png` | 1024x1024 | Android icon foreground. Must have transparent background |
+
+**Tools**: Figma, Canva, or any design tool. Export as PNG.
+
+**Design suggestion**: Amber connection graph icon (matching the app's primary color #FBBF24) on dark stone background (#0C0A09).
+
+---
+
+## Step 2: Create Privacy Policy & Terms
+
+Create two web pages:
+
+### Privacy Policy (`synap.live/relay/privacy`)
+
+Must include:
+- **What data is collected**: Name, email, phone, contacts (from device import), usage analytics
+- **How it's stored**: On the user's own Synap Data Pod (self-sovereign — user controls their data)
+- **AI processing**: Contact enrichment, relationship scoring via Synap Intelligence Service
+- **Third-party sharing**: No data sold to third parties. AI processing stays within Synap infrastructure
+- **Data retention**: User controls all data. Can delete anytime from Settings
+- **Children**: Not designed for users under 13 (COPPA compliance)
+- **Contact**: support@synap.live
+
+### Terms of Service (`synap.live/relay/terms`)
+
+Standard terms: acceptable use, account responsibility, data ownership (user owns their data), service availability, limitation of liability.
+
+**Tip**: Use a generator like termly.io or iubenda.com for the legal boilerplate, then customize for Synap's data sovereignty model.
+
+---
+
+## Step 3: Prepare App Store Connect (iOS)
+
+1. Go to https://appstoreconnect.apple.com
+2. Click "+" → New App
+3. Fill in:
+   - **Name**: Relay
+   - **Primary Language**: English
+   - **Bundle ID**: com.synap.relay (must match app.json)
+   - **SKU**: relay-ios
+
+4. **App Information**:
+   - Category: **Business** (primary), **Productivity** (secondary)
+   - Content Rights: "Does not contain third-party content"
+   - Age Rating: Fill the questionnaire (no violence, no gambling → 4+)
+
+5. **Pricing**: Free (or whatever your model is)
+
+6. **App Privacy** (critical — most common rejection reason):
+   - Contact Info: Yes (name, email, phone)
+   - Identifiers: Yes (user ID)
+   - Usage Data: Optional
+   - For each: "Linked to the user" + "Used for App Functionality"
+   - Privacy Policy URL: `https://synap.live/relay/privacy`
+
+7. **Screenshots**: Upload for each device size:
+   - 6.7" (1290x2796) — required
+   - 6.5" (1284x2778) — required if you support older phones
+   - iPad 12.9" (2048x2732) — only if supportsTablet
+
+   **Suggested 5 screenshots**:
+   1. People list with imported contacts + search bar
+   2. Person detail with properties + identity chips
+   3. Campaign pipeline with progress tracking
+   4. Search/AI screen with a query + results
+   5. Import flow showing contacts being added
+
+   **Tip**: Use a tool like screenshots.pro or rotato.app to create store-quality frames.
+
+8. **Description** (suggested):
+
+   ```
+   Relay — your relationship intelligence layer.
+
+   Never forget a connection. Relay helps entrepreneurs, business developers, and networkers keep track of everyone they meet, organize their contacts with AI, and run outreach campaigns.
+
+   Import your phone contacts instantly. Capture new connections with a quick note — "Met Sarah at ETHGlobal, she builds on Starknet." AI organizes everything automatically.
+
+   Features:
+   - Import contacts from your phone, Telegram, LinkedIn
+   - AI-powered contact enrichment and organization
+   - Campaign tracking for fundraising, hiring, partnerships
+   - Smart search — ask "Who knows Solidity?" and get AI answers
+   - Property editing — update contact info on the go
+   - Dark and light theme support
+   - Your data, your pod — self-sovereign data storage
+
+   Built on Synap — the sovereign personal data infrastructure.
+   ```
+
+9. **Keywords** (100 chars max):
+   ```
+   CRM,networking,contacts,relationship,AI,campaigns,business,fundraising,hiring
+   ```
+
+10. **Review Notes** (for Apple reviewer):
+    ```
+    To test the app, use these credentials:
+    Email: reviewer@synap.live
+    Password: [create a test account]
+    
+    The app connects to a Synap Data Pod for storage.
+    A test pod is available at the credentials above.
+    ```
+
+---
+
+## Step 4: Prepare Google Play Console (Android)
+
+1. Go to https://play.google.com/console
+2. Create app → fill in details
+3. **Store listing**: same description and screenshots as iOS
+4. **Content rating**: fill questionnaire (similar to Apple's age rating)
+5. **Privacy policy**: same URL
+6. **Create a Google Service Account** for automated submission:
+   - Go to Google Cloud Console → IAM → Service Accounts
+   - Create account with "Service Account User" role
+   - Download JSON key → save as `relay-app/credentials/google-service-account.json`
+   - In Play Console → Settings → API Access → link the service account
+7. **First upload must be manual**: build the AAB and upload it via the Play Console
+
+---
+
+## Step 5: Configure EAS
+
+Update placeholders in `eas.json`:
+
+```bash
+# After running eas init, your project ID is set automatically.
+# Then fill in:
+```
+
+In `eas.json`:
+- `ios.ascAppId`: Find in App Store Connect → App → General → App Information → Apple ID
+- `ios.appleTeamId`: Find in developer.apple.com → Membership → Team ID
+- `android.serviceAccountKeyPath`: Path to the Google service account JSON
+
+---
+
+## Step 6: Build & Submit
+
+```bash
+# Build for iOS (takes ~15 min on EAS)
+eas build --platform ios --profile production
+
+# Build for Android (takes ~10 min)
+eas build --platform android --profile production
+
+# Submit iOS to App Store Connect (goes to TestFlight first)
+eas submit --platform ios --latest
+
+# Submit Android to Play Console (internal track)
+eas submit --platform android --latest
+```
+
+### TestFlight (iOS)
+After submission:
+1. Build appears in App Store Connect → TestFlight
+2. Wait for processing (~30 min)
+3. Test via TestFlight app
+4. When ready → go to App Store → select the build → submit for review
+
+### Internal Testing (Android)
+After submission:
+1. Build appears in Play Console → Internal testing track
+2. Share with test group
+3. When ready → promote to Production track
+
+---
+
+## Step 7: Review Checklist
+
+Before submitting for review, verify:
+
+- [ ] App launches without crash on fresh install
+- [ ] Sign-up flow works end-to-end
+- [ ] Sign-in flow works
+- [ ] Contact import works
+- [ ] Person detail opens and displays data
+- [ ] Properties can be edited
+- [ ] Campaigns can be created
+- [ ] Search returns results
+- [ ] All links open correctly (no crashes on tel:/mailto:)
+- [ ] Dark mode works
+- [ ] Light mode works
+- [ ] Privacy policy accessible from Settings
+- [ ] App works on airplane mode (shows offline state)
+- [ ] No placeholder/demo data visible when connected to a real pod
+- [ ] Screenshots match the actual app
+
+---
+
+## Common Rejection Reasons & How We Avoid Them
+
+| Reason | Our Status |
+|--------|-----------|
+| Crashes or bugs | ErrorBoundary catches crashes. safeOpenURL prevents link crashes |
+| Missing privacy policy | Added to Settings + App Store metadata |
+| Misleading metadata | Description matches actual features |
+| Incomplete features | All features are functional (not stubs) |
+| Login/account issues | Demo mode available. Test credentials for reviewer |
+| No persistence | Data persists on the Synap pod |
+| Poor performance | FlatList with virtualization for all lists |
+
+---
+
+## Timeline
+
+| Task | Time | Who |
+|------|------|-----|
+| Create assets (icon, splash, screenshots) | 2-4 hours | Designer / you |
+| Write privacy policy + terms | 1-2 hours | You |
+| Set up App Store Connect + Play Console | 1 hour | You |
+| Configure EAS + first build | 30 min | You |
+| Test on real devices | 1-2 hours | You |
+| Submit for review | 15 min | You |
+| Apple review | 24-48 hours | Apple |
+| Google review | 2-4 hours | Google |
+
+**Total: ~1-2 days from now to live on both stores.**

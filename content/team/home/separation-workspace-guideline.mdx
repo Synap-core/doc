@@ -1,0 +1,134 @@
+Scoping Analysis: What Should Be Pod-Wide vs Workspace-Scoped
+
+  Here's my analysis, starting from your intuition and working through the implications:
+
+  1. Channels → Should be Pod-Wide (I agree)
+
+  Your argument is right. A channel is a communication pipe. What it's "about" is defined by links, not by a
+  workspaceId column.
+
+  Current state: channels.workspaceId is already nullable — personal channels already work pod-wide. The
+  infrastructure is 90% there.
+
+  The model should be:
+  Channel = pipe (pod-wide, belongs to userId)
+    ├── linked to workspace  → workspace AI thread
+    ├── linked to entity     → entity comments (contextObjectId)
+    ├── linked to document   → document review (contextObjectId)
+    ├── linked to nothing    → personal AI channel
+    └── linked to parent     → branch
+
+  What changes:
+  - channels.workspaceId stays nullable, but we stop treating it as a scoping column — it becomes a context hint
+  (same as contextObjectId)
+  - Personal channel: one per user, not one per (user, workspace). Already works this way
+  - AI context: the agent reads workspace data by looking at the channel's linked workspace, not by filtering
+  channels by workspace
+  - Listing channels: by userId (pod-wide), optionally filtered by linked workspace
+
+  What we gain:
+  - One AI assistant that sees everything, not siloed per workspace
+  - Cross-workspace conversations naturally
+  - Entity/doc channels work regardless of workspace context
+
+  What we need to be careful about:
+  - Permission checks: when an AI reads entity data, check the entity's workspace permissions, not the channel's
+  - Workspace context for tools: MCP servers, profiles, etc. still need a workspace context — the channel's linked
+  workspace (or the entity's workspace)
+
+  2. Secrets/Vault → Already Pod-Wide (confirm)
+
+  Looking at the schema: secrets.workspaceId is already nullable. Secrets belong to userId. The workspaceId is just
+  a grouping convenience and secret_shares handles cross-user/workspace sharing.
+
+  No change needed. The vault is already user-scoped (pod-wide). Automation vault resolution uses
+  automation.createdBy as the userId — correct.
+
+  3. Automations → Should be Pod-Wide (I partly agree with you)
+
+  Your question about removing workspaceId from automations — let me think about this:
+
+  Arguments for pod-wide automations:
+  - An automation could react to events across workspaces ("when any task is created anywhere, log it")
+  - The user owns the automation, not the workspace
+  - Simpler mental model: "my automations" not "this workspace's automations"
+
+  Arguments for keeping workspace scope:
+  - Automations act on workspace-specific data (entities, profiles)
+  - Event matching needs a workspace context (trigger filters reference profileSlug which is workspace-scoped)
+  - Teams: in a shared workspace, other members should see/manage automations
+
+  My recommendation: Make automations hybrid like secrets — workspaceId nullable:
+  - workspaceId = null → user's personal automation (reacts to events across all their workspaces)
+  - workspaceId = uuid → workspace automation (visible to team, scoped events)
+
+  But for v1, keeping them workspace-scoped is simpler and still correct. The trigger matcher already filters by
+  workspaceId when matching events.
+
+  4. Other Tables — The Full Assessment
+
+  ┌───────────────────────┬─────────────────────────────────┬───────────────────────┬──────────────────────────┐
+  │         Table         │             Current             │       Should be       │          Reason          │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │                       │                                 │ Pod-wide (workspaceId │ You're right — channel = │
+  │ channels              │ nullable (half-pod-wide)        │  = context link, not  │  pipe, workspace =       │
+  │                       │                                 │ scope)                │ context                  │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ messages              │ via channelId                   │ Inherited (no change  │ Messages follow their    │
+  │                       │                                 │ needed)               │ channel                  │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ sessions              │ via channelId                   │ Inherited (no change  │ Sessions follow their    │
+  │                       │                                 │ needed)               │ channel                  │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ secrets               │ nullable (already hybrid)       │ Pod-wide (already     │ User owns secrets,       │
+  │                       │                                 │ correct)              │ shares explicitly        │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │                       │                                 │ Keep workspace-scoped │ Act on workspace data;   │
+  │ automations           │ NOT NULL (workspace-scoped)     │  for v1               │ pod-wide = v2            │
+  │                       │                                 │                       │ enhancement              │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ automation_runs       │ NOT NULL (denormalized)         │ Follows automations   │ Audit trail matches      │
+  │                       │                                 │                       │ automation scope         │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ intelligence_commands │ workspace-scoped                │ Keep workspace-scoped │ Commands reference       │
+  │                       │                                 │                       │ workspace profiles/tools │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ mcp_servers           │ workspace-scoped                │ Debatable — keep      │ Security: workspace      │
+  │                       │                                 │ workspace for now     │ admin approves tools     │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ profiles              │ scope enum                      │ Already correct       │ Multi-scope design       │
+  │                       │ (system/shared/workspace/user)  │                       │ already handles this     │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │                       │                                 │                       │ User-scheduled tasks     │
+  │ background_tasks      │ workspace-scoped                │ Could be pod-wide     │ aren't                   │
+  │                       │                                 │                       │ workspace-specific       │
+  ├───────────────────────┼─────────────────────────────────┼───────────────────────┼──────────────────────────┤
+  │ proposals             │ workspace-scoped                │ Keep workspace-scoped │ Approval is              │
+  │                       │                                 │                       │ workspace-team-level     │
+  └───────────────────────┴─────────────────────────────────┴───────────────────────┴──────────────────────────┘
+
+  5. The Key Insight for Automations
+
+  You asked: "Do we really need the cron job polling? Can't we wire directly into the event chain?"                 
+  
+  For event-triggered automations: Yes, they're already wired directly — emitSideEffects() →                        
+  automation-trigger-match → instant. No polling needed.                                                          
+                                                                                                                    
+  For cron-triggered automations: We need the scheduler because there's no event — it's time-based. pg-boss's       
+  schedule() IS the native approach. The 1-minute polling just checks nextRunAt <= now().
+                                                                                                                    
+  For manual-triggered automations: Direct API call → instant execution. No polling.                                
+  
+  For webhook-triggered automations: Would be an inbound REST endpoint → direct execution. No polling.              
+                                                                                                                  
+  So only cron needs polling, and that's inherent to time-based triggers.                                           
+                                                                                                                  
+  6. What Actually Needs Changing Right Now                                                                         
+                                                                                                                  
+  For frontend readiness, I'd recommend we don't change the schema now. The channel workspaceId is already nullable 
+  and the current code works. Making channels fully pod-wide is a bigger refactor that touches:
+  - Channel listing queries                                                                                         
+  - Permission checks                                                                                               
+  - Workspace context resolution for AI
+  - Frontend workspace switcher behavior                                                                            
+                                                                       

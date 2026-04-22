@@ -1,0 +1,336 @@
+# Intelligence App – Audit & Implementation Plan
+
+**Purpose:** Align with the cofounder’s product direction (5 surfaces: Threads, Commands, Agents, Connections, Runs), add command-palette integration and “create your own intelligence service,” and deliver a phased plan with backend/frontend separation, package restructure, migrations, routers, and UI.
+
+**References:** Cofounder proposal (5 surfaces, Commands as UX primitive, Raycast placeholders, Agents, Connections, Runs/Audit), [INTELLIGENCE_APP_VISION_AND_IMPLEMENTATION.md](./INTELLIGENCE_APP_VISION_AND_IMPLEMENTATION.md), [AI_CHAT_UPDATE_PLAN.md](./AI_CHAT_UPDATE_PLAN.md).
+
+**Cofounder feedback incorporated (this revision):** Single source of truth for command inputs (template → compiled_template_ast + derived_inputs; optional input_overrides). Formal selectionContext type. Every command_run has a thread_id (provenance). Streaming transport defined up front (SSE or tRPC subscription). Explicit permission model (allowed_tools, allowed_entity_types, max_entities_created_per_run, can_create_views; snapshot on run). Connections: passive detection untrusted until validated; extend existing webhook_subscriptions (no new table). Service manifest for “create your own” (name, version, capabilities[], optional endpoints, auth type). UI: same handling as other apps (global sidebar; local header + tabs inside panel content only). Runs early in phasing; Connections after Commands + Agents feel good.
+
+---
+
+## 1. Product Summary (Locked)
+
+- **One app, five surfaces:** Threads | Commands | Agents | Connections | Runs (tabs or left-nav in the Intelligence app).
+- **Commands:** Reusable prompt+tool wrapper; Raycast-style placeholders (`{argument name="Topic"}`, `{selection}`, options/defaults/modifiers); run sheet → stream + proposals → approve.
+- **Agents:** Directory of built-in + user-created agents; enable/disable, permissions, “what they can do”; model + system instructions + allowed tools.
+- **Connections:** External integrations (n8n, ActivePieces, custom webhook) – explicit registration + passive detection; store provider, status, webhook subscriptions, delivery logs.
+- **Runs/Audit:** Unified timeline of what ran, inputs, proposals, approved, what changed (event-sourced).
+- **Command palette:** Search and run Commands from palette; “Create command” from palette; type-to-run, duplicate, quick edit.
+- **Intelligence app shell:** **Same handling as other apps** (Views, Data, etc.): keep the global left icon sidebar; use the same single props/layout pattern. **Inside** the Intelligence panel content only, render a **local header with tabs** (Threads | Commands | Agents | Connections | Runs), like Home’s “Workspace | My Home.” No special-casing of navbar/sidebar for this app.
+- **User’s own intelligence service:** Show “currently connected to &lt;service&gt;” and explain how to create/connect their own; backend fetches and displays which service is used and its data (address, skills/capabilities). Use a **service manifest** contract (see §3.7) so UI can show capabilities without guessing.
+
+---
+
+## 2. Audit – What Exists Today
+
+### 2.1 Backend
+
+| Area                                        | Exists | Location / Notes                                                                                                                                                                                                                                      |
+| ------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Intelligence service resolution**         | ✅     | `packages/api/src/utils/intelligence-routing.ts`: workspace → user prefs → env; `resolveIntelligenceService(ctx)`; uses `workspaces.settings.intelligenceServiceId`, `userPreferences.intelligenceServicePreferences`, `intelligence_services` table. |
+| **Intelligence services table**             | ✅     | `packages/database/src/schema/intelligence-services.ts`: id, serviceId, name, description, version, webhookUrl, apiKey, capabilities[], pricing, status, enabled, metadata.                                                                           |
+| **Intelligence registry API**               | ✅     | `packages/api/src/routers/intelligence-registry.ts`: register, list, get, update, unregister, findByCapability. List/get do not expose apiKey.                                                                                                        |
+| **Workspace → service link**                | ✅     | `workspaces.settings.intelligenceServiceId` (and overrides per capability). Resolution uses `intelligence_services.serviceId` for lookup.                                                                                                             |
+| **Agents table**                            | ✅     | `packages/database/src/schema/agents.ts`: id, name, description, createdBy, userId, llmProvider, llmModel, capabilities[], systemPrompt, toolsConfig, executionMode, active. No tRPC router that lists agents yet.                                    |
+| **Chat (threads/messages)**                 | ✅     | `infinite-chat` router: createThread, sendMessage, getMessages, listThreads, getThread, etc. Chat threads have workspaceId.                                                                                                                           |
+| **Proposals**                               | ✅     | Proposals router + event chain; AI proposals go through approval.                                                                                                                                                                                     |
+| **Webhooks (outbound)**                     | ✅     | `webhook_subscriptions`, `webhook_deliveries` in DB; `webhooksRouter` (integrations). Generic: userId, url, eventTypes. No “connection” or “provider” concept yet.                                                                                    |
+| **Hub protocol (for Intelligence Service)** | ✅     | Hub protocol router: context, search, entities, documents, branches, linking, **skills**, backgroundTasks. Intelligence service calls backend; backend does not “fetch” agents/skills from the service.                                               |
+| **Commands**                                | ❌     | No `intelligence_command` table or router.                                                                                                                                                                                                            |
+| **Command runs / audit**                    | ❌     | No dedicated `command_run` table. Event store exists for general audit.                                                                                                                                                                               |
+| **Connections (n8n, ActivePieces)**         | ❌     | No `integration_connection` table; no provider/status/webhookSubscriptions model.                                                                                                                                                                     |
+| **“Effective service” API**                 | ❌     | No procedure that returns “current intelligence service for this workspace” (name, capabilities, endpoint hint) for UI.                                                                                                                               |
+| **Agents list API**                         | ❌     | No procedure that lists agents (DB or merged with service).                                                                                                                                                                                           |
+
+### 2.2 Frontend
+
+| Area                   | Exists | Location / Notes                                                                                                                                                                   |
+| ---------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **AI Chat app**        | ✅     | `packages/apps/ai-chat`: ChatWorkspace, ChatView, ChatThreadList, etc. Exported as app content; used when `app === 'ai-chat'`.                                                     |
+| **AppView type**       | ✅     | `@synap/workspace`: AppView includes `'ai-chat'`.                                                                                                                                  |
+| **Sidebar entry**      | ✅     | `FloatingSidebar.tsx`: “AI Chat” app with icon, label, shortcut.                                                                                                                   |
+| **Workspace URL**      | ✅     | `workspaceUrlSchema.ts`: valid apps include `'ai-chat'`; params app, focus, chat, doc, entity, etc.                                                                                |
+| **Panel content**      | ✅     | `workspace/page.tsx`: `renderPanelContent` returns `<ChatWorkspace ... />` for `app === 'ai-chat'`.                                                                                |
+| **Command palette**    | ✅     | `CommandPaletteProvider.tsx`: uses `@synap/command-palette`; merges workspace app commands (Open AI Chat, Ask AI, etc.), search, system. No “Run command” or “Create command” yet. |
+| **Panel header**       | ✅     | `Panel` type has `customHeader`; `getCustomHeader` passed to PanelWorkspace. Currently returns null for all apps.                                                                  |
+| **Tabs inside an app** | ✅     | Home app has inline tab switcher (Workspace                                                                                                                                        | My Home). Panel type has `tabs` and `activeTabId`. |
+| **Intelligence app**   | ❌     | No separate “Intelligence” app with 5 surfaces.                                                                                                                                    |
+| **Commands UI**        | ❌     | No command list, create/edit, or run sheet.                                                                                                                                        |
+| **Agents UI**          | ❌     | No agents directory or enable/disable UI.                                                                                                                                          |
+| **Connections UI**     | ❌     | No connections list or registration UI.                                                                                                                                            |
+| **Runs/Audit UI**      | ❌     | No unified runs timeline.                                                                                                                                                          |
+| **Command package**    | ❌     | No `@synap/commands` (or similar) for command CRUD, placeholder parsing, run sheet.                                                                                                |
+
+### 2.3 Intelligence Service (synap-intelligence-service)
+
+- **Agents:** Implemented in code (orchestrator, meta, prompting, research, code, writing, action, etc.). No HTTP “list agents” endpoint exposed to the backend today.
+- **Hub protocol:** Service calls backend (context, search, entities, documents, skills, etc.). Backend does not call the service to “discover” agents/skills.
+- **Implication:** “Show agents/skills from current intelligence service” can be done by: (1) backend seeds/defines system agents in DB and lists them, (2) or we add a discovery endpoint on the intelligence service (e.g. GET /api/agents) and backend proxies it. MVP: (1) only; later (2) for custom services that implement discovery.
+
+---
+
+## 3. Backend – Required Updates
+
+### 3.1 Data Model (New Tables / Columns)
+
+#### 3.1.1 Single source of truth for Command inputs (no manual input_schema)
+
+- **Store only `prompt_template`** as the source of truth. Do **not** maintain a separate `input_schema` by hand (drift risk).
+- **On create/update:** Run the template compiler; persist:
+  - **compiled_template_ast** (or equivalent) – parsed structure for substitution.
+  - **derived_inputs** – argument definitions **derived from** the template (e.g. all `{argument name="X"}` placeholders).
+- **Optional input_overrides** (JSONB): user-provided overrides for **labels**, **defaults**, **options** only. The parser owns the base set of argument names and presence; overrides cannot add/remove arguments that the template doesn’t declare.
+- This prevents “template says `{argument name="Tone"}` but schema forgot Tone.”
+
+| Entity                                      | Purpose                                           | Suggested columns                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **intelligence_commands**                   | User-created Commands (Raycast-style)             | id (uuid), workspace_id, created_by (user_id), title, **prompt_template** (source of truth), **compiled_template_ast** (JSONB, from parser), **derived_inputs** (JSONB, from parser), **input_overrides** (JSONB, optional labels/defaults/options), **allowed_tools** (JSONB array or null = all), **allowed_entity_types** (JSONB array or null), **max_entities_created_per_run** (int or null), **can_create_views** (boolean), output_mode (text \| proposal \| view), **permissions_profile** (read_only \| propose_writes), shared_scope (workspace \| user), created_at, updated_at. |
+| **command_runs**                            | Audit / Runs timeline; **every run has a thread** | id (uuid), **thread_id** (uuid, FK to chat_threads, required – provenance), command_id (FK), workspace_id, user_id, **permissions_snapshot** (JSONB – copy of command’s permissions at run time), inputs (JSONB), selection_context_snapshot (JSONB, optional), output_summary (text or JSONB), proposed_actions (JSONB), approved_actions (JSONB), status (running \| completed \| failed), started_at, completed_at, error_message (optional).                                                                                                                                             |
+| **integration_connections**                 | External automations (n8n, ActivePieces, custom)  | id (uuid), workspace_id, created_by, provider (n8n \| activepieces \| custom \| webhook), name, status (healthy \| degraded \| offline), metadata (JSONB), created_at, updated_at, last_health_at.                                                                                                                                                                                                                                                                                                                                                                                           |
+| **webhook_subscriptions** (extend existing) | Link to connections; no new table                 | Add **connection_id** (nullable FK to integration_connections), **provider** (text), **display_name** (text), store **masked URL** for display. Cofounder: webhookSubscriptions[] on connection; extend existing table instead of creating integration_webhook_subscriptions.                                                                                                                                                                                                                                                                                                                |
+
+#### 3.1.2 selectionContext – formal typed payload
+
+`{selection}` is the most-used placeholder; it must have a strict shape so Commands behave predictably across Canvas/Data/Views/Docs.
+
+- **selection.type:** `entities` | `viewRows` | `documents` | `text`
+- **selection.entityIds[]** – when type is `entities` (e.g. selected entities from Data).
+- **selection.viewId** + **selection.rowEntityIds[]** – when type is `viewRows` (rows from a View).
+- **selection.documentIds[]** – when type is `documents`.
+- **selection.text** – when type is `text` (e.g. clipboard or selected text from Docs).
+
+Define this type in shared types (e.g. `@synap-core/types`) and use it in `runCommand` and in the template compiler when resolving `{selection}`.
+
+#### 3.1.3 Permission model (explicit at Command-level)
+
+- **permissions_profile:** `read_only` | `propose_writes` (already in plan).
+- **Also store on command (and snapshot on run):**
+  - **allowed_tools** (array or null = all)
+  - **allowed_entity_types** (array or null)
+  - **max_entities_created_per_run** (int or null)
+  - **can_create_views** (boolean)
+- **command_runs.permissions_snapshot:** Copy of the command’s permission fields at run time so history is not rewritten if the command is edited later. This avoids “one command accidentally becomes a super-admin.”
+
+### 3.2 Migrations (New Files)
+
+| Migration                                   | Content                                                                                                                                                                       |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `00XX_intelligence_commands.sql`            | Create `intelligence_commands` table (prompt_template, compiled_template_ast, derived_inputs, input_overrides, permission fields, etc.); indexes on workspace_id, created_by. |
+| `00XX_command_runs.sql`                     | Create `command_runs` table **with thread_id (required)**; indexes on command_id, workspace_id, user_id, thread_id, started_at.                                               |
+| `00XX_integration_connections.sql`          | Create `integration_connections` table; indexes on workspace_id.                                                                                                              |
+| `00XX_webhook_subscriptions_connection.sql` | **Extend** existing `webhook_subscriptions`: add connection_id (nullable FK), provider, display_name, masked URL column if needed. No new table.                              |
+
+### 3.3 New / Updated Routers
+
+| Router                                                                | Procedures                                                                                                   | Notes                                                                                                                                               |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **intelligence.commands** (new)                                       | list (workspaceId, limit), get(id), create, update, delete, run(commandId, argumentValues, selectionContext) | create/update: compile template → store compiled_template_ast + derived_inputs; allow input_overrides. run: see §3.5.                               |
+| **intelligence.agents** (new)                                         | list (workspaceId?), get(id)                                                                                 | List from `agents` table (filter by active); later merge with discovery from service manifest if supported.                                         |
+| **intelligence.effectiveService** (new or under intelligenceRegistry) | getEffective(workspaceId)                                                                                    | Resolve via resolveIntelligenceService; return service + **manifest** (name, version, capabilities[], optional endpoints, auth type) from metadata. |
+| **intelligence.connections** (new)                                    | list(workspaceId), get(id), create, update, delete, registerWebhook(connectionId, url, eventTypes?)          | Connections CRUD. Passive detection: **untrusted until confirmed** (see §3.6).                                                                      |
+| **intelligence.runs** (new)                                           | list(workspaceId, limit, cursor), get(runId)                                                                 | List command_runs; get full run (includes threadId for “open conversation”).                                                                        |
+
+### 3.4 Template Compiler (Placeholders)
+
+- **Location:** `packages/api/src/utils/command-template.ts` (or under intelligence).
+- **Parse:** `{argument name="Topic"}`, `{argument name="Tone" options="a,b,c" default="a"}`, `{selection}` (and modifiers: trim, uppercase, raw).
+- **Output:** (1) **derived_inputs** for UI form (parser owns base set); (2) function to substitute argument values + **selectionContext** (typed payload) into template.
+- **Validation:** All required arguments from derived_inputs must be provided before run; selectionContext must match selection.type when template uses `{selection}`.
+
+### 3.5 Execution (Run Command) – thread + transport
+
+- **Execution primitive:** Every command run **creates a thread** (or reuses one by policy). **command_run** always stores **thread_id**. Threads = “narrative log”; runs = “operational log.” Users can open the provenance conversation from a run.
+- **Flow:** `runCommand` → create row in command_runs (status=running, thread_id set) → create thread + first message (compiled prompt + selection context) → stream via Hub → update command_runs on completion/failure.
+- **Streaming + proposals – define transport now** (so Commands tab doesn’t feel laggy and we don’t re-architect mid-build):
+  - **Option A:** SSE endpoint e.g. `GET /runs/:id/stream` (or tRPC equivalent) that streams chunks for that run.
+  - **Option B:** tRPC subscription (if the app already uses WebSockets for real-time) – subscribe to runId, receive stream events.
+- **Recommendation:** Pick one and document it in this plan; implement in Phase 1 so runCommand returns runId + threadId and the client can attach to the stream via the chosen transport.
+
+### 3.6 Connections – passive detection (untrusted until confirmed)
+
+- **Do not** create “Detected Connection” records from arbitrary webhook traffic. Treat passive detection as **untrusted** until confirmed.
+- **Create or attach a “Detected” connection only if** you can validate via:
+  - a **shared secret signature header** (e.g. webhook signing), or
+  - a **token-bound webhook subscription** (user already registered this URL with a token), or
+  - **user-confirmed mapping in UI** (e.g. “This webhook belongs to connection X”).
+- Otherwise you risk noisy or forged “connections” records. Prefer explicit registration; use passive detection only when one of the above validates.
+
+### 3.7 Service manifest (create your own intelligence service)
+
+- Store a minimal **service manifest** in `intelligence_services.metadata` (or a dedicated JSONB column) so custom services declare capabilities predictably.
+- **Manifest shape (minimal):**
+  - **name**, **version**
+  - **capabilities[]**
+  - **optional endpoints supported:** e.g. `agents.list`, `skills.list`, `runs.execute`
+  - **auth type required**
+- Then the UI can show “Connected to X” and “Supports agent discovery” (or not) without guessing. getEffective(workspaceId) returns this manifest so the Intelligence app can render it.
+
+### 3.8 “Current Intelligence Service” and “Create Your Own”
+
+- **getEffective(workspaceId):** Resolve service; return public info + **manifest** (name, version, capabilities[], optional endpoints, auth type). Used by Intelligence app to show “Connected to: &lt;name&gt;” and capabilities.
+- **List registered services:** Already `intelligenceRegistry.list`; workspace admin can link workspace to a different service (workspace.settings.intelligenceServiceId).
+- **Docs:** “Create your own intelligence service” doc (or link to repo + Hub protocol spec); include manifest contract so implementors know what to expose.
+
+---
+
+## 4. Frontend – Package Restructure & Intelligence App
+
+### 4.1 Package Layout (Target)
+
+| Package                                   | Role                                                                                                                                                                                                                                                                             |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **@synap/ai-chat**                        | **Core package** (no longer an “app” by itself). Exports: ChatWorkspace, ChatView, ChatThreadList, thread/message hooks, chat UI store. Used by the Intelligence app as the “Threads” surface.                                                                                   |
+| **@synap/commands** (new)                 | Command CRUD, placeholder parsing (shared with backend or duplicate minimal parser), run sheet UI, command list. Depends on @synap/client, @synap/hooks, @synap-core/ui-system.                                                                                                  |
+| **@synap/intelligence** (new app package) | **Intelligence app**: shell with header + 5 tabs (Threads, Commands, Agents, Connections, Runs). Threads tab uses @synap/ai-chat; Commands uses @synap/commands; Agents/Connections/Runs are new views. Depends on @synap/ai-chat, @synap/commands, @synap/client, @synap/hooks. |
+| **apps/web**                              | Registers “Intelligence” as an app (replacing “AI Chat” in sidebar and URL). Renders Intelligence app when app === 'intelligence'; URL slug can stay `intelligence` or alias `ai-chat` for backward compat.                                                                      |
+
+### 4.2 AppView and URL
+
+- **Option A:** Add `'intelligence'` to AppView; keep `'ai-chat'` as alias that maps to intelligence (so existing links work).
+- **Option B:** Replace `'ai-chat'` with `'intelligence'` everywhere; redirect old URLs.
+- **Recommendation:** Add `'intelligence'`; in sidebar and palette show “Intelligence.” When app is intelligence, render the new shell. Keep `ai-chat` in URL schema as alias: if app=ai-chat, treat as app=intelligence (so focus=ai-chat and links still work).
+
+### 4.3 Intelligence App Shell – same handling as other apps, local tabs only
+
+- **Do not** replace or special-case the global navbar/sidebar for the Intelligence app. Use **the same handling as other apps** (Views, Data, Home): one props/layout pattern, no custom shell.
+- **Global:** Keep the **global left icon sidebar**; Intelligence is one app entry like Home, Data, Views. When the user selects Intelligence, the panel shows the Intelligence app content (same as when selecting Data or Views).
+- **Inside the panel:** Render a **local header with tabs** inside the Intelligence panel content only (like Home’s “Workspace | My Home” bar): Threads | Commands | Agents | Connections | Runs. Use `customHeader` only if it’s already the canonical way other apps do local headers; otherwise a simple inline header + tab strip in the same component tree is fine.
+- **Content per tab:** Threads → `<ChatWorkspace />` (from @synap/ai-chat). Commands → Command list + create/edit + run sheet (from @synap/commands). Agents → Agents directory (new). Connections → Connections list + add (new). Runs → Runs timeline (new).
+
+### 4.4 Command Palette Updates
+
+- **Search commands:** Fetch `intelligence.commands.list` (or a dedicated search); add results as palette commands: “Run: &lt;title&gt;” → open Intelligence app (or focus panel) and trigger run sheet for that command (e.g. URL `?app=intelligence&run=commandId` or store in context).
+- **Create command:** Palette action “Create command” → navigate to `?app=intelligence&tab=commands&create=1` or open modal/sheet to create command.
+- **Duplicate / Quick edit:** Can be in-app only for MVP; palette can later expose “Edit command” when we have command id in context.
+
+### 4.5 Components to Add (by Phase)
+
+- **Intelligence app:** IntelligenceApp.tsx (shell), IntelligenceHeader.tsx (tabs), tabs: ThreadsTab.tsx, CommandsTab.tsx, AgentsTab.tsx, ConnectionsTab.tsx, RunsTab.tsx.
+- **Commands package:** CommandList.tsx, CommandForm.tsx (create/edit), CommandRunSheet.tsx (arguments + stream + proposals), placeholder highlighter in prompt editor.
+- **Agents:** AgentCard.tsx, AgentList.tsx, AgentForm (if user-created agents).
+- **Connections:** ConnectionList.tsx, ConnectionCard.tsx, AddConnectionFlow (n8n / ActivePieces / webhook).
+- **Runs:** RunsTimeline.tsx, RunDetailDrawer.tsx.
+
+---
+
+## 5. Phased Implementation Plan
+
+**Sequencing (cofounder):** Add **Runs early** – as soon as Commands run, we want a run record + status + error. **Connections can wait** until Commands + Agents feel good.
+
+### Phase 1 – Backend: Commands, Runs (minimal), Effective Service, Transport
+
+| Task                             | Deliverable                                                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Migration: intelligence_commands | prompt_template, compiled_template_ast, derived_inputs, input_overrides, permission fields.                                          |
+| Migration: command_runs          | **thread_id (required)**, command_id, permissions_snapshot, inputs, selection_context_snapshot, status, etc.                         |
+| Schema + template compiler       | Parser derives inputs from template; store compiled_template_ast + derived_inputs on create/update.                                  |
+| selectionContext type            | Formal type (entities \| viewRows \| documents \| text) in shared types.                                                             |
+| Router: intelligence.commands    | list, get, create (compile → derived_inputs), update, delete, run.                                                                   |
+| Router: intelligence.runCommand  | Create thread, insert command_run (with thread_id), stream via chosen transport (SSE or tRPC subscription – define now), update run. |
+| Router: intelligence.runs        | list(workspaceId, limit, cursor), get(runId) – **from Phase 1** so every run is visible.                                             |
+| Router: getEffectiveService      | Returns service + **manifest** (name, version, capabilities[], optional endpoints, auth type).                                       |
+
+**Exit criteria:** Backend can create/list commands, run a command, write run record with thread_id, list runs. Transport for streaming is decided and implemented.
+
+### Phase 2 – Frontend: Intelligence App Shell + Threads + Command Palette + Runs (minimal)
+
+| Task                                   | Deliverable                                                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Add AppView `'intelligence'`           | `packages/core/workspace`: panel types, constraints                                                                                 |
+| URL schema                             | Add `intelligence` to valid apps; map `ai-chat` → intelligence if desired                                                           |
+| Create @synap/intelligence app package | IntelligenceApp shell, header with 5 tabs, Threads tab = ChatWorkspace                                                              |
+| Workspace page                         | When app === 'intelligence', render IntelligenceApp; keep ai-chat rendering for backward compat or remove and only use intelligence |
+| FloatingSidebar                        | Replace “AI Chat” with “Intelligence” (or add Intelligence, keep AI Chat as alias)                                                  |
+| Command palette                        | “Open Intelligence”, “Ask AI” (focus intelligence + q=), add “Create command” → ?app=intelligence&tab=commands&create=1             |
+| Commands tab placeholder               | Empty state or “Coming soon”                                                                                                        |
+
+**Exit criteria:** User can open Intelligence app, see Threads (current chat) and empty Commands/Agents/Connections/Runs tabs; palette has Create command.
+
+### Phase 3 – Commands Package & Commands Tab
+
+| Task                           | Deliverable                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Create @synap/commands package | Command list, create/edit form (prompt_template; UI shows derived_inputs + input_overrides), placeholder highlighter. |
+| CommandRunSheet                | Arguments form (from derived_inputs), selectionContext picker, submit → runCommand, attach to stream, show proposals  |
+| Intelligence app: Commands tab | Renders CommandList + create/edit; run opens RunSheet (inline or modal)                                               |
+| Command palette: Run command   | Commands from list as “Run: &lt;title&gt;” with commandId; on execute open Intelligence + run that command            |
+
+**Exit criteria:** User can create/edit commands, run from tab or palette, see stream and proposals; run appears in Runs tab with link to thread.
+
+### Phase 4 – Agents Directory & Effective Service UI
+
+| Task                         | Deliverable                                                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Backend: agents router       | intelligence.agents.list (from agents table), get(id)                                                                                            |
+| Seed or sync system agents   | Migration or job that ensures default agents exist in DB (or document that they come from env)                                                   |
+| Intelligence app: Agents tab | Agent list/cards; show “what they can do”; enable/disable if backend supports it                                                                 |
+| “Current service” block      | In Intelligence app (or Settings): call getEffectiveService, show “Connected to: &lt;name&gt;”, capabilities; link “Create your own” to doc/spec |
+
+**Exit criteria:** Agents tab shows agents; user sees which intelligence service is connected and how to add their own.
+
+### Phase 5 – Connections (External Integrations) – after Commands + Agents feel good
+
+| Task                                    | Deliverable                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Migration: integration_connections      | Table.                                                                                    |
+| Migration: extend webhook_subscriptions | connection_id, provider, display_name, masked URL.                                        |
+| Router: intelligence.connections        | list, get, create, update, delete; registerWebhook.                                       |
+| Intelligence app: Connections tab       | List connections; “Add” (n8n, ActivePieces, custom webhook); show status                  |
+| Passive detection                       | Only when validated (shared secret header, token-bound webhook, or user-confirmed in UI). |
+
+**Exit criteria:** User can register connections; webhooks linked via connection_id; no untrusted detected records.
+
+### Phase 6 – Runs polish & Data Binding
+
+| Task                           | Deliverable                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Runs tab polish                | Filters, run detail drawer (inputs, output, proposals, approved, open thread).                                        |
+| Data binding for commands      | runCommand accepts selectionContext (viewId/rowEntityIds, documentIds, entityIds, text); backend injects into prompt. |
+| Command form: selection source | UI to pick selection type and source (view, documents, entity, text).                                                 |
+
+**Exit criteria:** Runs tab polished; commands can use selectionContext (view/documents/entity/text).
+
+---
+
+## 6. File / Component Checklist (Summary)
+
+### Backend (synap-backend)
+
+- **Migrations:** `00XX_intelligence_commands.sql`, `00XX_command_runs.sql`, `00XX_integration_connections.sql`, `00XX_webhook_connection_link.sql`.
+- **Schema:** `intelligence-commands.ts`, `command-runs.ts`, `integration-connections.ts` (and optional webhook link).
+- **Routers:** `intelligence/commands.ts`, `intelligence/agents.ts`, `intelligence/connections.ts`, `intelligence/runs.ts`, `intelligence/effective-service.ts` (or under existing intelligence-registry).
+- **Utils:** `command-template.ts` (parse + substitute).
+- **Root:** Mount intelligence.\* under one `intelligenceRouter` and add to root.
+
+### Frontend (synap-app)
+
+- **New package:** `packages/apps/intelligence/` (or `packages/intelligence/`) with IntelligenceApp, tabs, Threads/Commands/Agents/Connections/Runs.
+- **New package:** `packages/commands/` (or `packages/features/commands/`) with CommandList, CommandForm, CommandRunSheet, placeholder highlighter.
+- **Refactor:** `@synap/ai-chat` – no API change; just consumed by Intelligence app as Threads.
+- **Workspace:** `panel.ts` (AppView), `workspaceUrlSchema.ts`, `FloatingSidebar.tsx`, `page.tsx` (renderPanelContent for intelligence), `CommandPaletteProvider.tsx` (commands + create command).
+
+---
+
+## 7. Validation: Can the Backend Support Everything?
+
+| Requirement                         | Status                                                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Commands (prompt + arguments + run) | ✅ After Phase 1 (table + router + template + runCommand).                                                               |
+| Agents directory                    | ✅ agents table exists; add list/get API and optional seed.                                                              |
+| “Current intelligence service”      | ✅ resolveIntelligenceService + new getEffective procedure.                                                              |
+| User’s own intelligence service     | ✅ intelligence_services + intelligenceRegistry; workspace.settings.intelligenceServiceId; doc link for “how to create.” |
+| Connections (n8n, etc.)             | ✅ After Phase 5 (integration_connections + router).                                                                     |
+| Runs / audit                        | ✅ command_runs table + intelligence.runs.list/get.                                                                      |
+| Proposals (approve from command)    | ✅ Existing proposals flow; runCommand can return proposals and frontend uses same approve flow.                         |
+| Event-sourced transparency          | ✅ command_runs + existing event store; Runs tab can show both.                                                          |
+
+---
+
+## 8. Next Steps
+
+1. **Confirm** placeholder syntax (e.g. `{argument name="X" options="a,b" default="a"}` and `{selection}`) and output_mode / permissions_profile enum values.
+2. **Implement Phase 1** (backend commands + effective service).
+3. **Implement Phase 2** (Intelligence app shell + Threads + palette).
+4. **Iterate** with Phase 3 (Commands UI) and Phase 4 (Agents + service UI), then Phase 5–6 (Connections, Runs, data binding).
+
+This plan keeps the cofounder’s product shape, your command-palette and “create your own service” requirements, and delivers a clear, phased backend/frontend split with packages and migrations called out.

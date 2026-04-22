@@ -1,0 +1,96 @@
+# Installing Synap Desktop
+
+Synap Desktop is the browser-based workspace app that connects to your Synap Data Pod (or Control Plane). This page describes how to download, install, and run it.
+
+## System requirements
+
+- **macOS**: 10.15 (Catalina) or later, Intel or Apple Silicon
+- **Windows**: Windows 10 or later (64-bit)
+- **Linux**: x64 (AppImage or .deb)
+- **RAM**: 4 GB minimum; 8 GB recommended for many tabs and the workspace app
+- **Disk**: ~200 MB for the app; additional space for cache and data
+
+## Where to get the app
+
+- **Recommended**: Download from the [Synap Control Plane](https://app.synap.live) (or your organization’s download page) if you have an account.
+- **Alternative**: Latest installers are published on [GitHub Releases](https://github.com/synap-live/synap-browser/releases) (when the repo is public). Choose the asset for your OS and architecture.
+
+## Install by platform
+
+### macOS
+
+1. Download the **DMG** (e.g. `Synap-0.1.0-arm64.dmg` for Apple Silicon, or `x64` for Intel).
+2. Open the DMG and drag **Synap** to **Applications**.
+3. First launch: if you see “Synap is from an unidentified developer”, open **System Settings → Privacy & Security** and click **Open Anyway** for Synap (or use **Right-click → Open** and confirm).
+4. Optional: For a smoother experience without security warnings, use a build that is **signed and notarized** (provided by Synap when available).
+
+### Windows
+
+1. Download the **NSIS installer** (e.g. `Synap Setup 0.1.0.exe`).
+2. Run the installer. You can change the installation directory if you want.
+3. Choose whether to add a desktop shortcut and/or Start menu shortcut.
+4. Launch **Synap** from the Start menu or desktop.
+
+### Linux
+
+- **AppImage**: Download the `.AppImage` file, make it executable (`chmod +x Synap-*.AppImage`), and run it. No system-wide install required.
+- **Debian/Ubuntu**: Download the `.deb` package and install with `sudo dpkg -i synap_*.deb` (install any missing dependencies with `sudo apt-get install -f` if needed).
+
+## First run
+
+1. **Open Synap Desktop.** The first time, you’ll see the onboarding flow.
+2. **Connect to Synap:**
+   - If you use **Synap Cloud**, sign in with your account; the app will connect to your Data Pod.
+   - If you use a **self-hosted pod**, enter your pod URL (e.g. `https://pod.yourdomain.com`) and complete the login flow in the browser or in-app.
+3. **Pick a workspace** if you have more than one.
+4. You’re in. Use the sidebar to open **Views**, **Notes**, **AI Chat**, and other apps; use the tab bar for web browsing and the embedded Synap workspace.
+
+## Extensions
+
+Synap Desktop supports **Chromium extensions** so you can use many of the same add-ons you use in Chrome.
+
+- **From a folder (unpacked)**  
+  Open **Extensions** from the sidebar (or **Settings**), then click **Load Extension**. Choose a folder that contains a Chromium extension (with a `manifest.json` file). You can download an extension’s source or build it yourself and point Synap to that folder. Loaded extensions are saved and restored on the next launch.
+
+- **From the Chrome Web Store**  
+  Click **Browse Web Store** in the Extensions view to open the Chrome Web Store in a tab. Note: installing directly from the store into Synap is not supported the same way as in Chrome. To use a store extension, download its source (e.g. from the developer’s repo) or use a third-party tool to get an unpacked build, then use **Load Extension** to load that folder.
+
+Most Chrome extensions are compatible. Extensions run in the browser’s default session and can interact with web pages you open in Synap.
+
+## MCP servers (AI tools)
+
+You can connect **MCP (Model Context Protocol) servers** to your workspace so AI agents can use external tools (e.g. filesystem, browser automation, databases).
+
+1. Open **Settings** and select your workspace.
+2. Go to the **MCP Servers** tab.
+3. Click **Add server** and fill in:
+   - **ID (slug)** – A short identifier (e.g. `playwright`, `filesystem`).
+   - **Name** – Display name.
+   - **Transport** – `stdio` (run a local process) or `http` (connect to a URL).
+   - **Command** (stdio) – Full command line, e.g. `npx -y @modelcontextprotocol/server-filesystem /path/to/dir`.
+   - **URL** (http) – e.g. `http://localhost:3001/mcp`.
+4. Save. Only **workspace owners** can **Approve** a server; until it’s approved, its tools are not injected into AI requests.
+5. Use **Test** to ping the server and see if it’s reachable; status is shown next to each server.
+
+MCP config is stored in your workspace and used by the Synap Intelligence Service when you use AI chat or agents.
+
+## Updates
+
+Synap Desktop checks for updates automatically after launch. When a new version is available, you’ll get a notification and can choose to download and restart. Updates are delivered from the same place you downloaded the app (e.g. GitHub Releases or Control Plane).
+
+## Troubleshooting
+
+- **“Cannot connect to pod”** – Check your internet connection and pod URL. For self-hosted pods, ensure the URL is correct and the server is reachable.
+- **Session expired / logged out** – Use **Settings** or the connection panel to reconnect to your pod and sign in again.
+- **Blank or stuck screen** – Restart the app. If it keeps happening, use **File → Clear data** (or run the app with `--clear-data` from the command line) to reset local data, then go through onboarding again.
+- **macOS security warning** – Use **Right-click → Open** on the app, or **System Settings → Privacy & Security → Open Anyway**, unless you have a signed/notarized build from Synap.
+
+## Uninstall
+
+- **macOS**: Move **Synap** from Applications to Trash. Remove data under `~/Library/Application Support/Synap` if you want a full cleanup.
+- **Windows**: **Settings → Apps → Synap → Uninstall**. Data is under `%APPDATA%\Synap`.
+- **Linux**: Remove the .deb package with `sudo dpkg -r synap`, or delete the AppImage and any config/cache under `~/.config/Synap` or `~/.local/share/Synap` if you used the AppImage.
+
+---
+
+For developers: build, packaging, signing, and production readiness are documented in **`synap-team-docs/content/team/browser/index.mdx`** (team docs route `/team/browser` on the docs app) and **`browser/build/README.md`**.

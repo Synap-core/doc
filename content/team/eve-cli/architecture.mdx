@@ -52,18 +52,18 @@ Internet
 | `@eve/legs` | Traefik, gateway, tunnel helpers |
 | `@eve/arms` | OpenClaw install & wiring |
 | `@eve/eyes` | RSSHub, database UI runners |
-| `@eve/builder` | **Hermes Agent deployment**, opencode CLI binary, Dokploy optional, subprocess orchestrator |
+| `@eve/builder` | **Hermes Agent deployment**, codegen tools (opencode or OpenClaude), Dokploy optional, subprocess orchestrator |
 | `@eve/cli-kit` | Shared flags, JSON output |
 
 ### @eve/builder — v2.0 changes
 
-The Builder organ has been refactored to replace the OpenClaude orchestration layer with **Hermes Agent** as the sole orchestrator:
+The Builder organ has been refactored to replace the OpenClaude orchestration layer with **Hermes Agent** as the sole orchestrator (while adding OpenClaude as an optional codegen tool, not as an agent framework):
 
 | Old (v1.0) | New (v2.0) |
 |------------|-----------|
-| Orchestrates OpenCode / OpenClaude / Claude Code directly | Deploys Hermes Agent container + opencode CLI binary |
+| Orchestrates OpenCode / OpenClaude / Claude Code directly | Deploys Hermes Agent container + codegen tools (opencode and/or OpenClaude) |
 | Direct command execution | Hermes uses its cron scheduler to poll Synap for queued tasks |
-| No sub-agent model | Hermes spawns opencode via local subprocess (`tools/execute_opencode.py` skill) |
+| No sub-agent model | Hermes spawns opencode or OpenClaude via local subprocess (`tools/execute_opencode.py` skill) |
 | Optional Dokploy | Optional Dokploy (first-class citizen when enabled) |
 
 ### OpenClaw (`@eve/arms`) — v2.0 changes

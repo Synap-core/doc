@@ -1,0 +1,215 @@
+# Synap Documentation Improvement Plan
+
+## Executive Summary
+This document outlines a comprehensive plan to improve Synap's documentation system based on a thorough analysis of the current state. The recommendations focus on actionable, incremental changes that align with Synap's architecture principles.
+
+## Current State Analysis
+
+### Documentation Structure
+- **Primary site**: `synap-team-docs/` (Next.js app with MDX)
+- **Internal docs**: `docs-internal/` (engineering specifications)
+- **Content organization**: Mixed audience targeting with some deprecated sections
+
+### Technology Stack
+- Next.js 13+ with App Router
+- Fumadocs MDX processing
+- Custom redirect system for legacy URLs
+- MDX components for consistent UI
+
+## Identified Improvement Opportunities
+
+### 1. Content Organization
+- **Deprecated `/developers` section** still exists but redirects
+- **Inconsistent categorization** across docs/team sections
+- **Limited API documentation** - no dedicated reference section
+- **Mixed audience targeting** without clear separation
+
+### 2. Technical Gaps
+- **No automated API documentation** from tRPC/Hono endpoints
+- **Basic search only** - no filtering or advanced capabilities
+- **No versioning system** - docs don't indicate applicability
+- **Missing contribution guidelines** for community docs
+- **No documentation linting** for consistency checks
+
+### 3. Specific Issues Found
+- Redirect mappings show significant content reorganization
+- Inconsistent frontmatter across MDX files
+- Limited code example standardization
+- Missing meta descriptions for SEO
+- No documentation coverage tracking
+
+## Prioritized Action Plan
+
+### Quick Wins (<1 day)
+1. **Standardize frontmatter** across all MDX files
+   - Require: title, description, sidebar_position (where applicable)
+   - Optional: tags, version, last_updated
+2. **Fix broken links** identified in redirect analysis
+3. **Add missing meta descriptions** for SEO optimization
+4. **Create documentation contribution guide** in `/content/docs/contributing/`
+5. **Standardize code block syntax highlighting** with language tags
+
+### Medium-term Improvements (1-3 days)
+1. **Create automated API documentation system**
+   - Extract tRPC/Hono route definitions
+   - Generate MDX reference documentation
+   - Create `/content/docs/api/` section
+2. **Enhance search functionality**
+   - Add filtering by content type (tutorial, reference, concept)
+   - Implement tag-based filtering
+   - Add search weighting for relevance
+3. **Add version indicators** to documentation
+   - Show Synap version applicability
+   - Indicate stability (experimental, stable, deprecated)
+4. **Create documentation linting script**
+   - Check frontmatter completeness
+   - Validate internal links
+   - Ensure code examples have language tags
+   - Check for consistent heading structure
+5. **Reorganize developer documentation**
+   - Separate tutorials from reference material
+   - Create clear learning paths
+   - Add prerequisites sections to tutorials
+
+### Long-term Strategic Changes (1+ week)
+1. **Build interactive documentation experiences**
+   - Live code examples with editable playgrounds
+   - Interactive diagrams for complex concepts
+   - Sandbox environments for trying features
+2. **Implement documentation analytics**
+   - Track page popularity and time on page
+   - Identify documentation gaps via search analytics
+   - Measure effectiveness of tutorials
+3. **Create documentation translation framework**
+   - Support for multiple languages
+   - Community translation workflow
+   - Version synchronization across languages
+4. **Build documentation testing suite**
+   - Automated link validation (internal/external)
+   - Code example execution and validation
+   - Broken image detection
+   - Accessibility auditing
+5. **Implement smart content suggestions**
+   - Contextual recommendations based on current page
+   - "You might also like" sections
+   - Prerequisite and next-step suggestions
+
+## Specific File/Folder Recommendations
+
+### New Structures to Create:
+```
+/content/docs/api/                 # Automated API reference
+/content/docs/tutorials/           # Step-by-step guides
+/content/docs/contributing/        # Documentation contribution guide
+/content/docs/references/          # Cheat sheets, quick references
+/lib/documentation/                # Documentation automation scripts
+```
+
+### File Standardization Templates:
+
+#### Standard MDX Frontmatter:
+```md
+---
+title: "Document Title"
+description: "Concise description for SEO and listings"
+sidebar_position: 3  # Optional, for sidebar ordering
+tags: ["tag1", "tag2"]  # Optional, for filtering
+version: ">=1.0.0"     # Optional, Synap version applicability
+last_updated: "2026-04-20"  # Optional, ISO date
+---
+```
+
+#### Code Example Standard:
+```typescript
+// Bad: No language tag, inconsistent formatting
+``` 
+const example = "bad";
+```
+
+// Good: Proper language tag, consistent formatting
+```typescript
+const example: string = "good";
+console.log(example);
+```
+```
+
+### Automation Opportunities:
+
+1. **API Reference Generator** (`scripts/generate-api-docs.ts`)
+   - Input: tRPC router definitions, Hono route handlers
+   - Output: MDX files in `/content/docs/api/`
+   - Features: Automatic parameter typing, response examples, error codes
+
+2. **Frontmatter Validator** (`scripts/validate-frontmatter.ts`)
+   - Checks: Required fields, proper formatting, version validity
+   - Integration: Pre-commit hook or CI check
+
+3. **Link Checker** (`scripts/check-links.ts`)
+   - Validates: Internal links (anchor and file), external links (HTTP status)
+   - Reports: Broken links, redirect chains, missing anchors
+
+4. **Documentation Coverage Report** (`scripts/coverage-report.ts`)
+   - Analyzes: What % of public APIs are documented
+   - Tracks: Documentation freshness (last updated vs code changes)
+   - Identifies: Undocumented features, outdated examples
+
+## Implementation Roadmap
+
+### Week 1: Foundation
+- Days 1-2: Standardize frontmatter, fix broken links, add contribution guide
+- Days 3-4: Build API documentation extraction script
+- Day 5: Create initial API reference documentation
+
+### Week 2: Enhancement
+- Days 6-7: Enhance search with filtering and tagging
+- Days 8-9: Add version indicators and linting script
+- Day 10: Reorganize developer documentation sections
+
+### Week 3+: Optimization
+- Ongoing: Interactive examples and analytics implementation
+- Ongoing: Translation framework and testing suite
+- Ongoing: Smart suggestions and personalization features
+
+## Success Metrics
+
+### Short-term (1 month)
+- 100% of MDX files have standardized frontmatter
+- 0 broken internal links in documentation
+- API reference covers 80% of public endpoints
+- Contribution guide receives first external contribution
+
+### Medium-term (3 months)
+- Documentation search satisfaction > 4/5 in user surveys
+- 50% reduction in "Where is X documented?" support queries
+- Documentation coverage reaches 90% of public APIs
+- Monthly active documentation users increase by 25%
+
+### Long-term (6 months)
+- Interactive examples in 75% of tutorial pages
+- Documentation available in 3+ languages
+- Automated testing catches 95% of documentation issues before publish
+- Documentation contributes to 20% reduction in onboarding time
+
+## Alignment with Synap Principles
+
+### Emergent Complexity
+- Documentation follows same Lego brick approach: small, composable pieces
+- API docs automatically generated from source - no drift
+- Tutorials build complexity progressively from simple to advanced
+
+### Three-layer Data Pattern
+- Documentation follows: UI (MDX) → Services (scripts) → Data (source code)
+- Changes propagate correctly through layers
+- No skipping layers - docs generated from actual implementation
+
+### Cell System Philosophy
+- Documentation components are reusable cells
+- Examples: API reference cell, tutorial step cell, concept explanation cell
+- Cells compose to form complete documentation pages
+
+### Proactive Intelligence
+- Documentation suggests improvements based on user behavior
+- Analytics drive proactive content updates
+- Smart connections between related topics
+
+This plan provides a concrete, incremental path to significantly improve Synap's documentation while respecting the existing architecture and enabling continuous improvement.

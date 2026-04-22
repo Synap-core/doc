@@ -1,0 +1,139 @@
+# Synap — Product Reference
+
+Single source of truth for product vision, principles, and roadmap. All feature decisions should align with this document.
+
+## Vision
+
+**"Your AI-powered second brain. Capture anything. AI organizes it. Build your own apps."**
+
+Core promise: "Never lose anything. Never organize anything. Everything you care about, structured and connected — automatically."
+
+## Product Principles
+
+### 1. Emergent Complexity (Lego Model)
+
+Synap does NOT ship features — it ships **primitives that compose**. Features emerge from the combination of simple building blocks.
+
+**Data emergence**: Entity profiles (Lego bricks) + Views (environments) = any data structure. A "task" profile is simple; a kanban view of tasks grouped by project creates emergent structure. Users never need to "set up a project management system" — they capture tasks, and views reveal the structure.
+
+**UI emergence**: Cells (universal renderer) + Bento grids (dashboards) = any interface. A stat-card cell is simple; a bento dashboard combining stat-cards, entity lists, calendars, and AI insights creates a command center. AI can compose existing cells or create entirely new ones.
+
+**The test**: If a feature requires special-casing in the codebase rather than composing from existing primitives, it's likely wrong. New entity profiles, view types, and cell types are the correct extension points.
+
+### 2. Capture First, Organize Never
+
+Users should be able to capture anything instantly — a thought, a URL, a contact, a file — with zero friction. AI handles categorization, linking, and structuring. The user should never need to decide "where does this go?" or "what type is this?"
+
+**The test**: Can a user go from zero to captured in under 3 seconds? If not, there's too much friction.
+
+### 3. Progressive Disclosure
+
+Start simple, reveal complexity only when needed. The sidebar has 3 items (Home, Chat, Library). Workflows, Calendar, Terminal, Marketplace — these exist but are hidden until the user needs them or AI suggests them.
+
+**The test**: Would a first-time user feel overwhelmed? If yes, hide it behind progressive disclosure.
+
+### 4. Human-in-the-Loop (Architectural Principle)
+
+AI proposes, humans approve. This is not a feature toggle — it's load-bearing architecture. Every AI write operation creates a reviewable, reversible proposal. Users can auto-approve categories they trust, but the proposal system is always there.
+
+**The test**: Can every AI action be undone? Can the user see exactly what AI did and why?
+
+### 5. Data Sovereignty
+
+Users own their data. Data lives in sovereign pods. The control plane manages billing and marketplace — it never sees user data. Pods can be self-hosted. Data is portable.
+
+**The test**: Could a user export everything and leave? Could they self-host?
+
+## Product Triptych
+
+Everything in Synap is one of three things:
+
+### Entities (Data)
+Universal data objects with typed profiles. Profiles define the shape (properties, icon, color). Entities are the atoms — they combine through relations and views.
+
+**System profiles (14)**: note, task, project, event, person, contact (→person), company, deal, bookmark, website (→bookmark), article (→bookmark), capture (→bookmark), file, anchor
+
+**Extension**: Users and AI can create custom profiles. Profile inheritance (parent→child) enables specialization without duplication.
+
+### Views (Lenses)
+Named queries + rendering configs. Same data, different lens. A "Tasks" table view becomes a "Sprint Board" kanban by changing the view type — the data doesn't move.
+
+**Types (16)**: table, list, grid, gallery, kanban, matrix, masonry/feed, calendar, timeline, flow, graph, bento, branch_tree, whiteboard, gantt, mindmap
+
+**Extension**: New view types are adapters in `view-renderer`. The data layer doesn't change.
+
+### Channels (Connections)
+Universal interaction surface. Every conversation — with AI, with people, about an entity, reviewing a document — is a channel. Channels connect entities, users, AI agents, and external services.
+
+**Types**: ai_thread, branch, entity_comments, document_review, view_discussion, direct, external_import
+
+**Extension**: New channel types for new interaction patterns. External services (Telegram, Slack) connect via channel gateway.
+
+## Cell System (Universal Rendering)
+
+Everything visual is a cell. A cell renders in any container:
+- **Full screen** — PageCellHost
+- **Side panel** — PanelCellHost
+- **Bento dashboard widget** — BentoCellHost
+- **Embedded in document** — inline
+- **Embedded in whiteboard** — tldraw node
+
+**Two AI capabilities**:
+- **Compose**: AI picks from 70+ built-in cells, configures them, arranges on bento grids
+- **Create**: AI writes new cell types (HTML/JS), sandboxed in iframes, proposal-gated
+
+**The bento grid** is the dashboard primitive. 12-column react-grid-layout. Blocks reference cells by kind (widget/view/entity). Display mode adapts to size (compact/medium/full). AI can arrange entire dashboards from natural language.
+
+## Agent System
+
+Two-layer architecture:
+- **OrchestratorAgent** — "Co-founder AI". Full tool access. Handles general requests, coordinates.
+- **PersonaAgent** — Domain expert (CTO, Marketing, Sales, PM). Branch-only. Deep expertise in one area.
+
+Agents use **Hub Protocol** (REST) to communicate with the backend. They never touch the database directly. All write operations go through `checkPermissionOrPropose()`.
+
+**Session-scoped memory**: Conversations have context that persists within a session (4h personal, 30min others) with compaction to stay within token budgets.
+
+## Current Roadmap (March 2026)
+
+### Completed
+- **Phase 1** ✅ — Connector infrastructure (Nango self-hosted, Google Calendar/Contacts/GitHub, CP→Pod pull-sync)
+- **Production readiness** ✅ — 4 tracks (data hardening, AI UX, browser polish, structural quality)
+- **Cell system Phase 1** ✅ — 70+ widgets, AI compose/create, bento grids, view system
+
+### In Progress / Next
+- **Phase 2** — Telegram AI structuring (`propose_entity` tool, `telegram_capture` skill, entity confirmation cards)
+- **Phase 3** — Dynamic home dashboard (backend-stored, data-aware widgets: recent captures, task kanban, activity graph, AI insights)
+- **Phase 4** — Unified onboarding (`@synap/onboarding-flow` package: Hook → First Capture → Connect → Done)
+- **Phase 5** — Views polish (kanban inline creation, list checkboxes, table sorting, empty states)
+- **Phase 6** — More connectors + write-back (Slack, Linear, Notion, bidirectional sync)
+
+### Sidebar Redesign (In Progress)
+- Two tabs: Apps / Browser
+- 3 core sidebar items: Home, Chat, Library
+- Library = Data + Views merged, masonry feed as default
+- Pinned section for user's frequently used views/apps
+- Everything else accessible via "+ Add app" or Settings
+
+## What "Good" Looks Like
+
+A feature is well-built when:
+
+1. **Composes from primitives** — Uses entity profiles, views, cells, channels. Not special-cased.
+2. **Capture-first** — Minimal friction to get data in. AI handles the rest.
+3. **Progressive** — Simple by default, powerful when needed.
+4. **Reversible** — Every action can be undone. AI actions are proposals.
+5. **Cell-native** — Visual output renders as cells, embeddable anywhere (dashboard, panel, document).
+6. **Separate package** — New features are `@synap/[name]`, not bolted onto existing packages.
+7. **Three-layer data** — hooks → stores → client. No shortcuts.
+8. **Sovereign** — User data stays in the pod. Control plane never sees it.
+
+## Documentation Map
+
+Detailed docs live in each repo:
+- **User/developer docs**: `users-docs/` (76 files, comprehensive)
+- **Frontend architecture**: `synap-app/CLAUDE.md` + `synap-app/docs/` (87 files)
+- **Backend architecture**: `synap-backend/docs/` (37 files)
+- **Agent system**: `synap-intelligence-service/ARCHITECTURE.md` + `docs/` (5 files)
+- **Browser app**: `browser/doc/` (4 files)
+- **Product decisions**: This file + memory files in `.claude/`

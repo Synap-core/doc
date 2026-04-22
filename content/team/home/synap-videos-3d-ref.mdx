@@ -1,0 +1,280 @@
+# Quick 3D Reference Card
+
+## 🚀 Basic 3D Scene Template
+
+```tsx
+import React from "react";
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
+import { ThreeCanvas } from "@remotion/three";
+
+export const My3DScene: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+
+  const rotation = frame * 0.02;
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#0A0A0A" }}>
+      <ThreeCanvas width={width} height={height} camera={{ position: [0, 0, 5], fov: 45 }}>
+        {/* Lighting */}
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[5, 5, 5]} intensity={0.8} />
+
+        {/* Your mesh */}
+        <mesh rotation={[0, rotation, 0]}>
+          <boxGeometry args={[2, 2, 2]} />
+          <meshStandardMaterial color="#38BDF8" />
+        </mesh>
+      </ThreeCanvas>
+    </AbsoluteFill>
+  );
+};
+```
+
+---
+
+## 🎨 Available Components
+
+### DataPod3D
+```tsx
+import { DataPod3D } from "./components/3d/DataPod3D";
+
+<DataPod3D
+  scale={1.2}
+  rotationSpeed={0.015}
+  color="#38BDF8"
+  state="active"
+  animateIn
+  startFrame={0}
+/>
+```
+
+### Particles3D
+```tsx
+import { Particles3D } from "./components/3d/Particles3D";
+
+<Particles3D
+  count={200}
+  color="#38BDF8"
+  direction="orbit"
+  size={0.15}
+  speed={1}
+/>
+```
+
+### OrbitingObjects
+```tsx
+import { OrbitingObjects } from "./components/3d/OrbitingObjects";
+
+<OrbitingObjects
+  objects={[
+    { id: "1", color: "#F59E0B", radius: 3, startAngle: 0, shape: "box" },
+    { id: "2", color: "#10B981", radius: 3, startAngle: Math.PI / 2, shape: "sphere" },
+  ]}
+  speed={0.015}
+  showLines
+/>
+```
+
+---
+
+## 📐 Common Geometries
+
+```tsx
+{/* Sphere */}
+<sphereGeometry args={[radius, widthSegments, heightSegments]} />
+
+{/* Box/Cube */}
+<boxGeometry args={[width, height, depth]} />
+
+{/* Icosahedron (geodesic) */}
+<icosahedronGeometry args={[radius, detail]} />
+
+{/* Octahedron */}
+<octahedronGeometry args={[radius, detail]} />
+
+{/* Torus (donut) */}
+<torusGeometry args={[radius, tube, radialSegments, tubularSegments]} />
+
+{/* Cylinder */}
+<cylinderGeometry args={[radiusTop, radiusBottom, height, radialSegments]} />
+```
+
+---
+
+## 🎨 Common Materials
+
+```tsx
+{/* Basic (no lighting needed) */}
+<meshBasicMaterial color="#38BDF8" />
+
+{/* Standard (PBR, needs lights) */}
+<meshStandardMaterial
+  color="#38BDF8"
+  metalness={0.8}
+  roughness={0.2}
+  emissive="#38BDF8"
+  emissiveIntensity={0.5}
+/>
+
+{/* Physical (glass, transmission) */}
+<meshPhysicalMaterial
+  color="#ffffff"
+  transmission={0.9}
+  thickness={0.5}
+  ior={1.5}
+  metalness={0.1}
+  roughness={0.05}
+/>
+
+{/* Wireframe */}
+<meshBasicMaterial wireframe color="#38BDF8" />
+```
+
+---
+
+## 💡 Common Lighting Setups
+
+### Basic (Good for most scenes)
+```tsx
+<ambientLight intensity={0.4} />
+<directionalLight position={[5, 5, 5]} intensity={0.8} />
+```
+
+### Three-Point Lighting
+```tsx
+<ambientLight intensity={0.2} />
+<directionalLight position={[5, 5, 5]} intensity={0.8} /> {/* Key */}
+<directionalLight position={[-5, 0, -5]} intensity={0.3} /> {/* Fill */}
+<directionalLight position={[0, -5, 0]} intensity={0.2} /> {/* Back */}
+```
+
+### Point Light (Glow)
+```tsx
+<pointLight
+  position={[0, 0, 0]}
+  intensity={2}
+  color="#38BDF8"
+  distance={5}
+  decay={2}
+/>
+```
+
+---
+
+## 🎬 Animation Patterns
+
+### Rotation
+```tsx
+const frame = useCurrentFrame();
+const rotation = frame * 0.02;
+
+<mesh rotation={[0, rotation, 0]} />
+```
+
+### Float/Bob
+```tsx
+const y = Math.sin(frame * 0.05) * 2;
+
+<mesh position={[0, y, 0]} />
+```
+
+### Orbit
+```tsx
+const angle = frame * 0.01;
+const radius = 3;
+const x = Math.cos(angle) * radius;
+const z = Math.sin(angle) * radius;
+
+<mesh position={[x, 0, z]} />
+```
+
+### Pulse/Scale
+```tsx
+const scale = 1 + Math.sin(frame * 0.1) * 0.2;
+
+<mesh scale={[scale, scale, scale]} />
+```
+
+### Spring Entrance
+```tsx
+const entrance = spring({
+  frame: frame - startFrame,
+  fps,
+  config: { damping: 100 },
+});
+
+const scale = interpolate(entrance, [0, 1], [0, 1]);
+```
+
+---
+
+## 🎯 Camera Positions
+
+```tsx
+{/* Front view */}
+camera={{ position: [0, 0, 5] }}
+
+{/* Angled view */}
+camera={{ position: [3, 2, 5] }}
+
+{/* Top-down */}
+camera={{ position: [0, 5, 0] }}
+
+{/* Animated camera */}
+const frame = useCurrentFrame();
+const x = Math.sin(frame * 0.01) * 3;
+camera={{ position: [x, 0, 5] }}
+```
+
+---
+
+## 🐛 Troubleshooting Checklist
+
+- [ ] Using `<ThreeCanvas>` not `<Canvas>`?
+- [ ] Passed `width` and `height` props?
+- [ ] Using `useCurrentFrame()` not `useFrame()`?
+- [ ] All animations based on `frame`, not `delta`?
+- [ ] Added lighting (`ambientLight` + `directionalLight`)?
+- [ ] No `OrbitControls` or interactive controls?
+- [ ] No `useState` for animation state?
+- [ ] Using `random("seed")` not `Math.random()`?
+
+---
+
+## 📦 Quick Import Reference
+
+```tsx
+// Core Remotion
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate } from "remotion";
+
+// 3D
+import { ThreeCanvas } from "@remotion/three";
+import * as THREE from "three";
+
+// Our components
+import { DataPod3D } from "./components/3d/DataPod3D";
+import { Particles3D } from "./components/3d/Particles3D";
+import { OrbitingObjects } from "./components/3d/OrbitingObjects";
+```
+
+---
+
+## 🎓 Learning Path
+
+1. **Start**: Watch `3DShowcase` composition (`npm start`)
+2. **Read**: `3D-COMPONENTS-GUIDE.md` for detailed docs
+3. **Understand**: `REMOTION-3D-MISTAKES.md` for common pitfalls
+4. **Practice**: Modify `3DShowcase` scenes
+5. **Build**: Create your own 3D scenes
+
+---
+
+## 💾 Save This Command
+
+```bash
+# Start Remotion Studio
+npm start
+
+# Then navigate to: 3DShowcase composition
+```

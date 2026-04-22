@@ -1,0 +1,116 @@
+---
+title: "High-Priority TODO Tracker"
+description: "Actionable TODOs found across the monorepo that would help a next developer understand and improve the codebase"
+---
+
+# High-Priority TODO Tracker
+
+> Scan performed: 2026-04-22. 56 actionable TODOs found across 12 sub-repos. Only blocking and high-value items are listed below.
+
+## HIGH — Blocking Production Readiness
+
+### 1. Enable OpenTelemetry Tracing
+- **File**: `synap-backend/apps/api/src/index.ts:17`
+- **Issue**: No OpenTelemetry or tracing configured in API server — blind to latency and error traces in production.
+- **Stack**: Backend uses Hono + tRPC — could leverage `hono-opentelemetry` or `@hono/zod-validator` with tracing middleware.
+
+### 2. Token Exchange Validation
+- **File**: `synap-backend/packages/auth/src/token-exchange.ts:39`
+- **Issue**: Token exchange has no provider validation — no validation for which provider issued the token. Potential auth bypass vulnerability.
+- **Impact**: CRITICAL — security-critical path.
+
+### 3. Semantic Search Missing
+- **File**: `synap-backend/packages/api/src/routers/search.ts:183`
+- **Issue**: Search relies only on Typesense full-text — pgvector semantic search is not wired in. Degraded UX for "find similar" queries.
+- **Note**: `VECTOR_SEARCH_ENABLED` env var exists but the router code path is not implemented.
+
+### 4. Push Notifications Not Backend-Wired
+- **File**: `other/synap-life-feed/src/hooks/usePushNotifications.ts:101`
+- **Issue**: Push notification payload is collected but never sent to backend server.
+- **File**: `other/synap-life-feed/src/components/ErrorBoundary.tsx:38`
+- **Issue**: Errors swallowed silently — no Sentry or error reporting. (Same file)
+
+## MEDIUM — Stubbed Functions & Missing Wiring
+
+### Template Engine — 6 TODOs in Single File
+- **File**: `synap-app/packages/features/template-engine/src/resolver/templateResolver.ts`
+- **Lines**: 62, 68, 133, 139, 147, 153
+- **Stubs**: Template loading/saving to backend, template fetching, settings persistence
+- **Impact**: Templates are completely hard-coded — no user-defined templates work.
+
+### Layout Engine — 3 Renderers Missing
+- **File**: `synap-app/packages/features/template-engine/src/LayoutEngine.tsx:106,118`
+- **Stubs**: `RelationsRenderer`, `EmbeddedViewRenderer`, `ActivityRenderer`
+- **Impact**: Complex layouts that depend on relation/activity streams show nothing.
+
+### UI Feedback Toasts — ~10 Missing
+Missing error/success toasts across:
+- `KanbanBoard.tsx:216` — no toast on mutation failure
+- `DataApp.tsx:451,455,667` — no success/error feedback
+- `CreateViewDialog.tsx:144` — silent failure
+- `TemplateEditor/page.tsx:68` — no error toast
+- `WhiteboardCanvas.tsx:348,353` — broken navigation with no feedback
+
+### Feed Mutations Stubbed
+- **File**: `synap-app/packages/core/channels/src/cells/feed/useFeedActions.ts:39,91,118`
+- **Stubs**: approve/reject mutations, capture mutation, dismiss mutation
+- **Status**: "Backend procedures not ready"
+- **Impact**: Feed action cells render but do nothing.
+
+### Channel Hydration Onboarding
+- **File**: `synap-backend/packages/api/src/routers/channels.ts:1126`
+- **Issue**: First N user messages on new channels not auto-routed to AI. Onboarding flow is incomplete.
+
+### Property Merge Gate for Entity Creation
+- **Files**: `browser/electron/renderer/src/hooks/mutations/index.ts:23`, `browser/electron/renderer/src/hooks/useCaptureEntity.ts:7`
+- **Issue**: Entities created without property merge validation — workspace-specific property definitions may be ignored.
+
+### Agent Chat Link Broken
+- **File**: `synap-app/apps/studio/app/(app)/agents/[id]/page.tsx:217`
+- **Issue**: "Open chat" button in agent detail page is not wired.
+
+### Relay Feed Connector Flow
+- **File**: `synap-app/packages/features/relay/src/components/feed/RelayFeed.tsx:103`
+- **Issue**: Connector icon does not trigger Nango integration flow.
+- **File**: `synap-app/packages/features/relay/src/hooks/useRelayPeople.ts:141`
+- **Issue**: Uses stub instead of tRPC call for people lookup.
+
+## LOW — Minor Cleanups & Nice-to-Have
+
+| # | File | Line | Issue |
+|---|------|------|-------|
+| 1 | `TemplateInspector.tsx` | 181 | Property editors, color pickers, layout controls, field mappings all stubbed |
+| 2 | `GraphCanvasV2.tsx` | 24 | `Event` type removed from SDK — uses `any` fallback |
+| 3 | `remark-synap.ts` | 63 | Logic block parsing (If/For) not implemented in markdown engine |
+| 4 | `markdown engine renderer` | 65 | Data provider not injected — static rendering only |
+| 5 | `claude.ts` | 10 | ZIP-routing importer pending (Phase B-1) |
+| 6 | `AuthorBadge.tsx` | 18 | Circular dependency blocks `MessageAuthorTypeString` import |
+| 7 | `SearchApp.tsx` | 99 | Timeline view not implemented in search |
+| 8 | `TimelineViewSwitcher.tsx` | 43 | Accessibility text needs improvement |
+
+## Notable Code Quality Notes from Full Scan
+
+### No Layer Violations
+All frontend packages correctly follow the 3-layer pattern: React → hooks → stores → client → backend. No upward imports detected.
+
+### `any` Usage Summary
+- `intelligence-routing.ts` — **FIXED** — replaced `as any` with `ServiceRecord` interface
+- `realtime/` package — Cloudflare Durable Objects typing limitations (unavoidable)
+- `search/` package — Typesense dynamic docs (unavoidable, well-documented)
+- `jobs/workers/index.ts` — pg-boss job handlers (runtime-typed)
+
+### `@ts-ignore` Usage
+~40 instances found across the codebase. All have explanatory comments. Main sources:
+- Tamagui type mismatches (CSS prop typing)
+- markdown engine `unified`/`rehype` typing gaps
+
+### Console Log Clean
+No `console.log` in app code. Only in CLI tools and monitor app — correct separation.
+
+## Recommendations for Next Developer
+
+1. **Security first**: Fix token exchange validation (`auth/token-exchange.ts:39`) before exposing to any untrusted environments.
+2. **Observability**: Add tracing middleware to the API server (`api/src/index.ts`) so production debugging is possible.
+3. **Template engine**: The single biggest UX gap — templates can't be saved/loaded. The backend API for this exists; wiring it up resolves 6 TODOs at once.
+4. **Feed mutations**: The 3 stubbed mutations in `useFeedActions.ts` are "wait for backend" — the tRPC procedures are likely ready to be verified and wired.
+5. **Remove `other/` contents**: This is a dumping ground for abandoned demos and docs. Move anything still relevant into `synap-team-docs/` and delete the rest.

@@ -1,0 +1,368 @@
+# View System Recap & Next Steps
+
+> **Current state:** For up-to-date behavior of all view types, state handling, data, and design, see **[VIEWS_SYSTEM_STATE_AND_UX.md](../../../docs/VIEWS_SYSTEM_STATE_AND_UX.md)**.
+
+## 📋 What We've Built So Far
+
+### ✅ **1. Unified View Renderer System**
+
+We've created a complete view rendering architecture that handles all view types:
+
+**Core Package**: `@synap/core/view-renderer`
+
+- **`ViewRenderer`**: Main entry point that loads views and routes to appropriate renderers
+- **`StructuredViewRenderer`**: Routes structured views (table, list, grid, kanban) to adapters
+- **`ViewTypeSwitcher`**: UI component for switching between view types
+- **`useViewConfig`**: Hook for managing view configuration with auto-sync
+- **`useViewData`**: Hook for fetching entities based on `EntityQuery`
+
+**Architecture Flow**:
+
+```
+ViewRenderer
+  ├── Loads view from backend (via tRPC)
+  ├── Merges pending config changes (viewConfigStore)
+  ├── Routes by category:
+  │   ├── 'canvas' → WhiteboardCanvas or Bento
+  │   └── 'structured' → StructuredViewRenderer
+  │       ├── 'table' → TableAdapter → EnhancedEntityTableView
+  │       ├── 'list' → ListAdapter → ListView
+  │       ├── 'grid' → GridAdapter → GridView
+  │       ├── 'kanban' → KanbanAdapter
+  │       ├── 'calendar' → CalendarAdapter
+  │       ├── 'flow' → FlowAdapter
+  │       └── 'branch_tree' → BranchTreeAdapter
+```
+
+### ✅ **2. Standard Table View (Complete)**
+
+**Package**: `@synap/entity-table-view`
+
+**Features**:
+
+- ✅ Standard table mode with columns, sorting, filtering
+- ✅ Column management (show/hide, reorder, resize)
+- ✅ Flexible column widths (auto-fill 100% width)
+- ✅ Multi-select rows
+- ✅ View mode selector UI (standard/pivot/kanban)
+- ✅ Integration with view API (load/save config)
+- ✅ Offline state management (pending changes)
+
+**Current State**: Fully functional ✅
+
+### ✅ **3. Backend Integration**
+
+**Backend Types** (from `@synap-core/types`):
+
+- `ViewConfig`: `{ category: 'structured' | 'canvas', query: EntityQuery, render?: RenderSettings }`
+- `EntityQuery`: Filters, sorts, pagination, `groupBy` (for Kanban)
+- `RenderSettings`: Columns, `groupByField`, `cardFields`, formatting rules
+
+**Frontend Types** (in `@synap/stores`):
+
+- Aligned with backend types
+- Extended with client-only state (selections, UI state)
+
+### ✅ **4. View Management Page**
+
+**Route**: `/workspace/view/[viewId]`
+
+- Full page for viewing any view type
+- Mock data setup (easy to remove)
+- MSW handlers for testing
+
+---
+
+## 🎯 **What's Missing: Pivot & Kanban Views**
+
+### **Current Status**
+
+Both modes are **defined in types** but **not yet implemented**:
+
+```typescript
+// packages/features/entity-table-view/src/components/EnhancedEntityTableView.tsx
+
+case 'pivot':
+  // TODO: Implement pivot mode
+  return <Placeholder>Pivot Mode - Coming soon...</Placeholder>;
+
+case 'kanban':
+  // TODO: Implement kanban mode
+  return <Placeholder>Kanban Mode - Coming soon...</Placeholder>;
+```
+
+### **What We Need to Build**
+
+#### **1. Pivot Table Mode** 🔄
+
+**Concept**: Dynamic columns generated from metadata values
+
+**Example**:
+
+- Pivot by `metadata.status`
+- Columns: "To Do", "In Progress", "Done", "Archived"
+- Entities grouped into columns based on their status value
+
+**Configuration** (already defined):
+
+```typescript
+interface PivotTableConfig {
+  pivotField: string; // e.g., 'metadata.status'
+  columnGeneration: "enum" | "dynamic" | "custom";
+  columnOrder?: string[];
+  defaultValueColumn?: string; // For entities without pivot value
+  aggregateFunctions?: Record<string, "count" | "sum" | "avg">;
+}
+```
+
+**Implementation Needs**:
+
+1. **`PivotTableView` component**:
+   - Generate columns from `pivotField` values
+   - Group entities by pivot value
+   - Render as table with dynamic columns
+   - Support aggregations (count, sum, etc.)
+
+2. **Column Generation Logic**:
+   - **Enum mode**: Use `ENTITY_SCHEMAS` to get enum values
+   - **Dynamic mode**: Analyze entities to find unique values
+   - **Custom mode**: User-defined columns
+
+3. **Integration**:
+   - Add to `EnhancedEntityTableView` switch statement
+   - Convert `RenderSettings.groupByField` to `PivotTableConfig`
+   - Handle config changes back to `RenderSettings`
+
+#### **2. Kanban View Mode** 📋
+
+**Concept**: Specialized pivot mode with drag-and-drop cards
+
+**Example**:
+
+- Kanban board with columns: "To Do", "In Progress", "Done"
+- Cards show entity title, assignee, priority
+- Drag cards between columns to change status
+
+**Configuration** (already defined):
+
+```typescript
+interface KanbanConfig {
+  pivotField: string; // Usually 'metadata.status'
+  columns: KanbanColumn[]; // Explicit column definitions
+  allowCustomColumns?: boolean;
+  defaultColumnId?: string;
+  cardHeight?: "compact" | "normal" | "large";
+  showCardFields?: string[]; // Which fields on cards
+}
+
+interface KanbanColumn {
+  id: string;
+  value: string; // The metadata value
+  label: string; // Display label
+  order: number;
+  color?: string;
+  limit?: number; // WIP limit
+}
+```
+
+**Implementation Needs**:
+
+1. **`KanbanView` component**:
+   - Render columns as vertical lanes
+   - Render entities as cards within columns
+   - Drag-and-drop support (react-beautiful-dnd or dnd-kit)
+   - Update entity metadata on drop
+   - Show WIP limits and warnings
+
+2. **Card Component**:
+   - Display entity fields (title, assignee, priority, etc.)
+   - Support different card sizes
+   - Click to open entity detail
+
+3. **Integration**:
+   - Add to `StructuredViewRenderer` switch statement
+   - Create `KanbanAdapter` (like `TableAdapter`)
+   - Convert `RenderSettings.groupByField` + `cardFields` to `KanbanConfig`
+   - Handle drag-and-drop updates via entity API
+
+---
+
+## 🏗️ **Architecture Decisions**
+
+### **1. View Categories**
+
+**Structured Views** (`category: 'structured'`):
+
+- Table, List, Grid, Kanban
+- Query-driven (fetch entities dynamically)
+- Configuration in `metadata.config`
+- No document backing
+
+**Canvas Views** (`category: 'canvas'`):
+
+- Whiteboard (only one currently)
+- Document-driven (content in `documentId`)
+- Uses document versioning system
+- Heavy content (Yjs blob)
+
+### **2. Pivot Mode Philosophy**
+
+**Why "Pivot Mode" instead of separate view types?**
+
+- ✅ More abstract, agnostic layer
+- ✅ Can handle any metadata field as columns
+- ✅ Enables many data visualization patterns
+- ✅ Kanban is just a specialized pivot with drag-and-drop
+
+**Backend Support**:
+
+- `EntityQuery.groupBy` field exists
+- `RenderSettings.groupByField` exists
+- Backend can handle pivot queries
+
+### **3. Configuration Storage**
+
+**Backend** (`views` table):
+
+- Lightweight metadata in `metadata.config` (JSONB)
+- Heavy content in `documents` table (via `documentId`)
+
+**Frontend**:
+
+- `viewConfigStore` (Zustand): Pending changes (offline)
+- Auto-sync to backend on changes
+- Merges saved config + pending changes
+
+---
+
+## 🚀 **Next Steps: Implementation Plan**
+
+### **Phase 1: Pivot Table Mode** (Priority 1)
+
+1. **Create `PivotTableView` component**
+   - Location: `packages/features/entity-table-view/src/components/PivotTableView.tsx`
+   - Generate columns from pivot field
+   - Group entities by pivot value
+   - Render as table with dynamic columns
+
+2. **Column Generation Utility**
+   - Location: `packages/features/entity-table-view/src/utils/pivotColumnGenerator.ts`
+   - Support enum/dynamic/custom modes
+   - Use `ENTITY_SCHEMAS` for enum values
+
+3. **Integration**
+   - Update `EnhancedEntityTableView` to render `PivotTableView`
+   - Convert `RenderSettings.groupByField` to `PivotTableConfig`
+   - Handle config changes
+
+### **Phase 2: Kanban View Mode** (Priority 2)
+
+1. **Create `KanbanView` component**
+   - Location: `packages/features/entity-table-view/src/components/KanbanView.tsx`
+   - Render columns as lanes
+   - Render entities as cards
+   - Drag-and-drop support
+
+2. **Create `KanbanCard` component**
+   - Display entity fields
+   - Support different sizes
+   - Click handlers
+
+3. **Create `KanbanAdapter`**
+   - Location: `packages/core/view-renderer/src/adapters/KanbanAdapter.tsx`
+   - Convert `RenderSettings` to `KanbanConfig`
+   - Handle drag-and-drop updates
+
+4. **Integration**
+   - Add to `StructuredViewRenderer`
+   - Update `ViewTypeSwitcher` to include kanban
+   - Handle entity updates on drop
+
+### **Phase 3: Polish & Testing**
+
+1. **Mode Switching UX**
+   - Modal for converting between modes
+   - Preview of column generation
+   - Smart defaults
+
+2. **Progressive Disclosure**
+   - Basic settings (always visible)
+   - Advanced settings (toggle)
+   - Pivot/Kanban configuration panels
+
+3. **Testing**
+   - Test pivot column generation
+   - Test Kanban drag-and-drop
+   - Test mode switching
+   - Test config persistence
+
+---
+
+## 💡 **Key Questions to Resolve**
+
+1. **Pivot Column Generation**:
+   - How to access enum values from `ENTITY_SCHEMAS` at runtime?
+   - Should backend provide metadata schema introspection endpoint?
+   - How to handle custom metadata fields?
+
+2. **Kanban Drag-and-Drop**:
+   - Which library? (`react-beautiful-dnd`, `@dnd-kit/core`, or custom?)
+   - How to handle optimistic updates?
+   - Should we batch updates for multiple moves?
+
+3. **Mode Switching**:
+   - Should we preserve column order when switching?
+   - How to handle incompatible configs?
+   - Should we show a preview before switching?
+
+4. **Performance**:
+   - How many entities can we handle in pivot/kanban?
+   - Should we virtualize columns/cards?
+   - Do we need pagination for pivot tables?
+
+---
+
+## 📚 **Related Files**
+
+**Types**:
+
+- `packages/features/entity-table-view/src/types/tableViewConfig.ts` - Pivot/Kanban config types
+- `packages/core/view-renderer/src/types/index.ts` - View renderer types
+- `packages/synap-stores/src/viewConfigStore.ts` - Backend-aligned types
+
+**Components**:
+
+- `packages/features/entity-table-view/src/components/EnhancedEntityTableView.tsx` - Main table component
+- `packages/core/view-renderer/src/components/StructuredViewRenderer.tsx` - View router
+- `packages/core/view-renderer/src/adapters/TableAdapter.tsx` - Table adapter (reference)
+
+**Utilities**:
+
+- `packages/features/entity-table-view/src/utils/entityQueryExecutor.ts` - Query execution
+- `packages/core/view-renderer/src/utils/viewTypeConverter.ts` - View type conversion
+
+---
+
+## 🎯 **Summary**
+
+**What's Done**:
+
+- ✅ Unified view renderer system
+- ✅ Standard table view (fully functional)
+- ✅ Backend integration
+- ✅ Type definitions for pivot/kanban
+
+**What's Next**:
+
+- 🔄 Implement Pivot Table Mode
+- 📋 Implement Kanban View Mode
+- 🎨 Polish UX and testing
+
+**Architecture**:
+
+- Clean separation: structured vs canvas views
+- Pivot mode as abstract layer for dynamic columns
+- Kanban as specialized pivot with drag-and-drop
+- Backend-aligned types with frontend extensions
+
+Ready to proceed with Pivot and Kanban implementations! 🚀

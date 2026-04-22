@@ -1,0 +1,1259 @@
+# Synap AI: System Architecture
+
+_Conceptual Design • Open Foundation • AI Interoperability_
+
+---
+
+## Document Purpose
+
+This document explains **how Synap AI works** at a conceptual level:
+
+- System components and their relationships
+- Data flows and integration patterns
+- Design principles and architectural decisions
+- Extensibility and scalability approach
+
+**Target Audience:** Technical leadership, architects, product managers, technical partners
+
+**Not Covered:** Implementation details, specific technologies, code examples
+
+---
+
+## System Overview
+
+### The Big Picture
+
+```
+┌──────────────────────────────────────────────────────┐
+│                  USER INTERFACE                      │
+│  • Chat interface with branching visualization       │
+│  • Approval management dashboard                     │
+│  • Real-time streaming updates                       │
+│  • Branch tree navigation                            │
+└────────────────┬─────────────────────────────────────┘
+                 │
+                 │ Secure API Layer
+                 │
+┌────────────────▼─────────────────────────────────────┐
+│              DATA POD (Open Source)                  │
+│                                                      │
+│  ┌────────────────────────────────────────────┐    │
+│  │ Data Layer                                 │    │
+│  │ • Conversations & messages                 │    │
+│  │ • Documents & entities                     │    │
+│  │ • Knowledge graph                          │    │
+│  │ • User preferences                         │    │
+│  │ • Approval queue                           │    │
+│  └────────────────────────────────────────────┘    │
+│                                                      │
+│  ┌────────────────────────────────────────────┐    │
+│  │ Hub Protocol Server                        │    │
+│  │ • OAuth2 authentication                    │    │
+│  │ • Scoped API access                        │    │
+│  │ • Event orchestration                      │    │
+│  │ • Approval workflow                        │    │
+│  └────────────────────────────────────────────┘    │
+│                                                      │
+└────────────────┬─────────────────────────────────────┘
+                 │
+                 │ Hub Protocol (Standard API)
+                 │
+      ┌──────────┴──────────┬──────────────────┐
+      │                     │                  │
+┌─────▼─────┐      ┌────────▼────────┐  ┌─────▼─────┐
+│ Synap AI  │      │ Marketplace     │  │ Custom    │
+│ Service   │      │ Agents          │  │ Agents    │
+│           │      │                 │  │           │
+│ • 15 core │      │ • Community     │  │ • User-   │
+│   agents  │      │   created       │  │   built   │
+│ • Managed │      │ • Specialized   │  │ • Private │
+│ • Updates │      │ • One-click     │  │ • Full    │
+│           │      │   install       │  │   control │
+└───────────┘      └─────────────────┘  └───────────┘
+```
+
+### Key Architectural Decisions
+
+**1. Data Pod Separation**
+
+- **Data Layer (open source)** owns all user data
+- **Intelligence Layer (pluggable)** provides AI capabilities
+- Clean separation via Hub Protocol API
+
+**Why:**
+
+- Users own their data (not locked in AI provider)
+- AI services compete on quality, not data lock-in
+- Self-hosting option for privacy/compliance
+- Future-proof (swap AI providers)
+
+**2. Hub Protocol Standard**
+
+- Open API specification for AI services
+- OAuth2 for secure, scoped access
+- Standard endpoints (search, retrieve, propose)
+
+**Why:**
+
+- AI interoperability (mix and match providers)
+- Marketplace ecosystem enablement
+- No vendor lock-in
+- Innovation through competition
+
+**3. Approval Workflow Pattern**
+
+- AI proposes actions (never executes directly)
+- User reviews and approves
+- Only approved actions execute
+
+**Why:**
+
+- User control and transparency
+- Build trust gradually
+- Prevent AI mistakes
+- Compliance and audit trails
+
+**4. Event-Driven Architecture**
+
+- Asynchronous processing
+- Event-based coordination
+- Real-time updates
+
+**Why:**
+
+- Scalability (non-blocking)
+- Extensibility (new handlers)
+- Reliability (retry logic)
+- User experience (progressive updates)
+
+---
+
+## Core Components
+
+### 1. Data Pod (Open Source)
+
+**Purpose:** Central repository for all user data
+
+**Responsibilities:**
+
+- Store conversations, messages, branches
+- Manage documents, tasks, contacts, projects
+- Maintain knowledge graph and relationships
+- Handle user preferences and settings
+- Queue AI proposals for approval
+- Provide Hub Protocol API
+- Orchestrate events
+
+**Key Characteristics:**
+
+- ✅ **Open Source:** User can inspect, modify, extend
+- ✅ **Self-Hostable:** Deploy on user's infrastructure
+- ✅ **Standard Storage:** PostgreSQL (exportable)
+- ✅ **API-First:** Everything accessible via API
+- ✅ **Event-Driven:** Publishes events for coordination
+
+**Data Model:**
+
+```
+Conversations
+    ├─ Threads (tree structure)
+    │   ├─ Main threads
+    │   └─ Branch threads (parent references)
+    ├─ Messages (hash-chain integrity)
+    └─ Context metadata
+
+Knowledge Base
+    ├─ Documents (text, markdown, code)
+    ├─ Entities (tasks, contacts, meetings, ideas, projects)
+    └─ Relationships (graph connections)
+
+AI Integration
+    ├─ Proposals (pending approvals)
+    ├─ Memories (long-term facts)
+    └─ Embeddings (semantic search)
+
+User Settings
+    ├─ Preferences
+    ├─ Permissions (AI capabilities)
+    └─ Connected services (Hub Protocol registrations)
+```
+
+**Hub Protocol Server:**
+
+- OAuth2 authentication server
+- Scoped API endpoints
+- Rate limiting and security
+- Event publishing
+- Approval workflow management
+
+---
+
+### 2. Intelligence Services (Pluggable)
+
+**Purpose:** Provide AI capabilities via Hub Protocol
+
+**Synap Default Intelligence Service:**
+
+**Components:**
+
+```
+┌────────────────────────────────────────────┐
+│ Orchestrator Layer                         │
+│ • Analyzes user requests                   │
+│ • Routes to specialized agents             │
+│ • Coordinates multi-agent workflows        │
+│ • Synthesizes results                      │
+└────────────┬───────────────────────────────┘
+             │
+┌────────────▼───────────────────────────────┐
+│ Agent Pool (15+ Specialists)               │
+│                                            │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│ │Research  │ │Writer    │ │Code      │   │
+│ │Agent     │ │Agent     │ │Agent     │   │
+│ └──────────┘ └──────────┘ └──────────┘   │
+│                                            │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│ │Business  │ │Creative  │ │Data      │   │
+│ │Agent     │ │Agent     │ │Agent     │   │
+│ └──────────┘ └──────────┘ └──────────┘   │
+│                                            │
+│ [... 9 more specialist agents]            │
+└────────────┬───────────────────────────────┘
+             │
+┌────────────▼───────────────────────────────┐
+│ Tool Execution Layer                       │
+│ • Context tools (read-only)                │
+│ • Action tools (propose changes)           │
+│ • Coordination tools (branching)           │
+└────────────┬───────────────────────────────┘
+             │
+┌────────────▼───────────────────────────────┐
+│ Hub Protocol Client                        │
+│ • Authenticates with Data Pod              │
+│ • Calls Hub Protocol APIs                  │
+│ • Proposes actions for approval            │
+└────────────────────────────────────────────┘
+```
+
+**Agent Characteristics:**
+
+- **Specialized:** Each agent expert in specific domain
+- **Coordinated:** Orchestrator manages collaboration
+- **Tool-Enabled:** Access to specific capabilities
+- **Transparent:** Explains reasoning and actions
+- **Stateless:** All state stored in Data Pod
+
+**Marketplace Intelligence Services:**
+
+- Implement same Hub Protocol
+- Register with user's Data Pod
+- Request scoped permissions
+- Provide specialized capabilities
+- Compete on quality and price
+
+**Custom Intelligence Services:**
+
+- User-built or third-party
+- Full control over logic
+- Deploy anywhere
+- Connect via Hub Protocol
+- Private or shared
+
+---
+
+### 3. Hub Protocol Interface
+
+**Purpose:** Standard API for AI services to access user data
+
+**Design Principles:**
+
+1. **Open Standard:** Public specification
+2. **OAuth2 Security:** Industry-standard auth
+3. **Scoped Permissions:** Granular access control
+4. **Versioned:** Backward compatibility
+5. **RESTful:** Simple integration
+
+**Protocol Layers:**
+
+**Layer 1: Authentication**
+
+```
+┌─────────────────────────────────────────────┐
+│ OAuth2 Flow                                 │
+│                                             │
+│ 1. AI Service → Register with Data Pod      │
+│ 2. User → Grant permissions                 │
+│ 3. AI Service → Receive access token        │
+│ 4. AI Service → Make API calls with token   │
+└─────────────────────────────────────────────┘
+
+Scopes:
+- read:conversations (view chat history)
+- read:documents (search documents)
+- read:entities (access tasks, contacts, etc.)
+- write:entities (propose entity changes)
+- write:documents (propose document changes)
+- create:branches (create conversation branches)
+```
+
+**Layer 2: Discovery & Search**
+
+```
+Endpoints for finding information:
+- POST /hub/search/vector (semantic search)
+- POST /hub/search/documents (full-text)
+- POST /hub/search/entities (structured)
+- GET /hub/conversations/:id (thread history)
+- GET /hub/memory/search (long-term facts)
+```
+
+**Layer 3: Retrieval**
+
+```
+Endpoints for fetching full content:
+- GET /hub/documents/:id
+- GET /hub/entities/:id
+- GET /hub/conversations/:id/context
+```
+
+**Layer 4: Action Proposals**
+
+```
+Endpoints for proposing changes:
+- POST /hub/proposals/create_entity
+- POST /hub/proposals/update_entity
+- POST /hub/proposals/create_document
+- POST /hub/proposals/update_document
+- POST /hub/proposals/create_branch
+
+All return proposal_id
+User reviews in Data Pod UI
+Webhook notification on approval/rejection
+```
+
+**Layer 5: Events**
+
+```
+Webhook-based event system:
+- proposal.approved (user approved action)
+- proposal.rejected (user rejected action)
+- document.updated (document changed)
+- entity.created (new entity created)
+- conversation.branched (new branch created)
+```
+
+---
+
+## Design Principles
+
+### 1. Separation of Data & Intelligence
+
+**Architecture:**
+
+```
+┌───────────────────────────────┐
+│ Data Pod (User Owns)          │
+│ • All conversations           │
+│ • All documents & entities    │
+│ • Full history                │
+│ • User preferences            │
+└───────────┬───────────────────┘
+            │
+            │ Hub Protocol
+            │ (Clean boundary)
+            │
+┌───────────▼───────────────────┐
+│ Intelligence (User Chooses)   │
+│ • Synap AI (default)          │
+│ • OR Marketplace agent        │
+│ • OR Custom agent             │
+│ • OR Multiple providers       │
+└───────────────────────────────┘
+```
+
+**Benefits:**
+
+- **Data Portability:** Export everything, switch providers
+- **No Lock-In:** Change AI services without data migration
+- **Privacy Control:** Self-host data, use external AI
+- **Competition:** AI providers compete on quality
+- **Future-Proof:** New AIs plug in via Hub Protocol
+
+**Contrast with Competitors:**
+
+```
+ChatGPT: Data + AI = OpenAI owns both
+Notion: Data + AI = Notion owns both
+Synap: Data (you own) + AI (you choose)
+```
+
+---
+
+### 2. Agent Specialization
+
+**Philosophy:** Right tool for right job
+
+**Architecture:**
+
+```
+User Request
+    ↓
+Orchestrator (Coordinator)
+    ├─ Analyzes request
+    ├─ Decomposes into sub-tasks
+    ├─ Routes to specialist(s)
+    └─ Synthesizes results
+
+Specialist Agents (Experts)
+    ├─ Research Agent → Deep analysis
+    ├─ Writer Agent → Content creation
+    ├─ Code Agent → Programming
+    └─ [12 more specialists]
+
+Each agent:
+    • Focused expertise
+    • Tailored prompts
+    • Specific tool access
+    • Optimized model selection
+```
+
+**Why Specialization:**
+
+- **Better Quality:** Expert prompts outperform generalist
+- **Cost Optimization:** Use cheaper models for simple tasks
+- **Transparency:** User knows which expert is working
+- **Extensibility:** Easy to add new specialists
+
+**Contrast:**
+
+- ChatGPT: Single GPT-4 for everything
+- Claude: Single Claude model for everything
+- Synap: 15+ specialists, coordinated by orchestrator
+
+---
+
+### 3. Human-in-the-Loop
+
+**Philosophy:** AI proposes, human approves
+
+**Approval Workflow:**
+
+```
+1. AI analyzes request
+     ↓
+2. AI proposes action(s)
+   Example: "Create task: Review design"
+     ↓
+3. Proposal stored in Data Pod
+     ↓
+4. User sees in UI:
+   • What AI wants to do
+   • Why (rationale)
+   • Preview of result
+     ↓
+5. User decides:
+   • Approve ✅
+   • Edit then approve ✏️
+   • Reject ❌
+     ↓
+6. If approved:
+   • Action executes
+   • Result stored
+   • User notified
+```
+
+**Granular Control:**
+
+```
+Permission Levels:
+- Deny: AI cannot propose this action
+- Require Approval: AI proposes, user approves (default)
+- Auto-Approve: AI executes immediately (trusted actions)
+
+Permission Scope:
+- By action type (create vs update)
+- By entity type (tasks vs contacts)
+- By field (title vs description)
+- By confidence (high confidence = auto-approve)
+
+User can configure:
+- "Auto-approve task creation from Meeting Agent"
+- "Always require approval for document updates"
+- "Auto-approve if AI confidence > 90%"
+```
+
+**Why This Matters:**
+
+- **Trust:** User in control, not AI
+- **Transparency:** See what AI is doing
+- **Learning:** Understand AI reasoning
+- **Safety:** Prevent mistakes
+- **Compliance:** Audit trail of all actions
+
+---
+
+### 4. Event-Driven Coordination
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────┐
+│ Data Pod Event System                       │
+│                                             │
+│ Events Published:                           │
+│ • message.added (new user message)          │
+│ • proposal.created (AI wants to do X)       │
+│ • proposal.approved (user said yes)         │
+│ • document.updated (content changed)        │
+│ • entity.created (new task/contact/etc)     │
+│ • branch.created (new conversation branch)  │
+└────────────┬────────────────────────────────┘
+             │
+             │ Event Bus (Publish/Subscribe)
+             │
+      ┌──────┴──────┬──────────┬──────────┐
+      │             │          │          │
+┌─────▼─────┐ ┌────▼────┐ ┌───▼────┐ ┌──▼─────┐
+│ AI        │ │ Search  │ │ Notif  │ │ Audit  │
+│ Service   │ │ Indexer │ │ System │ │ Logger │
+│ (listens) │ │         │ │        │ │        │
+└───────────┘ └─────────┘ └────────┘ └────────┘
+```
+
+**Event Flow Example:**
+
+```
+User: "Create task from this email"
+    ↓
+Frontend → Backend: POST /messages
+    ↓
+Backend: Publishes message.added event
+    ↓
+AI Service: Listens, processes, proposes action
+    ↓
+Backend: Publishes proposal.created event
+    ↓
+Frontend: Listens, shows approval UI
+    ↓
+User: Clicks "Approve"
+    ↓
+Backend: Publishes proposal.approved event
+    ↓
+Worker: Listens, executes action
+    ↓
+Backend: Publishes entity.created event
+    ↓
+AI Service: Listens, updates context
+Search Indexer: Listens, indexes new entity
+Notification: Listens, notifies user
+Audit: Listens, logs action
+```
+
+**Benefits:**
+
+- **Decoupled:** Components don't directly call each other
+- **Scalable:** Add workers without changing publishers
+- **Reliable:** Retry failed events
+- **Extensible:** New features subscribe to existing events
+- **Real-Time:** UI updates immediately
+
+---
+
+### 5. Infinite Context Management
+
+**Challenge:** LLMs have token limits (32K-200K)
+
+**Synap's Approach:** Smart context management
+
+**Context Tiers:**
+
+```
+┌─────────────────────────────────────────────┐
+│ HOT CONTEXT (Always Loaded)                │
+│ • Last 10-20 messages (verbatim)            │
+│ • Active branch metadata                    │
+│ • Current conversation focus                │
+│ • User preferences                          │
+│                                             │
+│ Tokens: ~5K-10K                             │
+│ Location: In AI prompt                      │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ WARM CONTEXT (Summarized)                  │
+│ • Last 50-100 messages (summarized)         │
+│ • Key decisions and conclusions             │
+│ • Important entities mentioned              │
+│ • Branch summaries                          │
+│                                             │
+│ Tokens: ~10K-20K                            │
+│ Location: Summarized in prompt              │
+└─────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────┐
+│ COLD CONTEXT (Retrieved on Demand)         │
+│ • Full conversation history                 │
+│ • All documents and entities                │
+│ • Complete knowledge graph                  │
+│                                             │
+│ Tokens: Unlimited (in database)             │
+│ Location: Database, retrieved via tools     │
+│ Access: Semantic search when needed         │
+└─────────────────────────────────────────────┘
+```
+
+**How It Works:**
+
+1. **Initial Load:** Hot + Warm context loaded for AI
+2. **Tool Access:** AI searches cold context as needed
+3. **Automatic Summary:** Warm context updated periodically
+4. **User Control:** Can always access full history
+
+**Example:**
+
+```
+Conversation: 500 messages (150K tokens total)
+
+Hot Context (loaded):
+- Last 10 messages: "Let's finalize the pricing..."
+
+Warm Context (loaded):
+- Summary: "Discussed competitor analysis, identified 5
+  main competitors, decided on value-based pricing approach"
+
+Cold Context (searchable):
+- Full 490 older messages in database
+- AI can search: "What did we say about Competitor X?"
+- Retrieved on demand, not always loaded
+
+Result: AI has "infinite" memory via tiered access
+```
+
+**Branching Amplifies This:**
+
+```
+Main Thread: 200 messages
+    ├─ Research Branch: 100 messages
+    ├─ Writing Branch: 50 messages
+    └─ Code Branch: 150 messages
+
+Total: 500 messages
+But each branch only needs its own context
+Research Branch doesn't load Code Branch history
+Summaries merged back to main thread
+```
+
+---
+
+### 6. Branching Architecture
+
+**Concept:** Git-like conversation branches
+
+**Data Model:**
+
+```
+Threads Table:
+┌──────────────────────────────────────────┐
+│ id: uuid                                 │
+│ parent_thread_id: uuid (null for main)   │
+│ branched_from_message_id: uuid           │
+│ branch_purpose: text                     │
+│ agent_id: text (specialist for branch)   │
+│ status: 'active' | 'merged' | 'archived' │
+└──────────────────────────────────────────┘
+
+Messages Table:
+┌──────────────────────────────────────────┐
+│ id: uuid                                 │
+│ thread_id: uuid (which thread/branch)    │
+│ content: text                            │
+│ role: 'user' | 'assistant' | 'system'    │
+│ sequence_number: int (ordering)          │
+│ hash: text (integrity check)             │
+│ previous_hash: text (chain)              │
+└──────────────────────────────────────────┘
+```
+
+**Tree Structure:**
+
+```
+Main Conversation (thread_1)
+    │
+    ├─ Message 1: "I need to build a SaaS product"
+    ├─ Message 2: "Let's start with market research"
+    ├─ Message 3: "Create research branch"
+    │
+    ├─── Research Branch (thread_2)
+    │    │ parent: thread_1
+    │    │ purpose: "Competitor analysis"
+    │    │ agent: Research Agent
+    │    │
+    │    ├─ Message 1: "Researching top competitors..."
+    │    ├─ Message 2: "Found 5 main competitors..."
+    │    └─ Message 3: "Here's the analysis..."
+    │
+    ├─ Message 4: [System] "✅ Research complete: 5 competitors analyzed"
+    ├─ Message 5: "Now draft pricing strategy"
+    │
+    ├─── Pricing Branch (thread_3)
+    │    │ parent: thread_1
+    │    │ purpose: "Pricing strategy"
+    │    │ agent: Business Agent
+    │    │
+    │    └─ Messages...
+    │
+    └─ Continue main conversation...
+```
+
+**Branch Operations:**
+
+**Create Branch:**
+
+```
+1. User/AI decides to branch
+2. New thread created:
+   - parent_thread_id = current thread
+   - branched_from_message_id = fork point
+   - branch_purpose = "Research competitors"
+   - agent_id = specialist (e.g., "research-agent")
+3. Context copied to branch (not full history)
+4. Branch has independent message history
+5. User switches to branch to work
+```
+
+**Merge Branch:**
+
+```
+1. User/AI decides to merge
+2. System generates summary:
+   - What was accomplished
+   - Key findings/decisions
+   - Created entities
+3. Summary added to parent thread as system message
+4. Branch marked as merged
+5. Branch remains accessible (for reference)
+```
+
+**Benefits:**
+
+- **Parallel Exploration:** Work on multiple ideas simultaneously
+- **Focus:** Each branch has clear purpose and specialist
+- **Non-Destructive:** Main conversation continues uninterrupted
+- **Context Preservation:** Each branch has relevant context
+- **Mergeable:** Insights flow back to main thread
+
+---
+
+## Integration Patterns
+
+### 1. Frontend ↔ Data Pod
+
+**Communication Method:** Type-safe API layer
+
+**Patterns:**
+
+**Real-Time Updates:**
+
+```
+User Action (Frontend)
+    ↓
+API Call (Request)
+    ↓
+Data Pod (Processing)
+    ↓
+Event Published
+    ↓
+WebSocket/SSE (Push)
+    ↓
+Frontend (Real-time Update)
+```
+
+**Optimistic Updates:**
+
+```
+User: Sends message
+    ↓
+Frontend: Immediately shows message (optimistic)
+    ↓
+Backend: Processes, AI responds
+    ↓
+Frontend: Updates with actual result
+```
+
+**Streaming Responses:**
+
+```
+User: Sends message
+    ↓
+Backend: Starts processing
+    ↓
+AI: Generates response (token by token)
+    ↓
+Backend: Streams chunks via WebSocket
+    ↓
+Frontend: Displays progressively
+```
+
+---
+
+### 2. Data Pod ↔ Intelligence Services
+
+**Communication Method:** Hub Protocol (REST API + OAuth2)
+
+**Authentication Flow:**
+
+```
+1. Intelligence Service Registration
+   - Service registers with Data Pod
+   - Provides service details (name, description, scopes)
+
+2. User Authorization
+   - User visits service authorization page
+   - Reviews requested permissions
+   - Grants or denies access
+
+3. Token Exchange
+   - Service receives authorization code
+   - Exchanges code for access token
+   - Token has limited lifetime + scopes
+
+4. API Access
+   - Service includes token in API calls
+   - Data Pod validates token + scopes
+   - Returns requested data
+```
+
+**Request Pattern:**
+
+```
+Intelligence Service makes API call:
+
+POST /hub/search/documents
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+{
+  "query": "competitor analysis",
+  "limit": 10
+}
+
+Data Pod validates:
+- Token is valid (not expired)
+- Token has "read:documents" scope
+- Rate limit not exceeded
+
+Returns:
+{
+  "results": [
+    { "id": "doc_1", "title": "...", "preview": "..." },
+    ...
+  ]
+}
+```
+
+**Proposal Pattern:**
+
+```
+Intelligence Service proposes action:
+
+POST /hub/proposals/create_entity
+Authorization: Bearer <access_token>
+
+{
+  "type": "task",
+  "title": "Review competitor analysis",
+  "description": "Based on research findings",
+  "rationale": "User requested follow-up tasks"
+}
+
+Data Pod:
+- Validates token has "write:entities" scope
+- Stores proposal (doesn't execute)
+- Returns proposal_id
+
+User reviews in UI:
+- Sees proposal with rationale
+- Approves or rejects
+
+If approved:
+- Data Pod publishes approval event
+- Webhook notifies Intelligence Service (optional)
+- Action executes
+```
+
+---
+
+### 3. Multi-Service Coordination
+
+**Scenario:** User requests complex task requiring multiple AI services
+
+**Example: "Build marketing campaign"**
+
+```
+1. User: "Build marketing campaign for new feature"
+    ↓
+2. Data Pod: Publishes message.added event
+    ↓
+3. Synap Orchestrator (via Hub Protocol):
+   - Analyzes request
+   - Decomposes into sub-tasks:
+     a) Market research
+     b) Competitor positioning
+     c) Ad copy generation
+     d) Landing page draft
+    ↓
+4. Orchestrator routes to specialists:
+
+   → Research Agent (Synap):
+     Accesses Data Pod via Hub Protocol
+     Searches existing research
+     Proposes creating research document
+
+   → Custom Brand Agent (User's):
+     Accesses Data Pod via Hub Protocol
+     Retrieves brand guidelines
+     Validates messaging alignment
+
+   → GPT-4 Agent (Marketplace):
+     Accesses Data Pod via Hub Protocol
+     Generates ad copy variations
+     Proposes creating document
+
+   All agents:
+   - Authenticate via Hub Protocol
+   - Request scoped permissions
+   - Propose actions (don't execute)
+    ↓
+5. Data Pod: Collects all proposals
+    ↓
+6. User: Reviews in single dashboard
+   - Sees proposals from all agents
+   - Approves batch or individually
+    ↓
+7. Approved actions execute
+    ↓
+8. Results stored in Data Pod
+    ↓
+9. Orchestrator synthesizes final response
+```
+
+**Key Insight:** Multiple AI services work together seamlessly because:
+
+- All use same Hub Protocol
+- All access same Data Pod
+- All follow approval workflow
+- User has single control point
+
+---
+
+## Scalability & Performance
+
+### Horizontal Scaling
+
+**Data Pod (Stateful):**
+
+```
+Load Balancer
+    ├─ Data Pod Instance 1
+    ├─ Data Pod Instance 2
+    └─ Data Pod Instance 3
+         ↓
+    PostgreSQL (Primary + Replicas)
+```
+
+- Database-backed (can scale DB independently)
+- Stateless API layer
+- Read replicas for heavy queries
+- Caching layer for frequent access
+
+**Intelligence Services (Stateless):**
+
+```
+Load Balancer
+    ├─ Intelligence Service 1
+    ├─ Intelligence Service 2
+    └─ Intelligence Service 3
+         ↓
+    LLM Providers (OpenAI, Anthropic, etc.)
+```
+
+- Completely stateless (all state in Data Pod)
+- Scale horizontally as needed
+- No session affinity required
+- Can distribute across regions
+
+---
+
+### Performance Optimizations
+
+**Streaming Responses:**
+
+- Don't wait for complete AI response
+- Stream tokens as generated
+- User sees progress immediately
+- Perceived latency reduced
+
+**Caching Strategies:**
+
+```
+L1: In-memory cache (Data Pod)
+    - Recent conversations
+    - User preferences
+    - Active entities
+
+L2: Distributed cache (Redis/Memcached)
+    - Computed summaries
+    - Search results
+    - Embeddings
+
+L3: Database
+    - Source of truth
+    - Full history
+```
+
+**Lazy Loading:**
+
+- Load hot context immediately
+- Fetch warm context on demand
+- Cold context only via search
+- Reduces initial load time
+
+**Background Processing:**
+
+```
+Synchronous (User waits):
+- Message storage
+- Immediate AI response
+
+Asynchronous (Background):
+- Embedding generation
+- Search index updates
+- Summary computation
+- Analytics processing
+```
+
+---
+
+## Security & Privacy
+
+### Data Isolation
+
+**User Data Separation:**
+
+```
+Each user has isolated data:
+- Separate encryption keys
+- Scoped database queries
+- Access control checks
+- Audit trails
+```
+
+**Hub Protocol Security:**
+
+```
+OAuth2 Scopes:
+- read:conversations (view chat history)
+- read:documents (search documents)
+- write:entities (propose entity changes)
+
+Each AI service has:
+- Limited scopes (principle of least privilege)
+- Time-limited tokens (expire after N hours)
+- Revocable access (user can disconnect)
+- Audit trail (all API calls logged)
+```
+
+---
+
+### Privacy Controls
+
+**Self-Hosting Option:**
+
+```
+User can deploy entire stack:
+- Data Pod on their infrastructure
+- Full control over data
+- No data leaves premises
+- Can still use external AI services (optional)
+```
+
+**Data Portability:**
+
+```
+Standard export formats:
+- JSON (structured data)
+- Markdown (conversations)
+- CSV (entities)
+- SQL dump (complete backup)
+
+User can:
+- Export anytime
+- Migrate to another system
+- Backup locally
+```
+
+**Approval Workflow:**
+
+```
+Privacy benefit:
+- AI proposes actions locally
+- No data sent to AI until approved
+- User sees what AI sees
+- Control over what gets processed
+```
+
+---
+
+## Extensibility
+
+### Adding New Agents
+
+**Process:**
+
+1. Implement Hub Protocol client
+2. Register with user's Data Pod
+3. Request appropriate scopes
+4. Provide agent metadata (name, description, capabilities)
+5. Implement webhook for approvals
+6. List on marketplace (optional)
+
+**No Changes Required:**
+
+- Data Pod doesn't change
+- Hub Protocol stays same
+- Other agents unaffected
+- User's data stays put
+
+---
+
+### Adding New Tools
+
+**For Synap's Agents:**
+
+1. Define tool interface
+2. Implement in Intelligence Service
+3. Add to agent's tool set
+4. Update documentation
+
+**For Custom Agents:**
+
+1. Define custom tool
+2. Implement in agent code
+3. Call Hub Protocol for data access
+4. Propose actions via Hub Protocol
+
+---
+
+### Marketplace Ecosystem
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────┐
+│ Marketplace (Discovery)                 │
+│ • Browse agents                         │
+│ • Read reviews                          │
+│ • Compare capabilities                  │
+└────────────┬────────────────────────────┘
+             │
+             │ User selects agent
+             │
+┌────────────▼────────────────────────────┐
+│ Installation Flow                       │
+│ 1. User clicks "Install"                │
+│ 2. Reviews requested permissions        │
+│ 3. Authorizes agent (OAuth2)            │
+│ 4. Agent connects to Data Pod           │
+└────────────┬────────────────────────────┘
+             │
+             │ Hub Protocol
+             │
+┌────────────▼────────────────────────────┐
+│ User's Data Pod                         │
+│ • Agent now has access                  │
+│ • Can propose actions                   │
+│ • Subject to approval workflow          │
+└─────────────────────────────────────────┘
+```
+
+**Revenue Model:**
+
+```
+Agent Provider:
+- Lists agent on marketplace
+- Sets pricing (free, one-time, subscription)
+- Receives revenue share
+
+Synap Platform:
+- Hosts marketplace
+- Handles payments
+- Provides Hub Protocol infrastructure
+- Takes platform fee (e.g., 30%)
+
+User:
+- Pays agent provider
+- Benefits from specialized expertise
+- Can uninstall anytime
+```
+
+---
+
+## Future Architecture
+
+### Phase 1: Current (Q1 2025)
+
+- Open-source Data Pod
+- Hub Protocol v1
+- Synap's 15 agents
+- Basic approval workflow
+
+### Phase 2: Marketplace (Q2 2025)
+
+- Community agents
+- One-click installation
+- Revenue sharing
+- Agent reviews and ratings
+
+### Phase 3: Advanced Features (Q3 2025)
+
+- Custom agent builder (visual)
+- Workflow automation
+- Team collaboration
+- Advanced memory
+
+### Phase 4: Ecosystem (Q4 2025+)
+
+- Federated data pods
+- Cross-pod collaboration (opt-in)
+- Advanced integrations
+- Enterprise features
+
+---
+
+## Conclusion
+
+**Synap's Architecture Achieves:**
+
+✅ **User Control:** Open-source data pod, full ownership
+
+✅ **AI Flexibility:** Hub Protocol enables any AI service
+
+✅ **No Lock-In:** Switch providers, export data, self-host
+
+✅ **Scalability:** Event-driven, horizontally scalable
+
+✅ **Security:** OAuth2, scoped access, approval workflow
+
+✅ **Extensibility:** Marketplace, custom agents, open standard
+
+✅ **Performance:** Streaming, caching, lazy loading
+
+✅ **Privacy:** Self-hosting, data portability, transparent approvals
+
+**The Result:**
+A production-ready AI system that respects user ownership while enabling powerful AI capabilities.
+
+---
+
+_Synap: Open Intelligence Platform_

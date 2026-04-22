@@ -1,0 +1,719 @@
+# PRD: Session-Scoped AI Memory System
+## Synap Intelligence Layer — Compacted State Architecture
+
+**Status:** Draft  
+**Author:** Antoine  
+**Date:** March 2026  
+**Version:** 1.0  
+
+---
+
+## 1. Context & Motivation
+
+### What we're building
+A session-scoped memory system that gives Synap's AI assistant the feel of an infinite, continuous conversation. Every time a user starts interacting, the AI is freshly instantiated but bootstrapped with structured, compacted knowledge from all prior interactions. The user never starts a "new chat" — they have one permanent channel with an AI that always knows who they are, what they've been working on, and where they left off.
+
+### Why now
+The current system runs `compressContext()` — an LLM call — on every request to assemble context. This is:
+- **Slow**: adds latency to every response
+- **Expensive**: LLM call per message just for context assembly
+- **Inconsistent**: different compression runs can produce different summaries
+- **Unstructured**: produces a flat text blob, not typed memory blocks
+
+The new system compacts **once at session start** (processing the previous session's data), then assembles context **deterministically** for the rest of the session. This is faster, cheaper, more consistent, and enables structured memory that users can inspect and edit.
+
+### What exists already (from architecture audit)
+- **Channel model**: Fully built. Channels with types (AI_THREAD, BRANCH, A2AI), parent references, branch purpose, status lifecycle (ACTIVE/MERGED/ARCHIVED), agent assignment, context summary.
+- **Message model**: Fully built. Roles, author types, categories, hash chain integrity, metadata.
+- **Channel context items**: Fully built. Polymorphic tracking of entities/documents/views per channel with relationship types and conflict detection.
+- **Knowledge facts**: Fully built. Per-user facts with pgvector embeddings and semantic search.
+- **Context compressor**: Exists but runs online (LLM call per request). Produces `conversationSummary` + `personalityFingerprint` + linked entities/documents + memory facts.
+- **Hub protocol**: 50 endpoints, fully typed client. All tool access goes through hub-protocol.
+- **Agent runtime**: Orchestrator + 6 specialists, ReAct loop, tool execution, branching analysis.
+- **Memory service**: Remember/recall/forget operations, auto-learning from conversations.
+
+### What doesn't exist
+- Sessions as a first-class concept
+- Compacted states (structured memory blocks with token budgets)
+- Offline compaction (compact once, use many times)
+- Deterministic bootstrap assembly
+- Mid-session compaction trigger
+
+---
+
+## 2. Architecture Decisions (Pre-Settled)
+
+These decisions are final and should not be revisited during implementation:
+
+**1. Compact at session open, not session close.**
+Session start is a single unambiguous event (message arrives, no active session or last message was >N minutes ago). Session end requires timers, inactivity detection, mobile backgrounding edge cases. Compacting at open eliminates all of that. The system is fully request-driven.
+
+**2. Branches are channels, not a separate table.**
+A branch is a channel with `parentChannelId` set. The existing channel model already has `parentChannelId`, `branchedFromMessageId`, `branchPurpose`, and status lifecycle. No `branch_records` table. Branch lifecycle = channel status transitions.
+
+**3. Compacted states live in the Data Pod.**
+Consistent with data sovereignty. The intelligence service reads/writes them through hub-protocol endpoints. The intelligence service remains stateless.
+
+**4. The intelligence service never stores user data.**
+All persistence goes through hub-protocol. Compaction results are POSTed to the Data Pod. Bootstrap assembly reads from the Data Pod. This is already how the system works — we're just adding new data types.
+
+**5. No external framework dependency.**
+The orchestration layer is proprietary. No LangGraph, no CrewAI, no external agent SDK at the core. Standard protocols (MCP for tools, A2A-compatible channels for inter-agent) at the boundaries only.
+
+---
+
+## 3. Data Model Changes
+
+### 3.1 New Table: `sessions`
+
+```typescript
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  channelId: text("channel_id").notNull().references(() => channels.id),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  endedAt: timestamp("ended_at"),  // null while active
+  
+  // Links to compacted states
+  bootstrapStateId: text("bootstrap_state_id").references(() => compactedStates.id),  // what started this session
+  producedStateId: text("produced_state_id").references(() => compactedStates.id),    // what this session produced (set after compaction)
+  
+  // Metrics
+  totalTokensUsed: integer("total_tokens_used").default(0),
+  messageCount: integer("message_count").default(0),
+  compactionCount: integer("compaction_count").default(0),  // mid-session compactions
+  
+  status: text("status").$type<"active" | "compacting" | "closed">().notNull().default("active"),
+});
+```
+
+**Indexes:** `channelId` + `status` (find active session), `channelId` + `startedAt` DESC (find latest).
+
+### 3.2 New Table: `compacted_states`
+
+```typescript
+export const compactedStates = pgTable("compacted_states", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  channelId: text("channel_id").notNull().references(() => channels.id),
+  sessionId: text("session_id").references(() => sessions.id),  // which session produced this
+  version: integer("version").notNull(),  // incrementing per channel
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  
+  // The five memory blocks
+  identityBlock: text("identity_block").notNull(),
+  userModelBlock: text("user_model_block").notNull(),
+  continuityBlock: text("continuity_block").notNull(),
+  activeGoalsBlock: text("active_goals_block").notNull(),
+  entityContextBlock: text("entity_context_block").notNull(),
+  
+  // Compression metrics
+  rawTokenCount: integer("raw_token_count"),      // tokens of source material
+  compressedTokenCount: integer("compressed_token_count"),  // total tokens of all blocks
+  
+  // Metadata
+  compactionModel: text("compaction_model"),  // which model performed the compaction
+  metadata: jsonb("metadata").$type<CompactedStateMetadata>(),
+});
+```
+
+**Indexes:** `channelId` + `version` DESC (find latest), unique constraint on `channelId` + `version`.
+
+**Type:**
+```typescript
+interface CompactedStateMetadata {
+  compactionDurationMs?: number;
+  qualityScore?: number;           // from self-check (0-1)
+  messagesCompacted?: number;      // how many messages were in the source
+  midSessionCompaction?: boolean;  // was this a mid-session compaction?
+  previousStateId?: string;        // which state this was derived from
+}
+```
+
+### 3.3 Extend: `messages` table
+
+Add one column:
+```typescript
+sessionId: text("session_id").references(() => sessions.id),
+```
+
+This links every message to its session. For existing messages without a session, the value is null (backfill is not required — the system works forward-only).
+
+### 3.4 Extend: `channel_context_items` table
+
+Add one column:
+```typescript
+relevanceScore: real("relevance_score"),  // 0.0-1.0, set during compaction
+```
+
+This is used by the compaction engine to determine which entities are important enough to include in the entity context block.
+
+### 3.5 Extend: `channels` table
+
+Add columns for branch completion tracking:
+```typescript
+resultSummary: text("result_summary"),           // for branch channels: what the branch produced
+mergedIntoStateId: text("merged_into_state_id").references(() => compactedStates.id),  // which parent compacted state incorporated this branch's results
+```
+
+These are only populated for channels with `parentChannelId` set (branch channels). The existing `contextSummary` field continues to serve its current purpose for the main channel.
+
+---
+
+## 4. Hub-Protocol Endpoints (Data Pod)
+
+### 4.1 Sessions
+
+```
+POST   /sessions
+  Body: { channelId: string }
+  Returns: Session object with status "active"
+  Logic: Check if an active session already exists for this channel.
+         If yes, return it. If no, create a new one.
+
+PATCH  /sessions/:id
+  Body: { status?, endedAt?, producedStateId?, totalTokensUsed?, messageCount?, compactionCount? }
+  Returns: Updated session
+
+GET    /sessions/:id
+  Returns: Session object
+
+GET    /sessions/active?channelId=:channelId
+  Returns: Active session for channel, or null
+  
+GET    /sessions?channelId=:channelId&limit=10
+  Returns: Recent sessions for channel (newest first)
+```
+
+### 4.2 Compacted States
+
+```
+POST   /compacted-states
+  Body: { channelId, sessionId, version, identityBlock, userModelBlock, 
+          continuityBlock, activeGoalsBlock, entityContextBlock, 
+          rawTokenCount?, compressedTokenCount?, compactionModel?, metadata? }
+  Returns: CompactedState object
+  Logic: Auto-increment version if not provided.
+
+GET    /compacted-states/latest?channelId=:channelId
+  Returns: Latest compacted state for channel (highest version)
+
+GET    /compacted-states/:id
+  Returns: Specific compacted state
+
+GET    /compacted-states?channelId=:channelId&limit=5
+  Returns: Recent compacted states (for version history / debugging)
+```
+
+### 4.3 Update existing endpoints
+
+**`POST /threads/:id/messages`** — Add optional `sessionId` to the body. If provided, set it on the created message.
+
+---
+
+## 5. Compaction Engine (Intelligence Service)
+
+### 5.1 Overview
+
+The compaction engine takes raw conversation messages and the previous compacted state, and produces a new compacted state. It runs per-block, allowing independent update logic for each memory type.
+
+### 5.2 When compaction runs
+
+**At session open (primary trigger):**
+When a new session starts, the engine:
+1. Reads the latest compacted state for the channel (via hub-protocol)
+2. Reads all messages since that compacted state was produced (the "uncompacted" messages from the previous session)
+3. If there are uncompacted messages: runs compaction, produces a new compacted state, stores it
+4. If there are no uncompacted messages (e.g., user returns immediately): skips compaction, reuses the existing state
+
+**Mid-session (secondary trigger):**
+During an active session, the agent runtime tracks `totalTokensUsed`. When it exceeds a threshold (configurable, default: 60% of the model's context window), mid-session compaction triggers. This compacts the current session's messages so far, produces a new state, and the session continues with the compressed context. The `compactionCount` on the session increments.
+
+### 5.3 Compaction Flow
+
+```
+Input:
+  - previousState: CompactedState (or null for first-ever session)
+  - messages: Message[] (uncompacted messages from previous session)
+  - entityRefs: ChannelContextItem[] (entity references from the session)
+  - channelId: string
+
+Process:
+  1. If no messages and previousState exists → return previousState (no-op)
+  2. If no previousState (first session ever):
+     a. Generate initial identity block from agent config / system prompt
+     b. Generate initial user model from any knowledge_facts + conversation
+     c. Generate initial continuity from conversation
+     d. Generate initial goals from conversation
+     e. Generate initial entity context from entityRefs
+  3. If previousState exists:
+     a. Update each block independently (see §5.4)
+  4. Assemble new CompactedState
+  5. Run quality check (see §5.5)
+  6. POST to hub-protocol: /compacted-states
+
+Output:
+  - CompactedState (persisted in Data Pod)
+```
+
+### 5.4 Per-Block Compaction Prompts
+
+Each block has a dedicated prompt sent to the compaction model. The prompts below are starting points — they should be iterated based on output quality.
+
+**Identity Block:**
+```
+System: You are a memory compaction agent. Your job is to maintain the identity 
+description of an AI assistant based on conversation evidence.
+
+Rules:
+- Only modify the identity if the user explicitly asked the AI to change its 
+  behavior (e.g., "be more concise," "use formal language," "call me by first name")
+- Preserve all existing traits unless directly contradicted by user instruction
+- Keep the output under {IDENTITY_TOKEN_BUDGET} tokens
+- Output the updated identity block as plain text, nothing else
+
+Previous identity block:
+{previousState.identityBlock}
+
+Recent conversation:
+{messages}
+
+Output the updated identity block:
+```
+
+**User Model Block:**
+```
+System: You are a memory compaction agent. Your job is to maintain a structured 
+profile of a user based on conversation evidence.
+
+Rules:
+- Extract new facts about the user: preferences, projects, relationships, 
+  expertise, communication style, context
+- Correct any outdated information in the previous model
+- Add new knowledge discovered in the conversation
+- Rarely remove information — only if explicitly contradicted
+- Keep the output under {USER_MODEL_TOKEN_BUDGET} tokens
+- Output as structured text (use categories like Preferences, Projects, 
+  Communication Style, etc.)
+
+Previous user model:
+{previousState.userModelBlock}
+
+Recent conversation:
+{messages}
+
+Output the updated user model:
+```
+
+**Continuity Block:**
+```
+System: You are a memory compaction agent. Your job is to maintain a narrative 
+summary of what has happened in recent interactions, applying a recency gradient.
+
+Rules:
+- Summarize what happened in the latest conversation:
+  * Decisions made
+  * Information discovered  
+  * Actions taken (tools used, entities accessed, documents created)
+  * Problems encountered and resolutions
+  * Topics discussed and conclusions
+- Apply recency gradient to the previous continuity:
+  * Keep the most recent session summary mostly intact but compress slightly
+  * Compress older sessions further (2-3 sessions ago → key events only)
+  * Sessions older than 5 interactions → extract remaining facts to user 
+    model format and drop the narrative
+- Keep the output under {CONTINUITY_TOKEN_BUDGET} tokens
+- Write in a natural narrative voice, not bullet points
+
+Previous continuity:
+{previousState.continuityBlock}
+
+Recent conversation:
+{messages}
+
+Output the updated continuity:
+```
+
+**Active Goals Block:**
+```
+System: You are a memory compaction agent. Your job is to maintain a list of 
+the user's current goals, tasks, and open requests.
+
+Rules:
+- Remove goals that were completed in the conversation
+- Add new goals discovered in the conversation
+- Update progress on ongoing goals
+- Flag goals that have persisted for many sessions without progress
+- Keep the output under {GOALS_TOKEN_BUDGET} tokens
+- Output as a structured list
+
+Previous goals:
+{previousState.activeGoalsBlock}
+
+Recent conversation:
+{messages}
+
+Output the updated goals:
+```
+
+**Entity Context Block:**
+```
+System: You are a memory compaction agent. Your job is to maintain a summary 
+of key entities (projects, people, documents) that are relevant to the user.
+
+Rules:
+- For entities accessed in the recent conversation: add or update their 
+  context snippet (what the AI learned about them, their current state)
+- For entities in the previous block that were NOT accessed: keep them but 
+  note they are from an older session
+- For entities not accessed in 5+ sessions: remove from this block 
+  (they remain searchable in archival memory)
+- Keep the output under {ENTITY_TOKEN_BUDGET} tokens
+- Output as a structured list: "- [Entity Name]: [context snippet]"
+
+Previous entity context:
+{previousState.entityContextBlock}
+
+Entities accessed in recent conversation:
+{entityRefs.map(ref => `${ref.objectType}: ${ref.contextSnippet}`).join('\n')}
+
+Recent conversation:
+{messages}
+
+Output the updated entity context:
+```
+
+### 5.5 Token Budgets (Configurable)
+
+```typescript
+const COMPACTION_BUDGETS = {
+  identityBlock: 400,      // tokens
+  userModelBlock: 600,     // tokens
+  continuityBlock: 800,    // tokens
+  activeGoalsBlock: 400,   // tokens
+  entityContextBlock: 800, // tokens
+  // Total: ~3000 tokens (~2% of 200K context)
+};
+```
+
+These should be configurable per workspace/agent via `agentConfig`.
+
+### 5.6 Quality Self-Check (v2 — not required for initial launch)
+
+After compaction, generate 3-5 factual questions from the raw messages and attempt to answer them using only the compacted state. If accuracy drops below 85%, expand the token budget by 50% and recompact. Log quality scores in `metadata.qualityScore`.
+
+### 5.7 Model Selection
+
+```typescript
+const COMPACTION_MODELS = {
+  sessionOpen: "claude-sonnet-4-5-20250929",   // quality, async
+  midSession: "claude-haiku-4-5-20251001",     // speed, in hot path
+};
+```
+
+Configurable per workspace via `agentConfig`.
+
+---
+
+## 6. Bootstrap Assembly (Intelligence Service)
+
+### 6.1 Overview
+
+The bootstrap assembler constructs the system prompt for a new session. It reads the latest compacted state and current app context, then formats them into a structured prompt. **No LLM call.** This is deterministic string assembly.
+
+### 6.2 Replaces
+
+This replaces the current online `compressContext()` call in the context assembly path. The existing `assembleContext()` function in `context-manager.ts` should be refactored to:
+1. Read the latest compacted state from hub-protocol (`GET /compacted-states/latest`)
+2. Read current app context from the request
+3. Assemble the system prompt deterministically
+
+### 6.3 Assembly Logic
+
+```typescript
+async function assembleBootstrap(params: {
+  channelId: string;
+  currentContext?: {        // optional, for context-aware ranking
+    visibleEntityIds?: string[];
+    currentPage?: string;
+    deviceType?: "mobile" | "desktop";
+    timeOfDay?: string;
+  };
+  activeBranches?: Array<{  // from channel query
+    channelId: string;
+    branchPurpose: string;
+    status: string;
+  }>;
+}): Promise<string> {
+  
+  // 1. Fetch latest compacted state
+  const state = await hubProtocol.getLatestCompactedState(params.channelId);
+  
+  // 2. Assemble blocks in order
+  const sections: string[] = [];
+  
+  // Identity (always full)
+  sections.push(`## Your Identity\n${state.identityBlock}`);
+  
+  // User model (always full)  
+  sections.push(`## About the User\n${state.userModelBlock}`);
+  
+  // Continuity (always included)
+  sections.push(`## Recent History\n${state.continuityBlock}`);
+  
+  // Active goals (always included)
+  if (state.activeGoalsBlock.trim()) {
+    sections.push(`## Current Goals & Pending Tasks\n${state.activeGoalsBlock}`);
+  }
+  
+  // Entity context (prioritized by current context)
+  if (state.entityContextBlock.trim()) {
+    let entityBlock = state.entityContextBlock;
+    // If we know which entities are currently visible, 
+    // we could reorder to put those first — but for v1, 
+    // just include as-is
+    sections.push(`## Key Entities & Context\n${entityBlock}`);
+  }
+  
+  // Session context (fresh, not from compacted state)
+  const sessionContext = [
+    `Current date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`,
+    `Current time: ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+  ];
+  if (params.currentContext?.currentPage) {
+    sessionContext.push(`User is viewing: ${params.currentContext.currentPage}`);
+  }
+  if (params.activeBranches?.length) {
+    const branchLines = params.activeBranches.map(b => 
+      `- "${b.branchPurpose}" (${b.status})`
+    );
+    sessionContext.push(`Active branches:\n${branchLines.join('\n')}`);
+  }
+  sections.push(`## Current Session\n${sessionContext.join('\n')}`);
+  
+  return sections.join('\n\n');
+}
+```
+
+### 6.4 Integration Point
+
+This function is called at the start of every agent invocation. It replaces the current path where `compressContext()` is called. The returned string becomes part of the system prompt, before any conversation messages.
+
+---
+
+## 7. Session Lifecycle (Intelligence Service)
+
+### 7.1 Session Start Logic
+
+Add to the agent runtime's message handling flow, before the ReAct loop:
+
+```
+On incoming user message:
+  1. Check for active session: GET /sessions/active?channelId={channelId}
+  2. If active session exists AND last message was < SESSION_TIMEOUT ago:
+     → Continue with existing session (increment messageCount)
+  3. If no active session OR last message was > SESSION_TIMEOUT ago:
+     a. If previous session exists: close it (PATCH status → "closed")
+     b. Run compaction on previous session's uncompacted messages
+     c. Create new session: POST /sessions
+     d. Assemble bootstrap from latest compacted state
+     e. Continue with new session
+```
+
+**SESSION_TIMEOUT:** Configurable, default 30 minutes. This means: if the user hasn't sent a message in 30 minutes, the next message starts a new session (with compaction of the old one).
+
+### 7.2 Mid-Session Compaction
+
+```
+On every agent response:
+  1. Update session.totalTokensUsed += (input tokens + output tokens)
+  2. If totalTokensUsed > MID_SESSION_THRESHOLD:
+     a. Run compaction on current session's messages so far
+     b. Swap in new compacted state as context
+     c. Increment session.compactionCount
+     d. Reset totalTokensUsed tracking
+```
+
+**MID_SESSION_THRESHOLD:** Configurable, default 80,000 tokens (roughly 60% of a 128K effective window).
+
+### 7.3 First-Ever Session (No Previous State)
+
+When a channel has no compacted state at all (brand new user or channel):
+1. Skip compaction (nothing to compact)
+2. Generate an initial compacted state from:
+   - Identity block: from the agent's default system prompt / agent config
+   - User model: empty or populated from any existing `knowledge_facts` for this user
+   - Continuity: empty ("This is your first interaction with this user.")
+   - Active goals: empty
+   - Entity context: empty or populated from any existing `channel_context_items`
+3. Proceed with this initial state as bootstrap
+
+---
+
+## 8. Branch Lifecycle Updates
+
+### 8.1 Spawning a Branch
+
+The existing `create_branch` tool (currently a stub) should:
+
+1. Create a new channel via hub-protocol:
+   ```typescript
+   {
+     type: "BRANCH",
+     parentChannelId: currentChannelId,
+     branchedFromMessageId: currentMessageId,
+     branchPurpose: purpose,  // "Market research for EU expansion"
+     agentType: specialistType,  // "research" | "analyst" | etc.
+     status: "ACTIVE"
+   }
+   ```
+2. Assemble a branch-specific bootstrap:
+   - Identity: derived from orchestrator's identity + role overlay
+   - User model: relevant subset (or full — branches serve the same user)
+   - Continuity: task-specific context extracted from orchestrator's continuity
+   - Goals: the specific task this branch was created for
+   - Entity context: entities relevant to the branch's purpose
+3. Start a session on the branch channel
+4. Return the branch channel ID to the orchestrator
+
+### 8.2 Branch Completion
+
+When a branch agent determines its task is complete:
+1. Produce a result summary (written to `channels.resultSummary`)
+2. Set channel status to MERGED or ARCHIVED
+3. Send a message to the parent channel with type `branch_result`:
+   ```typescript
+   {
+     channelId: parentChannelId,
+     role: "system",
+     messageCategory: "SYSTEM_NOTIFICATION",
+     content: resultSummary,
+     metadata: {
+       branchChannelId: branchChannelId,
+       branchPurpose: purpose,
+       branchDuration: endTime - startTime,
+     }
+   }
+   ```
+4. The orchestrator receives this as a normal message and synthesizes it for the user
+
+### 8.3 Branch-to-Branch Communication
+
+Uses the existing A2AI channel type. When two branches need to communicate:
+1. Create an A2AI channel with references to both branch channels (or reuse if exists)
+2. Messages flow on this channel like any other
+3. Both branches can query this channel for cross-referenced information
+4. During compaction, these cross-reference messages are attributed to their source branch
+
+---
+
+## 9. Migration & Rollout Strategy
+
+### Phase 1: Schema + Endpoints (Data Pod)
+- Add `sessions` and `compacted_states` tables
+- Add `sessionId` column to `messages` (nullable)
+- Add `relevanceScore` to `channel_context_items` (nullable)
+- Add `resultSummary` and `mergedIntoStateId` to `channels` (nullable)
+- Add hub-protocol endpoints for sessions and compacted states
+- **No behavior changes.** Existing system continues to work.
+
+### Phase 2: Compaction Engine (Intelligence Service)
+- Implement per-block compaction functions
+- Implement compaction flow (read previous state + messages → produce new state)
+- **Test in isolation** — run compaction on existing conversation data and inspect block quality
+- Iterate on prompts until block quality is satisfactory
+
+### Phase 3: Session Lifecycle + Bootstrap (Intelligence Service)
+- Implement session start/continue detection
+- Wire compaction to session start
+- Replace `compressContext()` path with deterministic `assembleBootstrap()`
+- **Feature flag:** toggle between old (online compression) and new (session-scoped) per workspace
+- **A/B test:** compare response quality and latency between old and new
+
+### Phase 4: Branch Lifecycle (Intelligence Service)
+- Wire `create_branch` tool to real channel creation
+- Implement branch-specific bootstrap assembly
+- Implement branch completion → parent notification flow
+- Test with orchestrator agent
+
+### Phase 5: Refinement
+- Mid-session compaction trigger
+- Context-aware bootstrap ranking (device, time, visible entities)
+- Compaction quality self-check
+- Token budget tuning based on real usage data
+- Compaction model selection optimization
+
+---
+
+## 10. Configuration
+
+All thresholds and budgets should be configurable via `agentConfig` on the workspace or channel level:
+
+```typescript
+interface SessionScopedConfig {
+  // Session
+  sessionTimeoutMinutes: number;          // default: 30
+  
+  // Compaction
+  midSessionTokenThreshold: number;       // default: 80000
+  compactionModel: string;                // default: "claude-sonnet-4-5-20250929"
+  midSessionCompactionModel: string;      // default: "claude-haiku-4-5-20251001"
+  
+  // Token budgets
+  identityBlockBudget: number;            // default: 400
+  userModelBlockBudget: number;           // default: 600
+  continuityBlockBudget: number;          // default: 800
+  activeGoalsBlockBudget: number;         // default: 400
+  entityContextBlockBudget: number;       // default: 800
+  
+  // Entity demotion
+  entityDemotionSessionThreshold: number; // default: 5
+  
+  // Quality (v2)
+  enableQualitySelfCheck: boolean;        // default: false
+  qualityThreshold: number;               // default: 0.85
+}
+```
+
+---
+
+## 11. Success Metrics
+
+### Functional
+- Session start-to-first-response time < 5 seconds (including compaction)
+- Bootstrap assembly time < 100ms (after compaction is done)
+- Compaction produces blocks within token budgets 95%+ of the time
+- AI correctly recalls key facts from 5+ sessions ago (test with planted information)
+
+### User Experience
+- Users report the AI "remembers" them across sessions (qualitative feedback)
+- No increase in "the AI forgot what I told it" complaints
+- Branch results feel integrated into the main conversation, not bolted on
+
+### Operational
+- Cost per message decreases (no per-message LLM compression call)
+- Average context window utilization decreases (structured bootstrap is smaller than ad-hoc compression)
+- Compaction runs successfully 99%+ of the time (monitor for failures)
+
+---
+
+## 12. Open Questions for Implementation
+
+1. **Session timeout value:** 30 minutes is a starting point. Should we track actual user behavior to calibrate?
+
+2. **Compaction during first message latency:** The simplest v1 runs compaction synchronously, adding 2-3 seconds to the first message. Is this acceptable, or should we run compaction in parallel with the first response (using the old state for message 1, swapping to new state for message 2)?
+
+3. **Existing conversation migration:** Should we backfill compacted states for existing channels? Or let the system build states forward-only as users interact?
+
+4. **Block format:** The prompts produce free-form text. Should we enforce JSON structure within blocks (e.g., user model as `{ preferences: [], projects: [], ... }`)? Structured format is better for programmatic access but harder to prompt for consistently.
+
+5. **Cross-channel user model:** Should the user model block be per-channel or per-user? A user interacting across multiple channels (different projects) might benefit from a shared user model with channel-specific overlays.
+
+---
+
+*This PRD is designed to be self-contained. An AI coding agent or developer should be able to implement the system from this document alone, using the existing codebase as described in the architecture audit.*
+
+## Related
+
+- [Monitor: Agents](./monitor-agents.mdx) — agent types and multi-agent dispatch
+- [Monitor: Memory](./monitor-memory.mdx) — memory system used by this design
+- [Agent System](./agent-system.mdx) — agent classes and context assembly
+- [Hub Protocol](../platform/hub-protocol.mdx) — external IS contract for multi-agent routing

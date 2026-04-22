@@ -1,0 +1,923 @@
+---
+title: 'Infrastructure Architecture'
+description: 'Complete infrastructure architecture: components, workflows, CI/CD, secrets, known gaps'
+section: devops
+audience: team
+version: 1.0+
+last_updated: '2026-04-22'
+tags: [infrastructure, ci-cd, devops, architecture, deployment]
+sidebar_position: 1
+hide_title: false
+toc: true
+---
+
+# Infrastructure Architecture
+
+*Adapted from `docs-internal/INFRASTRUCTURE-ARCHITECTURE.md`, last original update 2026-04-13.*
+
+This document captures the complete infrastructure architecture: how all components connect, how a pod is born, how it gets updated, how the signup flow works end-to-end, and what the current state of each CI/CD pipeline is.
+
+---
+
+## Table of Contents
+
+1. [Component Map](#1-component-map)
+2. [Component Internals](#2-component-internals)
+   - [Data Pod (synap-backend)](#21-data-pod-synap-backend)
+   - [Control Plane API (synap-control-plane-api)](#22-control-plane-api-synap-control-plane-api)
+   - [Intelligence Service (synap-intelligence-service)](#23-intelligence-service-synap-intelligence-service)
+   - [Control Plane Dashboard](#24-control-plane-dashboard-synap-control-plane-dashboard)
+3. [Authentication Model](#3-authentication-model)
+4. [Signup → Active Pod Workflow](#4-signup--active-pod-workflow)
+5. [Pod Update / Rolling Upgrade](#5-pod-update--rolling-upgrade)
+6. [Warm Pool](#6-warm-pool)
+7. [OpenClaw / Self-Hosted Agent Setup](#7-openclaw--self-hosted-agent-setup)
+8. [Migration System Contract](#8-migration-system-contract)
+9. [CI/CD Pipelines](#9-cicd-pipelines)
+   - [synap-backend (3 workflows)](#91-synap-backend--3-workflows)
+   - [synap-control-plane-api (2 workflows)](#92-synap-control-plane-api--2-workflows)
+   - [synap-intelligence-service (2 workflows)](#93-synap-intelligence-service--2-workflows)
+   - [Docker image tag strategy](#94-docker-image-tag-strategy-all-services)
+   - [GitHub Secrets reference](#95-github-secrets-reference)
+   - [Monitoring & Alerting](#9b-monitoring--alerting)
+10. [Environment Variables Reference](#10-environment-variables-reference)
+11. [Current State Assessment](#11-current-state-assessment)
+12. [Known Gaps & P0–P3 Issues](#12-known-gaps--p0p3-issues)
+
+---
+
+## 1. Component Map
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  USER                                                               │
+│  Browser (Electron) ──────────────────────────────────────────────┐ │
+│  Relay (Expo/RN)    ─────────────────────────────────────────────┐│ │
+│  synap-landing      ──── (auth/checkout) → CP API                ││ │
+└──────────────────────────────────────────────────────────────────┼┼─┘
+                                                                    ││
+            ┌──────────────────────────────────────────────────────┼┘
+            │                                                      │
+            ▼                                                      ▼
+┌───────────────────────┐          ┌─────────────────────────────────┐
+│ Control Plane API     │          │ Data Pod (synap-backend)         │
+│ synap-control-plane-  │          │ Port 4000                        │
+│ api  /  Port 3000     │          │                                 │
+│                       │          │  ┌─────────────────────────┐    │
+│ Better Auth           │◄─ES256──►│  │ Hub Protocol REST       │    │
+│ Stripe webhooks       │   JWT    │  │ /api/hub/* (76+ routes) │    │
+│ Hetzner provisioning  │          │  └─────────────────────────┘    │
+│ Cloudflare DNS        │          │  ┌─────────────────────────┐    │
+│ Resend emails         │          │  │ tRPC /trpc/*            │    │
+│ Pod lifecycle mgmt    │          │  └─────────────────────────┘    │
+│ Warm pool mgmt        │          │  ┌─────────────────────────┐    │
+└───────────────────────┘          │  │ MCP /mcp                │    │
+          │                        │  └─────────────────────────┘    │
+          │                        │  ┌─────────────────────────┐    │
+          ▼                        │  │ OpenAI compat /v1/*     │    │
+┌───────────────────────┐          │  └─────────────────────────┘    │
+│ CP Dashboard          │          │                                 │
+│ synap-control-plane-  │          │  PostgreSQL (TimescaleDB)        │
+│ dashboard / Port 5180 │          │  Redis                          │
+│                       │          │  MinIO / R2                      │
+│ Fleet management      │          │  Typesense                      │
+│ Shared pods           │          │  Ory Kratos (auth)              │
+│ Provisioning logs     │          │  Ory Hydra (OAuth2)             │
+│ Intelligence status   │          │  pod-agent (port 4002)          │
+│ Rolling updates       │          └─────────────────────────────────┘
+└───────────────────────┘                         │
+                                                  │ Hub Protocol API key
+                                                  ▼
+                   ┌─────────────────────────────────┐
+                   │ Intelligence Service (IS)        │
+                   │ synap-intelligence-service       │
+                   │ Port 3001                        │
+                   │                                 │
+                   │ OrchestratorAgent               │
+                   │ PersonaAgent                    │
+                   │ OpenRouter (LLM gateway)        │
+                   │ Skill loader                    │
+                   │ Tool categories (8)             │
+                   └─────────────────────────────────┘
+```
+
+**Traffic flows:**
+- **User → Pod**: tRPC (app) + Hub Protocol (OpenClaw/CLI/extensions) + MCP
+- **CP API → Pod**: ES256 JWTs for provisioning/updates, provisioning token for setup
+- **IS → Pod**: Hub Protocol REST (Bearer API key)
+- **Pod → IS**: HTTP calls to `INTELLIGENCE_HUB_URL` for AI processing
+- **CP API → IS**: `POST /admin/provision-pod` to register customers + set limits
+
+---
+
+## 2. Component Internals
+
+### 2.1 Data Pod (synap-backend)
+
+**Entry point:** `apps/api/src/index.ts`
+
+#### Startup sequence (in order)
+
+```
+1. Load .env (dotenv/config)
+2. Validate env: DATABASE_URL, storage provider, AI config, Ory Stack, IS connection, CORS
+   → exit(1) if any validation fails
+3. Create Hono app
+4. Apply middleware: CORS, security headers, rate limiting (500 req/15min IP), size limit (10MB)
+5. Register routes:
+   GET  /health          ← no auth
+   GET  /metrics         ← Prometheus
+   POST /api/hub/*       ← Hub Protocol REST (Bearer or session token)
+   POST /mcp             ← MCP JSON-RPC (Bearer token)
+   POST /v1/*            ← OpenAI-compat (Bearer token)
+   /trpc/*               ← tRPC (session token)
+   /api/files            ← file upload
+   /api/chat             ← chat stream
+   /admin/*              ← SPA fallback
+6. Run migrations (separate backend-migrate container)
+7. validateSchemaCoherence()  ← blocks server start if critical columns missing
+8. Start HTTP listener on port 4000
+9. Start pg-boss job queue + register 27 workers + 3 cron jobs
+10. Register process error handlers (unhandled rejection → exit(1))
+```
+
+**Schema coherence tripwire** (`packages/database/src/utils/schema-coherence.ts`):
+- Validates 30+ critical columns across 14 tables exist in the live DB
+- Catches drift between Drizzle schema and actual migrations
+- Runs AFTER migrations, BEFORE serving traffic
+- Exits with code 1 + structured error message pointing to the relevant migration
+
+#### Hub Protocol REST (`packages/api/src/routers/hub-protocol-rest.ts`, 4649 lines)
+
+Auth modes:
+| Mode | Header | Who uses it |
+|------|--------|-------------|
+| Bearer API key | `Authorization: Bearer <key>` | IS agents, OpenClaw, CLI |
+| Kratos session | `X-Session-Token: <token>` | Browser, extensions |
+
+Key routes:
+```
+GET  /api/hub/health              ← no auth
+GET  /api/hub/users/me            ← identity
+GET  /api/hub/workspaces          ← list accessible workspaces
+GET  /api/hub/entities            ← search entities
+POST /api/hub/entities            ← create/update entity
+GET  /api/hub/documents           ← search documents
+POST /api/hub/channels/{id}/send  ← send message
+POST /api/hub/memory              ← store fact (embedding optional)
+POST /api/hub/setup/agent         ← create agent user + API key
+```
+
+Rate limits:
+- Global IP: 500 req/15min
+- Per API key: configurable in `api_keys` table
+- MCP per key: 100 req/min
+
+#### Docker services (deploy/docker-compose.standalone.yml)
+
+| Service | Image | Port |
+|---------|-------|------|
+| backend | ghcr.io/synap-core/backend | 4000 |
+| backend-migrate | ghcr.io/synap-core/backend | — (one-shot) |
+| realtime | ghcr.io/synap-core/backend-realtime | 4001 |
+| pod-agent | ghcr.io/synap-core/pod-agent | 4002 |
+| postgres | timescale/timescaledb-ha:pg15 | 5432 |
+| redis | redis:7-alpine | — |
+| minio | minio/minio | 9000/9001 |
+| typesense | typesense/typesense:0.25.2 | 8108 |
+| kratos | oryd/kratos:v1.3.1 | 4433/4434 |
+| hydra | oryd/hydra:v2.3.0 | 4444/4445 |
+| caddy | caddy:2-alpine | 80/443 |
+| openclaw | ghcr.io/openclaw/openclaw | 18789 (opt-in, --profile openclaw) |
+| dozzle | amir20/dozzle | 8888 (opt-in, --profile dozzle) |
+
+---
+
+### 2.2 Control Plane API (synap-control-plane-api)
+
+**Framework:** Hono REST (not tRPC)
+**Auth:** Better Auth (email/password + OAuth + 2FA TOTP plugin)
+
+Key services:
+- **Billing**: Stripe checkout + webhooks (`src/services/billing/stripe.ts`)
+- **Provisioning**: Hetzner API for server creation (`src/jobs/provision-pod.ts`)
+- **DNS**: Cloudflare A records (`src/services/dns.ts`)
+- **Email**: Resend for invitation emails
+- **JWT signing**: ES256 ECDSA (`src/lib/signing-key.ts`)
+
+Pod lifecycle state machine:
+```
+pending_configuration  ← created on Stripe webhook; awaiting user setup form
+        ↓
+     pending           ← user submitted setup form
+        ↓
+  creating_server      ← Hetzner API called
+        ↓
+  configuring_dns      ← DNS A record created
+        ↓
+   waiting_dns         ← polling DNS propagation
+        ↓
+  waiting_health       ← polling /health endpoint (cloud-init completing)
+        ↓
+syncing_intelligence   ← registering with IS
+        ↓
+sending_invitation     ← sending admin email
+        ↓
+      active           ← fully operational
+        
+      error            ← any step failed (retryable via admin)
+    suspended          ← manually or billing lapse
+     archived          ← soft-deleted
+    warm_pool          ← pre-provisioned, no owner yet
+```
+
+---
+
+### 2.3 Intelligence Service (synap-intelligence-service)
+
+**Entry point:** `apps/intelligence-hub/src/index.ts`
+**Port:** `INTELLIGENCE_HUB_PORT` (default 3001)
+
+#### Agent architecture
+
+```
+BaseAgent (base/agent.ts)
+├── OrchestratorAgent  ← co-founder identity, all 8 tool categories, max 10 steps
+│   └── can call analyzeBranching() to spawn sub-agents
+└── PersonaAgent       ← domain expert, config-driven tools, built-in personas:
+    ├── CTO
+    ├── Marketing
+    ├── Sales
+    └── ProjectManager
+```
+
+#### Tool categories (`src/tools/tool-categories.ts`)
+
+| Category | Key tools | Auto-execute? |
+|----------|-----------|---------------|
+| investigation | search_unified, vector_search, search_entities | yes |
+| memory | memory_search, remember_fact | yes |
+| context | get_entity, get_document, graph_traverse | yes |
+| linking | link_entity_to_thread, link_document_to_thread | yes |
+| write | entity/doc CRUD, relations, automations | requires approval |
+| coordination | branching, dispatch, consolidate | yes |
+| workspace | views, profiles, layout, widgets | restricted |
+| feed | classify, digest, signals | yes |
+
+#### IS → Pod: Hub Protocol client (`src/clients/hub-protocol.ts`)
+
+```
+Base URL:   DATA_POD_URL env var
+Auth:       Authorization: Bearer {HUB_PROTOCOL_API_KEY}
+Timeout:    10s (reads), 20s (writes)
+Retry:      3 attempts, exponential backoff [0ms, 1s, 2s], only 5xx
+```
+
+#### Skill loader (`src/skills/skill-loader.ts`)
+
+Skill markdown files bundled in `src/skills/`. Loaded by matching required tools to `SKILL_TRIGGERS` array. Injected into agent system prompts as `## WORKSPACE SKILLS` section. Skill files include: hub-protocol, entity-management, document-management, automations, workspace-views, inline-references, view types (kanban, bento, flow, graph).
+
+---
+
+### 2.4 Control Plane Dashboard (synap-control-plane-dashboard)
+
+**Framework:** Vite + React 19, SPA
+**Dev port:** 5180
+**Auth:** Cookie-based session (Better Auth) + optional TOTP 2FA
+
+Routes:
+```
+/                   → FleetPage (all pods overview)
+/shared-pods        → SharedPodsPage (multi-tenant management)
+/pods/:id           → PodDetailPage (provisioning logs, actions, IS status)
+/releases           → ReleasesPage
+/metrics            → MetricsPage
+/users              → UsersPage
+/dns-audit          → DNSAuditPage
+/tickets            → TicketsPage
+/audit-log          → AuditLogPage
+/infrastructure     → InfrastructurePage
+/pod-architecture   → PodArchitecturePage
+```
+
+CP API endpoints used:
+```
+GET  /admin/fleet                           ← all pods
+GET  /admin/pods/:id                        ← pod detail + provisioning logs
+POST /admin/pods/:id/action                 ← health_check | reprovision | deprovision | suspend | activate | update
+POST /admin/pods/:id/provision-intelligence ← trigger IS provisioning
+GET  /intelligence/provision/status/:podId  ← IS provisioning status
+POST /admin/pods/:id/hub-key               ← retrieve Hub Protocol key
+DELETE /admin/pods/:podId/tenants/:tenantId ← evict shared pod tenant
+PATCH  /admin/pods/:podId/migrate/:tenantId ← migrate tenant to dedicated
+```
+
+All requests include `credentials: "include"` (session cookie). Auto-redirect to `/login` on 401.
+
+---
+
+## 3. Authentication Model
+
+### CP ↔ Pod: ES256 asymmetric JWTs
+
+```
+CP API generates:   signCpJwt(payload, expiry) → ES256 JWT
+                    Private key: CP_EC_PRIVATE_KEY (PKCS#8 PEM)
+
+Pod verifies:       fetch({CONTROL_PLANE_URL}/.well-known/jwks.json)
+                    → cache public key
+                    → verify JWT signature + expiry + jti (replay prevention)
+
+JWKS endpoint:      GET /.well-known/jwks.json on CP API
+                    Returns: { keys: [{ kty, crv, use: "sig", alg: "ES256", kid, x, y }] }
+```
+
+JWT types used:
+
+| Type | TTL | Purpose |
+|------|-----|---------|
+| `handshake` | 5 min | Shared pod pre-provisioning; creates Kratos identity + workspace |
+| `provision` | 10 min | Dedicated pod IS sync; registers with Hub, delivers Hub API key |
+| `agent_setup` | varies | OpenClaw agent setup; verified at `POST /api/hub/setup/agent` |
+| `addon_activate` | varies | Addon activation; same endpoint |
+| `tier_update` | 5 min | Push subscription tier changes to pod |
+| `update` | 10 min | Rolling update trigger; sent to pod-agent |
+| `update_callback` | 30 min | Pod authenticates result callback to CP |
+
+**Key generation:**
+```bash
+openssl ecparam -name prime256v1 -genkey -noout | \
+  openssl pkcs8 -topk8 -nocrypt -outform PEM > cp-private-key.pem
+```
+
+### Pod: API keys (Bearer tokens)
+
+Generated at `POST /api/hub/setup/agent`. Format: `synap_hub_live_{32_random_hex}` (prod) or `synap_hub_test_` (dev). Stored hashed in `api_keys` table. Scopes: `hub-protocol.read`, `hub-protocol.write`, `mcp.read`, `mcp.write`.
+
+### Pod: Kratos sessions
+
+Browser/app sessions via Ory Kratos. Sent as `X-Session-Token` header to Hub Protocol. Full access (no scope restrictions).
+
+### CP API: Better Auth sessions
+
+httpOnly cookie. Email+password + optional TOTP 2FA. Used by CP Dashboard and landing page.
+
+---
+
+## 4. Signup → Active Pod Workflow
+
+### Phase 1: Signup
+
+```
+POST /auth/sign-up/email
+  → Better Auth creates user record
+  → Email verification sent (Resend)
+  → POST /auth/verify-email callback
+      → auth.ts user.create.after hook:
+          1. Update waitlist.phase: "waitlist" → "signed_up"
+          2. fire-and-forget: provisionUserOnSharedPod()
+             → sign handshake JWT (5 min)
+             → POST pod:/api/handshake
+             → Creates Kratos identity + default workspace on shared pod
+          3. Create 7-day trial subscription (solo tier, no Stripe yet)
+```
+
+### Phase 2: Upgrade (Stripe checkout)
+
+```
+POST /billing/checkout
+  → createCheckoutSession(customerId, priceId, successUrl, cancelUrl, userId)
+  → Idempotent: same customer+price+day → same session
+
+User completes checkout
+  → POST /webhooks/stripe  (checkout.session.completed)
+      → verifyWebhookSignature()
+      → handleCheckoutCompleted():
+          1. Resolve user (by stripeCustomerId → client_reference_id → metadata.userId)
+          2. Resolve tier from priceId
+          3. INSERT subscriptions (onConflictDoNothing for replays)
+          4. Guard: if pod already created → skip
+          5. Guard: stale pending_configuration pods (>2h) → relink
+          6. Guard: re-subscribe → triggerRestorePod()
+          7. INSERT dataPods { status: "pending_configuration" }
+             subdomain: "{adj}-{noun}-{hex}"
+             deploymentMode: "full_managed"
+             provider: user.preferredProvider (default: hetzner)
+          8. INSERT intelligenceAccess { monthlyTokenLimit: tier.aiTokens }
+```
+
+### Phase 3: User setup form
+
+```
+GET /pods/:id/provisioning-setup    ← returns form definition (fields depend on tier)
+POST /pods/:id/provisioning-setup
+  → validate subdomain uniqueness
+  → validate custom domain (tier: pro+ only)
+  → UPDATE dataPods { status: "pending", subdomain, serverLocation, adminEmail }
+  → triggerProvisionPod(podId)       ← starts provision-pod job
+```
+
+### Phase 4: Server provisioning (provision-pod.ts)
+
+```
+Step 1: Create Hetzner server
+  → Check idempotency: if pod.serverId already set, skip creation
+  → Generate intelligenceApiKey (32 bytes hex)
+  → Generate provisioning token (32 bytes hex, encrypted, stored in provisioningTokens)
+  → Create Hetzner Volume (optional, persistent)
+  → Generate cloud-init script
+  → createServerWithFallback():
+      → try preferred server type (cx33, cx43...)
+      → fallback through alternatives on availability error
+      → fallback through locations: nbg1 → fsn1 → hel1
+  → Wait for IP (120s timeout)
+  → UPDATE dataPods { status: "configuring_dns", serverId, serverIp }
+
+Step 2: Configure DNS
+  → Create Cloudflare A record: {subdomain}.synap.live → serverIp
+  → UPDATE dataPods { status: "waiting_dns" }
+
+Step 3: Poll DNS propagation
+  → Resolve {subdomain}.synap.live up to 5 minutes
+  → Fallback: HTTPS health probe if DNS timeout
+
+Step 4: Poll health / cloud-init  [UPDATE: "deploying_services" → "waiting_health"]
+  → Poll every 15s, up to 30min (120 attempts)
+  → Two signals:
+      a) Server POSTs to /install-callback (provisioning token auth) → progress events
+      b) GET https://{domain}/health → fallback probe
+  → On install_complete: UPDATE { status: "syncing_intelligence" }
+  → On install_failed: DELETE server, abort (permanent error, no retry)
+  → On timeout: UPDATE { status: "error" }, allow admin retry
+
+Step 5: Sync Intelligence Hub
+  → Sign provision JWT (type: "provision", 10 min)
+  → POST pod:/api/provision/connect  ← establish trusted CP session
+  → POST hub:/admin/provision-pod    ← register customer, set token limits
+  → POST pod:/api/provision/register-intelligence  ← deliver Hub API key to pod
+  → (optional) relay hubProtocolApiKey back to IS for proactive calls
+  → UPDATE dataPods { status: "sending_invitation" }
+
+Step 5b: Auto-install packages
+  → For each pkg in autoInstallPackages:
+      POST pod:/api/trpc/workspaces.seedPlugin (provisioning token auth)
+
+Step 6: Send invitation email
+  → sendPodReadyEmail(adminEmail, podUrl)
+  → UPDATE dataPods { status: "active" }
+```
+
+**Total time (typical):** 3–8 minutes (server creation dominates)
+
+---
+
+## 5. Pod Update / Rolling Upgrade
+
+**File:** `synap-control-plane-api/src/jobs/rolling-update.ts`
+
+```
+Trigger: admin action "update" from CP Dashboard → POST /admin/pods/:id/action
+
+Rolling update flow:
+
+1. For fleet > 1 pod: designate one canary
+2. Sign two JWTs:
+   a. Update trigger JWT (type: "update", 10 min):
+      { podId, targetVersion, updateId, callbackUrl, callbackJwt }
+   b. Callback JWT (type: "update_callback", 30 min):
+      Pod uses this to authenticate its result POST back to CP
+
+3. POST pod:/api/pod-agent/command { jwt: triggerJwt }
+   Headers: X-JWKS-URL: {CP_URL}/.well-known/jwks.json
+   → pod-agent pulls new image, restarts services, calls callback
+
+4. Canary health check:
+   Poll GET {pod_url}/health every 15s, up to 5 min
+   → If canary fails: abort entire update
+   → If canary healthy: proceed with remaining pods in parallel batches
+
+5. Pod result callback:
+   POST /pods/update-result/{podId}  { status, version }
+   Authorization: Bearer {callbackJwt}
+   → CP verifies callback JWT
+   → UPDATE pod_updates { status, version }
+   → UPDATE dataPods { version, status: "active" | "error" | "rolled_back" }
+```
+
+---
+
+## 6. Warm Pool
+
+**Files:** `synap-control-plane-api/src/jobs/warm-pool-replenish.ts` + `claim-warm-pod.ts`
+
+Pre-provisioned pods with no owner. Configured via `WARM_POOL_SIZE` + `WARM_POOL_SERVER_TYPE` env vars.
+
+```
+Replenishment:
+  1. Count in-flight warm pool pods (all non-error statuses)
+  2. If errors exist: skip (manual cleanup required)
+  3. For each pod needed up to WARM_POOL_SIZE:
+     → INSERT dataPods { userId: null, status: "pending", subdomain: "safe-pool-{hex}" }
+     → triggerProvisionPod(podId, { warmPool: true })
+     → Provisioning skips Step 5 (IS sync) and Step 6 (email)
+     → Final status: "warm_pool"
+
+Claim (on Stripe checkout):
+  → webhook routes to triggerClaimWarmPod(podId, userId, subscriptionId)
+  → Step 5: sync Intelligence Hub (deferred from provision)
+  → Step 6: send admin invitation email
+  → UPDATE dataPods { userId, subscriptionId, status: "active" }
+  → fire-and-forget: triggerWarmPoolReplenish() to refill pool
+```
+
+**Key advantage:** Pod is ready in seconds for users (DNS + services already up). Only IS registration + email on claim path (~30s).
+
+---
+
+## 7. OpenClaw / Self-Hosted Agent Setup
+
+**Files:**
+- `synap-backend/deploy/setup-openclaw.sh`
+- `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` (lines 4205–4647)
+
+### `POST /api/hub/setup/agent` endpoint
+
+Auth: ES256 JWT (`type: "agent_setup"` or `"addon_activate"`) OR `PROVISIONING_TOKEN` (self-hosted fallback).
+
+Sequence:
+
+```
+1. Authenticate (CP JWT → PROVISIONING_TOKEN fallback)
+2. Parse body: { agentType, workspaceId?, definition? }
+3. Find or create workspace with packageSlug = 'agent-os'
+   → If creating: load templates/agent-os.json
+     → createWorkspaceFromDefinition() (6 profiles, 14 views)
+     → Enqueue workspace-init job
+4. Repair workspace: ensure owner member exists (self-healing)
+5. Find or create agent user (userType: "agent", agentMetadata.agentType)
+6. Grant workspace membership (role: "editor", idempotent)
+7. Revoke old API keys for this agent user
+8. Generate new Hub Protocol API key:
+   synap_hub_live_{32_random_hex}
+   Scopes: hub-protocol.read, hub-protocol.write, mcp.read, mcp.write
+9. Return { agentUserId, workspaceId, hubApiKey, keyId }
+   (key only returned once, not retrievable)
+```
+
+### setup-openclaw.sh flow
+
+```bash
+./setup-openclaw.sh [--pod-url URL] [--token TOKEN]
+
+1. GET {POD_URL}/health            ← verify pod is up
+2. POST {POD_URL}/api/hub/setup/agent { agentType: "openclaw" }
+   Authorization: Bearer {PROVISIONING_TOKEN}
+3. Write to .env:
+   OPENCLAW_HUB_API_KEY={hubApiKey}
+   SYNAP_AGENT_USER_ID={agentUserId}
+   SYNAP_WORKSPACE_ID={workspaceId}
+4. docker compose --profile openclaw up -d openclaw
+5. Poll http://localhost:18789/health (20 attempts, 3s interval)
+6. Print: openclaw skill install synap
+```
+
+---
+
+## 8. Migration System Contract
+
+**File:** `synap-backend/packages/database/src/scripts/migrate.ts`
+
+### Directory search order
+
+1. `/app/migrations` (Dockerfile layout)
+2. `/app/api/migrations` (deploy/Dockerfile layout)
+3. `./migrations` (dev, relative to CWD)
+4. `${__dirname}/../../migrations` (fallback)
+
+### Execution contract
+
+```
+- Read all .sql files from migrations directory
+- Sort alphabetically (prefix number controls order)
+- For each file NOT in _migrations table:
+    sql.begin(async (tx) => {
+      await tx.unsafe(migrationContent)
+      await tx`INSERT INTO "_migrations" (filename) VALUES (${filename})`
+    })
+    // If any SQL fails → transaction rolls back atomically
+    // Failed migration is NEVER recorded as applied
+- On any failure: log structured error (code, position, detail, hint) → exit(1)
+- On success: exit(0)
+```
+
+### _migrations table
+
+Tracked by `filename` (unique constraint). Single column after the hardening migration (removed `type` column from old Drizzle schema). Auto-created on first boot if not exists.
+
+### Baseline migration (0000_baseline_schema.sql)
+
+- Creates all 73 tables with `CREATE TABLE IF NOT EXISTS`
+- Creates 196 indexes with `CREATE INDEX IF NOT EXISTS`
+- Uses `ALTER TABLE ADD COLUMN IF NOT EXISTS` for every column (handles partial DB state)
+- Exception: `events` table has NO ALTER TABLE guards (TimescaleDB hypertable restriction — cannot add columns with non-constant defaults to compressed columnstores)
+- Inserts 103 legacy migration filenames into `_migrations` to prevent re-execution
+- The single source of truth for a fresh pod schema
+
+### Schema reconciliation (0099_schema_reconciliation.sql)
+
+- Catch-up migration for pods that have older schemas
+- Idempotent: all `ADD COLUMN IF NOT EXISTS`
+- Must be updated whenever a new column is added to `src/schema/*.ts`
+
+### Adding a new column (required steps)
+
+1. Add to Drizzle schema (`packages/database/src/schema/*.ts`)
+2. Add to `0099_schema_reconciliation.sql` with `ADD COLUMN IF NOT EXISTS`
+3. Add to `schema-coherence.ts` `REQUIRED_COLUMNS` array
+4. Create new numbered migration file (e.g., `0100_my_feature.sql`)
+
+---
+
+## 9. CI/CD Pipelines
+
+### 9.1 synap-backend — 3 workflows
+
+#### `ci.yml`
+
+Trigger: PRs to `main`/`develop`, push to `main`/`develop`. Concurrency: cancel in-progress for same ref. Services: `timescale/timescaledb-ha:pg16` at `localhost:5432`.
+
+| Step | Command | Blocking? | Notes |
+|------|---------|-----------|-------|
+| Lint | `pnpm lint --max-warnings=100` | **Yes** | 100 warnings allowed, errors fail |
+| Format | `pnpm format` | No | Warning only |
+| Build deps | `pnpm turbo build --filter=...` | No | Continues on failure |
+| Typecheck | `pnpm typecheck` | **Yes** | All packages |
+| **Validate migrations** | `pnpm --filter @synap/database migrate` | **Yes** | Runs against TimescaleDB pg16 service |
+| Tests | `pnpm test --filter='!@synap-core/core'` | **Yes** | BLOCKING — failures fail CI |
+| Build | `pnpm build` | **Yes** | Full monorepo build |
+| Docker build | `docker build -f deploy/Dockerfile .` | **Yes** | Build only (no push) |
+| Security audit | `pnpm audit --prod --audit-level=high` | **Yes** | High severity only |
+| Upload coverage | `actions/upload-artifact@v4` | No | 7-day retention |
+
+#### `docker-publish.yml`
+
+Trigger: push to `main`, `develop`, or `v*` tags.
+
+| Branch / Tag | Image tags produced |
+|---|---|
+| `develop` | `:dev` |
+| `main` | `:main` + `:sha-{short}` |
+| `v*` (e.g. `v1.2.3`) | `:v1.2.3` + `:latest` |
+
+Steps:
+1. Build multi-platform image (linux/amd64 + linux/arm64)
+2. Push to `ghcr.io/synap-core/backend`
+3. On `main` or tag: `POST $CP_API_URL/admin/releases/notify` with `{ repo, version, sha, imageTag }` (auth: `CP_ADMIN_KEY`)
+
+#### `staging-deploy.yml`
+
+Trigger: push to `develop` only.
+
+Steps:
+1. Wait for `docker-publish.yml` to complete (the `:dev` image must be pushed)
+2. Trigger rolling update via CP API:
+   ```
+   POST $CP_API_URL/admin/pods/$STAGING_POD_ID/action
+   { "action": "update", "targetVersion": "dev" }
+   Authorization: Bearer $CP_ADMIN_KEY
+   ```
+3. Poll `$STAGING_POD_URL/health` until healthy (30 attempts × 10s)
+4. Run smoke tests:
+   ```
+   HUB_API_KEY=$STAGING_HUB_API_KEY \
+   BASE_URL=$STAGING_POD_URL \
+   ./scripts/smoke-test.sh
+   ```
+5. Report pass/fail as commit status
+
+---
+
+### 9.2 synap-control-plane-api — 2 workflows
+
+#### `ci.yml`
+
+Trigger: PRs to `main`/`develop`, push to `main`.
+
+| Step | Blocking? | Notes |
+|------|-----------|-------|
+| Lint | **Yes** | |
+| Typecheck | **Yes** | |
+| Tests | **Yes** | BLOCKING |
+| Build | **Yes** | |
+| Security audit | **Yes** | High severity |
+| Deploy production | **Yes** | `main` push only — webhook-triggered |
+
+Deploy production step (runs only on `main` push):
+```
+POST $DEPLOY_WEBHOOK_URL
+X-Hub-Signature-256: hmac(DEPLOY_WEBHOOK_SECRET, body)
+{ "ref": "main", "sha": "$GITHUB_SHA" }
+```
+
+The webhook receiver (on the CP server) pulls the new image and does `docker compose up -d`.
+
+---
+
+### 9.3 synap-intelligence-service — 2 workflows
+
+#### `ci.yml`
+
+Trigger: PRs to `main`/`develop`, push to `main`/`develop`.
+
+| Step | Blocking? | Notes |
+|------|-----------|-------|
+| Lint | **Yes** | |
+| Typecheck | **Yes** | |
+| Tests + coverage | **Yes** | BLOCKING, coverage artifact uploaded |
+| Build | **Yes** | |
+| Security audit | **Yes** | `continue-on-error: false` |
+
+#### `docker-publish.yml`
+
+Same tag strategy as synap-backend (see table above). Image: `ghcr.io/synap-core/intelligence-service`.
+
+On `main` or tag push: notifies CP API of new IS version:
+```
+POST $CP_API_URL/admin/releases/notify
+{ "repo": "synap-intelligence-service", "version": "...", "imageTag": "..." }
+Authorization: Bearer $CP_ADMIN_KEY
+```
+
+---
+
+### 9.4 Docker image tag strategy (all services)
+
+| Git ref | Tags applied |
+|---------|-------------|
+| Push to `develop` | `:dev` |
+| Push to `main` | `:main`, `:sha-{7-char short SHA}` |
+| Push `v*` tag (e.g. `v1.2.3`) | `:v1.2.3`, `:latest` |
+
+Rationale: `:dev` is always safe to deploy to staging. `:sha-{short}` provides a pinned rollback target without requiring a formal release tag. `:latest` only moves on explicit version tags to avoid accidental production upgrades.
+
+---
+
+### 9.5 GitHub Secrets reference
+
+| Secret | Used by | Purpose |
+|--------|---------|---------|
+| `CP_API_URL` | synap-backend, synap-intelligence-service | CP notification endpoint for release events |
+| `CP_ADMIN_KEY` | synap-backend, synap-intelligence-service | Admin auth for CP API release notifications |
+| `STAGING_POD_URL` | synap-backend (`staging-deploy.yml`) | Staging pod base URL for health + smoke tests |
+| `STAGING_POD_ID` | synap-backend (`staging-deploy.yml`) | Pod ID in CP to trigger rolling update against |
+| `STAGING_HUB_API_KEY` | synap-backend (`staging-deploy.yml`) | Hub Protocol API key for smoke test requests |
+| `DEPLOY_WEBHOOK_URL` | synap-control-plane-api | Deployment trigger URL on the CP server |
+| `DEPLOY_WEBHOOK_SECRET` | synap-control-plane-api | HMAC secret for webhook signature verification |
+
+---
+
+## 9b. Monitoring & Alerting
+
+### Prometheus endpoints
+
+All three services expose `GET /metrics` (no auth required, scrape from internal network only):
+
+| Service | Endpoint |
+|---------|----------|
+| synap-backend | `http://pod:4000/metrics` |
+| synap-intelligence-service | `http://is:3001/metrics` |
+| synap-control-plane-api | `http://cp-api:3000/metrics` |
+
+### Alert definitions
+
+Alert rules live in `synap-backend/deploy/monitoring/alerts.yml`. Key alerts:
+
+| Alert name | Fires when | Severity |
+|---|---|---|
+| `PodHighErrorRate` | Pod 5xx rate > 5% for 2 min | warning |
+| `HubProtocolHighLatency` | Hub Protocol P95 latency > 2s for 5 min | warning |
+| `PodHealthCheckDown` | `/health` returns non-200 for > 1 min | critical |
+| `IntelligenceServiceDown` | IS `/health` returns non-200 for > 2 min | critical |
+| `WarmPoolDepleted` | Warm pool available pods = 0 for > 10 min | warning |
+| `ProvisioningDurationHigh` | Pod provisioning duration > 10 min | warning |
+
+### Starting the monitoring stack
+
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/... \
+docker compose -f deploy/docker-compose.standalone.yml --profile monitoring up -d
+```
+
+The `monitoring` Compose profile starts:
+- **Prometheus** — scrapes all three services
+- **Grafana** — dashboards at `http://monitoring.synap.live`
+- **Alertmanager** — routes alerts to Slack via `SLACK_WEBHOOK_URL`
+
+Grafana default credentials are set via `GF_SECURITY_ADMIN_PASSWORD` env var (required; no default).
+
+---
+
+## 10. Environment Variables Reference
+
+### Data Pod (synap-backend) — Critical
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `DATABASE_URL` | YES | — | PostgreSQL connection string |
+| `PROVISIONING_TOKEN` | YES (self-hosted) | — | Auth for `/api/hub/setup/agent` |
+| `SYNAP_SERVICE_ENCRYPTION_KEY` | YES | — | Service credential encryption |
+| `ALLOWED_ORIGINS` | YES (prod) | — | CORS allowed origins |
+| `CONTROL_PLANE_URL` | NO | — | CP issuer for JWT verification |
+| `INTELLIGENCE_HUB_URL` | NO | — | IS base URL |
+| `INTELLIGENCE_HUB_API_KEY` | NO | — | IS auth key |
+| `HUB_PROTOCOL_API_KEY` | NO | — | For IS→pod calls |
+| `PORT` | NO | 4000 | HTTP port |
+| `NODE_ENV` | NO | development | Environment |
+| `SHARED_POD_MODE` | NO | false | Multi-tenant mode |
+| `VECTOR_SEARCH_ENABLED` | NO | true | Disable pgvector on shared pods |
+
+### Control Plane API — Critical
+
+| Variable | Purpose |
+|----------|---------|
+| `BETTER_AUTH_URL` | Auth base URL + JWT issuer |
+| `BETTER_AUTH_SECRET` | Session signing |
+| `CP_EC_PRIVATE_KEY` | ES256 JWT signing (PKCS#8 PEM) |
+| `STRIPE_SECRET_KEY` | Stripe API |
+| `STRIPE_WEBHOOK_SECRET` | Webhook verification |
+| `HETZNER_API_TOKEN` | Server provisioning |
+| `INTELLIGENCE_HUB_URL` | IS registration endpoint |
+| `INTELLIGENCE_HUB_ADMIN_KEY` | IS admin API key |
+| `RESEND_API_KEY` | Email sending |
+| `APP_DOMAIN` | Pod subdomain base (e.g., `synap.live`) |
+| `WARM_POOL_SIZE` | Pre-provisioned pods target (0 = disabled) |
+| `DATABASE_URL` | CP PostgreSQL |
+
+### Intelligence Service — Critical
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENROUTER_API_KEY` | LLM provider (required) |
+| `HUB_PROTOCOL_API_KEY` | Auth for calling pod Hub Protocol |
+| `DATA_POD_URL` | Backend URL |
+| `INTELLIGENCE_HUB_INTERNAL_KEY` | Protects `/admin/*` routes |
+| `INTELLIGENCE_HUB_PORT` | Default: 3001 |
+
+---
+
+## 11. Current State Assessment
+
+### What works end-to-end
+
+| Flow | Status |
+|------|--------|
+| User signup + email verification | ✓ Working |
+| Stripe checkout → pod creation | ✓ Working |
+| Hetzner server provisioning | ✓ Working |
+| DNS setup via Cloudflare | ✓ Working |
+| Cloud-init health polling | ✓ Working |
+| IS registration (provision JWT) | ✓ Working |
+| OpenClaw setup (`setup-openclaw.sh`) | ✓ Working |
+| Hub Protocol REST (IS → Pod) | ✓ Working |
+| Rolling update (canary strategy) | ✓ Working |
+| Warm pool provisioning | ✓ Working |
+| Migration baseline (0000) | ✓ Fixed (was broken) |
+| CI migration validation | ✓ Added |
+| Schema coherence tripwire | ✓ Working |
+
+---
+
+## 12. Known Gaps & P0–P3 Issues
+
+### P0 — Data safety / correctness
+
+- **Intelligence Hub cross-contamination risk**: IS is shared across pods by default. If IS has a bug in agent context isolation, one pod's agent could leak context to another. Needs per-pod IS instance or strict context boundaries.
+- **`events` table (TimescaleDB)**: Cannot use `ALTER TABLE ADD COLUMN IF NOT EXISTS` with non-constant defaults. Any new column added to the `events` table in a migration must use `ALTER TABLE ... ADD COLUMN colname type` WITHOUT a `DEFAULT expr` using runtime functions (use `DEFAULT NULL` or literal constants only).
+
+### P1 — Reliability
+
+- **Warm pool health failures require manual cleanup**: If warm pool pods error during provisioning, `WARM_POOL_SIZE` is checked against non-error pods only. But errored pods aren't auto-deleted. Manual cleanup in CP Dashboard required before pool replenishes.
+- **Canary rollback edge cases**: If the canary pod update succeeds but fails silently (health check passes, app broken), remaining pods get the bad update. No semantic health validation beyond `/health` endpoint.
+- **Callback JWT idempotency**: Update result callback (`POST /pods/update-result/{podId}`) has no deduplication. If the pod retries the callback (network issue), it could flip the update status back. Add `ON CONFLICT DO NOTHING` or a `processed_at` guard.
+
+### P2 — Observability
+
+- **No distributed tracing**: OpenTelemetry is commented out in production on all services. No correlation IDs across CP → IS → Pod requests.
+- **No circuit breaker on Kratos/Hydra**: Slow auth services block all authenticated requests. Add circuit breaker pattern.
+- **Pod error state opaque**: When a pod lands in `status: "error"`, the CP Dashboard shows the status but the root cause is buried in provisioning logs. Surface the last error message at the pod record level.
+
+### P3 — Quality
+
+- **CI tests are non-blocking**: The `test` step in synap-backend CI uses `continue-on-error: true`. Test failures don't block merges. Should be blocking for at least the core packages.
+- **No E2E tests**: No integration tests for Hub Protocol or MCP endpoints in CI. Only unit/component tests.
+- **`property_defs.property.get(slug)` nondeterministic**: Returns first match — undefined behaviour with workspace overlays (documented in `team/platform/property-def-scoping` §Known Gaps).
+- **No smoke test after deploy**: CI only tests the Docker build — no health check against a running instance.
+
+## Related
+
+- [Operations Runbook](team/devops/operations-runbook) [team]
+- [Incident Runbook](team/devops/incident-runbook) [team]
+- [Docker Architecture](team/devops/docker-architecture) [team]
+- [Monitoring Setup](team/devops/monitoring-setup) [team]
+- [Rolling Updates](team/devops/rolling-updates) [team]
+- [Unified Setup](team/devops/unified-setup) [team]

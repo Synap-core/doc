@@ -1,0 +1,214 @@
+# Key Decisions — RESOLVED ✓
+
+This document records the 8 architectural decisions that have been made for Project eve.
+
+---
+
+## Decision 1: CLI Architecture ✓ **RESOLVED: Option C**
+
+**Chosen**: **Option C** — Modular CLI with installable plugins
+
+**Rationale**: The Control Plane is just one way of connecting to an external server (data pod) for Synap Backend. It can also enable OpenClaw & OpenClaude capabilities. We will not focus on the CP connection part for now, except for redundancy purposes.
+
+**Implementation**:
+```
+eve-cli/
+├── packages/
+│   ├── core/           # Required: package management, CLI framework
+│   ├── install/        # Script installer (the foundation)
+│   ├── usb/            # USB boot (wraps install)
+│   └── registry/       # Package discovery
+└── plugins/
+    ├── openclaw/       # Gateway-specific commands
+    ├── openclaude/     # Builder-specific commands
+    └── control-plane/  # CP connector (optional, for redundancy/fleet)
+```
+
+**Key Point**: CP is a plugin, not core. The CLI works without it.
+
+---
+
+## Decision 2: Entity vs Tables ✓ **RESOLVED: Option A (with exceptions)**
+
+**Chosen**: **Option A** — Pure Entity System (with new tables only for fundamental units like views or channels)
+
+**Rationale**: This is the main goal of our system. However, for complex things (or when we have a lot of data), and when that could be explained as being a fundamental unit (like we have for views or channels), we can accept new tables. But it should be logical even for a normal server with only Synap.
+
+**Implementation**:
+- `hearth_node` → Entity with `hearth_node` profile
+- `package_instance` → Entity with `package_instance` profile
+- `intelligence_provider` → Entity with `intelligence_provider` profile
+- `hearth_deployment` → Entity with `hearth_deployment` profile
+
+**No new database tables for eve** — everything is entities.
+
+---
+
+## Decision 3: Backend Scope ✓ **RESOLVED: Agnostic**
+
+**Chosen**: **Agnostic Architecture**
+
+**Rationale**: The goal is to be agnostic. We should update according to this principle, meaning anything can be an IS (Intelligence Service) — OpenClaw, our own, self-hosted, etc. We configure this in the script to work with our technology.
+
+**Implementation**:
+- `/api/hub/intelligence/query` — Uniform interface to any provider
+- Provider handlers for: ollama, openrouter, anthropic, openai, custom
+- All OpenAI-compatible endpoints work
+
+**Key Point**: The backend doesn't care where intelligence comes from.
+
+---
+
+## Decision 4: OpenClaw Relationship ✓ **RESOLVED: Part of Triptick**
+
+**Clarification**: The name "Orion" is nothing — it was just a placeholder. We now call this **Project eve**. 
+
+**Structure**: OpenClaw is **one of the triptick** (three pillars):
+- eve Core (Synap Backend) — The hearth
+- The Gateway (OpenClaw) — Voices from beyond
+- The Builder (OpenClaude) — The architect
+
+**Key Point**: eve is the composition. OpenClaw is one component within it.
+
+---
+
+## Decision 5: Control Plane Relationship ✓ **RESOLVED: Optional Connector**
+
+**Status**: Same rationale as Decision #1.
+
+**Implementation**: CP is an optional connector plugin for:
+- Redundancy (backup hearths)
+- Fleet management (multiple hearths)
+- DNS (optional, can use local)
+
+**Key Point**: CP is not required for core functionality. eve is sovereign.
+
+---
+
+## Decision 6: Intelligence Service ✓ **RESOLVED: Agnostic**
+
+**Status**: Same as Decision #3.
+
+**Implementation**: Any provider works:
+- Local: Ollama, vLLM, llama.cpp
+- Cloud: OpenRouter, Anthropic, OpenAI
+- Custom: Any OpenAI-compatible endpoint
+
+---
+
+## Decision 7: Install Method ✓ **RESOLVED: Script Primary**
+
+**Chosen**: **Script install is primary, USB as wrapper**
+
+**Rationale**: We should build for the script use case (simpler) while keeping in mind that the USB part is just becoming a package wrapped into the more complex use case of USB boot.
+
+**Implementation**:
+```
+eve-cli/packages/
+├── install/        # Script installer (primary)
+│   ├── install.sh
+│   ├── phases/
+│   │   ├── phase1.sh (foundation)
+│   │   ├── phase2.sh (core + gateway)
+│   │   └── phase3.sh (builder)
+│   └── wizard/first-fire.sh
+└── usb/            # USB package (wraps install)
+    ├── create-usb.sh
+    └── ventoy/
+        └── autoinstall/
+            └── late-command.sh → calls install.sh phase1
+```
+
+**Key Point**: USB just calls the script installer. Script is the foundation.
+
+---
+
+## Decision 8: Multi-Node Support ✓ **RESOLVED: Single with Redundancy Path**
+
+**Chosen**: **Single node for now, enabling redundancy connection between pods**
+
+**Rationale**: We are currently on single node while enabling connection between 2 pods for redundancy (main & backup). We will envision fleet (Option B) and possibly even blockchain(s) & wallets on top in the future.
+
+**Implementation**:
+- v1: Single hearth per workspace
+- v2: Primary + backup hearth (redundancy)
+- v3: Fleet of hearths (via CP connector)
+- Future: Blockchain anchoring, wallet integration
+
+**Key Point**: Start simple, enable redundancy, scale later.
+
+---
+
+## Summary of All Decisions
+
+| # | Topic | Decision | Key Implementation |
+|---|-------|----------|-------------------|
+| 1 | CLI Architecture | **Option C** — Modular with plugins | CP is a plugin, not core |
+| 2 | Entity vs Tables | **Option A** — Pure entity | All eve concepts are entities |
+| 3 | Backend Scope | **Agnostic** | Any IS provider works |
+| 4 | OpenClaw Relationship | **Part of triptick** | One of three pillars |
+| 5 | CP Relationship | **Optional connector** | For redundancy/fleet only |
+| 6 | Intelligence | **Agnostic** | Any OpenAI-compatible endpoint |
+| 7 | Install Method | **Script primary, USB wrapper** | Script is foundation |
+| 8 | Multi-Node | **Single → redundancy → fleet** | Progressive scaling |
+
+---
+
+## Architecture Principles Derived from Decisions
+
+1. **Everything is a Package**
+   - Each component is self-contained
+   - Packages handle their own logic
+   - CLI assembles packages
+
+2. **Agnostic Intelligence**
+   - Any provider works
+   - Uniform interface
+   - No vendor lock-in
+
+3. **Script First, USB Wrapper**
+   - Script installer is the foundation
+   - USB is just a delivery mechanism
+   - Both use same core logic
+
+4. **Pure Entity System**
+   - Everything is entities
+   - No new tables needed
+   - Temporal queries work automatically
+
+5. **CP as Optional Connector**
+   - Core works without CP
+   - CP adds redundancy/fleet
+   - Not required for sovereignty
+
+6. **Progressive Scaling**
+   - Single node → redundancy → fleet
+   - Add complexity as needed
+   - Never force features
+
+---
+
+## Package Philosophy
+
+> "Think as everything as a package handling its own logic (for OpenClaw, script, install monitoring, Caddyfile, etc...), assembled inside a CLI to create the right user flow, onboarding, setup, config and global UX."
+
+This means:
+- `openclaw` package handles OpenClaw logic
+- `install` package handles installation logic
+- `monitor` package handles monitoring logic
+- `router` package handles Caddy logic
+- CLI orchestrates them into coherent UX
+
+---
+
+## Next Steps
+
+With all decisions resolved, we can proceed to implementation:
+
+1. **Week 1**: Create `templates/eve-os.json`, implement Hub Protocol endpoints
+2. **Week 2**: Build `eve-cli/packages/core/` and `install/`
+3. **Week 3**: Add intelligence and gateway packages
+4. **Week 4**: Builder package, USB wrapper
+5. **Week 5+**: Testing, polish, documentation
+
+**Ready to forge the first packages.**

@@ -1,0 +1,220 @@
+# Relay — Product Roadmap
+
+What we have, what's next, and the vision for a complete relationship intelligence platform.
+
+---
+
+## v1.0 — Current (Done)
+
+The core loop works: **Import → Organize → Campaign → Search → Act**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Contact import (phone) | Done | Dedup, property merge, background progress |
+| People list | Done | Infinite scroll, search, filter by type, sort |
+| Person detail | Done | Editable properties, avatar, activity, notes, share |
+| Profile type switching | Done | Person / Contact / Lead |
+| Campaigns | Done | Pipeline board, funnel metrics, presets |
+| Search + AI | Done | Smart routing (name search + AI queries) |
+| Quick capture | Done | Text + voice + camera |
+| Settings | Done | AI & Automations transparency, theme, connectors |
+| AI provisioning | Done | IS status, activate/reconnect, usage bar, via `@synap-core/intelligence-connect` |
+| Auth | Done | CP sign-in → pod picker → Kratos handshake |
+| Workspace seeding | Done | `createFromDefinition` with full Relay definition |
+| Offline support | Done | Cache + sync queue + offline banner |
+| Dark + light theme | Done | System preference support |
+
+---
+
+## v1.1 — Polish & Reliability (1-2 weeks)
+
+Small fixes that make a big difference in daily use.
+
+### Smart Contact Merge on Re-Import
+When importing contacts that match existing ones by name but have MORE data (e.g., new phone number), propose to **update** the existing entity instead of skipping.
+- Compare incoming properties vs existing
+- Show a merge UI: "Sarah Chen already exists. Update phone number?"
+- Uses the property merge system already built
+
+### Proactive AI Feed Content
+Once the pod's cron workers are running:
+- Morning briefings appear in the Feed
+- Reconnection nudges for stale contacts
+- Weekly network digest
+- Event prep briefings
+The UI is already built — just needs the backend automations executing.
+
+### Person Timeline (Real Data)
+Currently the Activity tab shows metadata-derived events. With a channel per person (which `useEnsurePersonChannel` creates), we can show real interaction history from Telegram, email, etc.
+- Requires: Telegram bot integration, or manual message logging
+- The channel infrastructure exists — just needs data flowing in
+
+### Notes Synced to Pod
+Currently notes are in AsyncStorage (local only). Move to pod-backed storage:
+- Create a `note` entity per note, linked to the person via relation
+- Uses existing entity creation + relations — no new backend work
+- Notes survive app reinstall and sync across devices
+
+---
+
+## v1.2 — Connectors & Data Flow (2-3 weeks)
+
+Bring in real data from external sources.
+
+### Telegram Bot Integration
+- Link your Telegram account via bot token
+- Messages with contacts sync to person interaction channels
+- New Telegram contacts auto-create person entities
+- Architecture: already designed in `synap-backend` (Telegram bot endpoints exist)
+
+### Google Contacts + Calendar Sync
+- OAuth via Nango (already configured in CP)
+- Google Contacts → person entities (with dedup)
+- Google Calendar → event entities with attendee links
+- Live sync: changes in Google reflect in Relay
+
+### LinkedIn Data Import
+- Currently CSV-only. Add live OAuth sync via Nango
+- Import connections with roles, companies
+- Track LinkedIn message activity (if API permits)
+
+### Email Integration
+- Connect Gmail/Outlook
+- Track email interactions with contacts
+- Auto-log when you email someone → updates lastInteractionAt
+
+---
+
+## v1.3 — Intelligence Layer (3-4 weeks)
+
+AI becomes genuinely useful — not just enrichment, but insights.
+
+### Smart Suggestions
+- "You should intro Sarah to Jake — they're both building on Starknet"
+- "You haven't talked to your top 5 contacts in 30 days"
+- "3 people in your network are attending ETHGlobal Cannes"
+- Powered by the existing proactive AI system + automation templates
+
+### Contact Enrichment from Public Data
+- When a new contact is added, AI searches public data (LinkedIn, Twitter, company websites)
+- Enriches: role, company, bio, focus areas
+- Automation already templated — needs IS tool for web search
+
+### Relationship Graph Visualization
+- Visual network graph showing connections between your contacts
+- "Who knows who" discovery
+- Cluster detection (VC cluster, dev cluster, etc.)
+- Could reuse the Browser's graph view or build a simple RN version
+
+### Campaign Intelligence
+- AI suggests who to add to a campaign based on your goal
+- "For your seed round, consider these 8 contacts who know active VCs"
+- Auto-score campaign contacts by likelihood of conversion
+
+---
+
+## v1.4 — Collaboration & Sharing (4-6 weeks)
+
+Move from personal tool to team tool.
+
+### Shared Campaigns
+- Invite team members to a campaign
+- Track who is reaching out to whom (avoid double-pitching)
+- Shared pipeline view
+- Uses existing workspace members + permissions
+
+### Contact Sharing
+- Share a contact card with a teammate (within Synap)
+- "Can you intro me to Sarah?" → creates a request
+- Contact ownership and visibility controls
+
+### Team Dashboard
+- Aggregated pipeline metrics across all team members
+- Activity feed showing team outreach progress
+- Uses existing bento dashboard system
+
+---
+
+## v2.0 — Platform Features (Future)
+
+### Drag-and-Drop Pipeline
+- Full kanban with drag between columns (needs gesture library)
+- Currently: long-press to move (works well on mobile)
+
+### Custom Automations
+- Build your own automations from the mobile app
+- Visual flow editor (simplified version of Browser's workflow editor)
+- Templates marketplace
+
+### Messaging Integration (Beeper/Matrix)
+- Unified messaging across Telegram, WhatsApp, Signal, Slack
+- Requires Matrix homeserver + bridges (significant infrastructure)
+- Would make Relay a true communication hub, not just a contact manager
+- v2+ feature — needs careful evaluation of infrastructure costs
+
+### Widgets
+- iOS home screen widgets (Today's briefing, stale contacts, campaign progress)
+- Apple Watch complications
+- Android widgets
+
+### Deep Links
+- `relay://person/123` → opens person detail
+- `relay://campaign/456` → opens campaign
+- Shareable links that work across platforms
+
+### Offline-First with Sync
+- Full offline mode with conflict resolution
+- Edit contacts offline → sync when back online
+- Uses existing sync queue, needs conflict detection
+
+---
+
+## How It Connects to Synap's Architecture
+
+Every Relay feature maps to a Synap platform capability:
+
+```
+Relay Feature         → Synap Capability
+──────────────────    ──────────────────────
+Contact import        → Entity creation + PropertyDefs
+People list           → entities.list + includeDescendants
+Person detail         → entities.get + effectiveProperties
+Property editing      → entities.update + JSONB properties
+Campaigns             → Workspace-scoped entities + relations
+Pipeline              → Relation metadata + statusPipeline
+Search                → Typesense / pgvector
+AI queries            → Intelligence Service (streaming)
+Automations           → pg-boss workers + automation engine
+Proactive feed        → Cron workers + personal channel
+Auth                  → Better Auth (CP) + Ory Kratos (pod)
+Offline               → AsyncStorage cache + sync queue
+Theme                 → Zustand + system appearance
+```
+
+**Building Relay doesn't just build an app — it validates and improves every layer of the Synap platform.**
+
+---
+
+## Prioritization Framework
+
+For each feature, we ask:
+1. **Does it help users track relationships?** (core value)
+2. **Does it require new backend work?** (complexity)
+3. **Does it prove a Synap platform capability?** (strategic value)
+4. **Can users do it today with a workaround?** (urgency)
+
+Features that score high on 1 + 3 and low on 2 get built first.
+
+---
+
+## Key Metrics (post-launch)
+
+| Metric | What it tells us |
+|--------|------------------|
+| Contacts imported per user | Is the onboarding working? |
+| Active campaigns per user | Are people using the pipeline? |
+| Properties edited per session | Is the detail page useful? |
+| AI queries per day | Is the search valuable? |
+| Proactive feed opens | Is the AI layer sticky? |
+| Day 7 retention | Does the product have real value? |
+| Pipeline conversion rate | Are campaigns producing results? |

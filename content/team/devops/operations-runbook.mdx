@@ -1,0 +1,431 @@
+---
+title: 'Operations Runbook'
+description: 'Day-to-day operations: health checks, environment setup, debugging, releases, rollbacks'
+section: devops
+audience: team
+version: 1.0+
+last_updated: '2026-04-22'
+tags: [runbook, operations, devops, debugging, deployment]
+sidebar_position: 2
+hide_title: false
+toc: true
+---
+
+# Operations Runbook
+
+*Adapted from `docs-internal/RUNBOOK.md`, last original update 2026-04-13.*
+
+This runbook covers day-to-day operations: verifying the system is healthy, setting up environments, debugging common failures, releasing, and rolling back.
+
+Related docs:
+- [Infrastructure Architecture](/team/devops/infrastructure-architecture) — full architecture reference
+
+---
+
+## Table of Contents
+
+1. [How to verify the system is working](#1-how-to-verify-the-system-is-working)
+2. [Environment setup guide](#2-environment-setup-guide)
+3. [Debugging playbook](#3-debugging-playbook)
+4. [Release checklist](#4-release-checklist)
+5. [Rollback procedure](#5-rollback-procedure)
+
+---
+
+## 1. How to verify the system is working
+
+### 1.1 Quick health check (30 seconds)
+
+Run these in order. Any non-200 response signals a problem — jump to §3.
+
+```bash
+# 1. Pod health (no auth required)
+curl https://your-pod.synap.live/health
+
+# 2. Hub Protocol health (no auth required)
+curl https://your-pod.synap.live/api/hub/health
+
+# 3. IS health + readiness (no auth required)
+curl https://your-is.synap.live/health
+curl https://your-is.synap.live/ready
+
+# 4. Full smoke test (validates auth + entity CRUD + Hub Protocol round-trip)
+HUB_API_KEY=synap_hub_live_xxx \
+BASE_URL=https://your-pod.synap.live \
+./synap-backend/scripts/smoke-test.sh
+```
+
+Expected responses:
+- `/health` → `200 { "status": "ok" }`
+- `/api/hub/health` → `200 { "status": "ok", "version": "..." }`
+- `/ready` → `200 { "ready": true }` (IS: confirms DB connection + model reachable)
+- `smoke-test.sh` → exits 0 with each check listed as PASS
+
+### 1.2 Full contract test (2 minutes)
+
+Validates the complete Hub Protocol contract against a live database. Run before any production release.
+
+```bash
+cd synap-backend
+DATABASE_URL=postgresql://user:pass@localhost:5432/synap \
+  pnpm --filter @synap/test-e2e test hub-protocol.contract
+```
+
+Covers: authentication (API key + session), entity CRUD, document operations, channel messaging, memory storage, and proposal creation.
+
+---
+
+## 2. Environment setup guide
+
+### 2.1 Subdomains required per environment
+
+| Environment | Subdomain | Service | Purpose |
+|-------------|-----------|---------|---------|
+| Production pod | `pod.synap.live` | synap-backend | User data pod |
+| Staging pod | `staging.synap.live` | synap-backend | Pre-prod validation |
+| Intelligence Service | `is.synap.live` | synap-intelligence-service | AI hub |
+| Control Plane API | `api.synap.live` | synap-control-plane-api | Pod lifecycle management |
+| CP Dashboard | `dashboard.synap.live` | synap-control-plane-dashboard | Admin UI |
+| Monitoring | `monitoring.synap.live` | Grafana | Dashboards + alerting |
+
+DNS: all subdomains are Cloudflare A records managed by the CP API (`src/services/dns.ts`). The staging subdomain must be created manually or via `POST /admin/pods` with `purpose: "staging"`.
+
+### 2.2 Setting up a new staging pod
+
+```bash
+# 1. Create a staging pod via CP API
+curl -X POST https://api.synap.live/admin/pods \
+  -H "Authorization: Bearer $CP_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "purpose": "staging",
+    "tier": "solo",
+    "adminEmail": "dev@synap.live"
+  }'
+
+# Response: { "podId": "...", "subdomain": "staging", "status": "pending" }
+
+# 2. Wait for provisioning to complete
+# Poll: GET /admin/pods/:id until status = "active"
+
+# 3. Retrieve the Hub Protocol API key
+curl -X POST https://api.synap.live/admin/pods/$POD_ID/hub-key \
+  -H "Authorization: Bearer $CP_ADMIN_KEY"
+# Returns: { "hubApiKey": "synap_hub_live_..." } — save this immediately, shown once
+
+# 4. Add secrets to the synap-backend GitHub repo:
+#    STAGING_POD_URL  = https://staging.synap.live
+#    STAGING_POD_ID   = <podId from step 1>
+#    STAGING_HUB_API_KEY = <hubApiKey from step 3>
+
+# 5. staging-deploy.yml will auto-deploy on the next push to develop
+```
+
+### 2.3 GitHub Secrets setup checklist
+
+**synap-backend secrets:**
+
+| Secret | Where to get it |
+|--------|----------------|
+| `CP_API_URL` | Your CP deployment base URL (e.g. `https://api.synap.live`) |
+| `CP_ADMIN_KEY` | CP Dashboard → Settings → Admin Keys → create new key |
+| `STAGING_POD_URL` | Staging pod URL from step 2.2 above |
+| `STAGING_POD_ID` | Pod ID returned by `POST /admin/pods` |
+| `STAGING_HUB_API_KEY` | One-time key from `POST /admin/pods/:id/hub-key` |
+
+**synap-control-plane-api secrets:**
+
+| Secret | Where to get it |
+|--------|----------------|
+| `DEPLOY_WEBHOOK_URL` | URL of the webhook receiver on your CP server (set up manually — see `deploy/webhook-receiver.sh`) |
+| `DEPLOY_WEBHOOK_SECRET` | Generate: `openssl rand -hex 32` — same value in the webhook receiver and this secret |
+
+**synap-intelligence-service secrets:**
+
+| Secret | Where to get it |
+|--------|----------------|
+| `CP_API_URL` | Same as synap-backend |
+| `CP_ADMIN_KEY` | Same as synap-backend |
+
+---
+
+## 3. Debugging playbook
+
+### 3.1 "Pod is down / health check failing"
+
+```
+Symptoms: GET /health returns non-200 or times out
+
+1. Check pod container logs:
+   docker logs synap-backend-backend-1
+
+2. Check migration container (runs before main container):
+   docker logs synap-backend-backend-migrate-1
+   Look for: "Error" or "Migration failed" lines
+
+3. Check schema coherence (blocks startup):
+   Search logs for: "Schema coherence check failed"
+   If found: the DB is missing a critical column. Check the migration that adds it.
+   Fix: run the missing migration manually or redeploy after fixing the migration file.
+
+4. Check PostgreSQL is up:
+   docker exec synap-backend-postgres-1 pg_isready
+   If not ready: docker compose restart postgres (may lose in-flight writes)
+
+5. Check TimescaleDB extension:
+   docker exec synap-backend-postgres-1 \
+     psql -U postgres -c "SELECT extname FROM pg_extension WHERE extname = 'timescaledb';"
+   If missing: the postgres container did not initialize correctly — wipe volume and restart.
+
+6. If migration failed: fix the SQL, then:
+   docker compose restart backend-migrate backend
+   The runner will retry the failed file (it was never recorded as applied).
+```
+
+### 3.2 "Hub Protocol returning 401"
+
+```
+Symptoms: IS or OpenClaw gets 401 on Hub Protocol calls
+
+1. Verify the API key exists and has the right scopes:
+   GET /api/hub/users/me
+   Authorization: Bearer <the key>
+   → 200: key is valid; check the returned user scopes
+   → 401: key does not exist or is revoked
+
+2. Check key scopes include "hub-protocol.read" and "hub-protocol.write":
+   Inspect api_keys table:
+   SELECT scopes, expires_at FROM api_keys WHERE key_hash = sha256(<key>);
+
+3. Check key is not expired:
+   Look at api_keys.expires_at — NULL means no expiry (correct for IS keys)
+
+4. Re-generate the key (IS keys):
+   POST /api/hub/setup/agent
+   Authorization: Bearer $PROVISIONING_TOKEN
+   { "agentType": "intelligence-service" }
+   → Returns new hubApiKey; update IS env var HUB_PROTOCOL_API_KEY
+
+5. Re-generate for OpenClaw:
+   ./synap-backend/deploy/setup-openclaw.sh --pod-url $POD_URL --token $PROVISIONING_TOKEN
+```
+
+### 3.3 "IS not responding / AI features broken"
+
+```
+Symptoms: AI chat returns errors; /ready fails; tools time out
+
+1. Check IS is up:
+   curl https://is.synap.live/health
+   curl https://is.synap.live/ready
+   /ready failing means IS is up but the DB connection or OpenRouter is unreachable.
+
+2. Check OpenRouter quota:
+   Visit https://openrouter.ai/account — check usage vs. limit
+   If quota exceeded: upgrade plan or wait for reset
+
+3. Check Hub Protocol key on IS:
+   IS uses HUB_PROTOCOL_API_KEY env var to call the pod.
+   Test: curl -H "Authorization: Bearer $HUB_PROTOCOL_API_KEY" $DATA_POD_URL/api/hub/health
+   If 401: re-generate key (see §3.2 step 4) and redeploy IS with new key
+
+4. Check IS logs:
+   docker logs synap-intelligence-service-intelligence-hub-1
+   Look for: connection errors to DATA_POD_URL, OpenRouter 429/500, skill loader errors
+
+5. Restart IS:
+   Via CP Dashboard → Pod detail → IS status panel → Restart
+   Or: POST /admin/pods/:id/provision-intelligence (re-provisions the IS connection)
+```
+
+### 3.4 "Pod provisioning stuck"
+
+```
+Symptoms: pod status stays in "waiting_health" or "waiting_dns" for > 15 minutes
+
+waiting_dns (stuck):
+1. Check Cloudflare DNS:
+   dig +short {subdomain}.synap.live
+   If no result after 10 min: Cloudflare API may have failed silently.
+   Fix: POST /admin/pods/:id/action { "action": "reprovision" }
+
+waiting_health (most common stuck point):
+1. SSH to the provisioned server
+2. Check cloud-init completion:
+   cloud-init status --wait
+   (If still running: wait; if failed: check /var/log/cloud-init-output.log)
+3. Check systemd service:
+   journalctl -u synap-pod-init
+4. If cloud-init failed permanently:
+   POST /admin/pods/:id/action { "action": "reprovision" }
+   This deletes the server and starts over from server creation.
+
+syncing_intelligence (stuck):
+1. Check IS is reachable from the CP: curl $INTELLIGENCE_HUB_URL/health
+2. Check CP logs for "provision-pod" job:
+   Look for HTTP errors on POST /admin/provision-pod
+3. Manual retry: POST /admin/pods/:id/provision-intelligence
+
+General: if stuck > 30 min in any status:
+   POST /admin/pods/:id/action { "action": "reprovision" }
+   This resets to "pending" and restarts provisioning from Step 1.
+```
+
+### 3.5 "Migration failed on deploy"
+
+```
+Symptoms: pod boots but backend-migrate container exits non-zero;
+           backend container starts then crashes (schema coherence fails)
+
+1. Check migration container logs:
+   docker logs synap-backend-backend-migrate-1
+   The error includes: SQL error code, line number, the offending statement.
+
+2. Understand what happened:
+   - The failed migration ran inside a transaction and was ROLLED BACK.
+   - It was NOT recorded in _migrations.
+   - The next run will retry it from the beginning.
+
+3. Fix the SQL in the migration file and redeploy.
+   Common fixes:
+   - TimescaleDB hypertable: events table cannot use ADD COLUMN with non-constant DEFAULT.
+     Use: ALTER TABLE events ADD COLUMN IF NOT EXISTS col type DEFAULT NULL;
+   - Duplicate policy: add DROP POLICY IF EXISTS before CREATE POLICY.
+   - Type mismatch: check FK column types match the referenced table (uuid vs text).
+
+4. After fix: docker compose up --force-recreate backend-migrate backend
+   The runner will pick up the corrected file.
+
+5. If the column was added to src/schema/*.ts but NOT to 0099_schema_reconciliation.sql:
+   The schema coherence tripwire will block startup even after migration succeeds.
+   Add it to 0099 and redeploy.
+```
+
+### 3.6 "Stripe webhook not processing"
+
+```
+Symptoms: user paid but pod was not created; subscription not recorded
+
+1. Check Stripe dashboard:
+   Stripe → Developers → Webhooks → select endpoint → Recent deliveries
+   Find the failed event. Note the error message and HTTP status returned.
+
+2. Common cause — wrong STRIPE_WEBHOOK_SECRET:
+   The secret is per-endpoint in Stripe (not the same as STRIPE_SECRET_KEY).
+   Get it from: Stripe → Webhooks → select endpoint → Signing secret → Reveal.
+   Update the CP env var and redeploy.
+
+3. Idempotency check:
+   If the webhook was retried by Stripe, the handler uses INSERT ... ON CONFLICT DO NOTHING
+   for subscriptions and pods. Check if the pod already exists:
+   GET /admin/pods?userId=<userId> — if pod exists, it was created on a prior delivery.
+
+4. Manual trigger:
+   From the Stripe dashboard, click "Resend" on the failed event.
+   Monitor CP logs: docker logs synap-control-plane-api-1
+
+5. If pod was not created after resend:
+   POST /admin/pods with the user's details (manual provision from CP Dashboard).
+```
+
+---
+
+## 4. Release checklist
+
+Run through this before every production deploy of synap-backend or synap-intelligence-service.
+
+### Pre-deploy
+
+- [ ] CI passes on `main` — all steps green (lint, typecheck, migrations, tests, build, Docker build, security audit)
+- [ ] `staging-deploy.yml` succeeded on the last `develop` push (smoke tests passed)
+- [ ] No open P0/P1 issues in [Infrastructure Architecture §12](/team/devops/infrastructure-architecture#12-known-gaps--p0p3-issues)
+
+### Migration review (if any new migration files)
+
+- [ ] New numbered `.sql` file added to `packages/database/migrations/` (e.g. `0100_my_feature.sql`)
+- [ ] New columns also added to `0099_schema_reconciliation.sql` with `ADD COLUMN IF NOT EXISTS`
+- [ ] New columns added to `schema-coherence.ts` `REQUIRED_COLUMNS` array
+- [ ] If touching `events` table: no `DEFAULT <expr>` used (TimescaleDB hypertable restriction)
+- [ ] Migration validated in CI (the `Validate migrations` step used a real TimescaleDB instance)
+
+### Hub Protocol changes (if any)
+
+- [ ] Contract tests pass: `pnpm --filter @synap/test-e2e test hub-protocol.contract`
+- [ ] No breaking changes to existing routes (IS and OpenClaw depend on these)
+- [ ] If new routes added: IS updated to use them (or backwards-compatible)
+
+### Compatibility
+
+- [ ] IS version compatible with new backend version (check IS changelog for Hub Protocol version requirements)
+- [ ] CP API version compatible (check CP JWT types — no removed JWT type fields)
+
+### Post-deploy verification
+
+- [ ] Pod health: `curl https://pod.synap.live/health` → 200
+- [ ] Hub Protocol health: `curl https://pod.synap.live/api/hub/health` → 200
+- [ ] Smoke test passes against production pod (if safe to run)
+- [ ] No spike in error rate (Grafana → Pod 5xx alert)
+- [ ] No spike in Hub Protocol latency
+
+---
+
+## 5. Rollback procedure
+
+### 5.1 Rolling back a pod (synap-backend)
+
+```bash
+# 1. Find the last known-good image tag in GitHub Actions history
+#    GitHub → synap-backend → Actions → docker-publish.yml → last green run
+#    Copy the sha-{short} tag (e.g. sha-abc1234)
+
+# 2. Trigger rollback via CP API
+curl -X POST https://api.synap.live/admin/pods/$POD_ID/action \
+  -H "Authorization: Bearer $CP_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "update", "targetVersion": "sha-abc1234"}'
+
+# 3. Monitor the rolling update
+watch -n 5 'curl -s https://api.synap.live/admin/pods/$POD_ID | jq .status'
+# Wait for status = "active"
+
+# 4. Verify health
+curl https://your-pod.synap.live/health
+```
+
+**Important:** rolling back a migration is NOT automatic. If the new version added columns and the old image doesn't know about them, the old image may fail schema coherence. In practice:
+- New columns added with `DEFAULT NULL` are backwards-compatible (old code ignores them).
+- Removed columns are dangerous — avoid removing columns, mark as deprecated instead.
+- If schema coherence blocks the rollback: apply the missing column manually or fix the migration.
+
+### 5.2 Rolling back the Intelligence Service
+
+Same procedure — use the IS pod ID and target a previous `:sha-{short}` tag.
+
+### 5.3 Rolling back the Control Plane API
+
+The CP API has no auto-rollback (no CP to manage the CP). Manual steps:
+
+```bash
+# SSH to the CP server
+ssh admin@api.synap.live
+
+# Pull the previous image
+docker pull ghcr.io/synap-core/control-plane-api:sha-abc1234
+
+# Update docker-compose.override.yml to pin the image tag, then:
+docker compose up -d cp-api
+
+# Verify
+curl https://api.synap.live/health
+```
+
+### 5.4 Database rollback
+
+There is **no automated database rollback**. Migrations are forward-only. If a migration caused data corruption:
+
+1. Stop writes: suspend affected pods via CP Dashboard
+2. Restore from last Postgres backup (daily snapshots in MinIO/R2)
+3. Re-run migrations up to (but not including) the bad migration
+4. Fix the migration
+5. Re-run migrations (fixed version)
+6. Resume pods

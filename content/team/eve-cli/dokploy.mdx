@@ -28,7 +28,7 @@ Dokploy capabilities:
 ## Why Dokploy
 
 - **Sovereign deployment**: Replaces managed PaaS (Heroku, Railway) with a self-hosted alternative — fits the sovereignty principle.
-- **Simple API**: REST API for deployment operations — easy to integrate with opencode subprocess calls.
+- **Simple API**: REST API for deployment operations — easy to integrate with codegen tool (opencode or OpenClaude) subprocess calls.
 - **Docker-native**: Runs on the same `eve-network` Docker network, sharing containers and networking with the rest of the stack.
 - **First-class optional component**: Not a dependency of anything else. Stands alone when enabled, completely absent when disabled.
 
@@ -41,6 +41,7 @@ Hermes Agent (polls Synap for task)
 Hermes spawns opencode with Dokploy env vars:
     subprocess.run([
         'opencode', '--task', '<desc>',
+    ])  # or ['openclaude', '--task', '<desc>', '--cwd', project_dir] for OpenClaude
         '--cwd', project_dir
     ], env={
         ...process.env,
@@ -50,7 +51,7 @@ Hermes spawns opencode with Dokploy env vars:
     })
     │
     ▼
-opencode runs codegen → writes code to filesystem
+codegen tool runs → writes code to filesystem
     │
     ▼
 Dokploy deploys generated code as a service container
@@ -62,14 +63,14 @@ Dokploy service becomes discoverable via its internal URL
 Dokploy service URL written to Synap as file entity (for tracing)
 ```
 
-Dokploy is a **sidecar of the Builder organ** — it lives on `eve-network`, exposes its API on port 3000, and communicates with Hermes through environment variables passed to the opencode subprocess.
+Dokploy is a **sidecar of the Builder organ** — it lives on `eve-network`, exposes its API on port 3000, and communicates with Hermes through environment variables passed to the opencode (or OpenClaude) subprocess.
 
 ## Interaction with other parts
 
 | Component | Interaction | Direction |
 |-----------|-------------|-----------|
-| **Hermes** | Receives env vars; orchestrates deployment flow | Reads/writes (via opencode) |
-| **opencode** | Reads `DOKPLOY_API_URL` + `DOKPLOY_API_KEY`; may trigger deployment during task | Reads env vars |
+| **Hermes** | Receives env vars; orchestrates deployment flow | Reads/writes (via opencode or OpenClaude) |
+| **opencode / OpenClaude** | Reads `DOKPLOY_API_URL` + `DOKPLOY_API_KEY`; may trigger deployment during task | Reads env vars |
 | **Synap** | Service URLs written back as file entities for audit/tracing | Writes |
 | **Traefik (Legs)** | Optional: Traefik may proxy routes to Dokploy-deployed services | Reads docker labels |
 
@@ -83,6 +84,6 @@ Dokploy is a **sidecar of the Builder organ** — it lives on `eve-network`, exp
   - Restart: `dokploy restart`
   - Status: `dokploy status`
 - **Docker socket**: Dokploy requires access to the Docker socket (`/var/run/docker.sock:ro`). This is mounted in the Dokploy container during setup.
-- **Deployment strategy**: opencode generates code → Dokploy builds a Docker image from the generated code → Dokploy starts the container → new service appears on `eve-network` → its URL is discoverable.
-- **When Dokploy is disabled**: opencode writes to `--cwd` only, no deployment happens. This is the default behavior. Users who want deployment must explicitly enable it during `eve builder init`.
+- **Deployment strategy**: Codegen tool generates code → Dokploy builds a Docker image from the generated code → Dokploy starts the container → new service appears on `eve-network` → its URL is discoverable.
+- **When Dokploy is disabled**: The codegen tool writes to `--cwd` only, no deployment happens. This is the default behavior. Users who want deployment must explicitly enable it during `eve builder init`.
 - **Webhook integration**: `DOKPLOY_WEBHOOK_URL` (optional) is set when users want external CI/CD triggers to call into Dokploy for redeployment.

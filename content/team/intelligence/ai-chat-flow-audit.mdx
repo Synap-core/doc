@@ -1,0 +1,255 @@
+# AI Chat Flow – Audit Report (Current State)
+
+**Scope:** Frontend (AI chat app + command palette), Backend (Data Pod chat API + real-time), Intelligence Service (Hub).  
+**Focus:** Linear chat threads only (no parallel threads).  
+**Date:** 2025-02-09.
+
+---
+
+## 1. High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  FRONTEND (synap-app)                                                        │
+│  ┌─────────────────────┐  ┌──────────────────────┐  ┌────────────────────┐ │
+│  │ Workspace page      │  │ Command palette      │  │ @synap/client       │ │
+│  │ - Panels (main +    │  │ - "Ask AI" →         │  │ - tRPC (chat.*)     │ │
+│  │   side)             │  │   ?focus=ai-chat      │  │ - SocketIOProvider  │ │
+│  │ - renderAppContent  │  │ - "Open AI Chat" →   │  │ - workspaceLink     │ │
+│  │   ('ai-chat')       │  │   ?app=ai-chat       │  │   (X-Workspace-Id)  │ │
+│  └──────────┬──────────┘  └──────────┬───────────┘  └──────────┬───────────┘ │
+│             │                        │                         │             │
+│             └────────────────────────┼─────────────────────────┘             │
+│                                      ▼                                        │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ @synap/ai-chat (ChatWorkspace → ChatView → ChatInput, etc.)             │ │
+│  │ - listThreads, getMessages, sendMessage, createThread                   │ │
+│  │ - useSendMessage (optional threadId; backend creates thread if missing) │ │
+│  │ - useStreamingMessage (chat:stream, ai:step → streamingStore)           │ │
+│  │ - useRealtimeSync (chat:message, thread:created → query cache)          │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                    │                                    │
+                    │ tRPC (POST /trpc/chat.*)          │ Socket.IO (same origin)
+                    │ + X-Workspace-Id                   │
+                    ▼                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  BACKEND (synap-backend)                                                      │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ packages/api – infinite-chat router (exposed as chat.*)                  │ │
+│  │ - createThread (workspaceProcedure)                                      │ │
+│  │ - sendMessage (protectedProcedure, threadId optional)                     │ │
+│  │ - getMessages, getThread, listThreads, getBranches, mergeBranch, etc.    │ │
+│  │ - ctx.socketIO?.emit(thread:created, chat:stream, ai:step, chat:message) │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ packages/api – intelligence-routing + IntelligenceHubClient               │ │
+│  │ - resolveIntelligenceService(userId, workspaceId, "chat")                │ │
+│  │ - client.sendMessageStream() → SSE from Hub → forward as socket emits    │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ Hub Protocol REST (for Intelligence Service)                              │ │
+│  │ - GET /api/hub/threads/:threadId/context (messages + linked entities)    │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ packages/realtime – Socket.IO server (presence, Yjs)                      │ │
+│  │ - Separate process in dev (dev:all = api + realtime)                      │ │
+│  │ - tRPC context in apps/api does NOT inject socketIO → emits are no-ops    │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                    │
+                    │ HTTP POST (SSE) + Hub Protocol GET context
+                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  INTELLIGENCE SERVICE (synap-intelligence-service)                            │
+│  - POST /api/chat/stream (SSE: content, step, proposal, complete)             │
+│  - hubProtocol.getThreadContext(threadId) → Data Pod GET .../context         │
+│  - mvpChatAgent.executeWithStream() → tools: search_unified, get_document,    │
+│    create_entity, update_entity, create_document, update_document, memory_*    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. User Flows (Current Behaviour)
+
+### 2.1 AI Chat as main view or in a side panel
+
+- **Open AI Chat (main):** Command “Open AI Chat” → `?app=ai-chat` → workspace shows one panel with ChatWorkspace.
+- **Ask AI (side panel):** Command “Ask AI” or palette “Ask AI” (Tab) → `?focus=ai-chat` → if one panel: split and add `ai-chat` on the right; if already 2+ and an ai-chat panel exists: activate it. No pre-filled message: user types in the chat input after the panel opens.
+
+ChatWorkspace receives `workspaceId` (active workspace) and optional `initialThreadId` (e.g. from `?chat=...`). It loads threads via `chat.listThreads`, keeps `activeThreadId` in Zustand (`chatUIStore`), and shows either:
+
+- **Single view:** one thread (ChatView with threadId).
+- **Workspace view:** all threads / branch viz (WorkspaceVisualization, BranchVisualization, etc.).
+
+Send behaviour:
+
+- **With thread:** `sendMessage.mutateAsync({ threadId, content, workspaceId? })`.
+- **Without thread (e.g. workspace view, empty state):** `sendMessage.mutateAsync({ content, workspaceId })`; backend creates a thread and returns `threadId`; frontend calls `onThreadCreated(threadId)` and switches to single view with that thread.
+
+So “first message” from workspace view or side panel is supported without the frontend creating the thread.
+
+### 2.2 Command palette “Ask AI”
+
+- **Current:** Only navigates to `?focus=ai-chat`. Side panel opens with empty chat; user must type and send. The palette input is **not** passed as the first message.
+- **Implication:** “Ask AI” does not implement “send this query and show streaming answer”; it only opens the chat panel.
+
+### 2.3 Streaming and real-time
+
+- **Backend:** After saving the user message, it calls the resolved Intelligence Hub client’s `sendMessageStream()`, then:
+  - For each SSE chunk: `ctx.socketIO?.emit("chat:stream", { threadId, type, content, isComplete })`.
+  - For steps: `ctx.socketIO?.emit("ai:step", ...)`.
+  - For proposals: `ctx.socketIO?.emit("ai:proposal", ...)`.
+  - On completion: `ctx.socketIO?.emit("chat:message", { threadId, message, ... })`.
+- **Frontend:** `useStreamingMessage(threadId)` subscribes to `chat:stream` and `ai:step`, filters by `threadId`, and updates `streamingStore` and local state. `useRealtimeSync` handles `chat:message` and `thread:created` and updates `chat.getMessages` / `chat.listThreads` cache.
+- **Critical:** In `apps/api`, tRPC `createContext` does **not** set `ctx.socketIO`. So in the current API server, `ctx.socketIO` is always `undefined` and all these emits are no-ops. Real-time streaming and thread/message broadcasts do **not** happen unless another entry point injects the Socket.IO server into context.
+
+---
+
+## 3. Backend (Data Pod) – Detail
+
+### 3.1 Chat router (infinite-chat → chat.\*)
+
+| Procedure                                                | Auth               | Input (main)                                             | Behaviour                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------- | ------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| createThread                                             | workspaceProcedure | parentThreadId?, branchPurpose?, agentId?, agentType?, … | Main: insert thread, emit thread:created. Branch: emit event, executor creates later.                                                                                                                                                                                                                             |
+| sendMessage                                              | protectedProcedure | threadId?, content, workspaceId?                         | If no threadId: require workspaceId, create main thread, emit thread:created. Save user message, resolve intelligence service, stream via client.sendMessageStream(); emit chat:stream, ai:step, ai:proposal, chat:message. Return threadId, messageId, content, entities, branchDecision, branchThread, aiSteps. |
+| getMessages                                              | protectedProcedure | threadId, cursor?, limit                                 | Cursor pagination over conversation_messages.                                                                                                                                                                                                                                                                     |
+| getThread                                                | protectedProcedure | threadId, includeContext?, includeBranches?              | Thread + optional thread_entities, thread_documents, branches.                                                                                                                                                                                                                                                    |
+| listThreads                                              | protectedProcedure | threadType?, limit                                       | **No workspaceId/projectId in schema.** Filters by `ctx.userId` only. Returns all threads for the user.                                                                                                                                                                                                           |
+| getBranches, mergeBranch, archiveThread, updateThread, … | (various)          | (see router)                                             | As implemented.                                                                                                                                                                                                                                                                                                   |
+
+- **listThreads:** Frontend passes `projectId: workspaceId` in several places (ChatWorkspace, ChatThreadList, WorkspaceVisualization). The backend input schema does **not** define `projectId`; it only has `threadType` and `limit`. So backend ignores any workspace/project and returns all threads for the user. Threads are user-scoped (chat_threads has no workspace_id).
+- **Workspace context:** `sendMessage` and routing use `ctx.workspaceId` (from `X-Workspace-Id`) when available; required when creating a thread from “no threadId” path.
+
+### 3.2 Intelligence routing and client
+
+- **resolveIntelligenceService({ userId, workspaceId, capability: "chat" }):** Prefer workspace overrides, then user preferences, then env `INTELLIGENCE_HUB_URL` (default localhost:3002).
+- **IntelligenceHubClient:**
+  - Non-streaming: `POST ${baseUrl}/api/expertise/request`.
+  - Streaming: `POST ${baseUrl}/api/chat/stream`, body includes query, threadId, userId, agentId, agentType, workspaceId, dataPodUrl, dataPodApiKey, stream: true. Parses SSE and yields `{ type: "chunk"|"step"|"proposal"|"entities"|"branch_decision"|"complete"|"error", ... }`. Backend maps `content` → `chunk` for the frontend.
+
+### 3.3 Socket.IO and tRPC context
+
+- **Context type:** `Context` includes `socketIO?: any` (Socket.IO server).
+- **Actual creation:** `createContext` in `packages/api/src/context.ts` only sets db, auth, session, req, workspaceId. It does **not** set `socketIO`.
+- **apps/api:** The Hono tRPC createContext only calls `createApiContext(req, honoCtx)` and returns that. So **socketIO is never set** in production API server. All `ctx.socketIO?.emit(...)` in infinite-chat do nothing. Real-time chat (streaming UI, new message/thread notifications) will not work until the API server (or a unified server) injects the Socket.IO server into tRPC context.
+
+---
+
+## 4. Intelligence Service – Detail
+
+### 4.1 Chat stream endpoint
+
+- **POST /api/chat/stream:** Body: query, threadId, userId, workspaceId?, agentId?, agentType?, stream?.
+- Loads history and linked context via `hubProtocol.getThreadContext(threadId)` (calls Data Pod `GET /api/hub/threads/:threadId/context`).
+- Uses `mvpChatAgent.executeWithStream()`; SSE events: `content` (chunk), `step` (thinking/tool), `proposal`, then `step` for each aiStep, `branch_decision`, `complete` with full result. Backend client maps `content` → `chunk` for the backend→frontend stream.
+
+### 4.2 MVP chat agent
+
+- Tools: search_unified, get_document, create_entity, update_entity, create_document, update_document, memory_search.
+- Receives thread history and linked entities/documents in system prompt. Single agent, no orchestrator in this path.
+
+### 4.3 Hub Protocol (Hub → Data Pod)
+
+- **GET /api/hub/threads/:threadId/context:** API key auth, returns thread context (messages, linked entities/documents) for the Intelligence Service to build prompts. Implemented in hub-protocol-rest and backed by hub-protocol context router (getThread, getMessages, linked ids resolved to entities/documents).
+
+---
+
+## 5. Frontend (AI Chat Package) – Detail
+
+### 5.1 Data and send flow
+
+- **ChatWorkspace:** Uses `trpc.chat.listThreads.useQuery({ projectId: workspaceId, limit: 50 }, { enabled: !!workspaceId })`. Backend ignores `projectId`; list is still fetched when workspaceId is set (enabled true).
+- **useSendMessage(threadId?: string):** Optional threadId. With threadId: optimistic update for getMessages, rollback on error. Without: no optimistic update; caller uses returned `threadId` (e.g. onThreadCreated).
+- **ChatView:** If threadId: normal send with threadId. If no threadId but workspaceId: calls sendMessage with `{ content, workspaceId }` (type assertion used until API types have optional threadId); on success, calls `onThreadCreated(createdThreadId)` so workspace switches to that thread.
+
+### 5.2 Streaming UI
+
+- **useStreamingMessage(threadId):** Subscribes to `chat:stream` and `ai:step`, filters by `event.threadId === threadId`. Updates local state and `streamingStore` (startStream on first chunk, addChunk, addStep, completeStream). MessageList shows `streamingMessage` for the current thread.
+- **useRealtimeSync:** Listens to socket message types; for `chat:message` updates `chat.getMessages` cache and invalidates listThreads; for `thread:created` invalidates listThreads (and branch tree if parent). So when socketIO actually emits, UI would stay in sync.
+
+### 5.3 Command palette integration
+
+- **CommandPaletteProvider:** “Ask AI” runs `router.push('/workspace?focus=ai-chat')`. No passing of current search/input as first message.
+- **CommandPalette (core):** “Ask AI” pill calls `onAskAI?.()`. Same: navigation only.
+
+---
+
+## 6. Capabilities (What Works Today)
+
+- **Create thread:** Explicit “New thread” (createThread) or implicitly by sending without threadId (sendMessage with workspaceId).
+- **Send message:** With or without thread; backend creates thread when needed and returns threadId.
+- **List threads:** By user (no workspace filter); sidebar and workspace view show threads.
+- **Get messages / thread:** Cursor pagination and thread detail with optional context/branches.
+- **Streaming from Hub:** Backend receives SSE from Intelligence Service and processes chunks/steps/proposals.
+- **Hub context:** Intelligence Service loads thread history and linked entities/documents from Data Pod via Hub Protocol.
+- **Side panel:** “Ask AI” opens ai-chat in a side panel without replacing main view (when focus=ai-chat is applied).
+
+---
+
+## 7. Gaps, Limitations, and Risks
+
+### 7.1 Critical: Real-time not wired in API server
+
+- **Issue:** tRPC context in `apps/api` never receives `socketIO`. All `ctx.socketIO?.emit(...)` in infinite-chat are no-ops.
+- **Impact:** No live streaming in the client (no chat:stream/ai:step), no instant chat:message/thread:created updates. User only sees updates after refetch or next navigation.
+- **Needed:** Either (1) run API and Socket.IO in the same process and inject the Socket.IO server into createContext, or (2) have a separate real-time service that is notified (e.g. by API) to broadcast to the same Socket.IO namespace clients use.
+
+### 7.2 Command palette “Ask AI” does not send the query
+
+- **Issue:** “Ask AI” only opens the side panel; the text in the palette is not sent as the first message.
+- **Impact:** User must re-type or paste the question in the chat input. No “ask this and show answer” from the palette.
+- **Possible direction:** When opening with focus=ai-chat, pass initial query (e.g. URL param or shared state) and have ChatWorkspace/ChatView send it immediately (no threadId; backend creates thread and streams).
+
+### 7.3 listThreads vs workspace
+
+- **Issue:** Backend listThreads does not take workspaceId/projectId; threads are user-scoped. Frontend passes `projectId: workspaceId` and enables the query when workspaceId is set; backend ignores projectId.
+- **Impact:** Thread list is “all my threads”, not “threads for this workspace”. If product intent is workspace-scoped threads, schema and API need to support it.
+
+### 7.4 Type assertions for “send without thread”
+
+- **Issue:** Frontend uses a cast for `sendMessage.mutateAsync({ content, workspaceId })` and for the response `threadId` because generated API types still assume required threadId and no threadId in response.
+- **Impact:** Works at runtime but type safety is bypassed. Regenerating API types from the backend (optional threadId, threadId in response) would allow removing the cast.
+
+### 7.5 ChatThreadList enabled only when projectId set
+
+- **Issue:** ChatThreadList uses `enabled: !!projectId` with `projectId = workspaceId || activeWorkspaceId`. If both are null/undefined, list is disabled and sidebar shows no threads.
+- **Impact:** In contexts where workspace is not set, thread list will not load (by design today).
+
+### 7.6 Proposal / action approval
+
+- **Issue:** MessageExtraContent has onApproveProposedAction / onRejectProposedAction with TODO; they only log. No integration with backend “execute approved action” or hub approve.
+- **Impact:** Users can accept/reject document proposals (proposals package) but not full “proposed action” execution flow from chat.
+
+### 7.7 Parallel threads
+
+- **Scope:** Audit is for “classic linear chat”; parallel threads UI exists (ParallelChatView, etc.) but is out of scope. No change recommended here for this audit.
+
+---
+
+## 8. Summary Table
+
+| Area                         | Current state                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| Send with thread             | Works (tRPC sendMessage).                                                        |
+| Send without thread          | Works (backend creates thread, returns threadId; frontend uses onThreadCreated). |
+| Command “Ask AI”             | Opens side panel only; does not send palette input as first message.             |
+| Streaming (Hub→Backend)      | Works (SSE parsed, chunks/steps processed).                                      |
+| Streaming (Backend→Frontend) | Broken: ctx.socketIO never set, no chat:stream/ai:step/chat:message emitted.     |
+| Thread list                  | User-scoped; workspaceId/projectId ignored by backend.                           |
+| Hub thread context           | Works (GET threads/:id/context, history + linked entities/documents).            |
+| Real-time cache update       | Depends on socket events; currently no events from API → no live updates.        |
+
+---
+
+## 9. Recommended Next Steps (No Code Changes in This Audit)
+
+1. **Wire Socket.IO into tRPC context** so chat:stream, ai:step, chat:message, thread:created are actually emitted (e.g. single server with API + Socket.IO, or API publishing to the same real-time channel).
+2. **Optionally:** Support “Ask AI with query” (e.g. pass initial query when opening with focus=ai-chat and auto-send as first message with no threadId).
+3. **Align listThreads with product:** Either document “user-scoped threads” and drop misleading projectId in UI, or add workspace (or project) to thread model and API.
+4. **Regenerate API types** for chat.sendMessage (optional threadId, threadId in result) and remove frontend type assertions.
+5. **Implement or document** proposed-action approval (onApproveProposedAction / onRejectProposedAction) and any hub/backend execute-approval flow.
+
+This document reflects the codebase as audited; no edits were made to implementation.

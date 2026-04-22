@@ -1,0 +1,279 @@
+# Intelligence App — UX, Components & Empty States Plan
+
+**Purpose:** Define real components, layouts, user flows, empty states, and onboarding for the Intelligence app. Apply progressive disclosure and best practices.
+
+---
+
+## 1. Design Principles
+
+### 1.1 Core Principles
+
+- **Progressive disclosure:** Start simple; reveal complexity when needed (e.g., advanced command options in a collapsible section).
+- **Contextual guidance:** Empty states explain _what_ and _why_, not just _how_.
+- **Clear hierarchy:** Primary action prominent; secondary actions discoverable.
+- **Consistency:** Same patterns across tabs (list + detail, create flow, empty state structure).
+
+### 1.2 Layout Ratios (Proposed)
+
+- **Threads tab:** 280px sidebar (thread list) | flex main (chat) — existing ChatWorkspace pattern.
+- **Commands / Agents / Connections / Runs:** Single-column dashboard with optional split when editing:
+  - Default: Full-width list/grid.
+  - Edit mode: List (40%) | Detail/Form (60%) or modal for quick edits.
+- **Empty state:** Centered content, max-width 480px, generous padding.
+
+---
+
+## 2. Empty States
+
+### 2.1 Structure (Reusable Pattern)
+
+Each empty state should include:
+
+1. **Illustration or icon** — Muted, on-brand.
+2. **Headline** — Clear value prop (e.g., "No commands yet").
+3. **Body copy** — 1–2 sentences explaining benefit and next step.
+4. **Primary CTA** — Main action (Create command, New thread, etc.).
+5. **Secondary link** — Optional: "Learn more" → docs or in-app tour.
+6. **Optional tip** — One-liner hint (e.g., "Commands are like shortcuts for AI tasks").
+
+### 2.2 Tab-Specific Empty States
+
+#### Threads
+
+- **Headline:** "Start a conversation"
+- **Body:** "Chat with AI to get answers, generate content, or automate tasks. Your threads are saved here."
+- **CTA:** "New thread"
+- **Secondary:** "Learn how to use threads" → `/docs/threads` or tooltip/tour.
+
+#### Commands
+
+- **Headline:** "Create your first command"
+- **Body:** "Commands are reusable AI shortcuts. Define a prompt template, add arguments, and run them from here or the command palette."
+- **CTA:** "Create command"
+- **Secondary:** "See examples" → examples modal or docs.
+- **Tip:** "Use {argument name=\"X\"} for inputs, {selection} for context."
+
+#### Agents
+
+- **Headline:** "Configure AI agents"
+- **Body:** "Agents are specialized AI assistants. Choose from system agents or create custom ones with their own instructions and tools."
+- **CTA:** "Add agent"
+- **Secondary:** "What are agents?" → docs.
+- **Tip:** "Different agents excel at different tasks."
+
+#### Connections
+
+- **Headline:** "Connect external services"
+- **Body:** "Link intelligence providers, APIs, or tools to extend what your workspace can do."
+- **CTA:** "Add connection"
+- **Secondary:** "Create your own intelligence service" → external docs link.
+- **Tip:** "Connections are workspace-wide."
+
+#### Runs
+
+- **Headline:** "No runs yet"
+- **Body:** "When you run commands, their execution history will appear here. You can reopen any conversation from a run."
+- **CTA:** None (or "Go to Commands" as secondary).
+- **Secondary:** "Go to Commands" → switch tab.
+- **Tip:** "Runs help you track and audit AI activity."
+
+---
+
+## 3. Dashboard Layouts (Per Tab)
+
+### 3.1 Threads
+
+- **Current:** ChatWorkspace with sidebar + main — keep.
+- **Enhancements:**
+  - Empty state in main area when no threads.
+  - "New thread" prominent in sidebar header.
+  - Optional: Quick filters (All, Recent, Starred) in sidebar.
+
+### 3.2 Commands
+
+- **Layout:** Header (search + "New command") | List/Grid of CommandCards.
+- **View modes:** List (default) | Compact grid for power users.
+- **Card content:** Title, truncated prompt, argument count, last run (optional).
+- **Actions:** Run, Edit, Duplicate, Delete (on hover or context menu).
+- **Progressive disclosure:**
+  - Create: Step 1 = Title + Prompt (required). Step 2 = Arguments, permissions (optional, "Advanced").
+  - Edit: Same; advanced section collapsible.
+
+### 3.3 Agents
+
+- **Layout:** Header (search + "Add agent") | Grid of AgentCards.
+- **Card content:** Name, description, icon, status (active/inactive).
+- **Progressive disclosure:**
+  - View: Summary. "Configure" opens detail panel/sheet.
+  - Edit form: Name, description, system prompt override, model override, allowed tools (collapsible).
+
+### 3.4 Connections
+
+- **Layout:** Header ("Add connection") | List of ConnectionCards.
+- **Card content:** Name, type, status (connected/pending/error), last checked.
+- **Progressive disclosure:**
+  - Add: Choose type (e.g., Webhook, API) → minimal fields first.
+  - Edit: Connection details, test, disconnect.
+
+### 3.5 Runs
+
+- **Layout:** Header (filters: All, Completed, Failed) | Timeline or table.
+- **Row content:** Command name, status, time, "Open" link.
+- **Progressive disclosure:**
+  - Row expand: Inputs, error message (if failed), output summary.
+
+---
+
+## 4. Forms & Components
+
+### 4.1 Command Form (Create/Edit)
+
+- **Step 1 (always visible):**
+  - Title (required)
+  - Prompt template (required, textarea, placeholder with syntax hint)
+  - "Add argument" inline hint: `{argument name="X"}`
+- **Step 2 (collapsible "Advanced"):**
+  - Input overrides (labels, defaults)
+  - Allowed tools, entity types
+  - Output mode, permissions profile, shared scope
+- **Validation:** Client-side check for required args in prompt before submit.
+- **Preview:** Optional "Preview arguments" showing parsed inputs.
+
+### 4.2 Agent Form (Create/Edit)
+
+- **Required:** Name, description (short).
+- **Optional (collapsible):**
+  - System prompt override
+  - Model override
+  - Allowed tools
+  - Enable/disable
+- **For system agents:** Read-only view; "Use" or "Configure workspace default."
+
+### 4.3 Connection Form (Create/Edit)
+
+- **Required:** Connection type (select), name.
+- **Type-specific fields:** e.g., Webhook URL, API key (masked).
+- **Optional:** Description, event types.
+- **Actions:** Test connection, Save, Disconnect.
+
+---
+
+## 5. User Flows
+
+### 5.1 Create Command
+
+1. User clicks "Create command" (empty state or header).
+2. Modal/sheet opens with Step 1 (title + prompt).
+3. User writes prompt; optionally adds `{argument name="X"}`.
+4. User clicks "Create" (quick path) or "Advanced" to configure.
+5. On success: Modal closes; new command appears in list; optional toast "Command created. Run it from the list or command palette."
+
+### 5.2 Run Command
+
+1. User clicks "Run" on card or from palette.
+2. Sheet opens with argument inputs (if any).
+3. User fills; clicks "Run".
+4. Sheet closes; app switches to Threads tab with new thread.
+5. User sees stream; run appears in Runs tab.
+
+### 5.3 First-Time Onboarding
+
+1. **Option A (lightweight):** Tooltip on first visit: "Intelligence has 5 tabs: Threads, Commands, Agents, Connections, Runs. Start with Threads to chat, or Commands to automate."
+2. **Option B (dismissible banner):** "New to Intelligence? Take a quick tour" → 3-step overlay (Threads → Commands → Runs).
+3. **Option C (contextual):** No global tour; each empty state is self-explanatory with "Learn more" links.
+
+**Recommendation:** Start with Option C; add Option A if analytics show confusion.
+
+---
+
+## 6. Copy & Documentation Links
+
+### 6.1 Control Plane Guides (synap.live)
+
+Secondary buttons in empty states link to the **control plane** (synap.live) guides:
+
+- `https://synap.live/guides/threads` — Learn how to use threads
+- `https://synap.live/guides/commands` — Examples & use cases
+- `https://synap.live/guides/agents` — What are agents?
+- `https://synap.live/guides/connections` — Create your own intelligence service
+
+Guides use next-gen explanations: what it is, why, use-case phrases ("You can do X thanks to this"), capabilities, personalization. Set `NEXT_PUBLIC_CONTROL_PLANE_URL` to override the base (default: https://synap.live).
+
+### 6.2 Empty State Copy Summary
+
+| Tab         | Headline                  | CTA            | Secondary        |
+| ----------- | ------------------------- | -------------- | ---------------- |
+| Threads     | Start a conversation      | New thread     | Learn how        |
+| Commands    | Create your first command | Create command | See examples     |
+| Agents      | Configure AI agents       | Add agent      | What are agents? |
+| Connections | Connect external services | Add connection | Create your own  |
+| Runs        | No runs yet               | —              | Go to Commands   |
+
+---
+
+## 7. Implementation Phases
+
+### Phase 1: Empty States & Basic Dashboards ✅
+
+- [x] Create reusable `IntelligenceEmptyState` component.
+- [x] Implement real empty states for Commands, Agents, Connections, Runs tabs.
+- [x] Add primary CTAs and secondary "Learn more" placeholders.
+- [x] Ensure layout ratios and spacing are consistent (max-width 480px, padding $8).
+
+### Phase 2: Command Form Enhancement
+
+- [ ] Split form into required + advanced (collapsible).
+- [ ] Add syntax hint, validation, preview.
+- [ ] Improve CommandCard with last run, duplicate action.
+- [ ] Command list: add search, view mode toggle (optional).
+
+### Phase 3: Agents Tab (Real UI)
+
+- [ ] Agent list/grid with real data (when backend ready).
+- [ ] Agent form (create/edit) with progressive disclosure.
+- [ ] Empty state + "Add agent" flow.
+
+### Phase 4: Connections Tab (Real UI)
+
+- [ ] Connection list with status.
+- [ ] Connection form (type-specific fields).
+- [ ] Empty state + "Add connection" flow.
+- [ ] Test connection action.
+
+### Phase 5: Runs Tab Enhancement
+
+- [ ] Filters (All, Completed, Failed).
+- [ ] Row expand for details.
+- [x] Empty state with "Go to Commands" CTA.
+
+### Phase 6: Onboarding & Polish
+
+- [ ] First-visit tooltip or banner (if needed).
+- [ ] Wire "Learn more" links to docs.
+- [ ] Add "See examples" for commands (modal with 2–3 example prompts).
+- [ ] First commands & agents (separate discussion).
+
+---
+
+## 8. Component Checklist
+
+| Component                 | Status  | Notes                                    |
+| ------------------------- | ------- | ---------------------------------------- |
+| IntelligenceEmptyState    | Done    | Reusable; icon, headline, body, CTA, tip |
+| CommandForm (enhanced)    | Partial | Add advanced section, validation         |
+| CommandCard (enhanced)    | Partial | Add duplicate, last run                  |
+| AgentCard                 | To do   | For Agents tab                           |
+| AgentForm                 | To do   | Create/edit                              |
+| ConnectionCard            | To do   | For Connections tab                      |
+| ConnectionForm            | To do   | Type-specific                            |
+| Runs filters + expand     | To do   | Filters; row expand                      |
+| Onboarding tooltip/banner | To do   | Optional; Phase 6                        |
+
+---
+
+## 9. Notes
+
+- **First commands & agents:** Will be seeded/configured later; this plan focuses on UI and flows.
+- **Documentation:** Links can point to `/docs/*` routes or external URLs; implement when docs exist.
+- **Progressive disclosure:** Prefer collapsible "Advanced" over multi-step wizards for forms.
+- **Accessibility:** Ensure CTAs and forms are keyboard-navigable and screen-reader friendly.

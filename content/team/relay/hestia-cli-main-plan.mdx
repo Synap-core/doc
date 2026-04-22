@@ -1,0 +1,732 @@
+## Plan for hestia V2:
+
+***__Plan: Hestia CLI → Eve V2 Full Implementation__***                                                                                 
+
+                                                                                                                                
+
+  **Impact Analysis**                                                                                                               
+
+                                                                                                                                
+
+  - **Repo**: hestia-cli/ only                                                                                                      
+
+  - **New packages**: None (builder organ extended in-place)                                                                        
+
+  - **Shared packages modified**: @eve/dna (types, secrets, state)                                                                  
+
+  - **Organ packages modified**: brain, arms, builder, eyes, legs                                                                   
+
+  - **CLI package modified**: eve-cli                                                                                               
+
+  - **Risk**: MEDIUM (builder organ is a major new subsystem; brain/arms are minor)                                                 
+
+                                                                                                                                
+
+  ---                                                                                                                           
+
+  **Phase 1: Foundation — Shared Types, Interfaces, Wrappers**                                                                      
+
+                                                                                                                                
+
+  **Goal**: Centralized types and utilities that all organs depend on.
+
+                                                                                                                                
+
+  **Phase 1.1: DNA package — Core type extensions**                                                                                 
+
+                                                                                                                                
+
+  - **Task types** — packages/@eve/dna/src/types.ts                                                                                 
+
+    - Add TaskStatus = 'pending' | 'polling' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+    - Add TaskType = 'codegen' | 'deploy' | 'review' | 'refactor' | 'custom'                                                    
+
+    - Add TaskPriority = 'low' | 'normal' | 'high' | 'urgent'                                                                   
+
+    - Add BuilderTask interface: { id, status, type, priority, prompt, source, result, createdAt, updatedAt, startedAt,        
+
+  completedAt }                                                                                                                 
+
+    - Add BuilderTaskPayload interface: { taskId, prompt, engine } (what gets passed to subprocess)                             
+
+    - Add BuilderTaskResult interface: { taskId, output, exitCode, artifacts, submittedAt }                                     
+
+  - **Task polling types** — packages/@eve/dna/src/types.ts                                                                         
+
+    - Add PollConfig interface: { intervalMs, maxRetries, backoffMultiplier, syncEndpoint }                                     
+
+    - Add TaskSyncResponse interface: { tasks: BuilderTask[], since: string }                                                   
+
+    - Add TaskSubmission interface: { taskId, status, result?: string, artifacts?: string[] }                                   
+
+  - **Hermes daemon types** — packages/@eve/dna/src/types.ts                                                                        
+
+    - Add HermesMode = 'daemon' | 'once'                                                                                        
+
+    - Add HermesConfig interface: { enabled, mode, pollInterval, workspaceDir, skillsDir, maxConcurrent, engine }               
+
+    - Add HermesState interface: { status: 'idle' | 'polling' | 'running' | 'error', currentTaskId?, uptime?, tasksCompleted?,
+
+  lastPoll? }                                                                                                                   
+
+  - **Messaging types** — packages/@eve/dna/src/types.ts                                                                            
+
+    - Add MessagingChannel = 'whatsapp' | 'telegram' | 'imessage'                                                               
+
+    - Add MessagingConfig interface: { [channel]: { webhookUrl?, phoneCode?, sessionId?, botToken?, deviceId?, phoneNumber? } }
+
+    - Add VoiceConfig interface: { transcriptionModel?, voiceId?, sttEndpoint? }                                                
+
+  - **Organ info update** — packages/@eve/dna/src/types.ts                                                                          
+
+    - Update ORGAN_INFO.arms.purpose: "Action & messaging — OpenClaw with WhatsApp/iMessage/Telegram voice memos"               
+
+    - Update ORGAN_INFO.builder.purpose: "Headless dev orchestrator — Hermes + opencode, polls Synap for tasks"                 
+
+  - **Service registry update** — packages/@eve/dna/src/types.ts                                                                    
+
+    - Add hermes to BuilderService type: 'opencode' | 'openclaude' | 'claudecode' | 'dokploy' | 'hermes'                        
+
+    - Add Hermes entry to SERVICE_REGISTRY: node:20-alpine, restart: 'unless-stopped', dependsOn: ['eve-brain-ollama',          
+
+  'eve-brain-synap']                                                                                                            
+
+                                                                                                                                
+
+  **Phase 1.2: DNA package — Secrets & State extensions**                                                                           
+
+                  
+
+  - **Secrets contract** — packages/@eve/dna/src/secrets-contract.ts                                                                
+
+    - Add messaging to arms secrets: { whatsappSessionId?, telegramBotToken?, imessageDeviceId? }
+
+    - Add voice to arms secrets: { sttEndpoint?, voiceId? }                                                                     
+
+    - Add hermes to builder secrets: { enabled?, pollInterval?, workspaceDir?, skillsDir?, maxConcurrent?, codeEngine? }        
+
+    - Update mergeNested calls for new sections                                                                                 
+
+    - Bump version to '2' if breaking, or keep '1' with optional fields (optional = non-breaking, keep '1')                     
+
+  - **Entity state** — packages/@eve/dna/src/entity-state.ts                                                                        
+
+    - Fix state path: ~/.local/share/hestia/ → ~/.local/share/eve/                                                              
+
+    - Fix NEXT_STEPS commands: hestia → eve                                                                                     
+
+    - Fix JSDoc: "Hestia" → "Eve"                                                                                               
+
+    - Add hermes field to metadata: { hermesState?: HermesState }                                                               
+
+    - Add getHermesState() / setHermesState() methods to EntityStateManager                                                     
+
+    - Update StateSchema.aiModel to allow null (V2 allows no-model mode)                                                        
+
+  - **Builder hub wiring** — packages/@eve/dna/src/builder-hub-wiring.ts                                                            
+
+    - Add writeHermesEnvFile() — writes .eve/hermes/.env with SYNAP_API_URL, SYNAP_API_KEY, HUB_BASE_URL, HERMES_POLL_INTERVAL,
+
+  HERMES_WORKSPACE_DIR                                                                                                          
+
+    - Add writeHermesConfig() — writes ~/.eve/hermes/config.json                                                                
+
+    - Add writeMessagingEnvFile() — writes ~/.eve/arms/.env with messaging credentials                                          
+
+                                                                                                                                
+
+  **Phase 1.3: DNA package — Docker compose generator**                                                                             
+
+                                                                                                                                
+
+  - **Docker compose generator** — packages/@eve/dna/src/docker-compose-generator.ts                                                
+
+    - Add addHermesService() method
+
+    - Guard addBrainServices() with comment: "These are managed by the synap script, not the DNA generator"                     
+
+    - Add removeService() for hermes cleanup                                                                                    
+
+                                                                                                                                
+
+  **Phase 1.4: DNA package — Build & typecheck**                                                                                    
+
+                                                                                                                                
+
+  - cd hestia-cli && pnpm --filter @eve/dna build                                                                               
+
+  - Verify: pnpm --filter @eve/dna type-check (or build)
+
+  - Verify: no any types introduced                                                                                             
+
+                                                                                                                                
+
+  ---                                                                                                                           
+
+  **Phase 2: Builder Organ — Headless Orchestrator (Critical)**                                                                     
+
+                                                                                                                                
+
+  **Goal**: Build the complete Hermes daemon + task polling + codegen execution + result submission loop. This is the largest gap.
+
+                                                                                                                                
+
+  **Phase 2.1: Builder package — Hermes core**                                                                                      
+
+                                                                                                                                
+
+  - **Create**: packages/@eve/builder/src/lib/hermes-daemon.ts                                                                      
+
+    - HermesDaemon class with lifecycle: start(), stop(), restart(), getStatus()
+
+    - Internal loop: pollLoop() — calls Synap REST API periodically, processes tasks                                            
+
+    - Config: reads from HermesConfig (from DNA)                                                                                
+
+    - State: updates HermesState via DNA entity state manager                                                                   
+
+    - Error handling: exponential backoff, max retries, graceful shutdown on SIGINT/SIGTERM                                     
+
+  - **Create**: packages/@eve/builder/src/lib/task-poll.ts                                                                          
+
+    - TaskPoller class                                                                                                          
+
+    - pollTasks() — GET SYNAP_API_URL/api/tasks (or appropriate endpoint), with since cursor                                    
+
+    - submitResult() — POST result to Synap REST API                                                                            
+
+    - updateTaskStatus() — PATCH status to Synap REST API                                                                       
+
+    - Uses SYNAP_API_KEY header auth                                                                                            
+
+    - Backoff: PollConfig with exponential backoff on 429/500                                                                   
+
+  - **Create**: packages/@eve/builder/src/lib/task-executor.ts                                                                      
+
+    - TaskExecutor class                                                                                                        
+
+    - execute(task: BuilderTask) → dispatches based on task.type and task.prompt                                                
+
+    - Spawns codegen (opencode/Claude Code) via child_process.spawn() (fire-and-forget, NOT execSync)                           
+
+    - Captures stdout/stderr, tracks exit code                                                                                  
+
+    - Timeout handling, max concurrency control                                                                                 
+
+    - Writes artifacts to workspace directory                                                                                   
+
+  - **Create**: packages/@eve/builder/src/lib/task-queue.ts                                                                         
+
+    - TaskQueue class — in-memory queue for pending tasks                                                                       
+
+    - enqueue(task), dequeue(), size(), clear()                                                                                 
+
+    - Thread-safe, FIFO with priority support                                                                                   
+
+    - Integrates with TaskPoller (poll results → enqueue) and TaskExecutor (dequeue → execute)                                  
+
+                                                                                                                                
+
+  **Phase 2.2: Builder package — Integration with existing services**                                                               
+
+                                                                                                                                
+
+  - **Extend**: packages/@eve/builder/src/lib/opencode.ts                                                                           
+
+    - Change execSync → spawn (non-blocking)
+
+    - Return Promise<{ exitCode, stdout, stderr, pid }> instead of blocking                                                    
+
+    - Add startSession(prompt) for long-running sessions                                                                        
+
+  - **Remove**: packages/@eve/builder/src/lib/openclaude.ts                                                                         
+
+    - This was the direct Ollama caller (not via Synap REST) — V2 requires Synap as exclusive memory                            
+
+    - If still needed for local-only mode, redirect through Synap API instead                                                   
+
+  - **Extend**: packages/@eve/builder/src/index.ts                                                                                  
+
+    - Add HermesDaemon to exports                                                                                               
+
+    - Add TaskPoller, TaskExecutor, TaskQueue to exports                                                                        
+
+    - Update Builder class: add hermes property, startHermes(), stopHermes() methods                                            
+
+  - **Extend**: packages/@eve/builder/src/lib/builder-organ.ts                                                                      
+
+    - Add runHermesOrganSetup() — installs/initializes Hermes daemon                                                            
+
+    - Adds --enable-hermes flag to existing runBuilderOrganSetup()                                                              
+
+                                                                                                                                
+
+  **Phase 2.3: Builder package — Commands**                                                                                         
+
+                                                                                                                                
+
+  - **Create**: packages/@eve/builder/src/commands/hermes.ts                                                                        
+
+    - eve builder hermes start — starts Hermes daemon
+
+    - eve builder hermes stop — stops Hermes daemon                                                                             
+
+    - eve builder hermes status — shows current state, task count, uptime                                                       
+
+    - eve builder hermes poll — one-shot poll (for debugging)                                                                   
+
+    - eve builder hermes logs — follow daemon logs                                                                              
+
+  - **Extend**: packages/@eve/builder/src/commands/init.ts                                                                          
+
+    - Add --hermes flag to enable Hermes during init                                                                            
+
+    - If enabled, run runHermesOrganSetup() after project scaffold                                                              
+
+  - **Remove or deprecate**: packages/@eve/builder/src/commands/deploy.ts
+
+    - Dokploy deploy is simulated (setTimeout). Either implement real Dokploy API or mark as deprecated with "use Dokploy CLI
+
+  directly"                                                                                                                     
+
+  - **Remove or deprecate**: packages/@eve/builder/src/commands/sandbox.ts
+
+    - Docker sandbox container — low value, can be removed                                                                      
+
+  - **Remove or deprecate**: packages/@eve/builder/src/commands/stack.ts
+
+    - Static nginx stack on :9080 — low value, can be removed
+
+  **Phase** **2.4:** **Builder** **package** **—** **Build** **&** **typecheck**
+
+  - cd hestia-cli && pnpm --filter @eve/builder build
+
+  - Verify: all new files pass TypeScript strict mode
+
+  - Verify: no any types
+
+  - Verify: execSync removed from new code (use spawn only)
+
+  ---
+
+  **Phase 3: Arms Organ — Messaging & Voice**
+
+                                                                                                                                
+
+  **Goal**: Add messaging ingress and voice memo configuration plumbing.
+
+                                                                                                                                
+
+  **Phase 3.1: Arms package — Configuration**                                                                                       
+
+  
+
+  - **Extend**: packages/@eve/arms/src/lib/openclaw.ts                                                                              
+
+    - Add configureMessaging(channel, config) method — writes env vars to container
+
+    - Add configureVoice(config) method — writes voice env vars                                                                 
+
+    - Update start() Docker command to pass messaging/voice env vars                                                            
+
+  - **Update**: packages/@eve/dna/src/builder-hub-wiring.ts                                                                         
+
+    - Already done in Phase 1.2 (writeMessagingEnvFile)                                                                         
+
+                                                                                                                                
+
+  **Phase 3.2: Arms package — Commands**
+
+                                                                                                                                
+
+  - **Extend**: packages/@eve/arms/src/commands/install.ts
+
+    - Add post-install prompts: "Configure messaging (WhatsApp/Telegram/iMessage)?"
+
+    - Add post-install prompts: "Configure voice memos?"                                                                        
+
+    - Call configureMessaging() / configureVoice() on success
+
+  - **Create**: packages/@eve/arms/src/commands/messaging.ts                                                                        
+
+    - eve arms messaging list — list configured channels                                                                        
+
+    - eve arms messaging add <channel> — add channel with prompts                                                               
+
+    - eve arms messaging remove <channel> — remove channel                                                                      
+
+    - eve arms messaging status — show connection status per channel                                                            
+
+  - **Create**: packages/@eve/arms/src/commands/voice.ts                                                                            
+
+    - eve arms voice configure — configure STT/voice settings                                                                   
+
+    - eve arms voice status — show voice config status                                                                          
+
+  - **Extend**: packages/@eve/arms/src/commands/mcp.ts                                                                              
+
+    - Add messaging-related MCP presets (optional, low priority)                                                                
+
+                  
+
+  **Phase 3.3: Arms package — Build & typecheck**                                                                                   
+
+                  
+
+  - cd hestia-cli && pnpm --filter @eve/arms build                                                                              
+
+                  
+
+  ---                                                                                                                           
+
+  **Phase 4: Brain Organ — Cleanup**
+
+                                                                                                                                
+
+  **Goal**: Remove dead code, fix misleading descriptions, align with V2 spec.
+
+                                                                                                                                
+
+  **Phase 4.1: Dead code removal**                                                                                                  
+
+                                                                                                                                
+
+  - **Delete**: packages/@eve/brain/src/lib/postgres.ts                                                                             
+
+  - **Delete**: packages/@eve/brain/src/lib/redis.ts
+
+  - **Update**: packages/@eve/brain/src/index.ts — remove re-exports of deleted services                                            
+
+                                                                                                                                
+
+  **Phase 4.2: Command & description fixes**                                                                                        
+
+                                                                                                                                
+
+  - **Create**: packages/@eve/brain/src/commands/start.ts                                                                           
+
+  - **Create**: packages/@eve/brain/src/commands/stop.ts
+
+  - **Update**: packages/@eve/brain/src/index.ts — move start/stop from inline to command files                                     
+
+  - **Update**: descriptions from "Start Synap backend container" → "Start Synap stack (backend, Postgres, Redis, Ollama)"          
+
+                                                                                                                                
+
+  **Phase 4.3: SynapService fixes**                                                                                                 
+
+                                                                                                                                
+
+  - **Remove or implement**: packages/@eve/brain/src/lib/synap.ts                                                                   
+
+    - Remove install() (no-op) or make it delegate to synap install
+
+    - Implement getVersion() to delegate to synap version                                                                       
+
+                  
+
+  **Phase 4.4: Deprecation message fix**                                                                                            
+
+  
+
+  - **Update**: packages/@eve/brain/src/commands/init.ts                                                                            
+
+    - Deprecation message: change ./synap install → eve setup --profile data_pod|full
+
+                                                                                                                                
+
+  **Phase 4.5: Brain package — Build & typecheck**
+
+                                                                                                                                
+
+  - cd hestia-cli && pnpm --filter @eve/brain build                                                                             
+
+  
+
+  ---                                                                                                                           
+
+  **Phase 5: Eyes & Legs — Minor Cleanup**
+
+  **Goal**: Naming consistency, remove stale references.
+
+  **Phase** **5.1:** **Eyes**
+
+  - No major changes needed. Ensure RSSHub commands reference eve not hestia.                                                   
+
+  
+
+  **Phase 5.2: Legs**                                                                                                               
+
+                  
+
+  - No major changes needed. Ensure tunnel commands reference eve not hestia.                                                   
+
+  
+
+  ---                                                                                                                           
+
+  **Phase 6: CLI — Wiring & Updates**
+
+  **Goal**: Wire new organs/commands into the CLI entry point, fix naming everywhere.
+
+  **Phase** **6.1:** **CLI** **entry** **point**
+
+  - **Extend**: packages/eve-cli/src/index.ts                                                                                       
+
+    - Register eve builder hermes command group from builder package
+
+    - Register eve arms messaging and eve arms voice from arms package                                                          
+
+    - Update root help text organ descriptions to V2 language                                                                   
+
+  
+
+  **Phase 6.2: Setup flow**                                                                                                         
+
+                  
+
+  - **Extend**: packages/eve-cli/src/commands/setup.ts
+
+    - In --with-openclaw flow: add messaging/voice prompts (calls arms install logic)
+
+    - In full profile: add --hermes flag / prompt to enable Hermes                                                              
+
+    - Write hermes secrets to .eve/secrets/secrets.json
+
+                                                                                                                                
+
+  **Phase 6.3: Status & Doctor**
+
+                                                                                                                                
+
+  - **Update**: packages/eve-cli/src/commands/status.ts                                                                             
+
+    - Show Hermes state in output
+
+    - Update "hestia" → "eve" in output text                                                                                    
+
+  - **Update**: packages/eve-cli/src/commands/doctor.ts
+
+    - Add Hermes health check (process running? last poll successful?)
+
+    - Update "hestia" → "eve" in output text                                                                                    
+
+  
+
+  **Phase 6.4: Grow**                                                                                                               
+
+                  
+
+  - **Implement**: packages/eve-cli/src/commands/grow.ts
+
+    - Replace stub sleep() with actual eve <organ> install delegation
+
+    - Implement growCapability() with real feature enhancements                                                                 
+
+  
+
+  **Phase 6.5: Global cleanup**                                                                                                     
+
+                  
+
+  - **Replace**: All occurrences of hestia → eve in:
+
+    - State paths (entity-state.ts)
+
+    - Deprecation messages
+
+    - Next steps commands                                                                                                       
+
+    - Help text
+
+    - JSDoc comments                                                                                                            
+
+                  
+
+  **Phase** **6.6:** **CLI** **package** **—** **Build** **&** **typecheck**
+
+  - cd hestia-cli && pnpm --filter @eve/cli build
+
+  ---
+
+  **Phase 7: Cross-Cutting Verification**
+
+                                     
+
+  **Goal**: Ensure everything works together, code quality, best practices.
+
+                                                                                                                                
+
+  **Phase 7.1: Build verification**
+
+                                                                                                                                
+
+  - cd hestia-cli && pnpm build (all packages)
+
+  - cd hestia-cli && pnpm test (if tests exist)
+
+  **Phase** **7.2:** **Dependency** **verification**
+
+  - Verify: No circular dependencies introduced                                                                                 
+
+  - Verify: @eve/builder depends on @eve/dna only (not @eve/brain)
+
+  - Verify: Dependency flow follows downward direction: features → core                                                         
+
+                  
+
+  **Phase** **7.3:** **Code** **quality**
+
+  - Verify: Zero any types across all changed files
+
+  - Verify: All new public APIs have JSDoc
+
+  - Verify: All errors use typed error classes, not strings                                                                     
+
+  - Verify: Async code uses proper error boundaries (try/catch with fallback)
+
+  - Verify: child_process.spawn used over execSync in builder                                                                   
+
+                  
+
+  **Phase 7.4: V2 spec alignment**                                                                                                  
+
+  
+
+  - **Synap as exclusive memory**: Builder never calls Ollama directly — only via Synap REST                                        
+
+  - **No agent-to-agent communication**: Hermes → Synap → OpenClaw (no direct Hermes ↔ OpenClaw)
+
+  - **Headless mode**: Hermes daemon runs independently, not CLI-driven                                                             
+
+  - **Delegation**: Brain delegates Synap install to synap script (verified)
+
+                                                                                                                                
+
+  **Phase 7.5: Secrets & State integrity**
+
+  - Verify: secrets.json migration from v1 → v2 (if version bumped)                                                             
+
+  - Verify: State file at ~/.local/share/eve/state.json (not hestia)
+
+  - Verify: All secrets use ensureSecretValue() for auto-generation                                                             
+
+  - Verify: secrets.json permissions: 0o600
+
+                                                                                                                                
+
+  **Phase 7.6: Docker compose integrity**
+
+                                                                                                                                
+
+  - Verify: DockerComposeGenerator produces valid YAML
+
+  - Verify: All container names follow eve-{organ}-{service} convention
+
+  - Verify: All services on eve-network
+
+  - Verify: Hermes service depends on brain services correctly                                                                  
+
+  
+
+  ---                                                                                                                           
+
+  **Phase 8: User-Level Verification (Manual)**
+
+  **Goal**: You test the end-to-end flows yourself.
+
+  - eve setup --profile full — installs Synap + Ollama, wires all organs                                                        
+
+  - eve builder hermes start — starts daemon, check status
+
+  - eve arms messaging add telegram — configure messaging                                                                       
+
+  - eve status — shows all 5 organs + Hermes state
+
+  - eve doctor — all checks pass
+
+  - eve builder hermes status — shows task count, uptime                                                                        
+
+  - eve grow builder — actually installs builder tools
+
+                                                                                                                                
+
+  ---             
+
+  **Risk** **Assessment**
+
+  ┌────────────────────────────────────────────┬──────────┬─────────────────────────────────────────────────────────────────┐
+
+  │                    Risk                    │ Severity │                           Mitigation                            │
+
+  ├────────────────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤   
+
+  │ Builder organ is the largest gap — daemon, │ **High**     │ Phase 2 is isolated, sub-agent can focus purely on builder.     │
+
+  │  polling, subprocess, write-back           │          │ Existing CLI tool scaffolding stays.                            │   
+
+  ├────────────────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤
+
+  │ execSync → spawn migration in opencode     │ **Medium**   │ Keep backward-compatible return signature, add timeout          │
+
+  │ could break existing behavior              │          │                                                                 │   
+
+  ├────────────────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤
+
+  │ Removing openclaude.ts (direct Ollama)     │ **Medium**   │ Check if any setup path uses it; if so, deprecate with warning  │   
+
+  │ could break local-only users               │          │ instead of delete                                               │   
+
+  ├────────────────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤
+
+  │ Secrets schema v1 → v2 migration could     │ **Low**      │ Keep optional fields; mergeNested handles graceful upgrade      │   
+
+  │ lose existing secrets                      │          │                                                                 │
+
+  ├────────────────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤
+
+  │ State path change hestia → eve breaks      │ **Low**      │ Add migration: if ~/.local/share/hestia/state.json exists, copy │
+
+  │ existing installs                          │          │  to ~/.local/share/eve/                                         │   
+
+  └────────────────────────────────────────────┴──────────┴─────────────────────────────────────────────────────────────────┘
+
+                                                                                                                                
+
+  **Open Questions**                                                                                                                
+
+  
+
+  1. **What endpoint does the builder poll on Synap?** — The V2 spec says "polls Synap for tasks" but the current Synap backend     
+
+  doesn't have a tasks endpoint yet. Do we need to create one in synap-backend, or does the builder use an existing endpoint
+
+  (e.g., entities, proposals, or channel messages)?
+
+  2. **Hermes deployment model** — Should Hermes run as a Docker container (eve-builder-hermes) or as a native Node process on the
+
+  host? V2 says "headless dev orchestrator" which suggests a long-running daemon. Docker makes sense for isolation but adds     
+
+  complexity.
+
+  3. **What happens if Synap is down during polling?** — The V2 spec says Synap is the exclusive memory. Should the daemon buffer   
+
+  tasks locally if Synap is unavailable, or just retry?                                                                         
+
+  4. **Dokploy deploy simulation** — Should we implement real Dokploy API integration or deprecate the command entirely?
+
+  5. **Messaging credentials storage** — Telegram bot tokens and WhatsApp sessions are sensitive. Should they go in                 
+
+  .eve/secrets/secrets.json (on-disk, 0o600) or use an OS keychain? Currently the plan puts them in secrets.json.           
+
+—-
+responses: 1) so the builder should poll the entity router, as almost everything is an entity, with the filter task, and also the       
+
+  filter "assignated=agent" (or something like that, maybe we need to update the task properly to handle that). 2) I think it   
+
+  should be its own docker like verything else, 3) no, if synap is unavailable, it wait & retry, no other route, 4) we can      
+
+  accept to not do dockploy on the first plan, but the goal is that the user arrive on dockploy UI and everything is already    
+
+  inside, 5) let's keep the secrets.jsons, but we will maybe change after the V2

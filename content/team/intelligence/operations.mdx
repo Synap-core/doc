@@ -571,3 +571,10 @@ pool_size = max_connections_postgres / (is_replicas + backend_replicas + headroo
 - **`/metrics` endpoint** is on port 3001 (internal only) — never exposed publicly
 - **Admin routes** (`/admin/*`) use HMAC signature verification with replay protection (±5 min window)
 - **Rate limiting** is layered: Traefik (per customer key) + IS Redis (per customer) + quota-guard (per customer concurrent)
+
+## Related
+
+- [Infrastructure](../control-plane/infrastructure.mdx) — server map and Docker services
+- [Monitor: Execution](./monitor-execution.mdx) — IS execution metrics and observability
+- [Rolling Updates](../devops/rolling-updates.mdx) — deployment and update process
+- [Monitor: Agents](./monitor-agents.mdx) — agent-level monitoring dashboard

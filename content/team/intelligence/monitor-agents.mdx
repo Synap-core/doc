@@ -98,3 +98,10 @@ Each sub-operation has its own abort signal:
 2. Override `buildSystemPrompt()` with the specialized prompt
 3. Add the type to `AgentType` in `agents/base/agent-registry.ts`
 4. Register tool allocation in `tool-registry.ts` → `getToolsForAgent()`
+
+## Related
+
+- [Agent System](./agent-system.mdx) — architecture, agent classes, and routing
+- [Monitor: Execution](./monitor-execution.mdx) — agent execution cycle and loop
+- [Monitor: Tools](./monitor-tools.mdx) — tool categories and agent tool mapping
+- [Monitor: Memory](./monitor-memory.mdx) — memory system agents use for context

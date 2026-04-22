@@ -1,0 +1,154 @@
+# Synap Team Spaces Consolidation Plan
+
+## Goal
+Consolidate team documentation and team spaces to create a clear, intuitive structure that reflects the actual applications and services, with a focus on:
+1. Merging browser and browser extension into a single space (since they are closely related)
+2. Creating feature-focused spaces that showcase end-to-end workflows
+3. Improving navigation and discoverability of team documentation
+
+## Current State Analysis
+
+### Existing Team Spaces (from `/content/team/`):
+- browser/ (Desktop/Electron application)
+- relay/ (Mobile application)
+- studio/ (Content creation application)
+- raycast/ (Quick access/search tool)
+- control-plane/ (Provisioning and management)
+- intelligence/ (AI Agent Hub)
+- platform/ (Backend architecture, data model, channels, etc.)
+- devops/ (Infrastructure, deployment, monitoring)
+- go-to-market/ (Launch, marketing, sales)
+- eve-cli/ (Command-line interface)
+- synap-packages/ (Shared packages)
+- technologies/ (Infrastructure components)
+- synap-app/ (Web frontend)
+- home/ (Team portal)
+
+## Issues with Current Structure
+
+1. **Browser vs Browser Extension**: The user mentioned having both a browser app and a browser extension, but we don't see a separate "browser-extension" directory. It's possible the browser extension is part of the browser space or not yet documented.
+
+2. **Lack of Feature-Focused Spaces**: There's no dedicated space for showcasing end-to-end workflows that span multiple services (like the OVNDOL/OVPROVIGIOR examples).
+
+3. **Navigation Complexity**: With many top-level sections, it can be overwhelming for new team members to find what they need.
+
+## Proposed Consolidation
+
+### 1. Merge Browser and Browser Extension
+- Create a unified "Browser & Extensions" space under `/content/team/browser/`
+- This space will cover:
+  - Desktop/Electron application (primary browser)
+  - Browser extensions (Chrome, Firefox, Safari)
+  - Shared code between browser and extensions
+  - Extension-specific APIs and capabilities
+
+### 2. Create Feature-Focused Spaces
+Create a new `/content/team/features/` directory with subdirectories for major workflows:
+
+#### Example: External Source Integration (OVNDOL-like)
+- `/content/team/features/external-sources/`
+  - Overview: How external sources (RSSHub, web scrapers, etc.) are integrated
+  - Architecture diagram: Data flow from external source → Control Plane → Data Pod → Intelligence Service
+  - Step-by-step guide: Setting up a new external source
+  - Configuration reference: CP settings for external sources
+  - Troubleshooting: Common issues and solutions
+  - Related spaces: links to control-plane, platform, intelligence documentation
+
+#### Example: Feed Creation & Filtering (OVPROVIGIOR-like)
+- `/content/team/features/feeds/`
+  - Overview: How feeds are created, filtered, and delivered
+  - Architecture diagram: Signal flow through feed system
+  - Step-by-step: Creating a custom feed with filters
+  - Configuration: Feed definition syntax and options
+  - Related spaces: platform/feed-system, intelligence/proactive, relay/user-flows
+
+#### Example: AI-Powered Workflows
+- `/content/team/features/ai-workflows/`
+  - Overview: How AI actions are proposed, reviewed, and executed
+  - Architecture diagram: Orchestrator → Persona → Skill Hub → Data Pod
+  - Step-by-step: Creating a new AI skill
+  - Configuration: Agent definitions and tool boundaries
+  - Related spaces: intelligence/agent-system, platform/hub-protocol
+
+### 3. Reorganize Team Home Page
+Update `/content/team/home/index.mdx` to have clear categories:
+
+```
+## Application Spaces
+- Browser & Extensions (Desktop, Mobile, Extensions)
+- Studio (Content Creation)
+- Raycast (Quick Access)
+
+## Platform Services
+- Data Pod (Backend API)
+- Intelligence Service (AI)
+- Control Plane (Provisioning)
+- Feed System (Notifications/Activity)
+
+## Developer Tools
+- Eve CLI
+- Synap Packages (SDKs)
+- DevOps Tooling
+
+## Feature Workflows
+- External Source Integration
+- Feed Creation & Filtering
+- AI-Powered Workflows
+- [Other features as needed]
+
+## Operational Spaces
+- Incident Response
+- Monitoring & Alerting
+- Deployment Pipelines
+```
+
+### 4. Update Individual Space Documentation
+Each team space should include:
+- **User Stories**: Specific scenarios of who uses this space and what they accomplish
+- **Getting Started Guide**: For new team members joining this space
+- **Workflow Diagrams**: Using Mermaid or similar to show common flows
+- **Common Tasks Reference**: Frequently performed actions
+- **Troubleshooting Guide**: Known issues and solutions
+- **Related Spaces**: Clear links to dependent and related spaces
+
+## Implementation Approach
+
+### Phase 1: Browser Space Consolidation (Quick Win)
+1. Verify if browser extension documentation exists elsewhere or needs to be created
+2. Merge any extension-specific docs into `/content/team/browser/`
+3. Update the browser space documentation to cover both
+4. Update links in home page and other spaces
+
+### Phase 2: Create Feature Spaces (Medium-term)
+1. Create `/content/team/features/` directory
+2. Pick one high-value feature workflow (e.g., external source integration)
+3. Create the space with overview, architecture, guides, and references
+4. Link from relevant existing spaces
+5. Repeat for other feature workflows
+
+### Phase 3: Reorganize Home Page and Spaces (Ongoing)
+1. Update the team home page with the new categorization
+2. Work with space owners to add user stories, getting started guides, etc.
+3. Add cross-links between related spaces
+4. Monitor usage and feedback to refine the structure
+
+## Success Metrics
+- Reduction in time for new team members to find relevant documentation
+- Increase in cross-space links created (indicating better awareness of connections)
+- Positive feedback from team on documentation usability
+- Decrease in "where do I find X?" questions in team channels
+
+## Alignment with Synap Principles
+- **Emergent Complexity**: Starts with simple consolidation, builds to sophisticated feature showcases
+- **Three-layer Data Pattern**: Documentation follows same structure (presentation → processing → source)
+- **Cell System**: Feature spaces can be thought of as "documentation cells" that compose multiple services
+- **Channels**: Documentation serves as a knowledge channel for the team
+- **Event Chain**: Documentation updates follow clear processes with review/approval
+- **Multi-repo Structure**: Respects boundaries between apps while enabling cross-repo feature documentation
+
+## Next Steps
+1. Validate current browser extension documentation status
+2. Create the browser space consolidation plan
+3. Design the first feature space (external source integration)
+4. Update the team home page structure
+5. Begin implementation with subagents

@@ -1,8 +1,8 @@
 ---
 title: 'opencode'
 description: >-
-  Code generation tool — invoked by Hermes Agent via subprocess,
-  not a standalone service.
+  Code generation tools (opencode or OpenClaude) — invoked by Hermes Agent via
+  subprocess, not a standalone service.
 section: general
 audience: users
 version: 2.0+
@@ -23,11 +23,11 @@ opencode is stateless with respect to Synap: it takes a task description and wor
 - **SST ecosystem**: Built by SST with excellent TypeScript/JavaScript support and a clean CLI interface.
 - **CLI-driven**: Designed to be invoked from automation — fits the subprocess invocation pattern perfectly.
 - **Task-based**: Accepts a task description that Hermes maps from the Synap Task entity.
-- **Stdout capture**: Codegen output is designed to be captured programmatically — ideal for the Hermes → opencode → Synap flow.
+- **Stdout capture**: Codegen output is designed to be captured programmatically — ideal for the Hermes → codegen tool → Synap flow.
 
 ## How it integrates
 
-opencode sits in the middle of the execution flow — it receives a task from Hermes, processes it, and outputs results for Hermes to capture and write to Synap.
+The codegen tool sits in the middle of the execution flow — it receives a task from Hermes, processes it, and outputs results for Hermes to capture and write to Synap.
 
 ```
 OpenClaw creates Task in Synap
@@ -36,15 +36,15 @@ OpenClaw creates Task in Synap
 Hermes polls → finds Task (status="queued")
     │
     ▼
-Hermes spawns opencode:
+Hermes spawns opencode (or OpenClaude):
     subprocess.run([
-        'opencode',
+        'opencode',  # or 'openclaude' for OpenClaude
         '--task', 'Implement user authentication flow',
         '--cwd', '/home/user/.eve/workspace/my-project'
     ], capture_output=True)
     │
     ▼
-opencode runs → generates code → outputs to stdout/stderr
+codegen tool runs → generates code → outputs to stdout/stderr
     │
     ▼
 Hermes captures output → writes to Synap Task result
@@ -58,14 +58,27 @@ OpenClaw reads Task result → summarizes for user
 | Component | Interaction | Direction |
 |-----------|-------------|-----------|
 | **Hermes** | Invoked as subprocess by Hermes | Called by |
-| **Dokploy** | Optional deployment hook — if env vars available, opencode can deploy generated code | Reads env vars |
+| **Dokploy** | Optional deployment hook — if env vars available, codegen tool can deploy generated code | Reads env vars |
 | **Local filesystem** | Writes generated code to `--cwd` directory | Writes only |
 
 opencode never calls Synap directly. All persistence (task in/out, results) flows through Hermes.
 
+## OpenClaude as an alternative
+
+The Builder organ can use **OpenClaude** instead of opencode as the code generation tool. Both are invoked identically by Hermes — they differ in their underlying LLM and tooling:
+
+| Aspect | **opencode** | **OpenClaude** |
+|--------|-------------|----------------|
+| Origin | SST | Anthropic ecosystem |
+| Language strengths | TypeScript/JavaScript, broad language support | Strong in any language it supports |
+| Invocation | Same subprocess pattern | Same subprocess pattern, replace binary name |
+| When to prefer | TypeScript/JS projects, SST ecosystem compatibility | Projects optimized for Claude's capabilities |
+
+The CLI `eve` currently defaults to opencode. During `eve builder init`, the user can choose between opencode and OpenClaude (or both, for flexibility).
+
 ## Guidelines
 
-- **Invocation pattern**: Always use `subprocess.run()` with `capture_output=True`, `text=True`, and a timeout. Example:
+- **Invocation pattern**: Always use `subprocess.run()` with `capture_output=True`, `text=True`, and a timeout. Example (opencode):
 
 ```python
 import subprocess
@@ -78,7 +91,7 @@ result = subprocess.run(
 ```
 
 - **Workspace directory**: Projects are stored in `~/.eve/workspace/<project-name>/` by default. Hermes sets `--cwd` to the relevant project directory.
-- **Dokploy integration**: When Dokploy is enabled, env vars `DOKPLOY_API_URL` and `DOKPLOY_API_KEY` are injected into the subprocess environment. opencode uses these to trigger deployments within the generated code context.
-- **Timeout**: 5 minutes (300 seconds) is the recommended timeout. If opencode exceeds this, Hermes should mark the task as "error" with partial output.
+- **Dokploy integration**: When Dokploy is enabled, env vars `DOKPLOY_API_URL` and `DOKPLOY_API_KEY` are injected into the subprocess environment. The codegen tool (opencode or OpenClaude) can use these to trigger deployments within the generated code context. For OpenClaude, replace the binary name `opencode` with `openclaude` in the subprocess call.
+- **Timeout**: 5 minutes (300 seconds) is the recommended timeout. If the codegen tool exceeds this, Hermes should mark the task as "error" with partial output.
 - **No Synap auth needed**: opencode does not need Synap credentials. It runs purely in the local filesystem context with whatever tools and project files are available.
-- **Language support**: opencode's capabilities vary by language (best in TypeScript/JavaScript). For Python or other languages, ensure relevant language models are available to the LLM that drives opencode.
+- **Language support**: opencode's capabilities vary by language (best in TypeScript/JavaScript). OpenClaude's capabilities depend on Claude's supported languages. For Python or other languages, ensure relevant language models are available to the LLM driving the chosen codegen tool.

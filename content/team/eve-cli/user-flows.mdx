@@ -70,12 +70,9 @@ This is the full journey from user input to code output in v2.0:
 11. Hermes updates task status to "processing"
     │   PATCH /trpc/tasks.update/:id → {status="processing"}
     │
-12. Hermes spawns opencode via subprocess
-    │   subprocess.run(['opencode', '--task', '<task-desc>', '--cwd', projectDir])
-    │
-13. opencode generates code, outputs to stdout/stderr
-    │
-14. Hermes captures opencode output
+  12. Hermes spawns opencode (or OpenClaude) via subprocess
+  13. Codegen tool generates code, outputs to stdout/stderr
+  14. Hermes captures codegen tool output
     │
 15. Hermes writes result to Synap
     │   PATCH /trpc/tasks.update/:id → {status="done", result=<stdout/stderr>}
@@ -91,8 +88,8 @@ This is the full journey from user input to code output in v2.0:
 
 **Key properties:**
 - Step 8-18 only happens for coding requests. For conversational messages, the flow stops after step 7.
-- At no point does OpenClaw call Hermes or opencode directly. Hermes discovers tasks only through Synap.
-- opencode produces no side effects beyond stdout/stderr and local filesystem writes (if Dokploy is disabled).
+- At no point does OpenClaw call Hermes or the codegen tool directly. Hermes discovers tasks only through Synap.
+- The codegen tool produces no side effects beyond stdout/stderr and local filesystem writes (if Dokploy is disabled).
 
 ---
 
@@ -125,8 +122,8 @@ When user opts-in during `eve setup` (or via `eve builder init --with-dokploy`):
 1. **Dokploy** is installed alongside Synap sidecars.
 2. `DOKPLOY_API_URL` and `DOKPLOY_API_KEY` are injected into:
    - Hermes Agent environment variables (so it can deploy via Dokploy within sessions)
-   - opencode subprocess environment (so opencode can deploy during codegen)
-3. If opt-out, opencode writes to local disk without deployment hooks. These env vars are absent from the process environment.
+   - opencode / OpenClaude subprocess environment (so codegen can deploy during codegen)
+ 3. If opt-out, the codegen tool writes to local disk without deployment hooks. These env vars are absent from the process environment.
 
 Dokploy lifecycle:
 - **Up**: `dokploy start`

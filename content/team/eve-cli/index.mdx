@@ -23,7 +23,7 @@ Eve is Synap's **sovereign stack orchestrator** — a **TypeScript CLI** (`eve`)
 
 1. **Guided installation** — `eve setup` installs a complete stack: Synap Data Pod, inference services, routing, agents, and developer tooling. Profiles: `inference_only`, `data_pod`, `full`.
 2. **Organ commands** — `eve brain`, `eve arms`, `eve builder`, `eve eyes`, `eve legs` — each manages a domain of the stack via the organ metaphor.
-3. **Agent wiring** — Configures OpenClaw (Arms) and Hermes Agent (Builder) to communicate exclusively through Synap's REST API. No agent speaks directly to another.
+  3. **Agent wiring** — Configures OpenClaw (Arms) and Hermes Agent (Builder) to communicate exclusively through Synap's REST API. No agent speaks directly to another. Codegen tool (opencode or OpenClaude) is invoked by Hermes as a subprocess.
 4. **Provider routing** — Stores local tooling preferences (OpenRouter, Anthropic, Ollama) in `.eve/secrets/secrets.json`; optionally syncs non-secret policy via `eve ai sync`.
 
 ---
@@ -42,7 +42,7 @@ Eve is Synap's **sovereign stack orchestrator** — a **TypeScript CLI** (`eve`)
 |-------|---------|------------|----------------|
 | **Brain** | `@eve/brain` | Synap Backend, PostgreSQL, Redis, Ollama | Central memory, API, governance, task queue |
 | **Arms** | `@eve/arms` | OpenClaw | Messaging ingress (WhatsApp, iMessage, Telegram), voice memos, reasoning. Fetches memory from Synap, writes back to Synap. Does NOT do coding. |
-| **Builder** | `@eve/builder` | Hermes Agent, opencode, Dokploy (optional) | Headless dev orchestrator. Polls Synap for queued tasks, spawns opencode via subprocess, writes results to Synap. |
+| **Builder** | `@eve/builder` | Hermes Agent, opencode/OpenClaude, Dokploy (optional) | Headless dev orchestrator. Polls Synap for queued tasks, spawns codegen tool via subprocess, writes results to Synap. |
 | **Eyes** | `@eve/eyes` | RSSHub, Outerbase | Information intake (RSS feeds), database visualization |
 | **Legs** | `@eve/legs` | Traefik, Pangolin | Reverse proxy, routing, sovereign tunneling |
 
@@ -60,10 +60,10 @@ Write to Synap via REST API (new message entity or channel update)
 Synap queues task for Hermes
     │
     ▼
-Hermes (Builder) polls Synap cron → reads task → spawns opencode via subprocess
+Hermes (Builder) polls Synap cron → reads task → spawns codegen tool via subprocess
     │
     ▼
-opencode runs → stdout/stderr captured → written as result back to Synap
+Codegen tool runs → stdout/stderr captured → written as result back to Synap
     │
     ▼
 Synap notifies OpenClaw → OpenClaw replies to user
@@ -75,7 +75,7 @@ Synap notifies OpenClaw → OpenClaw replies to user
 
 ## Golden Rule: Synap as Central Switchboard
 
-Every agent (OpenClaw, Hermes, opencode) treats Synap as their sole source of truth:
+Every agent (OpenClaw, Hermes, codegen tool — opencode or OpenClaude) treats Synap as their sole source of truth:
 
 | Layer | What | Where |
 |-------|------|-------|
@@ -97,7 +97,7 @@ No agent runs its own SQLite, Vector DB, or external state store. This applies t
 | Organ metaphor commands | Shipped | `eve brain`, `eve arms`, `eve builder`, `eve eyes`, `eve legs` |
 | Secrets management | Shipped | `.eve/secrets/secrets.json` — merged secrets across organs |
 | Setup profiling | Shipped | `.eve/setup-profile.json` — record of last `eve setup` choices |
-| Hermens Agent + opencode wiring | Planned v2.0 | `@eve/builder` replaced: Hermes Agent as headless dev orchestrator, opencode invoked via subprocess |
+| Hermes Agent + codegen wiring | Planned v2.0 | `@eve/builder` replaced: Hermes Agent as headless dev orchestrator, opencode (or OpenClaude) invoked via subprocess |
 | Synap-native OpenClaw | Planned v2.0 | OpenClaw stripped of long-term memory; fetches from/write to Synap REST API |
 | Dokploy integration | Shipped (optional) | First-class when enabled via `--with-dokploy`; injects env vars into Builder |
 

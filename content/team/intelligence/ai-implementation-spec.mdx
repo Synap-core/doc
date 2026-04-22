@@ -1,0 +1,5002 @@
+# Synap Intelligence Service: Complete Implementation Specification
+
+**Version**: 1.0  
+**Date**: 2026-01-07  
+**Target**: AI Implementation Agent / Development Team  
+**Scope**: Backend Intelligence Service - Full Architecture
+
+---
+
+## Document Purpose
+
+This specification provides **complete technical guidance** for implementing Synap's infinite chat system with branching, meta-agent orchestration, and event-driven AI capabilities. It bridges the gap between the **current implementation** (basic request/response agent) and the **target vision** (conversation-first, event-driven, infinitely scalable AI assistant).
+
+**Target Audience:**
+
+- AI agents implementing this system
+- Backend developers reviewing/maintaining code
+- Architects making technical decisions
+
+**What This Document Provides:**
+
+1. ✅ Full architectural blueprint (current → target state)
+2. ✅ Feature specifications (Priority 1-4, all phases)
+3. ✅ File-by-file implementation plan
+4. ✅ Code patterns and schemas
+5. ✅ Research guidance for technical decisions
+6. ✅ Validation and testing criteria
+
+---
+
+# Table of Contents
+
+## Part 1: Vision & Architecture
+
+- 1.1 Executive Vision
+- 1.2 Current vs Target Architecture
+- 1.3 Core Architectural Principles
+- 1.4 Technology Stack Decisions
+
+## Part 2: Current State Analysis
+
+- 2.1 What Exists and Works
+- 2.2 What's Partially Built
+- 2.3 Critical Gaps
+- 2.4 Integration Points
+
+## Part 3: Feature Specifications (Priority 1-4)
+
+- 3.1 Priority 1: Infinite Chat with Thread Continuity
+- 3.2 Priority 1: Git-like Branching Operations
+- 3.3 Priority 1: Context Window Management
+- 3.4 Priority 1: Tool Calling with Approval Flow
+- 3.5 Priority 2: Meta-Agent Orchestration
+- 3.6 Priority 3: Event-Driven AI Architecture
+- 3.7 Priority 4: Document Editing with Diffs
+- 3.8 Deferred: Proactive AI & ActivePieces
+
+## Part 4: Implementation Phases
+
+- 4.1 MVP (April 2025)
+- 4.2 V1 (May-June 2025)
+- 4.3 V2 (Q3 2025+)
+
+## Part 5: File-by-File Implementation Plan
+
+- 5.1 New Package: `ai-conversation`
+- 5.2 Modifications to `intelligence-service`
+- 5.3 Backend Integration Points
+- 5.4 Database Schema Changes
+
+## Part 6: Code Architecture
+
+- 6.1 Data Models
+- 6.2 API Contracts
+- 6.3 Event Schemas
+- 6.4 Service Boundaries
+
+## Part 7: Research Guidance
+
+- 7.1 LangGraph State Management
+- 7.2 Meta-Agent Patterns
+- 7.3 Event-Driven AI
+- 7.4 Context Compression
+
+## Part 8: Validation & Testing
+
+- 8.1 Success Criteria by Feature
+- 8.2 Performance Requirements
+- 8.3 Edge Cases
+
+---
+
+# PART 1: VISION & ARCHITECTURE
+
+## 1.1 Executive Vision
+
+### What We're Building
+
+**Synap Intelligence Service** is an **infinite conversation system** where users engage in one continuous dialogue that can branch into parallel explorations, merge insights, and maintain context across thousands of messages. The AI acts as a **persistent intelligent partner** integrated into the event-sourced backend, not a stateless chatbot.
+
+### Key Differentiators
+
+1. **Infinite Chat**: One conversation thread per context (workspace/personal) that never resets
+2. **Git-like Branching**: Fork conversations to explore options, merge back with conflict resolution
+3. **Meta-Agent**: AI that orchestrates other AIs, ensuring seamless transitions at context limits
+4. **Event-Driven**: AI subscribes to backend events and proposes actions proactively
+5. **Entity-Aware**: AI understands user's entities (tasks, contacts, documents) and their relationships
+
+### User Mental Model
+
+**Not this**: "I'm talking to a chatbot that forgets our conversation every time I close the tab"
+
+**But this**: "I have an intelligent assistant that remembers everything we've discussed, can explore multiple ideas in parallel, and helps me manage my knowledge graph"
+
+---
+
+## 1.2 Current vs Target Architecture
+
+### Current Architecture (Request/Response)
+
+```
+┌─────────────┐
+│   USER      │
+└──────┬──────┘
+       │ sends message
+       ▼
+┌─────────────────────────────────┐
+│   BACKEND                       │
+│   POST /api/chat/message        │
+└──────┬──────────────────────────┘
+       │ HTTP POST /api/expertise/request
+       ▼
+┌─────────────────────────────────┐
+│   INTELLIGENCE SERVICE          │
+│   - Orchestrator (stateless)    │
+│   - Analyzes query              │
+│   - Returns response            │
+└──────┬──────────────────────────┘
+       │ JSON response
+       ▼
+┌─────────────────────────────────┐
+│   BACKEND                       │
+│   Stores message + response     │
+└─────────────────────────────────┘
+```
+
+**Problems:**
+
+- ❌ Each request is independent (no conversation state)
+- ❌ AI has no memory of previous interactions within request
+- ❌ Context must be fetched fresh every time
+- ❌ No branching capability
+- ❌ No proactive behavior
+- ❌ Scales poorly (fetching full context every request)
+
+---
+
+### Target Architecture (Conversation-First)
+
+```
+┌─────────────┐
+│   USER      │
+└──────┬──────┘
+       │ sends message
+       ▼
+┌────────────────────────────────────────────────────────┐
+│   BACKEND                                              │
+│   POST /api/chat/threads/:threadId/messages            │
+│   - Appends to conversation thread                     │
+│   - Publishes: thread.message.added event              │
+└──────┬─────────────────────────────────────────────────┘
+       │ Event Bus
+       ▼
+┌────────────────────────────────────────────────────────┐
+│   INTELLIGENCE SERVICE                                 │
+│   - Thread Manager (stateful)                          │
+│   - Loads conversation state from checkpoint           │
+│   - Orchestrator processes with full context           │
+│   - Updates conversation state                         │
+│   - Returns response + saves checkpoint                │
+└──────┬─────────────────────────────────────────────────┘
+       │ Event: thread.response.generated
+       ▼
+┌────────────────────────────────────────────────────────┐
+│   BACKEND                                              │
+│   - Stores AI response                                 │
+│   - Updates thread metadata                            │
+└────────────────────────────────────────────────────────┘
+
+PARALLEL FLOW (Branching):
+┌────────────────────────────────────────────────────────┐
+│   USER branches conversation                           │
+│   POST /api/chat/threads/:threadId/branch              │
+└──────┬─────────────────────────────────────────────────┘
+       │
+       ▼
+┌────────────────────────────────────────────────────────┐
+│   THREAD MANAGER                                       │
+│   - Forks conversation state at message N              │
+│   - Creates new thread with parent reference           │
+│   - Copies relevant context (not full history)         │
+│   - Returns new threadId                               │
+└────────────────────────────────────────────────────────┘
+
+META-AGENT FLOW (Context Rotation):
+┌────────────────────────────────────────────────────────┐
+│   CONTEXT MONITOR                                      │
+│   - Detects thread at 70% context window               │
+│   - Triggers: context.rotation.needed event            │
+└──────┬─────────────────────────────────────────────────┘
+       │
+       ▼
+┌────────────────────────────────────────────────────────┐
+│   META-AGENT                                           │
+│   - Analyzes conversation (last 100 messages)          │
+│   - Extracts: role, tone, decisions, active topics     │
+│   - Generates handoff prompt (structured YAML)         │
+│   - Spawns new orchestrator instance with prompt       │
+│   - Validates seamlessness (factual + tonal)           │
+│   - If approved: Replaces current orchestrator         │
+│   - User sees: subtle "Context refreshed" indicator    │
+└────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+
+- ✅ Conversation state persists (LangGraph checkpointing)
+- ✅ AI maintains context across sessions
+- ✅ Branching creates parallel explorations
+- ✅ Meta-agent enables infinite scaling
+- ✅ Event-driven enables proactive AI
+- ✅ Efficient context management (tiered storage)
+
+---
+
+## 1.3 Core Architectural Principles
+
+### Principle 1: Conversation as First-Class Primitive
+
+**Every feature builds on the conversation thread:**
+
+- Thread = persistent state container
+- Messages = events in conversation log
+- Context = derived from thread state
+- Branches = lightweight thread forks
+- AI responses = thread mutations
+
+**Implementation:** LangGraph StateGraph with PostgreSQL checkpointing
+
+---
+
+### Principle 2: Event-Driven Communication
+
+**Everything flows through events:**
+
+- User actions → Events
+- AI analyses → Events
+- Tool executions → Events
+- Approvals → Events
+
+**Pattern:** Event Sourcing + CQRS
+
+- Write: Append-only event log
+- Read: Materialized views from events
+
+**Implementation:** PostgreSQL LISTEN/NOTIFY + Worker pool
+
+---
+
+### Principle 3: Hybrid Context Management
+
+**Not "everything in context" OR "retrieve on demand"**
+**But:** Tiered storage with intelligent retrieval
+
+**Tier 1: Hot Context** (always loaded)
+
+- Last 5-10 messages (verbatim)
+- User preferences (name, communication style)
+- Active entities (current task, open docs)
+- Thread metadata (branch parent, merge conflicts)
+
+**Tier 2: Warm Context** (summarized)
+
+- Last 50-100 messages (summarized by topic)
+- Key decisions made
+- Important entities mentioned
+
+**Tier 3: Cold Context** (retrieved on demand)
+
+- Full conversation history (vector search)
+- All user entities (semantic search)
+- Long-term memory (Mem0)
+
+**Implementation:** LangChain ConversationSummaryBufferMemory + pgvector
+
+---
+
+### Principle 4: Separation of Concerns
+
+**Intelligence Service is SEPARATE from Backend:**
+
+- Backend = data authority (entities, threads, events)
+- Intelligence Service = reasoning authority (AI decisions)
+- Communication = Hub Protocol (OAuth2 + REST) + Event Bus
+
+**Why?**
+
+- Licensing: Backend (open-source) vs Intelligence (proprietary)
+- Scaling: AI service needs GPUs, backend doesn't
+- Security: AI can't access database directly
+- Flexibility: Swap AI providers without backend changes
+
+**Implementation:** Hybrid monorepo (shared packages, separate deployments)
+
+---
+
+### Principle 5: Human-in-the-Loop
+
+**AI proposes, user approves:**
+
+- Read operations = auto-execute (search, analyze)
+- Write operations = require approval (create, update, delete)
+- Granular permissions = per entity type + field
+
+**Pattern:** Proposal → Review → Execute
+
+- AI generates proposal with rationale
+- Backend stores in approvals table
+- User sees in UI
+- On approval, execute via event chain
+
+**Implementation:** Event chain with worker subscribers (already exists in backend)
+
+---
+
+## 1.4 Technology Stack Decisions
+
+### Core Technologies (Keep Current)
+
+**AI Orchestration:**
+
+- ✅ **LangChain** - Agent framework
+- ✅ **LangGraph** - Stateful conversation graphs
+- ✅ **Vercel AI SDK** - Unified LLM interface
+- ✅ **Mem0** - Long-term memory (pgvector)
+
+**Backend:**
+
+- ✅ **PostgreSQL** - Primary database
+- ✅ **pgvector** - Vector similarity search
+- ✅ **tRPC** - Type-safe API
+- ✅ **Drizzle ORM** - Database schema
+
+**Service Communication:**
+
+- ✅ **Hono** - Intelligence Service HTTP server
+- ✅ **Hub Protocol** - Service-to-service API
+- ✅ **OAuth2 (Ory Hydra)** - Service authentication
+
+### New Technologies (Add for Features)
+
+**Event Bus:**
+
+- 🆕 **PostgreSQL LISTEN/NOTIFY** - Simple event pub/sub
+  - Why: Already have PostgreSQL
+  - Alternative: Redis Streams (if scale requires)
+  - NOT Kafka (overkill for early stage)
+
+**Context Management:**
+
+- 🆕 **LangChain ConversationSummaryBufferMemory** - Hybrid context
+  - Keep recent messages verbatim
+  - Summarize older messages
+  - Better than pure summarization or pure retrieval
+
+**Model Router:**
+
+- 🆕 **OpenRouter** - Multi-model switching
+  - Replace direct Anthropic calls
+  - Enable model routing (cheap for simple, expensive for complex)
+  - Fallback strategy (if Claude down, use GPT-4)
+
+**State Management:**
+
+- 🆕 **LangGraph Checkpointer (PostgreSQL)** - Conversation state
+  - Persist thread state between requests
+  - Enable time-travel (rewind conversation)
+  - Support branching (fork from checkpoint)
+
+### Architecture Pattern
+
+**Hybrid Monorepo:**
+
+```
+synap-monorepo/
+├─ apps/
+│  ├─ backend/              (Port 4000, existing)
+│  └─ intelligence-service/ (Port 3002, existing)
+├─ packages/
+│  ├─ ai-conversation/      (NEW - shared conversation logic)
+│  ├─ ai-agents/            (NEW - move from intelligence-service)
+│  ├─ database/             (existing - add conversation schemas)
+│  ├─ hub-protocol/         (existing - add event schemas)
+│  └─ types/                (existing - add conversation types)
+```
+
+**Benefits:**
+
+- ✅ Shared TypeScript types (backend ↔ intelligence)
+- ✅ Still separate deployments
+- ✅ Single PR for full-stack features
+- ✅ Easier to refactor later
+
+---
+
+# PART 2: CURRENT STATE ANALYSIS
+
+## 2.1 What Exists and Works ✅
+
+### Agent System (Operational)
+
+**File:** `apps/intelligence-hub/src/agents/orchestrator.ts`
+
+**Current Capabilities:**
+
+- ✅ ReAct loop (Reasoning + Acting pattern)
+- ✅ Tool calling with 5 tools registered
+- ✅ Proposal mode (returns proposals instead of executing)
+- ✅ Multi-step reasoning (up to 5 tool roundtrips)
+- ✅ Streaming support (`executeWithStream()`)
+- ✅ Claude 3.7 Sonnet integration via Vercel AI SDK
+
+**Code Structure:**
+
+```typescript
+export class SynapHubOrchestrator {
+  async executeRequest(input: {
+    requestId: string;
+    userId: string;
+    query: string;
+    context: Record<string, any>;
+  }): Promise<OrchestratorResponse> {
+    // 1. Assemble context (fetch user data via Hub Protocol)
+    const assembledContext = await this.assembleContext(input);
+
+    // 2. Build system prompt with dynamic context
+    const systemPrompt = `You are the Orchestrator...`;
+
+    // 3. Execute with LangChain
+    const result = await generateText({
+      model: anthropic('claude-3-7-sonnet-20250219'),
+      tools: this.tools,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: input.query }],
+      maxToolRoundtrips: 5,
+    });
+
+    return { content: result.text, proposedActions: [...] };
+  }
+}
+```
+
+**Strengths:**
+
+- Well-structured agent pattern
+- Tool registry is extensible
+- Proposal system is correct approach
+
+**Weaknesses:**
+
+- ❌ Stateless (no conversation memory)
+- ❌ Context fetched fresh every request
+- ❌ No thread management
+
+---
+
+### Tool Registry (Functional)
+
+**File:** `apps/intelligence-hub/src/tools/registry.ts`
+
+**5 Tools Implemented:**
+
+1. **`vector_search`** (Context tool - read-only)
+   - Searches user entities by semantic similarity
+   - Calls Hub Protocol: `GET /api/hub/users/:userId/entities`
+   - Returns top 5 results
+
+2. **`memory_search`** (Context tool - read-only)
+   - Searches long-term memory (Mem0)
+   - Returns user preferences, facts
+   - Auto-executes (no approval needed)
+
+3. **`create_entity`** (Action tool - requires approval)
+   - Creates task/contact/meeting/idea/project
+   - Returns proposal in proposal mode
+   - Executes via Hub Protocol in execution mode
+
+4. **`create_document`** (Action tool - requires approval)
+   - Creates document/note
+   - Proposal → Approval → Execute pattern
+
+5. **`create_branch`** (Action tool - requires approval)
+   - **STUB**: Returns branchId but doesn't actually fork thread
+   - Needs full implementation
+
+**Tool Pattern:**
+
+```typescript
+const create_entity = tool({
+  description: "Create a new entity",
+  parameters: z.object({
+    type: z.enum(["task", "contact", "meeting", "idea", "project"]),
+    title: z.string(),
+    description: z.string().optional(),
+  }),
+  execute: async (args, context) => {
+    if (context.proposalMode) {
+      return {
+        proposed: true,
+        action: "create_entity",
+        description: `Create ${args.type}: "${args.title}"`,
+        args,
+      };
+    }
+
+    // Execution mode: Call Hub Protocol
+    return await hubProtocol.createEntity({
+      userId: context.userId,
+      ...args,
+    });
+  },
+});
+```
+
+**Strengths:**
+
+- Clean separation: Context tools vs Action tools
+- Proposal mode correctly implemented
+- Extensible registry pattern
+
+**Weaknesses:**
+
+- ❌ `create_branch` is just a stub
+- ❌ No merge/switch/list branch tools
+- ❌ No document editing tools (only create)
+
+---
+
+### Memory System (Operational)
+
+**Technology:** Mem0 (self-hosted vector DB)  
+**Storage:** PostgreSQL with pgvector extension
+
+**Capabilities:**
+
+- ✅ Store facts: "User prefers Python for data analysis"
+- ✅ Store preferences: "User likes concise responses"
+- ✅ Semantic search: "What's my favorite programming language?"
+- ✅ User-scoped: Each user has separate memory
+
+**Usage:**
+
+```typescript
+// Store memory
+await memoryService.store({
+  content: "User is working on competitor research for Q2 launch",
+  userId: "user-123",
+  category: "project",
+});
+
+// Search memory
+const memories = await memoryService.search("what am I working on", {
+  userId: "user-123",
+  limit: 5,
+});
+// Returns: ["User is working on competitor research for Q2 launch"]
+```
+
+**Strengths:**
+
+- Self-hosted (no external dependency)
+- pgvector = fast similarity search
+- Integrated into tool registry
+
+**Weaknesses:**
+
+- ❌ No conversation-level memory (only facts)
+- ❌ Not integrated with thread state
+- ❌ No automatic memory extraction from conversations
+
+---
+
+### Hub Protocol (Partially Implemented)
+
+**What It Is:** OAuth2-authenticated REST API for service-to-service communication
+
+**Current Endpoints (Assumed from Intelligence Service code):**
+
+**Backend exposes:**
+
+```
+GET  /api/hub/threads/:id/context       (fetch thread messages)
+GET  /api/hub/users/:id/context         (fetch user prefs)
+GET  /api/hub/users/:id/entities        (fetch user entities)
+POST /api/hub/entities                  (create entity)
+PATCH /api/hub/threads/:id/context      (update thread summary)
+```
+
+**Intelligence Service calls:**
+
+```typescript
+const hubClient = new HubProtocolClient({
+  dataPodUrl: "http://localhost:4000",
+  getToken: async () => dataPodApiKey,
+});
+
+// Example call
+const entities = await hubClient.getEntities(userId, {
+  type: "task",
+  limit: 10,
+});
+```
+
+**Strengths:**
+
+- OAuth2 scopes (read vs write)
+- Type-safe client library
+- Separation of concerns (AI can't access DB directly)
+
+**Weaknesses:**
+
+- ⚠️ **Endpoints not found in backend codebase** (doc says they exist, but where?)
+- ❌ No event bus integration
+- ❌ Synchronous only (no streaming)
+
+---
+
+## 2.2 What's Partially Built ⚠️
+
+### Research Agent (Exists but Limited)
+
+**File:** `apps/intelligence-hub/src/agents/research.ts`
+
+**Capabilities:**
+
+- ✅ Planning: Breaks topic into subtopics
+- ✅ Investigation: Researches each subtopic
+- ✅ Synthesis: Combines findings into report
+- ✅ Summarization: Executive summaries
+
+**Current Implementation:**
+
+```typescript
+class ResearchAgent {
+  async conductResearch(topic: string): Promise<ResearchReport> {
+    // 1. Create research plan
+    const plan = await this.createResearchPlan(topic);
+
+    // 2. Research each subtopic
+    const findings = await Promise.all(
+      plan.subtopics.map((subtopic) => this.researchSubtopic(subtopic))
+    );
+
+    // 3. Synthesize findings
+    const report = await this.synthesizeFindings(findings);
+
+    return report;
+  }
+}
+```
+
+**Problem:** Research is currently **LLM-hallucinated**, not real web search
+
+**Need:**
+
+- 🔴 Web search tool (Tavily, Serper, or similar)
+- 🔴 Integration with `create_branch` (research should happen in branch)
+- 🔴 Citation system (track sources)
+
+---
+
+### Branching (Stub Only)
+
+**Current Implementation:**
+
+```typescript
+const create_branch = tool({
+  description: "Create a branched conversation",
+  parameters: z.object({
+    type: z.enum(["research", "technical", "creative"]),
+    topic: z.string(),
+    initialMessage: z.string(),
+  }),
+  execute: async (args) => {
+    // TODO: Actually create branch in thread management system
+    return { branchId: uuid() }; // Just returns random ID
+  },
+});
+```
+
+**What's Missing:**
+
+- ❌ Thread forking logic
+- ❌ Parent thread reference
+- ❌ Branch listing/switching
+- ❌ Merge operations
+- ❌ Context inheritance
+
+**Need:** Full branching system (see Priority 1 features)
+
+---
+
+### Backend Router (Defined but Not Registered)
+
+**File:** `synap-backend/packages/api/src/routers/infinite-chat.ts`
+
+**Current State:**
+
+```typescript
+// Router exists but is EMPTY
+export const infiniteChatRouter = router({
+  // TODO: Implement endpoints
+});
+```
+
+**File:** `synap-backend/packages/api/src/index.ts`
+
+```typescript
+// Router is NOT registered
+// Should be:
+registerRouter("infiniteChat", infiniteChatRouter, {
+  /* ... */
+});
+```
+
+**Problem:** Frontend can't call Intelligence Service because router isn't wired up
+
+**Need:**
+
+- ✅ Register router
+- ✅ Implement endpoints
+- ✅ Wire to Intelligence Service
+
+---
+
+## 2.3 Critical Gaps 🔴
+
+### 1. No Conversation State Management
+
+**Current:** Each request is independent, no thread continuity
+
+**Need:**
+
+- Thread state storage (PostgreSQL)
+- LangGraph checkpointing (save conversation state)
+- Context window tracking
+- Message history management
+
+**Impact:** Can't build infinite chat without this
+
+---
+
+### 2. No Meta-Agent
+
+**Current:** Basic context injection (`assembleContext()`)
+
+**Need:**
+
+- Conversation analyzer (extract role/tone/decisions)
+- Prompt synthesizer (generate handoff prompts)
+- Seamlessness validator (test new AI instance)
+- Rotation trigger (at 70% context window)
+
+**Impact:** Can't scale beyond ~8K tokens without meta-agent
+
+---
+
+### 3. No Event Bus
+
+**Current:** HTTP request/response only
+
+**Need:**
+
+- Event publishing (PostgreSQL LISTEN/NOTIFY)
+- Event subscription (worker pool)
+- Event schemas (TypeScript types)
+- Event handlers (AI reacts to entity changes)
+
+**Impact:** Can't build event-driven AI or proactive suggestions
+
+---
+
+### 4. No Approval Flow in Backend
+
+**Current:** Intelligence Service generates proposals, but backend doesn't handle them
+
+**Need:**
+
+- Approvals table (store pending proposals)
+- Approval endpoints (`/approve`, `/reject`)
+- Execution logic (call Intelligence Service on approval)
+- Frontend UI (show proposals)
+
+**Impact:** Proposal system is broken (proposals generated but never executed)
+
+---
+
+### 5. No Branching Infrastructure
+
+**Current:** `create_branch` tool returns stub branchId
+
+**Need:**
+
+- Thread forking (create new thread from parent)
+- Branch metadata (parent, fork point, status)
+- Context inheritance (copy relevant state)
+- Merge operations (detect conflicts, resolve)
+- Branch UI (visualize tree)
+
+**Impact:** Can't implement parallel exploration
+
+---
+
+## 2.4 Integration Points
+
+### Intelligence Service → Backend
+
+**Current:**
+
+```
+POST /api/expertise/request
+  { userId, dataPodUrl, dataPodApiKey, query }
+
+Response:
+  { requestId, status, eventsCount }
+```
+
+**Need to Add:**
+
+```
+POST /api/expertise/thread/:threadId/message
+  { message, userId }
+
+Response (streaming):
+  { delta: "text chunk", proposedActions: [...], threadState: {...} }
+```
+
+---
+
+### Backend → Intelligence Service
+
+**Current (Hub Protocol):**
+
+```
+GET  /api/hub/threads/:id/context
+GET  /api/hub/users/:id/entities
+POST /api/hub/entities
+```
+
+**Need to Add:**
+
+```
+GET  /api/hub/threads/:id/state          (fetch conversation state)
+POST /api/hub/threads/:id/checkpoint     (save checkpoint)
+POST /api/hub/threads/:id/branch         (create branch)
+POST /api/hub/threads/:id/merge          (merge branch)
+```
+
+---
+
+### Event Bus Integration
+
+**New Pattern (to implement):**
+
+```
+Backend publishes:
+  - thread.message.added
+  - entity.created
+  - entity.updated
+  - thread.branch.created
+
+Intelligence Service subscribes:
+  - thread.message.added → Process message
+  - entity.created → Update context
+
+Intelligence Service publishes:
+  - thread.response.generated
+  - proposal.created
+  - context.rotation.needed
+
+Backend subscribes:
+  - thread.response.generated → Store message
+  - proposal.created → Store approval
+```
+
+---
+
+# PART 3: FEATURE SPECIFICATIONS (PRIORITY 1-4)
+
+## 3.1 Priority 1: Infinite Chat with Thread Continuity
+
+**Status:** 🔴 Missing (only request/response exists)  
+**Phase:** MVP (April 2025)  
+**Dependencies:** None  
+**Complexity:** High (core architectural change)
+
+---
+
+### Functional Requirements
+
+**FR-1.1: Persistent Conversation Thread**
+
+- User can send unlimited messages in one continuous thread
+- Thread persists across sessions (browser close/reopen)
+- Thread ID remains stable (never changes)
+- Each workspace/personal context has one thread
+
+**FR-1.2: Message Ordering**
+
+- Messages appear in chronological order
+- No duplicate messages
+- No lost messages (at-least-once delivery)
+
+**FR-1.3: Context Continuity**
+
+- AI remembers previous messages in thread
+- AI can reference earlier parts of conversation
+- Context is maintained even after days/weeks
+
+**FR-1.4: Thread Metadata**
+
+- Thread has: title, created_at, updated_at, message_count
+- Title auto-generated from first message
+- Title user-editable
+
+**FR-1.5: Performance**
+
+- Message send latency: <200ms (95th percentile)
+- Thread load latency: <500ms (95th percentile)
+- Supports threads with 10,000+ messages
+
+---
+
+### Technical Implementation
+
+#### Data Models
+
+**New Table: `conversation_threads`**
+
+```typescript
+// packages/database/src/schema/conversation-threads.ts
+
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  integer,
+  jsonb,
+} from "drizzle-orm/pg-core";
+
+export const conversationThreads = pgTable("conversation_threads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id),
+
+  // Thread metadata
+  title: text("title").notNull(),
+  status: text("status").notNull().default("active"), // 'active' | 'archived'
+
+  // Branching
+  parentThreadId: uuid("parent_thread_id").references(
+    () => conversationThreads.id
+  ),
+  forkPoint: integer("fork_point"), // Message index where branched
+
+  // Statistics
+  messageCount: integer("message_count").notNull().default(0),
+  tokenCount: integer("token_count").notNull().default(0),
+
+  // Timestamps
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  lastMessageAt: timestamp("last_message_at"),
+
+  // State snapshot (for quick context loading)
+  stateSnapshot: jsonb("state_snapshot"), // { summary, recentMessages, entities }
+});
+```
+
+**New Table: `thread_messages`**
+
+```typescript
+// packages/database/src/schema/thread-messages.ts
+
+export const threadMessages = pgTable("thread_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  threadId: uuid("thread_id")
+    .notNull()
+    .references(() => conversationThreads.id),
+
+  // Message content
+  role: text("role").notNull(), // 'user' | 'assistant' | 'system'
+  content: text("content").notNull(),
+
+  // Ordering
+  sequenceNumber: integer("sequence_number").notNull(),
+
+  // Metadata
+  tokenCount: integer("token_count"),
+  metadata: jsonb("metadata"), // { toolCalls, proposedActions, etc. }
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Index for fast retrieval
+export const threadMessagesThreadIdIdx = index(
+  "thread_messages_thread_id_idx"
+).on(threadMessages.threadId);
+export const threadMessagesSequenceIdx = index(
+  "thread_messages_sequence_idx"
+).on(threadMessages.threadId, threadMessages.sequenceNumber);
+```
+
+**New Table: `thread_checkpoints`** (LangGraph state)
+
+```typescript
+// packages/database/src/schema/thread-checkpoints.ts
+
+export const threadCheckpoints = pgTable("thread_checkpoints", {
+  threadId: uuid("thread_id")
+    .notNull()
+    .references(() => conversationThreads.id),
+  checkpointId: text("checkpoint_id").notNull(),
+
+  // LangGraph checkpoint data
+  state: jsonb("state").notNull(), // Full conversation state
+  metadata: jsonb("metadata"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+
+  primaryKey: [threadId, checkpointId],
+});
+```
+
+---
+
+#### API Contracts
+
+**New tRPC Router: `thread`**
+
+```typescript
+// packages/api/src/routers/thread.ts
+
+export const threadRouter = router({
+  // Create new thread
+  create: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid().optional(),
+        initialMessage: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const thread = await ctx.db
+        .insert(conversationThreads)
+        .values({
+          userId: ctx.session.userId,
+          workspaceId: input.workspaceId,
+          title: input.initialMessage?.slice(0, 100) || "New Conversation",
+        })
+        .returning();
+
+      return thread[0];
+    }),
+
+  // Get thread by ID
+  get: protectedProcedure
+    .input(z.object({ threadId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const thread = await ctx.db.query.conversationThreads.findFirst({
+        where: eq(conversationThreads.id, input.threadId),
+        with: {
+          messages: {
+            orderBy: [asc(threadMessages.sequenceNumber)],
+            limit: 100, // Last 100 messages
+          },
+        },
+      });
+
+      return thread;
+    }),
+
+  // Send message to thread
+  sendMessage: protectedProcedure
+    .input(
+      z.object({
+        threadId: z.string().uuid(),
+        content: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Insert user message
+      const userMessage = await ctx.db
+        .insert(threadMessages)
+        .values({
+          threadId: input.threadId,
+          role: "user",
+          content: input.content,
+          sequenceNumber: await getNextSequence(input.threadId),
+        })
+        .returning();
+
+      // 2. Publish event
+      await ctx.eventBus.publish("thread.message.added", {
+        threadId: input.threadId,
+        messageId: userMessage[0].id,
+        userId: ctx.session.userId,
+      });
+
+      // 3. Update thread metadata
+      await ctx.db
+        .update(conversationThreads)
+        .set({
+          messageCount: sql`${conversationThreads.messageCount} + 1`,
+          lastMessageAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(conversationThreads.id, input.threadId));
+
+      return userMessage[0];
+    }),
+
+  // List user's threads
+  list: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid().optional(),
+        limit: z.number().default(20),
+        offset: z.number().default(0),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return await ctx.db.query.conversationThreads.findMany({
+        where: and(
+          eq(conversationThreads.userId, ctx.session.userId),
+          input.workspaceId
+            ? eq(conversationThreads.workspaceId, input.workspaceId)
+            : isNull(conversationThreads.workspaceId)
+        ),
+        orderBy: [desc(conversationThreads.lastMessageAt)],
+        limit: input.limit,
+        offset: input.offset,
+      });
+    }),
+});
+```
+
+---
+
+#### Intelligence Service Integration
+
+**New Package: `ai-conversation`**
+
+```typescript
+// packages/ai-conversation/src/thread-manager.ts
+
+import { LangGraph, StateGraph, Checkpoint } from "@langchain/langgraph";
+import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
+
+export class ThreadManager {
+  private checkpointer: PostgresSaver;
+  private graphs: Map<string, StateGraph> = new Map();
+
+  constructor(private db: Database) {
+    this.checkpointer = new PostgresSaver(db);
+  }
+
+  /**
+   * Get or create conversation graph for thread
+   */
+  async getGraph(threadId: string): Promise<StateGraph> {
+    if (this.graphs.has(threadId)) {
+      return this.graphs.get(threadId)!;
+    }
+
+    // Create new graph with checkpointing
+    const graph = new StateGraph({
+      channels: {
+        messages: {
+          value: (prev, next) => [...prev, ...next],
+          default: () => [],
+        },
+        context: {
+          value: (prev, next) => ({ ...prev, ...next }),
+          default: () => ({}),
+        },
+      },
+    });
+
+    // Compile with persistent checkpointer
+    const compiled = graph.compile({
+      checkpointer: this.checkpointer,
+    });
+
+    this.graphs.set(threadId, compiled);
+    return compiled;
+  }
+
+  /**
+   * Add message to thread and get AI response
+   */
+  async processMessage(input: {
+    threadId: string;
+    message: string;
+    userId: string;
+  }): Promise<{ response: string; proposedActions: any[] }> {
+    const graph = await this.getGraph(input.threadId);
+
+    // Load current state
+    const state = await graph.getState({
+      configurable: { thread_id: input.threadId },
+    });
+
+    // Add user message
+    const newMessages = [
+      ...state.values.messages,
+      { role: "user", content: input.message },
+    ];
+
+    // Update state
+    await graph.updateState(
+      { configurable: { thread_id: input.threadId } },
+      { messages: newMessages }
+    );
+
+    // Run orchestrator
+    const result = await this.orchestrator.executeWithContext({
+      threadId: input.threadId,
+      userId: input.userId,
+      messages: newMessages,
+      context: state.values.context,
+    });
+
+    // Save checkpoint
+    await graph.updateState(
+      { configurable: { thread_id: input.threadId } },
+      {
+        messages: [
+          ...newMessages,
+          { role: "assistant", content: result.content },
+        ],
+        context: result.updatedContext,
+      }
+    );
+
+    return {
+      response: result.content,
+      proposedActions: result.proposedActions,
+    };
+  }
+
+  /**
+   * Get thread state snapshot for quick loading
+   */
+  async getStateSnapshot(threadId: string): Promise<{
+    summary: string;
+    recentMessages: any[];
+    tokenCount: number;
+  }> {
+    const graph = await this.getGraph(threadId);
+    const state = await graph.getState({
+      configurable: { thread_id: threadId },
+    });
+
+    const messages = state.values.messages;
+    const recentMessages = messages.slice(-10); // Last 10 messages
+
+    // Summarize older messages
+    const olderMessages = messages.slice(0, -10);
+    const summary = await this.summarizeMessages(olderMessages);
+
+    return {
+      summary,
+      recentMessages,
+      tokenCount: this.countTokens(messages),
+    };
+  }
+}
+```
+
+---
+
+#### Event Integration
+
+**Event: `thread.message.added`**
+
+```typescript
+// Intelligence Service subscribes to this event
+eventBus.subscribe("thread.message.added", async (event) => {
+  const { threadId, messageId, userId } = event.payload;
+
+  // Process message through ThreadManager
+  const result = await threadManager.processMessage({
+    threadId,
+    message: await getMessage(messageId),
+    userId,
+  });
+
+  // Store AI response
+  await storeMessage({
+    threadId,
+    role: "assistant",
+    content: result.response,
+  });
+
+  // Publish response event
+  await eventBus.publish("thread.response.generated", {
+    threadId,
+    response: result.response,
+    proposedActions: result.proposedActions,
+  });
+});
+```
+
+---
+
+### Research Guidance for AI
+
+**Key Questions to Investigate:**
+
+1. **LangGraph State Persistence**
+   - How does LangGraph checkpointing work with PostgreSQL?
+   - What's the overhead of saving checkpoints after every message?
+   - Can checkpoints be lazy-loaded (only when needed)?
+
+2. **Context Window Management**
+   - How to efficiently count tokens for long threads?
+   - When to trigger summarization vs keep verbatim?
+   - How to handle mixed text + tool calls in token counting?
+
+3. **Performance Optimization**
+   - Should we cache compiled graphs in memory?
+   - How to handle concurrent requests to same thread?
+   - Database connection pooling for checkpointer?
+
+**Research Sources:**
+
+- LangGraph documentation: https://langchain-ai.github.io/langgraph/
+- LangGraph checkpointing guide: https://langchain-ai.github.io/langgraph/concepts/persistence/
+- LangGraph PostgreSQL saver: https://github.com/langchain-ai/langgraph/tree/main/libs/checkpoint-postgres
+
+---
+
+### Validation & Testing
+
+**Success Criteria:**
+
+**SC-1.1:** User can send 1000 messages to thread, all appear in order
+
+- Test: Create thread, send 1000 messages via API, verify sequence numbers
+- Expected: No duplicates, no gaps, correct ordering
+
+**SC-1.2:** Thread persists across sessions
+
+- Test: Create thread, send messages, close browser, reopen, verify messages present
+- Expected: All messages retrieved, correct order, same threadId
+
+**SC-1.3:** Performance requirements met
+
+- Test: Measure p50, p95, p99 latencies for sendMessage
+- Expected: p95 < 200ms for message send, p95 < 500ms for thread load
+
+**SC-1.4:** Concurrent message handling
+
+- Test: Send 10 messages to same thread simultaneously
+- Expected: All messages stored, correct sequence numbers, no race conditions
+
+**Edge Cases:**
+
+1. **Empty thread:** Get thread with no messages → should return empty messages array
+2. **Very long message:** Send 10,000 character message → should store correctly
+3. **Unicode/emoji:** Send message with emoji/unicode → should preserve exactly
+4. **Deleted thread:** Try to send message to deleted thread → should error gracefully
+
+---
+
+## 3.2 Priority 1: Git-like Branching Operations
+
+**Status:** 🔴 Stub exists, full implementation missing  
+**Phase:** MVP (April 2025)  
+**Dependencies:** Infinite Chat (3.1)  
+**Complexity:** High (requires thread forking, merge logic)
+
+---
+
+### Functional Requirements
+
+**FR-2.1: Fork Operation**
+
+- User can branch from any message in thread
+- Creates new thread with parent reference
+- Copies relevant context (not full history)
+- Original thread continues independently
+
+**FR-2.2: Branch Metadata**
+
+- Branch has: parent thread, fork point (message index), status
+- Status: 'active' | 'merged' | 'abandoned'
+- Can list all branches of a thread
+
+**FR-2.3: Switch Between Branches**
+
+- User can switch between parent and branches
+- UI shows current branch clearly
+- Context loads appropriate for branch
+
+**FR-2.4: Merge Operation**
+
+- User can merge branch back to parent
+- Detects conflicts (if parent modified same entities)
+- Shows conflict resolution UI
+- Preserves messages from both threads
+
+**FR-2.5: Visual Branch Tree**
+
+- User can see branch tree (parent → children)
+- Shows status of each branch
+- Can jump to any branch
+
+---
+
+### Technical Implementation
+
+#### Data Model Updates
+
+**Add to `conversation_threads` table:**
+
+```typescript
+// Already defined in 3.1, key fields:
+parentThreadId: uuid('parent_thread_id').references(() => conversationThreads.id),
+forkPoint: integer('fork_point'), // Message index where branched
+status: text('status').notNull().default('active'), // 'active' | 'merged' | 'abandoned'
+```
+
+**New Table: `thread_branches`** (track branch relationships)
+
+```typescript
+export const threadBranches = pgTable("thread_branches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  rootThreadId: uuid("root_thread_id")
+    .notNull()
+    .references(() => conversationThreads.id),
+  branchThreadId: uuid("branch_thread_id")
+    .notNull()
+    .references(() => conversationThreads.id),
+
+  // Branch metadata
+  forkPoint: integer("fork_point").notNull(),
+  branchPurpose: text("branch_purpose"), // User's reason for branching
+
+  // Merge tracking
+  mergeStatus: text("merge_status").notNull().default("unmerged"), // 'unmerged' | 'merged' | 'conflicted'
+  mergedAt: timestamp("merged_at"),
+  mergedBy: uuid("merged_by").references(() => users.id),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+```
+
+**New Table: `merge_conflicts`** (track conflicts during merge)
+
+```typescript
+export const mergeConflicts = pgTable("merge_conflicts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  branchId: uuid("branch_id")
+    .notNull()
+    .references(() => threadBranches.id),
+
+  // Conflict details
+  conflictType: text("conflict_type").notNull(), // 'entity_modified' | 'context_diverged'
+  entityId: uuid("entity_id"), // If entity-level conflict
+
+  // Conflicting values
+  parentValue: jsonb("parent_value"),
+  branchValue: jsonb("branch_value"),
+
+  // Resolution
+  resolution: text("resolution"), // 'use_parent' | 'use_branch' | 'manual_merge'
+  resolvedAt: timestamp("resolved_at"),
+  resolvedBy: uuid("resolved_by").references(() => users.id),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+```
+
+---
+
+#### API Contracts
+
+**Add to `thread` router:**
+
+```typescript
+export const threadRouter = router({
+  // ... existing methods from 3.1
+
+  // Create branch from message
+  branch: protectedProcedure
+    .input(
+      z.object({
+        threadId: z.string().uuid(),
+        forkPoint: z.number(), // Message sequence number to fork from
+        purpose: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Validate parent thread exists
+      const parentThread = await getThread(input.threadId);
+      if (!parentThread) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // 2. Get messages up to fork point
+      const messages = await getMessages(input.threadId, {
+        upTo: input.forkPoint,
+      });
+
+      // 3. Create new branch thread
+      const branchThread = await ctx.db
+        .insert(conversationThreads)
+        .values({
+          userId: ctx.session.userId,
+          workspaceId: parentThread.workspaceId,
+          title: `${parentThread.title} (branch)`,
+          parentThreadId: input.threadId,
+          forkPoint: input.forkPoint,
+          status: "active",
+        })
+        .returning();
+
+      // 4. Copy messages to branch
+      await copyMessages(messages, branchThread[0].id);
+
+      // 5. Track branch relationship
+      await ctx.db.insert(threadBranches).values({
+        rootThreadId: input.threadId,
+        branchThreadId: branchThread[0].id,
+        forkPoint: input.forkPoint,
+        branchPurpose: input.purpose,
+      });
+
+      // 6. Fork conversation state (LangGraph checkpoint)
+      await threadManager.forkThread({
+        parentThreadId: input.threadId,
+        branchThreadId: branchThread[0].id,
+        forkPoint: input.forkPoint,
+      });
+
+      return branchThread[0];
+    }),
+
+  // List branches of a thread
+  listBranches: protectedProcedure
+    .input(z.object({ threadId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      return await ctx.db.query.threadBranches.findMany({
+        where: eq(threadBranches.rootThreadId, input.threadId),
+        with: {
+          branchThread: true,
+        },
+      });
+    }),
+
+  // Merge branch back to parent
+  merge: protectedProcedure
+    .input(
+      z.object({
+        branchThreadId: z.string().uuid(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Get branch metadata
+      const branch = await getBranch(input.branchThreadId);
+      if (!branch) throw new TRPCError({ code: "NOT_FOUND" });
+
+      // 2. Detect conflicts
+      const conflicts = await detectConflicts({
+        parentThreadId: branch.rootThreadId,
+        branchThreadId: input.branchThreadId,
+        forkPoint: branch.forkPoint,
+      });
+
+      if (conflicts.length > 0) {
+        // Store conflicts for user resolution
+        await storeConflicts(conflicts);
+
+        return {
+          success: false,
+          conflictsDetected: true,
+          conflicts,
+        };
+      }
+
+      // 3. No conflicts: Perform merge
+      const mergeResult = await threadManager.mergeThreads({
+        parentThreadId: branch.rootThreadId,
+        branchThreadId: input.branchThreadId,
+      });
+
+      // 4. Update branch status
+      await ctx.db
+        .update(threadBranches)
+        .set({
+          mergeStatus: "merged",
+          mergedAt: new Date(),
+          mergedBy: ctx.session.userId,
+        })
+        .where(eq(threadBranches.branchThreadId, input.branchThreadId));
+
+      // 5. Update thread status
+      await ctx.db
+        .update(conversationThreads)
+        .set({ status: "merged" })
+        .where(eq(conversationThreads.id, input.branchThreadId));
+
+      return {
+        success: true,
+        mergedMessages: mergeResult.messageCount,
+      };
+    }),
+
+  // Resolve merge conflict
+  resolveConflict: protectedProcedure
+    .input(
+      z.object({
+        conflictId: z.string().uuid(),
+        resolution: z.enum(["use_parent", "use_branch", "manual_merge"]),
+        mergedValue: z.any().optional(), // If manual_merge
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(mergeConflicts)
+        .set({
+          resolution: input.resolution,
+          resolvedAt: new Date(),
+          resolvedBy: ctx.session.userId,
+        })
+        .where(eq(mergeConflicts.id, input.conflictId));
+
+      // If all conflicts resolved, retry merge
+      const remainingConflicts = await getUnresolvedConflicts(/* ... */);
+      if (remainingConflicts.length === 0) {
+        // Retry merge
+        // ...
+      }
+    }),
+});
+```
+
+---
+
+#### Thread Manager Branching Logic
+
+**Add to `ThreadManager` class:**
+
+```typescript
+// packages/ai-conversation/src/thread-manager.ts
+
+export class ThreadManager {
+  /**
+   * Fork thread at specific checkpoint
+   */
+  async forkThread(input: {
+    parentThreadId: string;
+    branchThreadId: string;
+    forkPoint: number;
+  }): Promise<void> {
+    const parentGraph = await this.getGraph(input.parentThreadId);
+
+    // Get state at fork point
+    const checkpoints = await parentGraph.getStateHistory({
+      configurable: { thread_id: input.parentThreadId },
+    });
+
+    // Find checkpoint at fork point (by message count)
+    const forkCheckpoint = checkpoints.find(
+      (cp) => cp.values.messages.length === input.forkPoint
+    );
+
+    if (!forkCheckpoint) {
+      throw new Error(`No checkpoint found at fork point ${input.forkPoint}`);
+    }
+
+    // Create branch graph with copied state
+    const branchGraph = await this.getGraph(input.branchThreadId);
+    await branchGraph.updateState(
+      { configurable: { thread_id: input.branchThreadId } },
+      forkCheckpoint.values
+    );
+  }
+
+  /**
+   * Merge branch back to parent
+   */
+  async mergeThreads(input: {
+    parentThreadId: string;
+    branchThreadId: string;
+  }): Promise<{ messageCount: number }> {
+    const parentGraph = await this.getGraph(input.parentThreadId);
+    const branchGraph = await this.getGraph(input.branchThreadId);
+
+    // Get current states
+    const parentState = await parentGraph.getState({
+      configurable: { thread_id: input.parentThreadId },
+    });
+    const branchState = await branchGraph.getState({
+      configurable: { thread_id: input.branchThreadId },
+    });
+
+    // Find divergence point
+    const divergenceIndex = this.findDivergence(
+      parentState.values.messages,
+      branchState.values.messages
+    );
+
+    // Get branch-only messages
+    const branchOnlyMessages =
+      branchState.values.messages.slice(divergenceIndex);
+
+    // Append to parent
+    await parentGraph.updateState(
+      { configurable: { thread_id: input.parentThreadId } },
+      {
+        messages: [
+          ...parentState.values.messages,
+          { role: "system", content: `[Merged from branch]` },
+          ...branchOnlyMessages,
+        ],
+      }
+    );
+
+    return { messageCount: branchOnlyMessages.length };
+  }
+
+  /**
+   * Detect conflicts between parent and branch
+   */
+  async detectConflicts(input: {
+    parentThreadId: string;
+    branchThreadId: string;
+    forkPoint: number;
+  }): Promise<Conflict[]> {
+    const conflicts: Conflict[] = [];
+
+    // Get states
+    const parentState = await this.getState(input.parentThreadId);
+    const branchState = await this.getState(input.branchThreadId);
+
+    // Compare entity modifications
+    const parentEntities = this.extractEntities(
+      parentState.values.messages,
+      input.forkPoint
+    );
+    const branchEntities = this.extractEntities(branchState.values.messages, 0);
+
+    for (const [entityId, branchValue] of Object.entries(branchEntities)) {
+      if (parentEntities[entityId]) {
+        // Same entity modified in both threads
+        if (!deepEqual(parentEntities[entityId], branchValue)) {
+          conflicts.push({
+            type: "entity_modified",
+            entityId,
+            parentValue: parentEntities[entityId],
+            branchValue,
+          });
+        }
+      }
+    }
+
+    // Compare context divergence
+    const semanticSimilarity = await this.compareContexts(
+      parentState.values.context,
+      branchState.values.context
+    );
+
+    if (semanticSimilarity < 0.7) {
+      conflicts.push({
+        type: "context_diverged",
+        parentValue: parentState.values.context,
+        branchValue: branchState.values.context,
+      });
+    }
+
+    return conflicts;
+  }
+}
+```
+
+---
+
+### Research Guidance for AI
+
+**Key Questions:**
+
+1. **LangGraph Branching**
+   - Does LangGraph support native branching, or must we implement manually?
+   - How to efficiently fork state (copy-on-write vs deep copy)?
+   - Checkpoint storage overhead for multiple branches?
+
+2. **Conflict Detection**
+   - How to detect semantic divergence between branches?
+   - Entity-level vs message-level conflict detection?
+   - Use embedding similarity for context comparison?
+
+3. **Merge Strategies**
+   - Three-way merge (fork point, parent, branch)?
+   - Preserve message ordering from both threads?
+   - Handle interleaved tool calls?
+
+**Research Sources:**
+
+- LangGraph branching examples: https://github.com/langchain-ai/langgraph/tree/main/examples
+- Git merge algorithms: https://git-scm.com/docs/git-merge
+- Conflict-free replicated data types (CRDTs): https://crdt.tech/
+
+---
+
+### Validation & Testing
+
+**Success Criteria:**
+
+**SC-2.1:** User can branch from any message
+
+- Test: Create thread with 50 messages, branch from message 25
+- Expected: Branch has messages 1-25, can continue independently
+
+**SC-2.2:** Branch and parent evolve independently
+
+- Test: Create branch, send message to parent, send message to branch
+- Expected: Messages don't leak between threads, both active
+
+**SC-2.3:** Conflict-free merge succeeds
+
+- Test: Branch from parent, modify different entities, merge back
+- Expected: Merge completes, all messages preserved, no conflicts
+
+**SC-2.4:** Conflicting merge detected
+
+- Test: Branch from parent, modify same entity in both, attempt merge
+- Expected: Merge fails with conflicts, conflict details returned
+
+**Edge Cases:**
+
+1. **Branch from branch:** Create branch, then branch from that branch → should work (multi-level tree)
+2. **Merge abandoned branch:** Branch, never use, merge back → should work (no-op merge)
+3. **Delete parent thread:** What happens to branches? → Should block deletion or cascade delete
+4. **Concurrent branching:** Two users branch from same message → should create independent branches
+
+---
+
+## 3.3 Priority 1: Context Window Management
+
+**Status:** 🔴 Missing (only basic context injection)  
+**Phase:** MVP (April 2025)  
+**Dependencies:** Infinite Chat (3.1)  
+**Complexity:** Medium (algorithmic, not architectural)
+
+---
+
+### Functional Requirements
+
+**FR-3.1: Token Counting**
+
+- Accurately count tokens in thread (messages + tool calls)
+- Track token usage per message
+- Warn user when approaching context limit
+
+**FR-3.2: Tiered Context Storage**
+
+- **Tier 1 (Hot):** Last 5-10 messages (verbatim)
+- **Tier 2 (Warm):** Last 50-100 messages (summarized)
+- **Tier 3 (Cold):** Full history (vector search on demand)
+
+**FR-3.3: Automatic Summarization**
+
+- Summarize messages beyond Tier 1 automatically
+- Preserve key facts, entities, decisions
+- Maintain narrative continuity
+
+**FR-3.4: Context Rotation Trigger**
+
+- Monitor token usage per thread
+- Trigger rotation at 70% of context window
+- Seamless transition (via meta-agent in V1, manual in MVP)
+
+**FR-3.5: User Visibility**
+
+- Show token usage in UI (optional advanced setting)
+- Indicate when context is summarized
+- Allow user to "expand" summarized sections
+
+---
+
+### Technical Implementation
+
+#### Token Counting
+
+**New Utility: `token-counter.ts`**
+
+```typescript
+// packages/ai-conversation/src/token-counter.ts
+
+import { encoding_for_model } from "tiktoken";
+
+export class TokenCounter {
+  private encoder = encoding_for_model("gpt-4"); // Claude uses similar tokenization
+
+  /**
+   * Count tokens in text
+   */
+  countText(text: string): number {
+    return this.encoder.encode(text).length;
+  }
+
+  /**
+   * Count tokens in message
+   */
+  countMessage(message: { role: string; content: string }): number {
+    // Add overhead for message structure
+    const overhead = 4; // <|start|>role<|message|>content<|end|>
+    return this.countText(message.content) + overhead;
+  }
+
+  /**
+   * Count tokens in entire thread
+   */
+  countThread(messages: any[]): number {
+    return messages.reduce((sum, msg) => sum + this.countMessage(msg), 0);
+  }
+
+  /**
+   * Check if thread needs rotation
+   */
+  needsRotation(tokenCount: number, maxTokens: number = 100000): boolean {
+    return tokenCount >= maxTokens * 0.7; // 70% threshold
+  }
+}
+```
+
+---
+
+#### Context Assembler
+
+**New Service: `context-assembler.ts`**
+
+```typescript
+// packages/ai-conversation/src/context-assembler.ts
+
+import { TokenCounter } from "./token-counter";
+
+export class ContextAssembler {
+  constructor(
+    private tokenCounter: TokenCounter,
+    private vectorStore: VectorStore
+  ) {}
+
+  /**
+   * Assemble context for AI prompt (tiered)
+   */
+  async assembleContext(input: {
+    threadId: string;
+    maxTokens: number;
+  }): Promise<{
+    hotContext: any[]; // Recent messages (verbatim)
+    warmContext: string; // Summarized messages
+    coldContext: any[]; // Retrieved from vector store (if needed)
+    totalTokens: number;
+  }> {
+    // 1. Get all messages
+    const allMessages = await this.getMessages(input.threadId);
+
+    // 2. Tier 1: Last 10 messages (verbatim)
+    const hotMessages = allMessages.slice(-10);
+    const hotTokens = this.tokenCounter.countThread(hotMessages);
+
+    // 3. Tier 2: Messages 11-100 (summarized)
+    const warmMessages = allMessages.slice(-100, -10);
+    const warmSummary = await this.summarizeMessages(warmMessages);
+    const warmTokens = this.tokenCounter.countText(warmSummary);
+
+    // 4. Tier 3: Older messages (vector search if needed)
+    const coldMessages: any[] = [];
+    let coldTokens = 0;
+
+    const remainingTokens = input.maxTokens - hotTokens - warmTokens;
+    if (remainingTokens > 1000) {
+      // Retrieve relevant older messages
+      coldMessages = await this.retrieveRelevantMessages({
+        threadId: input.threadId,
+        query: hotMessages[hotMessages.length - 1].content, // Use last message as query
+        excludeRecent: 100,
+        maxResults: 5,
+      });
+      coldTokens = this.tokenCounter.countThread(coldMessages);
+    }
+
+    return {
+      hotContext: hotMessages,
+      warmContext: warmSummary,
+      coldContext: coldMessages,
+      totalTokens: hotTokens + warmTokens + coldTokens,
+    };
+  }
+
+  /**
+   * Summarize messages using LLM
+   */
+  private async summarizeMessages(messages: any[]): Promise<string> {
+    if (messages.length === 0) return "";
+
+    const prompt = `Summarize the following conversation, preserving key facts, entities, and decisions:
+
+${messages.map((m) => `${m.role}: ${m.content}`).join("\n\n")}
+
+Summary:`;
+
+    const summary = await this.llm.generate(prompt);
+    return summary;
+  }
+
+  /**
+   * Retrieve relevant messages from vector store
+   */
+  private async retrieveRelevantMessages(input: {
+    threadId: string;
+    query: string;
+    excludeRecent: number;
+    maxResults: number;
+  }): Promise<any[]> {
+    const results = await this.vectorStore.similaritySearch({
+      query: input.query,
+      filter: {
+        threadId: input.threadId,
+        sequenceNumber: { $lt: -input.excludeRecent }, // Exclude recent N messages
+      },
+      k: input.maxResults,
+    });
+
+    return results.map((r) => r.metadata.message);
+  }
+}
+```
+
+---
+
+#### Integration with Orchestrator
+
+**Update `orchestrator.ts`:**
+
+```typescript
+// apps/intelligence-service/src/agents/orchestrator.ts
+
+export class SynapHubOrchestrator {
+  constructor(
+    private contextAssembler: ContextAssembler
+    // ... other dependencies
+  ) {}
+
+  async executeWithContext(input: {
+    threadId: string;
+    userId: string;
+    messages: any[];
+  }): Promise<OrchestratorResponse> {
+    // 1. Assemble tiered context
+    const context = await this.contextAssembler.assembleContext({
+      threadId: input.threadId,
+      maxTokens: 80000, // Leave 20K for response
+    });
+
+    // 2. Build system prompt with tiered context
+    const systemPrompt = `
+You are the Orchestrator for Synap.
+
+## CONVERSATION SUMMARY
+${context.warmContext}
+
+## RELEVANT HISTORICAL CONTEXT
+${context.coldContext.map((m) => `${m.role}: ${m.content}`).join("\n\n")}
+
+## RECENT MESSAGES (Verbatim)
+[These are the most recent messages, use them as primary context]
+
+## CURRENT TIME
+${new Date().toISOString()}
+`;
+
+    // 3. Execute with hot context as messages
+    const result = await generateText({
+      model: this.model,
+      system: systemPrompt,
+      messages: context.hotContext, // Only recent messages in message array
+      tools: this.tools,
+      maxToolRoundtrips: 5,
+    });
+
+    return {
+      content: result.text,
+      contextUsed: context.totalTokens,
+      proposedActions: this.extractProposals(result),
+    };
+  }
+}
+```
+
+---
+
+#### Context Rotation Monitor
+
+**New Service: `context-monitor.ts`**
+
+```typescript
+// packages/ai-conversation/src/context-monitor.ts
+
+export class ContextMonitor {
+  constructor(
+    private tokenCounter: TokenCounter,
+    private eventBus: EventBus
+  ) {}
+
+  /**
+   * Check if thread needs context rotation
+   */
+  async checkThread(threadId: string): Promise<{
+    needsRotation: boolean;
+    currentTokens: number;
+    maxTokens: number;
+  }> {
+    const thread = await getThread(threadId);
+    const messages = await getMessages(threadId);
+
+    const currentTokens = this.tokenCounter.countThread(messages);
+    const maxTokens = 100000; // Claude 3.5 Sonnet context window
+
+    const needsRotation = currentTokens >= maxTokens * 0.7;
+
+    if (needsRotation) {
+      // Publish rotation event
+      await this.eventBus.publish("context.rotation.needed", {
+        threadId,
+        currentTokens,
+        maxTokens,
+      });
+    }
+
+    return { needsRotation, currentTokens, maxTokens };
+  }
+
+  /**
+   * Run periodic check on all active threads
+   */
+  async runPeriodicCheck(): Promise<void> {
+    const activeThreads = await getActiveThreads();
+
+    for (const thread of activeThreads) {
+      await this.checkThread(thread.id);
+    }
+  }
+}
+
+// Run every hour
+setInterval(() => contextMonitor.runPeriodicCheck(), 60 * 60 * 1000);
+```
+
+---
+
+### Research Guidance for AI
+
+**Key Questions:**
+
+1. **Token Counting Accuracy**
+   - tiktoken vs Anthropic's actual tokenizer?
+   - Tool calls token overhead?
+   - How to count streaming responses?
+
+2. **Summarization Quality**
+   - Use same model (Claude) or cheaper model (GPT-3.5) for summaries?
+   - Prompt engineering for better summaries?
+   - How to preserve entity references?
+
+3. **Vector Store Strategy**
+   - Embed entire messages or just content?
+   - Metadata filtering (role, timestamp, entities)?
+   - Refresh embeddings when messages updated?
+
+**Research Sources:**
+
+- tiktoken library: https://github.com/openai/tiktoken
+- LangChain ConversationSummaryBufferMemory: https://python.langchain.com/docs/modules/memory/types/summary_buffer
+- pgvector best practices: https://github.com/pgvector/pgvector
+
+---
+
+### Validation & Testing
+
+**Success Criteria:**
+
+**SC-3.1:** Token counting is accurate (within 5%)
+
+- Test: Count tokens for known text, compare to Anthropic API count
+- Expected: <5% deviation
+
+**SC-3.2:** Context assembly respects token limits
+
+- Test: Assemble context for thread with 50K tokens, max=10K
+- Expected: Returns 10K tokens (hot + warm + cold)
+
+**SC-3.3:** Rotation triggered at 70%
+
+- Test: Create thread with 70K tokens
+- Expected: `context.rotation.needed` event published
+
+**SC-3.4:** Summarization preserves key info
+
+- Test: Summarize 50 messages, verify key entities/decisions present in summary
+- Expected: Manual review shows no critical info lost
+
+**Edge Cases:**
+
+1. **Empty thread:** Assemble context for thread with 0 messages → should return empty gracefully
+2. **Very short messages:** Thread with 1000 short messages (10 tokens each) → should handle efficiently
+3. **Very long messages:** Single message with 50K tokens → should truncate or summarize
+4. **Mixed languages:** Messages in multiple languages → tokenization should work
+
+---
+
+[Document continues with Priority 1.4: Tool Calling with Approval Flow, then Priority 2-4 features...]
+
+---
+
+## 3.4 Priority 1: Tool Calling with Approval Flow
+
+**Status:** 🟡 Partially built (proposals generated but not handled)  
+**Phase:** MVP (April 2025)  
+**Dependencies:** Infinite Chat (3.1)  
+**Complexity:** Medium (backend integration with existing event chain)
+
+---
+
+### Functional Requirements
+
+**FR-4.1: Proposal Generation**
+
+- AI identifies actions that need execution
+- Generates structured proposal with rationale
+- Proposal includes: action type, parameters, expected outcome
+- User sees proposal inline in chat
+
+**FR-4.2: Approval Interface**
+
+- User can approve or reject proposal
+- Can edit proposal parameters before approving
+- Can approve multiple proposals at once
+- Can set default approvals for trusted actions
+
+**FR-4.3: Execution Flow**
+
+- Approved proposals execute via event chain
+- Workers subscribe to approval events
+- Execution results return to thread
+- Failures handled gracefully (retry, error message)
+
+**FR-4.4: Granular Permissions**
+
+- Per entity type: "AI can create tasks"
+- Per field: "AI can update task status, not assignee"
+- Per reason: "AI can update if confidence > 0.9"
+- User configurable in settings
+
+**FR-4.5: Audit Trail**
+
+- All proposals logged (approved, rejected, executed)
+- Execution history per proposal
+- User can review past AI actions
+
+---
+
+### Technical Implementation
+
+#### Data Models
+
+**New Table: `ai_proposals`**
+
+```typescript
+// packages/database/src/schema/ai-proposals.ts
+
+export const aiProposals = pgTable("ai_proposals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  threadId: uuid("thread_id")
+    .notNull()
+    .references(() => conversationThreads.id),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
+
+  // Proposal details
+  actionType: text("action_type").notNull(), // 'create_entity', 'update_entity', etc.
+  actionPayload: jsonb("action_payload").notNull(),
+  rationale: text("rationale"), // AI's explanation
+  confidence: real("confidence"), // 0.0-1.0
+
+  // Status tracking
+  status: text("status").notNull().default("pending"), // 'pending' | 'approved' | 'rejected' | 'executed' | 'failed'
+  approvedAt: timestamp("approved_at"),
+  approvedBy: uuid("approved_by").references(() => users.id),
+  rejectedAt: timestamp("rejected_at"),
+  rejectedBy: uuid("rejected_by").references(() => users.id),
+
+  // Execution tracking
+  executedAt: timestamp("executed_at"),
+  executionResult: jsonb("execution_result"),
+  executionError: text("execution_error"),
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+```
+
+**New Table: `ai_permissions`** (user-configured)
+
+```typescript
+export const aiPermissions = pgTable("ai_permissions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
+
+  // Permission scope
+  actionType: text("action_type").notNull(),
+  entityType: text("entity_type"),
+  fieldName: text("field_name"),
+
+  // Permission level
+  permissionLevel: text("permission_level").notNull(),
+  // 'auto_approve' | 'require_approval' | 'deny'
+
+  // Conditions (JSON logic)
+  conditions: jsonb("conditions"), // { confidence: { $gte: 0.9 } }
+
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+```
+
+---
+
+#### API Contracts
+
+**New Router: `ai-proposals`**
+
+```typescript
+// packages/api/src/routers/ai-proposals.ts
+
+export const aiProposalsRouter = router({
+  // List pending proposals for user
+  list: protectedProcedure
+    .input(
+      z.object({
+        status: z
+          .enum(["pending", "approved", "rejected", "executed", "failed"])
+          .optional(),
+        threadId: z.string().uuid().optional(),
+        limit: z.number().default(20),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return await ctx.db.query.aiProposals.findMany({
+        where: and(
+          eq(aiProposals.userId, ctx.session.userId),
+          input.status ? eq(aiProposals.status, input.status) : undefined,
+          input.threadId ? eq(aiProposals.threadId, input.threadId) : undefined
+        ),
+        orderBy: [desc(aiProposals.createdAt)],
+        limit: input.limit,
+      });
+    }),
+
+  // Approve proposal
+  approve: protectedProcedure
+    .input(
+      z.object({
+        proposalId: z.string().uuid(),
+        editedPayload: z.any().optional(), // User can edit before approving
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Get proposal
+      const proposal = await getProposal(input.proposalId);
+      if (!proposal) throw new TRPCError({ code: "NOT_FOUND" });
+      if (proposal.userId !== ctx.session.userId) {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      // 2. Update status
+      await ctx.db
+        .update(aiProposals)
+        .set({
+          status: "approved",
+          approvedAt: new Date(),
+          approvedBy: ctx.session.userId,
+          actionPayload: input.editedPayload || proposal.actionPayload,
+        })
+        .where(eq(aiProposals.id, input.proposalId));
+
+      // 3. Publish approval event (existing event chain)
+      await ctx.eventBus.publish("ai.proposal.approved", {
+        proposalId: input.proposalId,
+        actionType: proposal.actionType,
+        actionPayload: input.editedPayload || proposal.actionPayload,
+        userId: ctx.session.userId,
+        threadId: proposal.threadId,
+      });
+
+      return { success: true };
+    }),
+
+  // Reject proposal
+  reject: protectedProcedure
+    .input(
+      z.object({
+        proposalId: z.string().uuid(),
+        reason: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .update(aiProposals)
+        .set({
+          status: "rejected",
+          rejectedAt: new Date(),
+          rejectedBy: ctx.session.userId,
+        })
+        .where(eq(aiProposals.id, input.proposalId));
+
+      // Optionally notify AI of rejection
+      await ctx.eventBus.publish("ai.proposal.rejected", {
+        proposalId: input.proposalId,
+        reason: input.reason,
+      });
+
+      return { success: true };
+    }),
+
+  // Bulk approve multiple proposals
+  bulkApprove: protectedProcedure
+    .input(
+      z.object({
+        proposalIds: z.array(z.string().uuid()),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      for (const proposalId of input.proposalIds) {
+        await ctx.procedures.aiProposals.approve({ proposalId });
+      }
+      return { success: true, count: input.proposalIds.length };
+    }),
+
+  // Get execution result
+  getResult: protectedProcedure
+    .input(z.object({ proposalId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const proposal = await ctx.db.query.aiProposals.findFirst({
+        where: eq(aiProposals.id, input.proposalId),
+      });
+
+      return {
+        status: proposal?.status,
+        executionResult: proposal?.executionResult,
+        executionError: proposal?.executionError,
+      };
+    }),
+});
+```
+
+**New Router: `ai-permissions`**
+
+```typescript
+export const aiPermissionsRouter = router({
+  // Get user's permissions
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return await ctx.db.query.aiPermissions.findMany({
+      where: eq(aiPermissions.userId, ctx.session.userId),
+    });
+  }),
+
+  // Set permission for action type
+  set: protectedProcedure
+    .input(
+      z.object({
+        actionType: z.string(),
+        entityType: z.string().optional(),
+        fieldName: z.string().optional(),
+        permissionLevel: z.enum(["auto_approve", "require_approval", "deny"]),
+        conditions: z.any().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.db
+        .insert(aiPermissions)
+        .values({
+          userId: ctx.session.userId,
+          ...input,
+        })
+        .onConflictDoUpdate({
+          target: [
+            aiPermissions.userId,
+            aiPermissions.actionType,
+            aiPermissions.entityType,
+            aiPermissions.fieldName,
+          ],
+          set: {
+            permissionLevel: input.permissionLevel,
+            conditions: input.conditions,
+          },
+        });
+
+      return { success: true };
+    }),
+});
+```
+
+---
+
+#### Event Chain Integration
+
+**Worker: Proposal Approval Handler**
+
+```typescript
+// apps/backend/src/workers/proposal-approval-worker.ts
+
+import { Worker } from "your-worker-library";
+
+export class ProposalApprovalWorker extends Worker {
+  constructor(
+    private intelligenceService: IntelligenceServiceClient,
+    private db: Database
+  ) {
+    super();
+
+    // Subscribe to approval events
+    this.subscribe("ai.proposal.approved", this.handleApproval.bind(this));
+  }
+
+  async handleApproval(event: {
+    proposalId: string;
+    actionType: string;
+    actionPayload: any;
+    userId: string;
+    threadId: string;
+  }): Promise<void> {
+    try {
+      // 1. Call Intelligence Service to execute action
+      const result = await this.intelligenceService.executeAction({
+        actionType: event.actionType,
+        actionPayload: event.actionPayload,
+        userId: event.userId,
+        proposalMode: false, // EXECUTION MODE
+      });
+
+      // 2. Update proposal status
+      await this.db
+        .update(aiProposals)
+        .set({
+          status: "executed",
+          executedAt: new Date(),
+          executionResult: result,
+        })
+        .where(eq(aiProposals.id, event.proposalId));
+
+      // 3. Notify thread
+      await this.db.insert(threadMessages).values({
+        threadId: event.threadId,
+        role: "system",
+        content: `✅ Action completed: ${event.actionType}`,
+        metadata: { proposalId: event.proposalId, result },
+        sequenceNumber: await getNextSequence(event.threadId),
+      });
+
+      // 4. Publish success event
+      await this.eventBus.publish("ai.action.executed", {
+        proposalId: event.proposalId,
+        result,
+      });
+    } catch (error) {
+      // Handle execution failure
+      await this.db
+        .update(aiProposals)
+        .set({
+          status: "failed",
+          executionError: error.message,
+        })
+        .where(eq(aiProposals.id, event.proposalId));
+
+      // Notify user
+      await this.db.insert(threadMessages).values({
+        threadId: event.threadId,
+        role: "system",
+        content: `❌ Action failed: ${error.message}`,
+        sequenceNumber: await getNextSequence(event.threadId),
+      });
+    }
+  }
+}
+```
+
+---
+
+#### Intelligence Service Changes
+
+**Update Tool Registry: Execute vs Propose**
+
+```typescript
+// apps/intelligence-service/src/tools/registry.ts
+
+export function createToolRegistry(context: ToolContext) {
+  return {
+    // Action tool with proposal mode
+    create_entity: tool({
+      description: "Create a new entity",
+      parameters: z.object({
+        type: z.enum(["task", "contact", "meeting", "idea", "project"]),
+        title: z.string(),
+        description: z.string().optional(),
+        properties: z.record(z.any()).optional(),
+      }),
+      execute: async (args, toolContext) => {
+        if (toolContext.proposalMode) {
+          // PROPOSAL MODE: Return structured proposal
+          return {
+            _isProposal: true,
+            actionType: "create_entity",
+            actionPayload: args,
+            rationale: `Creating ${args.type}: "${args.title}"`,
+            confidence: 0.95,
+          };
+        } else {
+          // EXECUTION MODE: Actually create entity via Hub Protocol
+          const result = await context.hubClient.createEntity({
+            userId: toolContext.userId,
+            ...args,
+          });
+
+          return {
+            success: true,
+            entityId: result.id,
+            message: `Created ${args.type}: "${args.title}"`,
+          };
+        }
+      },
+    }),
+
+    // Context tools always execute (no approval needed)
+    vector_search: tool({
+      description: "Search entities by semantic meaning",
+      parameters: z.object({ query: z.string() }),
+      execute: async (args, toolContext) => {
+        // No proposal mode check - always execute
+        return await context.vectorStore.search({
+          query: args.query,
+          userId: toolContext.userId,
+          limit: 5,
+        });
+      },
+    }),
+  };
+}
+```
+
+**Update Orchestrator: Store Proposals**
+
+```typescript
+// apps/intelligence-service/src/agents/orchestrator.ts
+
+export class SynapHubOrchestrator {
+  async executeWithContext(input: {
+    threadId: string;
+    userId: string;
+    messages: any[];
+  }): Promise<OrchestratorResponse> {
+    // ... existing context assembly
+
+    // Execute with tools in PROPOSAL MODE
+    const result = await generateText({
+      model: this.model,
+      system: systemPrompt,
+      messages: input.messages,
+      tools: this.tools,
+      maxToolRoundtrips: 5,
+    });
+
+    // Extract proposals from tool calls
+    const proposals = this.extractProposals(result.toolCalls);
+
+    // Store proposals in backend (via Hub Protocol)
+    const storedProposals = await Promise.all(
+      proposals.map((p) =>
+        this.hubClient.createProposal({
+          threadId: input.threadId,
+          userId: input.userId,
+          actionType: p.actionType,
+          actionPayload: p.actionPayload,
+          rationale: p.rationale,
+          confidence: p.confidence,
+        })
+      )
+    );
+
+    return {
+      content: result.text,
+      proposedActions: storedProposals,
+      requiresApproval: proposals.length > 0,
+    };
+  }
+
+  private extractProposals(toolCalls: any[]): Proposal[] {
+    return toolCalls
+      .filter((tc) => tc.result?._isProposal)
+      .map((tc) => tc.result);
+  }
+}
+```
+
+---
+
+#### Permission Checking
+
+**New Service: `permission-checker.ts`**
+
+```typescript
+// packages/ai-conversation/src/permission-checker.ts
+
+export class PermissionChecker {
+  constructor(private db: Database) {}
+
+  /**
+   * Check if action should auto-approve
+   */
+  async checkPermission(input: {
+    userId: string;
+    actionType: string;
+    entityType?: string;
+    fieldName?: string;
+    confidence: number;
+  }): Promise<"auto_approve" | "require_approval" | "deny"> {
+    // Get user's permission rules
+    const rules = await this.db.query.aiPermissions.findMany({
+      where: and(
+        eq(aiPermissions.userId, input.userId),
+        eq(aiPermissions.actionType, input.actionType),
+        input.entityType
+          ? eq(aiPermissions.entityType, input.entityType)
+          : undefined,
+        input.fieldName
+          ? eq(aiPermissions.fieldName, input.fieldName)
+          : undefined
+      ),
+    });
+
+    // No rules = require approval (safe default)
+    if (rules.length === 0) return "require_approval";
+
+    // Check most specific rule first
+    for (const rule of rules) {
+      // Evaluate conditions
+      if (rule.conditions) {
+        const conditionsMet = this.evaluateConditions(rule.conditions, {
+          confidence: input.confidence,
+        });
+        if (!conditionsMet) continue;
+      }
+
+      return rule.permissionLevel;
+    }
+
+    return "require_approval";
+  }
+
+  private evaluateConditions(conditions: any, context: any): boolean {
+    // Simple JSON Logic evaluation
+    // Example: { confidence: { $gte: 0.9 } }
+    for (const [field, logic] of Object.entries(conditions)) {
+      if (typeof logic === "object") {
+        for (const [op, value] of Object.entries(logic)) {
+          switch (op) {
+            case "$gte":
+              if (context[field] < value) return false;
+              break;
+            case "$lte":
+              if (context[field] > value) return false;
+              break;
+            case "$eq":
+              if (context[field] !== value) return false;
+              break;
+            // Add more operators as needed
+          }
+        }
+      }
+    }
+    return true;
+  }
+}
+```
+
+**Integrate Permission Checking:**
+
+```typescript
+// When storing proposals
+const permission = await permissionChecker.checkPermission({
+  userId: input.userId,
+  actionType: proposal.actionType,
+  entityType: proposal.actionPayload.type,
+  confidence: proposal.confidence,
+});
+
+if (permission === "auto_approve") {
+  // Skip proposal storage, execute immediately
+  await executeAction(proposal);
+} else if (permission === "deny") {
+  // Don't create proposal, inform AI
+  return { denied: true, reason: "User has disabled this action" };
+} else {
+  // Create proposal for user approval
+  await storeProposal(proposal);
+}
+```
+
+---
+
+### Research Guidance for AI
+
+**Key Questions:**
+
+1. **Proposal Granularity**
+   - One proposal per tool call or batch multiple related actions?
+   - How to handle multi-step actions (create entity → link to another)?
+   - Rollback strategy if one action in batch fails?
+
+2. **Permission Model**
+   - RBAC (role-based) vs ABAC (attribute-based)?
+   - Should permissions cascade (allow entity creation → allow field updates)?
+   - How to handle permission conflicts (allow + deny rules)?
+
+3. **Execution Reliability**
+   - Idempotency (safe to retry failed executions)?
+   - Transaction handling (all-or-nothing for related actions)?
+   - Timeout handling (long-running actions)?
+
+**Research Sources:**
+
+- Event sourcing patterns: https://martinfowler.com/eaaDev/EventSourcing.html
+- CQRS with approval workflows: https://docs.microsoft.com/en-us/azure/architecture/patterns/cqrs
+- Permission systems (Oso, Casbin): https://www.osohq.com/
+
+---
+
+### Validation & Testing
+
+**Success Criteria:**
+
+**SC-4.1:** Proposals generated correctly
+
+- Test: AI calls `create_entity` tool in proposal mode
+- Expected: Proposal stored in database, not executed
+
+**SC-4.2:** Approval flow works end-to-end
+
+- Test: Approve proposal via API → Worker executes → Result stored
+- Expected: Proposal status 'executed', entity created in database
+
+**SC-4.3:** Rejection prevents execution
+
+- Test: Reject proposal → Wait 1 minute
+- Expected: Proposal status 'rejected', no entity created
+
+**SC-4.4:** Permissions respected
+
+- Test: Set permission to auto_approve, AI proposes action
+- Expected: Action executes immediately without approval step
+
+**SC-4.5:** Failed execution handled
+
+- Test: Approve proposal with invalid data
+- Expected: Status 'failed', error message stored, user notified
+
+**Edge Cases:**
+
+1. **Concurrent approvals:** Two users approve same proposal → should handle idempotently
+2. **Deleted thread:** Approve proposal for deleted thread → should fail gracefully
+3. **Invalid payload:** AI generates malformed proposal → should validate before storing
+4. **Permission change mid-flow:** User denies permission while proposal pending → should respect new permission
+
+---
+
+## 3.5 Priority 2: Meta-Agent Orchestration
+
+**Status:** 🔴 Missing (only basic context injection)  
+**Phase:** V1 (May-June 2025)  
+**Dependencies:** Infinite Chat (3.1), Context Management (3.3)  
+**Complexity:** Very High (novel AI-to-AI coordination)
+
+---
+
+### Functional Requirements
+
+**FR-5.1: Conversation Analysis**
+
+- Analyze last 100 messages of thread
+- Extract: role, tone, domain expertise, communication style
+- Identify: active topics, key decisions, open questions
+- Detect: user preferences (concise vs detailed, technical level)
+
+**FR-5.2: Prompt Synthesis**
+
+- Generate optimized system prompt for new AI instance
+- Structure: Role definition, context summary, user preferences, active state
+- Format: Structured YAML (easier to update fields, debug)
+- Compression: Distill 50K tokens → 5K token prompt
+
+**FR-5.3: Seamless Transition**
+
+- Spawn new AI instance with synthesized prompt
+- Test continuity (factual accuracy, tonal consistency)
+- If quality ≥ 0.8: Replace current instance
+- If quality < 0.8: Retry with adjusted prompt or keep current
+
+**FR-5.4: Rotation Triggers**
+
+- Automatic: At 70% context window utilization
+- Manual: User clicks "Refresh context"
+- Intelligent: On topic shift (detected via embedding similarity)
+
+**FR-5.5: User Visibility**
+
+- Subtle indicator: "Context refreshed" badge (progressive disclosure)
+- Click to expand: "AI analyzed 100 messages, distilled to key insights"
+- Advanced users: Toggle in settings to see full meta-agent prompt
+
+**FR-5.6: Meta-Agent Capabilities (Full Orchestration)**
+
+- Context rotation (primary use case)
+- Branch creation optimization (analyze conversation, extract relevant context for branch)
+- Merge conflict detection (compare branch conclusions semantically)
+- User-invoked reframing ("Summarize and optimize for [new goal]")
+
+---
+
+### Technical Implementation
+
+#### Meta-Agent Architecture
+
+**New Service: `meta-agent.ts`**
+
+```typescript
+// packages/ai-conversation/src/meta-agent.ts
+
+export class MetaAgent {
+  constructor(
+    private llm: LLM, // Use GPT-4 or Claude Opus (specialized model for meta-tasks)
+    private conversationAnalyzer: ConversationAnalyzer,
+    private promptSynthesizer: PromptSynthesizer,
+    private seamlessnessValidator: SeamlessnessValidator
+  ) {}
+
+  /**
+   * Orchestrate context rotation for thread
+   */
+  async rotateContext(input: {
+    threadId: string;
+    currentMessages: any[];
+    reason: "token_limit" | "topic_shift" | "user_request";
+  }): Promise<{
+    success: boolean;
+    newSystemPrompt: string;
+    validationScore: number;
+    rotationId: string;
+  }> {
+    console.log(
+      `[Meta-Agent] Rotating context for thread ${input.threadId}, reason: ${input.reason}`
+    );
+
+    // Step 1: Analyze conversation
+    const analysis = await this.conversationAnalyzer.analyze({
+      messages: input.currentMessages.slice(-100), // Last 100 messages
+      fullHistory: input.currentMessages, // For deeper analysis
+    });
+
+    console.log(`[Meta-Agent] Analysis complete:`, analysis);
+
+    // Step 2: Synthesize new prompt
+    const newPrompt = await this.promptSynthesizer.synthesize({
+      analysis,
+      targetTokens: 5000, // Compress to ~5K tokens
+    });
+
+    console.log(
+      `[Meta-Agent] Synthesized prompt (${newPrompt.tokenCount} tokens)`
+    );
+
+    // Step 3: Validate seamlessness
+    const validation = await this.seamlessnessValidator.validate({
+      oldMessages: input.currentMessages,
+      newSystemPrompt: newPrompt.systemPrompt,
+      testQueries: [
+        "What were we just discussing?",
+        "What's my main goal here?",
+        "Summarize our conversation so far",
+      ],
+    });
+
+    console.log(`[Meta-Agent] Validation score: ${validation.overallScore}`);
+
+    if (validation.overallScore >= 0.8) {
+      // Success: Store rotation record
+      const rotationId = await this.storeRotation({
+        threadId: input.threadId,
+        oldPrompt: "...", // Store old state for rollback
+        newPrompt: newPrompt.systemPrompt,
+        analysis,
+        validationScore: validation.overallScore,
+      });
+
+      return {
+        success: true,
+        newSystemPrompt: newPrompt.systemPrompt,
+        validationScore: validation.overallScore,
+        rotationId,
+      };
+    } else {
+      // Failure: Try again with adjusted approach
+      console.warn(
+        `[Meta-Agent] Validation failed (${validation.overallScore}), retrying...`
+      );
+
+      // Adjust strategy (more verbatim context, less summarization)
+      const adjustedPrompt = await this.promptSynthesizer.synthesize({
+        analysis,
+        targetTokens: 8000, // Less aggressive compression
+        verbatimMessages: 20, // Keep more recent messages verbatim
+      });
+
+      // Re-validate
+      const revalidation = await this.seamlessnessValidator.validate({
+        oldMessages: input.currentMessages,
+        newSystemPrompt: adjustedPrompt.systemPrompt,
+        testQueries: validation.failedQueries,
+      });
+
+      if (revalidation.overallScore >= 0.7) {
+        // Acceptable: Use adjusted prompt
+        const rotationId = await this.storeRotation({
+          threadId: input.threadId,
+          newPrompt: adjustedPrompt.systemPrompt,
+          analysis,
+          validationScore: revalidation.overallScore,
+        });
+
+        return {
+          success: true,
+          newSystemPrompt: adjustedPrompt.systemPrompt,
+          validationScore: revalidation.overallScore,
+          rotationId,
+        };
+      } else {
+        // Still failing: Keep current instance
+        return {
+          success: false,
+          newSystemPrompt: "",
+          validationScore: revalidation.overallScore,
+          rotationId: "",
+        };
+      }
+    }
+  }
+
+  /**
+   * Optimize context for branch creation
+   */
+  async optimizeForBranch(input: {
+    parentThreadId: string;
+    branchPurpose: string;
+    parentMessages: any[];
+  }): Promise<{
+    relevantContext: any[];
+    systemPrompt: string;
+  }> {
+    // Analyze parent conversation
+    const analysis = await this.conversationAnalyzer.analyze({
+      messages: input.parentMessages,
+    });
+
+    // Extract only context relevant to branch purpose
+    const relevantContext = await this.extractRelevantContext({
+      analysis,
+      branchPurpose: input.branchPurpose,
+    });
+
+    // Generate specialized prompt for branch
+    const branchPrompt = await this.promptSynthesizer.synthesize({
+      analysis,
+      purpose: input.branchPurpose,
+      focusAreas: relevantContext.topics,
+    });
+
+    return {
+      relevantContext: relevantContext.messages,
+      systemPrompt: branchPrompt.systemPrompt,
+    };
+  }
+
+  /**
+   * Detect merge conflicts semantically
+   */
+  async detectMergeConflicts(input: {
+    parentThreadId: string;
+    branchThreadId: string;
+    forkPoint: number;
+  }): Promise<Conflict[]> {
+    // Get post-fork messages from both threads
+    const parentMessages = await getMessages(input.parentThreadId, {
+      after: input.forkPoint,
+    });
+    const branchMessages = await getMessages(input.branchThreadId);
+
+    // Analyze conclusions of each thread
+    const parentAnalysis = await this.conversationAnalyzer.analyze({
+      messages: parentMessages,
+      focusOn: "conclusions",
+    });
+    const branchAnalysis = await this.conversationAnalyzer.analyze({
+      messages: branchMessages,
+      focusOn: "conclusions",
+    });
+
+    // Compare conclusions semantically
+    const similarity = await this.compareConclusionsSemantically({
+      parentConclusions: parentAnalysis.conclusions,
+      branchConclusions: branchAnalysis.conclusions,
+    });
+
+    const conflicts: Conflict[] = [];
+
+    if (similarity < 0.5) {
+      conflicts.push({
+        type: "conclusion_diverged",
+        description: "Parent and branch reached different conclusions",
+        parentValue: parentAnalysis.conclusions,
+        branchValue: branchAnalysis.conclusions,
+        similarity,
+      });
+    }
+
+    // Check entity-level conflicts
+    const entityConflicts = await this.detectEntityConflicts({
+      parentAnalysis,
+      branchAnalysis,
+    });
+
+    return [...conflicts, ...entityConflicts];
+  }
+}
+```
+
+---
+
+#### Conversation Analyzer
+
+**New Service: `conversation-analyzer.ts`**
+
+```typescript
+// packages/ai-conversation/src/conversation-analyzer.ts
+
+export class ConversationAnalyzer {
+  constructor(private llm: LLM) {}
+
+  async analyze(input: {
+    messages: any[];
+    fullHistory?: any[];
+    focusOn?: "all" | "conclusions" | "preferences";
+  }): Promise<ConversationAnalysis> {
+    const prompt = `
+You are a meta-cognitive analyst. Analyze this conversation and extract key patterns.
+
+CONVERSATION:
+${input.messages.map((m, i) => `[${i}] ${m.role}: ${m.content}`).join("\n\n")}
+
+Extract and return as YAML:
+
+role:
+  description: What role is the AI playing? (e.g., "technical advisor", "creative partner")
+  tone: formal | casual | professional | friendly
+  
+communication_style:
+  user_prefers: concise | detailed | step_by_step
+  technical_level: beginner | intermediate | advanced | expert
+  
+active_topics:
+  - topic: "Main topic being discussed"
+    keywords: ["keyword1", "keyword2"]
+    depth: shallow | medium | deep
+    
+key_decisions:
+  - decision: "What was decided"
+    rationale: "Why it was decided"
+    message_index: [42]
+    
+open_questions:
+  - question: "Unresolved question"
+    context: "Why it matters"
+    
+user_context:
+  goals: ["What user is trying to achieve"]
+  constraints: ["Limitations or requirements"]
+  background: "User's domain knowledge"
+  
+entities_mentioned:
+  - entity_id: "abc-123"
+    entity_type: "task"
+    relevance: high | medium | low
+    
+conclusions:
+  - conclusion: "Key insight or decision"
+    confidence: 0.95
+    
+OUTPUT (YAML only, no markdown):
+`;
+
+    const response = await this.llm.generate(prompt);
+    const analysis = parseYAML(response);
+
+    return analysis as ConversationAnalysis;
+  }
+}
+
+interface ConversationAnalysis {
+  role: {
+    description: string;
+    tone: string;
+  };
+  communication_style: {
+    user_prefers: string;
+    technical_level: string;
+  };
+  active_topics: Array<{
+    topic: string;
+    keywords: string[];
+    depth: string;
+  }>;
+  key_decisions: Array<{
+    decision: string;
+    rationale: string;
+    message_index: number[];
+  }>;
+  open_questions: Array<{
+    question: string;
+    context: string;
+  }>;
+  user_context: {
+    goals: string[];
+    constraints: string[];
+    background: string;
+  };
+  entities_mentioned: Array<{
+    entity_id: string;
+    entity_type: string;
+    relevance: string;
+  }>;
+  conclusions: Array<{
+    conclusion: string;
+    confidence: number;
+  }>;
+}
+```
+
+---
+
+#### Prompt Synthesizer
+
+**New Service: `prompt-synthesizer.ts`**
+
+```typescript
+// packages/ai-conversation/src/prompt-synthesizer.ts
+
+export class PromptSynthesizer {
+  constructor(private tokenCounter: TokenCounter) {}
+
+  async synthesize(input: {
+    analysis: ConversationAnalysis;
+    targetTokens: number;
+    purpose?: string;
+    verbatimMessages?: number;
+  }): Promise<{
+    systemPrompt: string;
+    tokenCount: number;
+    structure: any;
+  }> {
+    // Build structured prompt in YAML (easier to modify programmatically)
+    const structure = {
+      role: {
+        identity: input.analysis.role.description,
+        tone: input.analysis.role.tone,
+        communication_style: input.analysis.communication_style,
+      },
+
+      user_context: {
+        background: input.analysis.user_context.background,
+        goals: input.analysis.user_context.goals,
+        constraints: input.analysis.user_context.constraints,
+      },
+
+      conversation_state: {
+        active_topics: input.analysis.active_topics.map((t) => ({
+          topic: t.topic,
+          depth: t.depth,
+        })),
+        key_decisions: input.analysis.key_decisions.map((d) => d.decision),
+        open_questions: input.analysis.open_questions.map((q) => q.question),
+      },
+
+      entities: {
+        relevant: input.analysis.entities_mentioned
+          .filter((e) => e.relevance === "high")
+          .map((e) => ({ id: e.entity_id, type: e.entity_type })),
+      },
+
+      special_instructions: this.generateSpecialInstructions(input.analysis),
+    };
+
+    // Convert to natural language prompt
+    const systemPrompt = this.structureToPrompt(structure);
+
+    const tokenCount = this.tokenCounter.countText(systemPrompt);
+
+    // If over target, compress
+    if (tokenCount > input.targetTokens) {
+      const compressed = await this.compressPrompt({
+        structure,
+        targetTokens: input.targetTokens,
+      });
+
+      return {
+        systemPrompt: compressed.prompt,
+        tokenCount: compressed.tokenCount,
+        structure: compressed.structure,
+      };
+    }
+
+    return { systemPrompt, tokenCount, structure };
+  }
+
+  private structureToPrompt(structure: any): string {
+    return `
+# ROLE DEFINITION
+You are ${structure.role.identity}.
+Tone: ${structure.role.tone}
+Communication: ${structure.role.communication_style.user_prefers} responses at ${structure.role.communication_style.technical_level} level
+
+# USER CONTEXT
+Background: ${structure.user_context.background}
+
+Goals:
+${structure.user_context.goals.map((g) => `- ${g}`).join("\n")}
+
+Constraints:
+${structure.user_context.constraints.map((c) => `- ${c}`).join("\n")}
+
+# CONVERSATION STATE
+Active Topics:
+${structure.conversation_state.active_topics.map((t) => `- ${t.topic} (${t.depth})`).join("\n")}
+
+Key Decisions Made:
+${structure.conversation_state.key_decisions.map((d) => `- ${d}`).join("\n")}
+
+Open Questions:
+${structure.conversation_state.open_questions.map((q) => `- ${q}`).join("\n")}
+
+# RELEVANT ENTITIES
+${structure.entities.relevant.map((e) => `- ${e.type}: ${e.id}`).join("\n")}
+
+# SPECIAL INSTRUCTIONS
+${structure.special_instructions}
+
+---
+
+Continue the conversation naturally from here. The user should not notice any discontinuity.
+`;
+  }
+
+  private generateSpecialInstructions(analysis: ConversationAnalysis): string {
+    const instructions: string[] = [];
+
+    // Based on communication style
+    if (analysis.communication_style.user_prefers === "concise") {
+      instructions.push("Keep responses brief and to-the-point");
+    }
+
+    // Based on active topics
+    if (analysis.active_topics.some((t) => t.depth === "deep")) {
+      instructions.push("User expects detailed technical discussions");
+    }
+
+    // Based on open questions
+    if (analysis.open_questions.length > 0) {
+      instructions.push(
+        `Prioritize addressing these open questions: ${analysis.open_questions.map((q) => q.question).join(", ")}`
+      );
+    }
+
+    return instructions.join("\n");
+  }
+
+  private async compressPrompt(input: {
+    structure: any;
+    targetTokens: number;
+  }): Promise<{ prompt: string; tokenCount: number; structure: any }> {
+    // Compression strategies (apply in order until under target):
+    // 1. Shorten goal descriptions
+    // 2. Reduce number of key decisions (keep most recent)
+    // 3. Summarize active topics
+    // 4. Remove low-relevance entities
+
+    const compressed = { ...input.structure };
+
+    // Strategy 1: Shorten goals
+    compressed.user_context.goals = compressed.user_context.goals.slice(0, 3);
+
+    let prompt = this.structureToPrompt(compressed);
+    let tokens = this.tokenCounter.countText(prompt);
+
+    if (tokens <= input.targetTokens) {
+      return { prompt, tokenCount: tokens, structure: compressed };
+    }
+
+    // Strategy 2: Keep only last 5 decisions
+    compressed.conversation_state.key_decisions =
+      compressed.conversation_state.key_decisions.slice(-5);
+
+    prompt = this.structureToPrompt(compressed);
+    tokens = this.tokenCounter.countText(prompt);
+
+    if (tokens <= input.targetTokens) {
+      return { prompt, tokenCount: tokens, structure: compressed };
+    }
+
+    // Strategy 3: Summarize topics
+    compressed.conversation_state.active_topics =
+      compressed.conversation_state.active_topics.slice(0, 3);
+
+    prompt = this.structureToPrompt(compressed);
+    tokens = this.tokenCounter.countText(prompt);
+
+    return { prompt, tokenCount: tokens, structure: compressed };
+  }
+}
+```
+
+---
+
+#### Seamlessness Validator
+
+**New Service: `seamlessness-validator.ts`**
+
+```typescript
+// packages/ai-conversation/src/seamlessness-validator.ts
+
+export class SeamlessnessValidator {
+  constructor(
+    private llm: LLM,
+    private embeddingModel: EmbeddingModel
+  ) {}
+
+  async validate(input: {
+    oldMessages: any[];
+    newSystemPrompt: string;
+    testQueries: string[];
+  }): Promise<{
+    overallScore: number;
+    factualContinuity: number;
+    tonalConsistency: number;
+    roleMaintenance: number;
+    failedQueries: string[];
+    details: any[];
+  }> {
+    const results = await Promise.all(
+      input.testQueries.map((query) => this.validateQuery(query, input))
+    );
+
+    const scores = {
+      factualContinuity: this.avgScore(results.map((r) => r.factual)),
+      tonalConsistency: this.avgScore(results.map((r) => r.tonal)),
+      roleMaintenance: this.avgScore(results.map((r) => r.role)),
+    };
+
+    const overallScore =
+      scores.factualContinuity * 0.5 + // Factual is most important
+      scores.tonalConsistency * 0.3 +
+      scores.roleMaintenance * 0.2;
+
+    const failedQueries = results
+      .filter((r) => r.factual < 0.7 || r.tonal < 0.7)
+      .map((r) => r.query);
+
+    return {
+      overallScore,
+      ...scores,
+      failedQueries,
+      details: results,
+    };
+  }
+
+  private async validateQuery(
+    query: string,
+    context: { oldMessages: any[]; newSystemPrompt: string }
+  ): Promise<{
+    query: string;
+    factual: number;
+    tonal: number;
+    role: number;
+  }> {
+    // Get response from old instance (last few messages)
+    const oldContext = context.oldMessages.slice(-10);
+    const oldResponse = await this.llm.generate({
+      system: this.extractSystemPromptFromMessages(context.oldMessages),
+      messages: [...oldContext, { role: "user", content: query }],
+    });
+
+    // Get response from new instance (with new prompt)
+    const newResponse = await this.llm.generate({
+      system: context.newSystemPrompt,
+      messages: [...oldContext, { role: "user", content: query }],
+    });
+
+    // Compare responses
+    const factual = await this.compareFactualAccuracy(oldResponse, newResponse);
+    const tonal = await this.compareTone(oldResponse, newResponse);
+    const role = await this.compareRole(oldResponse, newResponse);
+
+    return { query, factual, tonal, role };
+  }
+
+  private async compareFactualAccuracy(
+    oldResponse: string,
+    newResponse: string
+  ): Promise<number> {
+    // Use embeddings to measure semantic similarity
+    const oldEmbedding = await this.embeddingModel.embed(oldResponse);
+    const newEmbedding = await this.embeddingModel.embed(newResponse);
+
+    const cosineSimilarity = this.cosine(oldEmbedding, newEmbedding);
+
+    // Also check for factual contradictions using LLM
+    const contradictionCheck = await this.llm.generate(`
+Compare these two responses to the same question. Do they contain factual contradictions?
+
+Response A: ${oldResponse}
+Response B: ${newResponse}
+
+Answer with a score from 0.0 (complete contradiction) to 1.0 (fully consistent):
+`);
+
+    const score = parseFloat(contradictionCheck.match(/\d\.\d+/)?.[0] || "0.5");
+
+    // Average semantic similarity and contradiction check
+    return (cosineSimilarity + score) / 2;
+  }
+
+  private async compareTone(
+    oldResponse: string,
+    newResponse: string
+  ): Promise<number> {
+    const prompt = `
+Rate how similar the tone and style of these two responses are (0.0 = completely different, 1.0 = identical):
+
+Response A: ${oldResponse}
+Response B: ${newResponse}
+
+Consider: formality, brevity, friendliness, technical level.
+Score:
+`;
+
+    const score = await this.llm.generate(prompt);
+    return parseFloat(score.match(/\d\.\d+/)?.[0] || "0.5");
+  }
+
+  private async compareRole(
+    oldResponse: string,
+    newResponse: string
+  ): Promise<number> {
+    const prompt = `
+Do these responses maintain the same role/persona (e.g., technical advisor, creative partner)?
+
+Response A: ${oldResponse}
+Response B: ${newResponse}
+
+Score (0.0 = different roles, 1.0 = same role):
+`;
+
+    const score = await this.llm.generate(prompt);
+    return parseFloat(score.match(/\d\.\d+/)?.[0] || "0.5");
+  }
+
+  private avgScore(scores: number[]): number {
+    return scores.reduce((sum, s) => sum + s, 0) / scores.length;
+  }
+
+  private cosine(a: number[], b: number[]): number {
+    const dot = a.reduce((sum, _, i) => sum + a[i] * b[i], 0);
+    const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+    const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+    return dot / (magA * magB);
+  }
+}
+```
+
+---
+
+### Research Guidance for AI
+
+**Key Questions:**
+
+1. **Meta-Agent Model Selection**
+   - Same model (Claude) or specialized (GPT-4 for meta-tasks)?
+   - Cost tradeoff: Specialized model more expensive but better analysis?
+   - Can smaller models (Mistral) handle conversation analysis?
+
+2. **Validation Approach**
+   - Embedding similarity vs LLM-as-judge?
+   - How to test seamlessness without extensive human evaluation?
+   - Benchmark: GPT-4 evaluating GPT-4 transitions (published research?)
+
+3. **Compression Strategies**
+   - LLMLingua compression (20x) vs custom summarization?
+   - Loss of information tolerance (what can be safely discarded)?
+   - Hierarchical summarization (summary of summaries)?
+
+4. **Structured Prompts**
+   - YAML vs JSON vs plain text?
+   - Does structure improve maintainability at cost of flexibility?
+   - Can LLM update YAML fields programmatically?
+
+**Research Sources:**
+
+- Meta-Prompting paper: https://arxiv.org/abs/2401.12954
+- LLMLingua compression: https://arxiv.org/abs/2310.06839
+- Context compression strategies: https://arxiv.org/abs/2307.06945
+- LLM-as-judge evaluation: https://arxiv.org/abs/2306.05685
+
+---
+
+### Validation & Testing
+
+**Success Criteria:**
+
+**SC-5.1:** Meta-agent analyzes conversation correctly
+
+- Test: Give meta-agent 100-message thread
+- Expected: Extracts role, tone, topics with >90% accuracy (manual review)
+
+**SC-5.2:** Prompt synthesis produces working prompts
+
+- Test: Synthesize prompt from analysis, use with fresh AI instance
+- Expected: AI responds appropriately to test queries
+
+**SC-5.3:** Seamlessness validation detects poor transitions
+
+- Test: Create obviously bad transition (change role completely)
+- Expected: Validation score < 0.5
+
+**SC-5.4:** Context rotation completes in <3 seconds
+
+- Test: Trigger rotation, measure end-to-end time
+- Expected: User requirement (3 sec max)
+
+**SC-5.5:** Rotated instance maintains continuity
+
+- Test: Rotate context, ask "What were we discussing?"
+- Expected: Accurate summary of pre-rotation conversation
+
+**Edge Cases:**
+
+1. **Empty conversation:** Meta-agent on 0-message thread → should handle gracefully
+2. **Topic chaos:** 50 unrelated messages (no coherent topic) → should detect and create minimal prompt
+3. **Validation false positive:** New AI accidentally correct despite bad prompt → rare but possible
+4. **Infinite loop:** Rotation triggers immediately after rotation → should have cooldown period
+
+---
+
+## 3.6 Priority 3: Event-Driven AI Architecture
+
+## 3.7 Priority 4: Document Editing with Diffs (Deferred)
+
+**Status:** 🔴 Not started (create-only tool exists)  
+**Phase:** V2 (Q3 2025+)  
+**Dependencies:** Tool Calling (3.4)  
+**Complexity:** High (requires diff algorithm, UI complexity)
+
+---
+
+### Brief Overview (Full Implementation Deferred)
+
+**Functional Requirements (Summary):**
+
+- AI proposes line-by-line document changes
+- Git-style diff UI (green additions, red deletions)
+- User reviews each change, accepts/rejects
+- Side panel or full panel presentation
+- Version history with rollback
+
+**Technical Approach (High-Level):**
+
+- Diff algorithm: Myers diff or google-diff-match-patch
+- Tool: `update_document` with `proposed_changes` array
+- Storage: Document versions table
+- UI: Similar to Cursor's review mode
+
+**Deferred Reason:** Document editing is powerful but not MVP-critical. Users can currently create documents. Full diff workflow requires significant frontend work.
+
+---
+
+## 3.8 Deferred Features
+
+### Proactive AI Suggestions (V2)
+
+**What It Is:** AI runs on schedule (hourly/daily), proactively suggests without user request
+
+**Why Deferred:**
+
+- Requires event-driven architecture (Priority 3) to be stable
+- Notification fatigue risk if implemented poorly
+- Can be simulated via event triggers in V1
+
+**When to Build:** After V1 event-driven AI is proven stable
+
+---
+
+### ActivePieces Integration (V2)
+
+**What It Is:** Visual workflow builder integration, users create AI flows
+
+**Why Deferred:**
+
+- No direct LangGraph integration exists (research needed)
+- Event-driven architecture (Priority 3) provides foundation
+- Can use HTTP webhooks as interim solution
+
+**When to Build:** Q3 2025 after core AI features stable
+
+---
+
+### Visual Conversation Tree (V2)
+
+**What It Is:** UI showing branch tree (parent → children), click to navigate
+
+**Why Deferred:**
+
+- Frontend-heavy (not in backend spec scope)
+- Branching operations (Priority 1) are backend foundation
+- Can use simple list view initially
+
+**When to Build:** Once branching backend is stable and tested
+
+---
+
+# PART 4: IMPLEMENTATION PHASES
+
+## 4.1 MVP Phase (April 2025)
+
+**Goal:** Functional infinite chat with branching and approval flow
+
+### Features to Ship
+
+**Core Functionality:**
+
+1. ✅ Infinite Chat (Priority 1.1)
+   - Persistent threads
+   - Message storage and retrieval
+   - Context continuity across sessions
+
+2. ✅ Basic Branching (Priority 1.2)
+   - Fork from any message
+   - Switch between branches
+   - List branches (simple)
+   - **NOT YET:** Merge with conflict resolution (V1)
+
+3. ✅ Context Window Management (Priority 1.3)
+   - Token counting
+   - Tiered context (hot/warm/cold)
+   - Automatic summarization
+   - **NOT YET:** Meta-agent rotation (V1)
+
+4. ✅ Tool Calling with Approval (Priority 1.4)
+   - Proposal generation
+   - Approval/rejection UI
+   - Execution via event chain (existing backend worker system)
+   - Permissions system
+
+**What Users Get:**
+
+- One continuous conversation per workspace/personal
+- Ability to explore ideas in parallel branches
+- AI that proposes actions, waits for approval
+- Context that persists across 1000+ messages
+
+### Technical Deliverables
+
+**New Packages:**
+
+- `packages/ai-conversation` (thread manager, context assembler)
+- `packages/event-bus` (PostgreSQL pub/sub wrapper)
+
+**New Tables:**
+
+- `conversation_threads`
+- `thread_messages`
+- `thread_checkpoints` (LangGraph state)
+- `thread_branches` (branch relationships)
+- `ai_proposals`
+- `ai_permissions`
+- `event_log`
+
+**Modified Files:**
+
+- `apps/intelligence-service/src/agents/orchestrator.ts` (add state management)
+- `apps/backend/packages/api/src/index.ts` (register new routers)
+- Backend Hub Protocol endpoints (implement missing)
+
+**Infrastructure:**
+
+- LangGraph PostgreSQL checkpointer
+- Event bus (PostgreSQL LISTEN/NOTIFY)
+- Worker pool for event handling
+
+### Testing Requirements
+
+**MVP Success Criteria:**
+
+- User can send 1000+ messages to thread without issues
+- Branching works (fork, switch, independent evolution)
+- Approval flow completes end-to-end (propose → approve → execute)
+- Performance: p95 <200ms message send, <500ms thread load
+- Zero data loss (all messages persist)
+
+### Known Limitations in MVP
+
+**What's NOT included:**
+
+- ❌ Meta-agent seamless transitions (manual context reset if needed)
+- ❌ Branch merging with conflict resolution (branches are independent)
+- ❌ Proactive AI suggestions (purely reactive)
+- ❌ Event-driven triggers (only message-driven)
+- ❌ Document editing (create only)
+
+**MVP is still valuable because:**
+
+- Infinite chat solves "context reset" pain
+- Branching enables parallel exploration
+- Approval system enables safe AI actions
+- Foundation for V1 features
+
+---
+
+## 4.2 V1 Phase (May-June 2025)
+
+**Goal:** Complete agentic AI vision with meta-agent and event-driven capabilities
+
+### Features to Ship
+
+**Advanced Capabilities:**
+
+1. ✅ Meta-Agent Orchestration (Priority 2)
+   - Seamless context rotation at 70% window
+   - Conversation analysis
+   - Prompt synthesis
+   - Validation and quality control
+   - User sees subtle "Context refreshed" indicator
+
+2. ✅ Event-Driven AI Architecture (Priority 3)
+   - AI subscribes to entity events
+   - Proactive analysis (not scheduled yet)
+   - Event-triggered proposals
+   - Worker-based execution
+
+3. ✅ Advanced Branching (Priority 1.2 complete)
+   - Branch merging with conflict detection
+   - Semantic conflict resolution
+   - Cross-branch context awareness
+   - Visual tree navigation (frontend)
+
+4. ✅ Context Optimization
+   - Meta-agent optimizes branch context
+   - Intelligent context inheritance
+   - Lazy loading for large threads
+
+**What Users Get:**
+
+- Infinite conversations that never feel "reset"
+- AI that proactively suggests based on their work
+- Branches that can merge back intelligently
+- Truly seamless experience
+
+### Technical Deliverables
+
+**New Services:**
+
+- `packages/ai-conversation/src/meta-agent.ts`
+- `packages/ai-conversation/src/conversation-analyzer.ts`
+- `packages/ai-conversation/src/prompt-synthesizer.ts`
+- `packages/ai-conversation/src/seamlessness-validator.ts`
+- `apps/intelligence-service/src/workers/event-handler-worker.ts`
+
+**New Tables:**
+
+- `context_rotations` (rotation history)
+- `merge_conflicts` (conflict tracking)
+
+**Infrastructure:**
+
+- OpenRouter integration (model switching)
+- Embedding service for semantic comparison
+- Enhanced event bus (more event types)
+
+### Testing Requirements
+
+**V1 Success Criteria:**
+
+- Meta-agent rotation seamless (validation score >0.8)
+- Rotation completes in <3 seconds
+- Event-driven proposals generated within 5 seconds
+- Merge detects conflicts accurately (>90% precision)
+- No infinite loops (rotation triggering rotation)
+
+### Migration from MVP
+
+**Backwards Compatibility:**
+
+- MVP threads work in V1 (no migration needed)
+- Existing proposals execute same way
+- No breaking changes to API
+
+**Upgrade Path:**
+
+- Enable meta-agent per user (feature flag)
+- Opt-in event-driven reactions (user settings)
+- Graceful fallback if meta-agent fails
+
+---
+
+## 4.3 V2 Phase (Q3 2025+)
+
+**Goal:** Polish, proactive AI, and advanced integrations
+
+### Features to Ship
+
+**Enhancement & Integration:**
+
+1. ✅ Proactive AI Suggestions
+   - Scheduled analysis (hourly/daily)
+   - Notification system
+   - Suggestion feed UI
+   - Smart batching to avoid fatigue
+
+2. ✅ ActivePieces Integration
+   - Visual workflow builder
+   - User-created agents
+   - Flow triggers from events
+   - Marketplace (optional)
+
+3. ✅ Document Editing with Diffs
+   - Line-by-line change proposals
+   - Git-style diff UI
+   - Version history
+   - Rollback capability
+
+4. ✅ Advanced Analytics
+   - AI usage metrics
+   - Cost tracking per user
+   - Performance monitoring
+   - A/B testing framework
+
+**What Users Get:**
+
+- AI that anticipates needs
+- Custom workflows without code
+- Powerful document collaboration
+- Transparent system performance
+
+### Testing Requirements
+
+**V2 Success Criteria:**
+
+- Proactive suggestions not annoying (<5/day)
+- ActivePieces flows execute reliably
+- Document diffs render correctly
+- Analytics dashboard accurate
+
+---
+
+# PART 5: FILE-BY-FILE IMPLEMENTATION PLAN
+
+## 5.1 New Package: `ai-conversation`
+
+**Purpose:** Shared conversation management logic (backend + intelligence service)
+
+### Files to CREATE
+
+```
+packages/ai-conversation/
+├── package.json
+├── tsconfig.json
+├── src/
+│   ├── index.ts                        # Public exports
+│   ├── thread-manager.ts               # LangGraph state management
+│   ├── context-assembler.ts            # Tiered context builder
+│   ├── context-monitor.ts              # Token tracking, rotation triggers
+│   ├── token-counter.ts                # Accurate token counting
+│   ├── permission-checker.ts           # AI action permissions
+│   ├── meta-agent.ts                   # (V1) Meta-agent orchestrator
+│   ├── conversation-analyzer.ts        # (V1) Conversation analysis
+│   ├── prompt-synthesizer.ts           # (V1) Prompt generation
+│   └── seamlessness-validator.ts       # (V1) Transition quality check
+└── README.md
+```
+
+**Implementation Order:**
+
+1. MVP: `thread-manager.ts`, `context-assembler.ts`, `token-counter.ts`, `permission-checker.ts`, `context-monitor.ts`
+2. V1: `meta-agent.ts`, `conversation-analyzer.ts`, `prompt-synthesizer.ts`, `seamlessness-validator.ts`
+
+**Key Dependencies:**
+
+- `@langchain/langgraph` (state graphs)
+- `@langchain/langgraph-checkpoint-postgres` (persistence)
+- `tiktoken` (token counting)
+- `yaml` (structured prompt parsing)
+
+**Example Structure (`thread-manager.ts`):**
+
+```typescript
+export class ThreadManager {
+  constructor(
+    private db: Database,
+    private checkpointer: PostgresSaver,
+    private orchestrator: SynapHubOrchestrator
+  ) {}
+
+  async getGraph(threadId: string): Promise<StateGraph> { ... }
+  async processMessage(input: { threadId, message, userId }): Promise<Response> { ... }
+  async forkThread(input: { parentThreadId, branchThreadId, forkPoint }): Promise<void> { ... }
+  async mergeThreads(input: { parentThreadId, branchThreadId }): Promise<MergeResult> { ... }
+  async detectConflicts(input: { parentThreadId, branchThreadId, forkPoint }): Promise<Conflict[]> { ... }
+}
+```
+
+---
+
+## 5.2 New Package: `event-bus`
+
+**Purpose:** Event pub/sub system (PostgreSQL LISTEN/NOTIFY wrapper)
+
+### Files to CREATE
+
+```
+packages/event-bus/
+├── package.json
+├── tsconfig.json
+├── src/
+│   ├── index.ts                        # Public exports
+│   ├── postgres-event-bus.ts           # PostgreSQL NOTIFY implementation
+│   ├── event-schemas.ts                # TypeScript event types
+│   └── event-handler.ts                # Base handler class
+└── README.md
+```
+
+**Implementation:**
+
+```typescript
+// postgres-event-bus.ts
+export class PostgresEventBus implements EventBus {
+  async publish(channel: string, event: Event): Promise<void> { ... }
+  subscribe(channel: string, handler: EventHandler): void { ... }
+}
+
+// event-schemas.ts
+export namespace Events {
+  export interface ThreadMessageAdded { ... }
+  export interface EntityCreated { ... }
+  export type AnyEvent = ThreadMessageAdded | EntityCreated | ...;
+}
+```
+
+**Key Dependencies:**
+
+- `pg` (PostgreSQL client)
+
+---
+
+## 5.3 Database Schema Changes
+
+**Files to MODIFY:**
+
+### `packages/database/src/schema/`
+
+**New Files to CREATE:**
+
+1. `conversation-threads.ts` - Thread storage
+2. `thread-messages.ts` - Message storage
+3. `thread-checkpoints.ts` - LangGraph state
+4. `thread-branches.ts` - Branch relationships
+5. `merge-conflicts.ts` - Conflict tracking
+6. `ai-proposals.ts` - Proposal storage
+7. `ai-permissions.ts` - User permissions
+8. `event-log.ts` - Event history
+9. `context-rotations.ts` - (V1) Rotation tracking
+
+**Migration Strategy:**
+
+```bash
+# Generate migration
+pnpm db:generate
+
+# Apply migration
+pnpm db:migrate
+```
+
+**Critical:** Test migrations on staging data before production
+
+---
+
+## 5.4 Intelligence Service Modifications
+
+**Files to MODIFY:**
+
+### `apps/intelligence-service/src/`
+
+**1. `agents/orchestrator.ts`**
+
+**Changes:**
+
+- Add `ThreadManager` dependency
+- Replace stateless execution with stateful conversation
+- Integrate `ContextAssembler` for tiered context
+- Store proposals via Hub Protocol
+
+**Code Changes:**
+
+```typescript
+// BEFORE (stateless)
+async executeRequest(input: { query, userId }): Promise<Response> {
+  const context = await this.assembleContext(input);
+  const result = await generateText({ ... });
+  return { content: result.text };
+}
+
+// AFTER (stateful)
+async executeWithContext(input: { threadId, userId, messages }): Promise<Response> {
+  const context = await this.contextAssembler.assembleContext({
+    threadId: input.threadId,
+    maxTokens: 80000,
+  });
+
+  const result = await generateText({
+    system: this.buildSystemPrompt(context),
+    messages: context.hotContext,
+    tools: this.tools,
+  });
+
+  const proposals = this.extractProposals(result.toolCalls);
+  await this.storeProposals(proposals, input.threadId);
+
+  return { content: result.text, proposedActions: proposals };
+}
+```
+
+**2. `tools/registry.ts`**
+
+**Changes:**
+
+- Update `create_branch` from stub to full implementation
+- Add permission checking to all action tools
+- Integrate with `ThreadManager` for branch operations
+
+**3. New: `workers/event-handler-worker.ts`**
+
+**Purpose:** Subscribe to events, trigger AI processing
+
+**Implementation:**
+
+```typescript
+export class AIEventHandlerWorker {
+  constructor(private eventBus: EventBus, private threadManager: ThreadManager) {
+    this.registerHandlers();
+  }
+
+  private registerHandlers(): void {
+    this.eventBus.subscribe('thread.message.added', this.handleMessage);
+    this.eventBus.subscribe('entity.created', this.handleEntityCreated);
+    this.eventBus.subscribe('context.rotation.needed', this.handleRotation);
+  }
+
+  private async handleMessage(event: Events.ThreadMessageAdded): Promise<void> { ... }
+  private async handleEntityCreated(event: Events.EntityCreated): Promise<void> { ... }
+  private async handleRotation(event: Events.ContextRotationNeeded): Promise<void> { ... }
+}
+```
+
+---
+
+## 5.5 Backend Integration Points
+
+**Files to MODIFY:**
+
+### `packages/api/src/`
+
+**1. `index.ts`**
+
+**Changes:**
+
+- Register new routers: `thread`, `aiProposals`, `aiPermissions`
+- Initialize event bus
+- Start worker pool
+
+**Code:**
+
+```typescript
+// Register routers
+registerRouter("thread", threadRouter, { requireAuth: true });
+registerRouter("aiProposals", aiProposalsRouter, { requireAuth: true });
+registerRouter("aiPermissions", aiPermissionsRouter, { requireAuth: true });
+
+// Initialize event bus
+const eventBus = new PostgresEventBus({
+  connectionString: process.env.DATABASE_URL,
+});
+
+// Start workers
+const proposalWorker = new ProposalApprovalWorker(
+  eventBus,
+  intelligenceService,
+  db
+);
+```
+
+**2. New: `routers/thread.ts`**
+
+**Purpose:** Thread CRUD operations
+
+**Endpoints:**
+
+- `create` - Create new thread
+- `get` - Get thread with messages
+- `sendMessage` - Add message, publish event
+- `list` - List user's threads
+- `branch` - Fork thread
+- `listBranches` - Get branches
+- `merge` - Merge branch (V1)
+- `resolveConflict` - Resolve merge conflict (V1)
+
+**3. New: `routers/ai-proposals.ts`**
+
+**Endpoints:**
+
+- `list` - Get proposals
+- `approve` - Approve proposal (publishes event)
+- `reject` - Reject proposal
+- `bulkApprove` - Approve multiple
+- `getResult` - Get execution result
+
+**4. New: `routers/ai-permissions.ts`**
+
+**Endpoints:**
+
+- `list` - Get user permissions
+- `set` - Set permission rule
+- `delete` - Remove permission
+
+**5. New: `workers/proposal-approval-worker.ts`**
+
+**Purpose:** Execute approved proposals
+
+**Implementation:**
+
+```typescript
+export class ProposalApprovalWorker {
+  constructor(
+    private eventBus: EventBus,
+    private intelligenceService,
+    private db
+  ) {
+    eventBus.subscribe("ai.proposal.approved", this.handleApproval.bind(this));
+  }
+
+  private async handleApproval(event: Events.ProposalApproved): Promise<void> {
+    try {
+      const result = await this.intelligenceService.executeAction({
+        actionType: event.payload.actionType,
+        actionPayload: event.payload.actionPayload,
+        proposalMode: false, // EXECUTE
+      });
+
+      await this.db
+        .update(aiProposals)
+        .set({ status: "executed", executionResult: result });
+    } catch (error) {
+      await this.db
+        .update(aiProposals)
+        .set({ status: "failed", executionError: error.message });
+    }
+  }
+}
+```
+
+---
+
+### Hub Protocol Endpoints (Missing in Current Backend)
+
+**Files to CREATE:**
+
+### `packages/api/src/hub-protocol/`
+
+**New Router: `hub-protocol.ts`**
+
+**Endpoints to implement:**
+
+```typescript
+export const hubProtocolRouter = router({
+  // Thread operations
+  'threads.get': async ({ threadId }) => { ... },
+  'threads.getState': async ({ threadId }) => { ... },
+  'threads.saveCheckpoint': async ({ threadId, state }) => { ... },
+  'threads.branch': async ({ parentThreadId, branchThreadId, forkPoint }) => { ... },
+  'threads.merge': async ({ parentThreadId, branchThreadId }) => { ... },
+
+  // Entity operations
+  'entities.list': async ({ userId, type }) => { ... },
+  'entities.get': async ({ entityId }) => { ... },
+  'entities.create': async ({ userId, type, properties }) => { ... },
+  'entities.update': async ({ entityId, properties }) => { ... },
+
+  // Proposal operations
+  'proposals.create': async ({ threadId, userId, actionType, actionPayload }) => { ... },
+  'proposals.list': async ({ userId, status }) => { ... },
+});
+```
+
+**Authentication:** OAuth2 scopes (existing Ory Hydra setup)
+
+---
+
+## 5.6 OpenRouter Integration
+
+**Files to MODIFY:**
+
+### `apps/intelligence-service/src/config/model-config.ts`
+
+**Changes:**
+
+- Replace direct Anthropic calls with OpenRouter
+- Add model routing logic
+- Add fallback strategy
+
+**Code:**
+
+```typescript
+// BEFORE
+import { anthropic } from "@anthropic/ai-sdk";
+const model = anthropic("claude-3-7-sonnet-20250219");
+
+// AFTER
+import { createOpenRouter } from "@openrouter/ai-sdk";
+const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+
+export function getModel(task: "simple" | "complex" | "creative"): LLM {
+  switch (task) {
+    case "simple":
+      return openrouter("deepseek/deepseek-chat"); // Cheap
+    case "complex":
+      return openrouter("anthropic/claude-3-7-sonnet"); // Reasoning
+    case "creative":
+      return openrouter("anthropic/claude-3-opus"); // Quality
+  }
+}
+```
+
+---
+
+## 5.7 Complete Implementation Checklist
+
+### Phase MVP (April 2025)
+
+**Week 1-2: Foundation**
+
+- [ ] Create `packages/ai-conversation` package structure
+- [ ] Create `packages/event-bus` package structure
+- [ ] Generate and apply database migrations (all new tables)
+- [ ] Set up LangGraph PostgreSQL checkpointer
+- [ ] Implement `ThreadManager` class
+- [ ] Implement `ContextAssembler` class
+- [ ] Implement `TokenCounter` utility
+- [ ] Test: Basic thread creation and message storage
+
+**Week 3-4: Core Features**
+
+- [ ] Implement thread router (create, get, sendMessage, list)
+- [ ] Wire thread router to Intelligence Service
+- [ ] Update Orchestrator for stateful execution
+- [ ] Implement event bus (PostgreSQL LISTEN/NOTIFY)
+- [ ] Create event schemas
+- [ ] Test: End-to-end message flow (user → backend → intelligence → storage)
+
+**Week 5-6: Branching**
+
+- [ ] Implement branch operations (fork, switch, list)
+- [ ] Update ThreadManager with branching logic
+- [ ] Create branch router endpoints
+- [ ] Test: Branch creation, independent evolution
+
+**Week 7-8: Approval Flow**
+
+- [ ] Create ai_proposals router
+- [ ] Create ai_permissions router
+- [ ] Implement ProposalApprovalWorker
+- [ ] Wire approval events to execution
+- [ ] Implement PermissionChecker
+- [ ] Test: Proposal → Approval → Execution flow
+
+**Week 9-10: Integration & Testing**
+
+- [ ] Hub Protocol endpoints implementation
+- [ ] OpenRouter integration
+- [ ] End-to-end integration tests
+- [ ] Performance testing (p95 latency)
+- [ ] Load testing (1000+ message threads)
+- [ ] Bug fixes and polish
+
+**Week 11-12: Documentation & Launch Prep**
+
+- [ ] API documentation
+- [ ] Deployment guide
+- [ ] Monitoring setup
+- [ ] Beta user onboarding
+- [ ] **Launch MVP**
+
+---
+
+### Phase V1 (May-June 2025)
+
+**Month 1: Meta-Agent**
+
+- [ ] Implement ConversationAnalyzer
+- [ ] Implement PromptSynthesizer
+- [ ] Implement SeamlessnessValidator
+- [ ] Implement MetaAgent orchestrator
+- [ ] Add rotation trigger to ContextMonitor
+- [ ] Test: Context rotation end-to-end
+
+**Month 2: Event-Driven + Advanced Branching**
+
+- [ ] Expand event handlers (entity events)
+- [ ] Implement merge with conflict detection
+- [ ] Add semantic conflict resolution
+- [ ] Test: Event-triggered proposals
+- [ ] Test: Branch merge with conflicts
+- [ ] **Launch V1**
+
+---
+
+### Phase V2 (Q3 2025+)
+
+**Ongoing:**
+
+- [ ] Proactive AI suggestions
+- [ ] ActivePieces integration
+- [ ] Document editing with diffs
+- [ ] Analytics dashboard
+- [ ] Performance optimizations
+- [ ] Scale testing
+
+---
+
+# PART 6: CRITICAL DECISIONS SUMMARY
+
+## Decision 1: Architecture Pattern
+
+**Chosen:** Hybrid Monorepo with Separate Deployments
+
+**Rationale:**
+
+- Shared TypeScript types prevent sync issues
+- Independent scaling (AI needs GPUs, backend doesn't)
+- Security (AI can't access database directly)
+- Single PR for full-stack features
+
+**Alternatives Rejected:**
+
+- ❌ Full merge (tight coupling, scaling issues)
+- ❌ Complete separation (duplicate code, type drift)
+
+---
+
+## Decision 2: Event Bus Technology
+
+**Chosen:** PostgreSQL LISTEN/NOTIFY for MVP, Redis Streams for V2 if needed
+
+**Rationale:**
+
+- No external dependency (already have PostgreSQL)
+- Sufficient throughput (<10K events/sec)
+- ACID guarantees (events in transaction)
+- Simple to implement
+
+**Alternatives:**
+
+- Kafka: Overkill, expensive, complex
+- Redis Streams: Good but requires separate service
+
+---
+
+## Decision 3: Context Management Strategy
+
+**Chosen:** Tiered Hybrid (Hot/Warm/Cold)
+
+**Rationale:**
+
+- Balances information retention with token efficiency
+- Hot = recent verbatim (accuracy)
+- Warm = summarized (context)
+- Cold = vector search (relevance)
+
+**Alternatives Rejected:**
+
+- ❌ Pure summarization (loses nuance)
+- ❌ Pure retrieval (expensive, slow)
+
+---
+
+## Decision 4: Meta-Agent Model
+
+**Chosen:** Specialized Model (GPT-4 or Claude Opus for meta-tasks)
+
+**Rationale:**
+
+- Better conversation analysis
+- More accurate prompt synthesis
+- Worth the extra cost (~$0.01 per rotation)
+
+**Alternatives:**
+
+- Same model as chat (cheaper but lower quality)
+- Fine-tuned model (complex, requires training data)
+
+---
+
+## Decision 5: Approval Flow Pattern
+
+**Chosen:** Event-Driven with Existing Worker System
+
+**Rationale:**
+
+- Backend already has event chain + workers
+- Proposals publish events, workers execute
+- Non-blocking (doesn't slow down chat)
+- Auditable (event log)
+
+**Alternatives Rejected:**
+
+- ❌ Synchronous execution (slow, blocking)
+- ❌ New job queue system (unnecessary complexity)
+
+---
+
+## Decision 6: LLM Provider
+
+**Chosen:** OpenRouter with DeepSeek Primary, Claude Fallback
+
+**Rationale:**
+
+- DeepSeek very cheap ($0.28/M tokens)
+- OpenRouter enables easy model switching
+- Fallback to Claude if DeepSeek fails
+- €19/month pricing sustainable
+
+**Alternatives:**
+
+- Direct Anthropic: More expensive, single vendor
+- Self-hosted: Too early (requires GPU infrastructure)
+
+---
+
+## Decision 7: Branching Merge Strategy
+
+**Chosen:** Manual Conflict Resolution in MVP, Semantic Detection in V1
+
+**Rationale:**
+
+- MVP: Branches independent (no merge = simpler)
+- V1: Add semantic conflict detection (embedding similarity)
+- User resolves conflicts via UI
+
+**Alternatives:**
+
+- Automatic merge: Risky, could lose data
+- No merge ever: Limits utility
+
+---
+
+# PART 7: KEY LEARNINGS & RECOMMENDATIONS
+
+## For AI Implementing This Spec
+
+### 1. Start with Thread Management
+
+**Why:** Everything else depends on persistent conversation state
+
+**Order of Implementation:**
+
+1. Database tables (conversation_threads, thread_messages)
+2. Thread router (CRUD operations)
+3. LangGraph checkpointer setup
+4. ThreadManager class (state management)
+5. Test thoroughly before moving to branching
+
+**Validation:** Can send 1000 messages, close browser, reopen, messages still there
+
+---
+
+### 2. Event Bus is Simple but Critical
+
+**Why:** Enables asynchronous processing, foundation for V1 features
+
+**Implementation Tips:**
+
+- Start with PostgreSQL LISTEN/NOTIFY (don't overcomplicate)
+- Test event ordering (publish 10 events rapidly, verify order)
+- Implement idempotency (handlers safe to run twice)
+- Add logging (trace events through system)
+
+**Validation:** Publish event → Handler executes within 100ms
+
+---
+
+### 3. Meta-Agent is the Hardest Part
+
+**Why:** Novel pattern, no reference implementations
+
+**Risk Mitigation:**
+
+- Start with simple conversation analysis (extract topics/tone)
+- Test prompt synthesis independently (generate → test with AI)
+- Validate seamlessness extensively (human reviewers + automated)
+- Have fallback (if validation fails, keep current instance)
+
+**Validation:** Rotation score consistently >0.8
+
+---
+
+### 4. Approval Flow Must Be Bulletproof
+
+**Why:** User trust depends on it
+
+**Critical Requirements:**
+
+- Never auto-execute without approval (unless permission set)
+- Always show rationale (why AI proposes action)
+- Easy rejection (don't make user work to say no)
+- Clear confirmation (user knows what happened)
+
+**Validation:** User can approve 10 proposals in <30 seconds
+
+---
+
+### 5. Performance is Non-Negotiable
+
+**Why:** Slow AI feels broken
+
+**Targets:**
+
+- Message send: <200ms (p95)
+- Thread load: <500ms (p95)
+- Context rotation: <3 seconds (p95)
+- Proposal execution: <5 seconds (p95)
+
+**Optimization Strategies:**
+
+- Cache compiled LangGraph graphs
+- Lazy load old messages (pagination)
+- Batch proposal creation
+- Use database connection pooling
+
+---
+
+### 6. Error Handling is Complex
+
+**Why:** Distributed system with AI (unpredictable)
+
+**Failure Modes to Handle:**
+
+- LLM timeout (retry with exponential backoff)
+- Invalid tool calls (validate parameters)
+- Database connection loss (queue locally)
+- Worker crash (checkpoint progress)
+- Context limit exceeded (trigger rotation)
+
+**Testing:** Inject failures, verify graceful degradation
+
+---
+
+### 7. Monitor Everything
+
+**Why:** Can't fix what you can't see
+
+**Key Metrics:**
+
+- Latency (p50, p95, p99 for all operations)
+- Token usage (per thread, per user, total)
+- Error rates (by type: LLM, DB, worker)
+- Approval rates (how often users approve vs reject)
+- Rotation frequency (how often meta-agent triggers)
+
+**Alerting:** Set up alerts for p95 latency >500ms, error rate >1%
+
+---
+
+## Common Pitfalls to Avoid
+
+### Pitfall 1: Forgetting to Update Thread State
+
+**Problem:** Messages stored in DB but not in LangGraph state → AI forgets
+
+**Solution:** Always update both:
+
+```typescript
+// Wrong
+await storeMessage(message);
+
+// Right
+await storeMessage(message);
+await threadManager.updateState(threadId, { messages: [..., message] });
+```
+
+---
+
+### Pitfall 2: Not Handling Concurrent Requests
+
+**Problem:** Two users send message to same thread simultaneously → race condition
+
+**Solution:** Use database transactions + row-level locking:
+
+```typescript
+await db.transaction(async (tx) => {
+  await tx.select().from(threads).where(eq(threads.id, threadId)).for("update");
+  await tx.insert(messages).values(message);
+});
+```
+
+---
+
+### Pitfall 3: Token Counting Inaccuracy
+
+**Problem:** Token count off by 20% → rotation triggers too early/late
+
+**Solution:** Use tiktoken library, test against actual LLM API:
+
+```typescript
+const estimated = tokenCounter.count(text);
+const actual = (await llm.generate(text)).usage.inputTokens;
+assert(Math.abs(estimated - actual) < estimated * 0.05); // Within 5%
+```
+
+---
+
+### Pitfall 4: Proposal Execution Without Approval
+
+**Problem:** Proposal marked approved in DB but never actually executed
+
+**Solution:** Event-driven execution (approval event → worker):
+
+```typescript
+// In approval endpoint
+await db.update(proposals).set({ status: "approved" });
+await eventBus.publish("ai.proposal.approved", { proposalId }); // Critical
+```
+
+---
+
+### Pitfall 5: Meta-Agent Infinite Loop
+
+**Problem:** Rotation triggers immediately after rotation (validation passes but context still >70%)
+
+**Solution:** Cooldown period + token threshold check:
+
+```typescript
+const lastRotation = await getLastRotation(threadId);
+if (Date.now() - lastRotation.timestamp < 60000) {
+  return; // Don't rotate within 1 minute
+}
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests (Per Module)
+
+- ThreadManager: State persistence, branching logic
+- ContextAssembler: Tiered context, token limits
+- MetaAgent: Conversation analysis, prompt synthesis
+- EventBus: Publish/subscribe, ordering
+
+### Integration Tests (Cross-Module)
+
+- End-to-end message flow
+- Branch fork and evolution
+- Approval and execution
+- Context rotation
+
+### Performance Tests
+
+- Load test: 1000 messages to single thread
+- Concurrency test: 100 simultaneous requests
+- Latency test: Measure p95 for all operations
+
+### User Acceptance Tests (Manual)
+
+- Create thread, send messages, verify continuity
+- Branch conversation, verify independence
+- Approve proposal, verify execution
+- Trigger rotation, verify seamlessness
+
+---
+
+# PART 8: CONCLUSION & NEXT STEPS
+
+## What This Spec Provides
+
+✅ **Complete architectural blueprint** (current → target state)  
+✅ **Feature specifications** (Priority 1-4, MVP → V1 → V2)  
+✅ **File-by-file implementation plan** (what to create, what to modify)  
+✅ **Code patterns and schemas** (TypeScript examples, SQL tables)  
+✅ **Research guidance** (technical questions, sources to investigate)  
+✅ **Validation criteria** (success metrics, edge cases)  
+✅ **Implementation checklist** (week-by-week plan)  
+✅ **Critical decisions** (architecture, tech stack, patterns)  
+✅ **Key learnings** (pitfalls to avoid, testing strategy)
+
+---
+
+## How to Use This Spec
+
+### For AI Implementation Agent
+
+1. **Read Part 1-2** (understand vision, current state)
+2. **Deep dive Part 3** (feature specifications for phase you're implementing)
+3. **Follow Part 5** (file-by-file plan, create/modify lists)
+4. **Research Part 7** (investigate technical questions before coding)
+5. **Validate Part 8** (test against success criteria)
+6. **Refer to Part 6** (understand why decisions were made)
+
+### For Development Team
+
+1. **Review Part 1** (align on vision)
+2. **Discuss Part 6** (validate critical decisions)
+3. **Plan from Part 4** (phased approach, timeline)
+4. **Assign from Part 5** (file-by-file tasks)
+5. **Test from Part 8** (validation criteria)
+
+### For Product Owner
+
+1. **Understand Part 1** (what we're building, why)
+2. **Approve Part 4** (phasing, feature scope)
+3. **Track Part 5.7** (implementation checklist)
+4. **Review Part 8** (testing strategy)
+
+---
+
+## Immediate Next Steps
+
+### Step 1: Validate This Spec (You)
+
+**Questions to ask yourself:**
+
+- Does MVP scope match April timeline?
+- Are technical decisions correct (event bus, meta-agent model, etc.)?
+- Any features missing or misunderstood?
+- Any concerns about complexity?
+
+**Action:** Review spec, provide feedback, approve to proceed
+
+---
+
+### Step 2: Set Up Development Environment (Team)
+
+**Actions:**
+
+- [ ] Create hybrid monorepo structure
+- [ ] Set up LangGraph dependencies
+- [ ] Configure OpenRouter API keys
+- [ ] Set up PostgreSQL test database
+- [ ] Install tiktoken, YAML parser
+- [ ] Verify all dependencies install correctly
+
+**Timeline:** 1-2 days
+
+---
+
+### Step 3: Begin MVP Implementation (AI/Developers)
+
+**Week 1 Focus:** Foundation
+
+- Create packages/ai-conversation structure
+- Create packages/event-bus structure
+- Generate database migrations
+- Set up LangGraph checkpointer
+- Implement ThreadManager (basic)
+
+**Validation:** Can create thread, store message, retrieve thread
+
+---
+
+### Step 4: Iterative Development (Team)
+
+**Pattern:**
+
+- Implement feature (1-2 weeks)
+- Test against success criteria
+- Demo to stakeholders
+- Iterate based on feedback
+- Move to next feature
+
+**Cadence:** Weekly demos, biweekly retrospectives
+
+---
+
+## Final Notes
+
+### This Spec is Living
+
+- Update as technical decisions change
+- Add learnings from implementation
+- Refine estimates based on actual velocity
+- Document new patterns discovered
+
+### Success Definition
+
+**MVP succeeds if:**
+
+- Users can have infinite conversations (1000+ messages)
+- Branching enables parallel exploration
+- Approval flow works reliably
+- Performance targets met (p95 <200ms)
+
+**V1 succeeds if:**
+
+- Context rotation is seamless (validation >0.8)
+- Event-driven proposals feel magical
+- Merge conflicts detected accurately
+
+**V2 succeeds if:**
+
+- Proactive AI enhances (not annoys)
+- ActivePieces enables user customization
+- Document editing feels natural
+
+---
+
+## Resources & References
+
+### Documentation
+
+- LangGraph: https://langchain-ai.github.io/langgraph/
+- LangChain Memory: https://python.langchain.com/docs/modules/memory/
+- PostgreSQL LISTEN/NOTIFY: https://www.postgresql.org/docs/current/sql-notify.html
+- OpenRouter: https://openrouter.ai/docs
+
+### Research Papers
+
+- Meta-Prompting: https://arxiv.org/abs/2401.12954
+- LLMLingua: https://arxiv.org/abs/2310.06839
+- ContextBranch: https://arxiv.org/abs/2512.13914
+- Event Sourcing: https://martinfowler.com/eaaDev/EventSourcing.html
+
+### Code Examples
+
+- LangGraph Branching: https://github.com/langchain-ai/langgraph/tree/main/examples
+- PostgreSQL Event Bus: https://github.com/brianc/node-postgres/issues/1549
+
+---
+
+**END OF SPECIFICATION**
+
+**Document Version:** 1.0  
+**Last Updated:** 2026-01-07  
+**Total Pages:** ~120 (estimated)  
+**Total Words:** ~35,000
+
+**This specification is ready for implementation. Good luck! 🚀**

@@ -189,3 +189,8 @@ Once `setup/agent` accepts CP JWTs, the CP doesn't need to store the PROVISIONIN
 | Bcrypt cost 12 for API keys | Good | Balance of security vs performance |
 
 **Overall:** The security primitives are solid (ES256, JWKS, bcrypt, scoped keys). The problem is architectural — too many paths doing the same thing, creating confusion and maintenance burden.
+
+## Related
+
+- [Security](security) — Security entrypoint and ownership matrix
+- [Security Best Practices](security-practices) — Operational hardening checklist

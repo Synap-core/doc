@@ -1,0 +1,245 @@
+# Synap Product North Star
+
+> **Synap — Your AI-powered second brain.**
+> Capture anything. AI organizes it. Build your own apps. Your workspace grows with you.
+
+## Vision
+
+Synap is a personal data operating system where users capture information from anywhere (browser, Telegram, AI chat, imports), AI automatically organizes it, and custom dashboards emerge as "apps" the user pins to their sidebar. The product feels simple on day 1 and grows in power as the user's data grows.
+
+## Three Pain Points We Solve
+
+1. **"I save things everywhere and can never find them"** → Unified capture + AI search across all your data
+2. **"I need different tools for different things"** → Custom bento dashboards = your own apps, all in one place
+3. **"Setting up productivity tools is exhausting"** → AI builds your workspace through conversation
+
+## Core Principles
+
+1. **Simplicity first** — New users see 3 items in the sidebar, not 12
+2. **Progressive disclosure** — Features appear when relevant, not upfront
+3. **AI as guide** — The AI suggests apps, views, and automations when patterns emerge
+4. **Capture is king** — The easiest way to save anything, from anywhere
+5. **Your apps, your way** — Any view (bento, kanban, table, whiteboard) can become a pinned "app"
+
+---
+
+## Phase 1: Simplification (UI Refactor)
+
+### 1.1 Sidebar Redesign
+
+**Current problem**: 12+ items in the sidebar, icon-only, overwhelming.
+
+**New design**: Two-tab sidebar with icons + text labels.
+
+#### Tab 1: "Apps" (default)
+
+```
+┌─────────────────────┐
+│ [Apps]  [Browser]   │  ← Tab switcher
+├─────────────────────┤
+│ 🏠 Home             │  ← Dashboard (bento)
+│ 💬 Chat             │  ← AI Chat only (not multi-user chat)
+│ 📚 Library          │  ← Merged Data + Views (masonry feed)
+├─────────────────────┤
+│ PINNED              │  ← Section header
+│ 📊 My Projects      │  ← Pinned bento dashboard (view)
+│ 📖 Reading List     │  ← Pinned kanban view
+│ 🌐 Twitter          │  ← Pinned website (external)
+│ 🔲 Whiteboard       │  ← Pinned built-in app
+│ + Add app           │  ← Opens picker (views, websites, built-in apps)
+├─────────────────────┤
+│ ⚙️ Settings          │  ← Bottom
+│ 🔄 Sync status      │  ← Bottom
+└─────────────────────┘
+```
+
+#### Tab 2: "Browser"
+
+```
+┌─────────────────────┐
+│ [Apps]  [Browser]   │  ← Tab switcher
+├─────────────────────┤
+│ 🔍 Address bar      │  ← URL input
+├─────────────────────┤
+│ TABS (3)            │  ← Open browser tabs
+│ 🌐 GitHub           │
+│ 🌐 Docs             │
+│ 🌐 Stack Overflow   │
+│ + New tab           │
+├─────────────────────┤
+│ ⚙️ Settings          │
+└─────────────────────┘
+```
+
+**Key changes:**
+- Icons + text labels (not icon-only) — room for this since only 3 core items
+- Two tabs separate app navigation from web browsing
+- Only 3 core items: Home, Chat, Library
+- Everything else lives in "Pinned" section (user adds what they need)
+- Built-in apps (Whiteboard, Calendar, Vault, Terminal, Workflows, etc.) are discoverable only when user clicks "+ Add app" or when AI suggests them
+
+### 1.2 Library App (Merged Data + Views)
+
+**Default view**: Masonry/Feed — Pinterest-style mixed feed of all captured entities.
+
+The masonry view is the perfect home for Library because:
+- Shows all entity types in one mixed feed (bookmarks, notes, tasks, articles, contacts...)
+- Profile-aware cards (articles show images, tasks show status, contacts show avatar)
+- Search + type filters built in
+- Variable-height cards feel natural for mixed content
+
+**Library layout:**
+```
+┌─────────────────────────────────────────────┐
+│ Library                          [+ Capture] │
+│ [All] [Bookmarks] [Notes] [Tasks] [...]     │  ← Type filter pills
+│ 🔍 Search...                                 │
+├─────────────────────────────────────────────┤
+│ ┌──────┐ ┌──────────┐ ┌──────┐             │
+│ │Article│ │  Note    │ │Task  │             │
+│ │ with  │ │ "Meeting │ │ Fix  │             │
+│ │ image │ │  notes"  │ │ bug  │             │
+│ │  ...  │ └──────────┘ └──────┘             │
+│ └──────┘ ┌──────┐ ┌──────────┐             │
+│ ┌──────┐ │Book- │ │ Contact  │             │  ← Masonry feed
+│ │Event │ │mark  │ │ "John"   │             │
+│ └──────┘ └──────┘ └──────────┘             │
+└─────────────────────────────────────────────┘
+```
+
+**Sub-navigation within Library:**
+- "Feed" tab (default) — masonry of all entities
+- "Views" tab — list of saved views (tables, kanbans, bentos, etc.)
+- Any view can be "pinned" to become a sidebar app
+
+**Note**: Data and Views still exist as separate apps in the manifest (for users who want to pin them individually), but Library is the unified default entry point.
+
+### 1.3 AI Chat (Primary Chat)
+
+- "Chat" in the sidebar = AI Chat only
+- Multi-user chat is a future feature, kept as separate app in manifest but not surfaced
+- Proposals appear as notifications/badges on the Chat icon (no separate Proposals app in sidebar)
+- Channels are accessible within Chat (thread list)
+
+### 1.4 Progressive Disclosure Rules
+
+| Feature | When it appears |
+|---------|----------------|
+| Workflows | AI suggests when user describes recurring patterns, or via Settings |
+| Calendar | AI suggests after user creates 3+ events, or user pins it |
+| Whiteboard | User discovers via "+ Add app" or AI suggests |
+| Terminal | Settings → Developer Tools toggle |
+| Vault | Settings → Developer Tools toggle |
+| Marketplace | Settings → Packages, or AI suggests relevant packages |
+| Proposals | Badge on Chat icon; accessible within Chat |
+| Profiles/RelationTypes | Library → Settings gear, or AI manages |
+
+### 1.5 What "Apps" Are (Unified Mental Model)
+
+Everything in the "Pinned" section of the sidebar is an "app". Three kinds:
+
+1. **View apps** — A saved view (bento dashboard, kanban board, table, calendar, whiteboard, masonry feed). Created by user or AI. This is the primary way users build custom apps.
+2. **Website apps** — A pinned external URL that opens in the embedded browser.
+3. **Built-in apps** — Synap features (Whiteboard, Calendar, Vault, Terminal, etc.). Discovered via "+ Add app" picker or AI suggestion.
+
+The user doesn't need to know these are different. They all look the same in the sidebar: icon + label.
+
+---
+
+## Phase 2: Capture Everything
+
+### 2.1 Browser Capture
+- One-click bookmark button in address bar → creates entity with AI-extracted metadata
+- Auto-classify: bookmark, article, website, tool, etc.
+- Screenshot/clip region → creates entity with image
+
+### 2.2 Telegram Capture
+- Forward any message to Synap bot → entity created
+  - Links → bookmark entity (AI extracts title, description, image)
+  - Images → file entity (AI describes content, OCR if text)
+  - Voice memos → note entity (transcription + summary)
+  - Documents → file entity (AI extracts metadata)
+  - Text → note entity
+- "Share to Synap" from any Telegram chat
+
+### 2.3 Chat Capture
+- Paste/drop anything in AI chat → entity created
+- "Remember this" / "Save this" → entity created from context
+- AI auto-creates entities during conversation (SECTION_ORGANIC_STRUCTURING)
+
+### 2.4 Import
+- Browser bookmarks import (Chrome, Firefox, Safari)
+- External AI chat import (ChatGPT, Gemini, Claude exports)
+- Notion import
+- CSV/JSON bulk import
+- Readwise, Pocket, Instapaper import
+
+### 2.5 Global Capture (Electron)
+- `Cmd+Shift+S` — Quick capture modal from anywhere
+- URL, text, image, or file
+- AI auto-classifies and creates entity
+
+---
+
+## Phase 3: Your Apps Emerge
+
+### 3.1 AI-Driven App Suggestions
+After accumulating entities, AI proactively suggests:
+- "You have 15 bookmarks — want me to create a Bookmarks dashboard?" → bento view → pin to sidebar
+- "I see 8 projects with deadlines — want a Project Kanban?" → kanban view → pin
+- "You track reading progress — want a Reading Tracker?" → custom bento with progress widgets → pin
+
+### 3.2 Template Gallery
+Pre-built bento dashboards users can install:
+- Book Tracker, CRM, Project Board, Content Calendar, Research Hub, Recipe Collection
+- Each template = bento view + profiles + sample widgets
+
+### 3.3 Sharing
+- Export custom app templates
+- Share with other Synap users
+- Eventually: marketplace for community templates
+
+---
+
+## Sidebar Item Architecture (Technical)
+
+The existing `WorkspaceSidebarItem` system already supports this vision:
+- `kind: 'app'` → built-in apps
+- `kind: 'view'` → saved views (bento, kanban, table, etc.)
+- `kind: 'external'` → pinned websites
+- `kind: 'cell'` → widget instances
+- `kind: 'profile'` → entity type dashboards
+
+The main change is **what's shown by default** (3 core items) and **how the sidebar renders** (tabs + text labels + pinned section).
+
+---
+
+## Key Metrics
+
+- **Day 1 retention**: Does the user capture at least 3 items?
+- **Day 7 retention**: Does the user have at least 1 pinned app?
+- **Activation**: User creates or accepts AI-suggested dashboard
+- **Power user**: 3+ pinned apps, 50+ entities, uses Telegram capture
+
+---
+
+## What We're NOT Building (For Now)
+
+- Multi-user chat (future)
+- Marketplace (future, need users first)
+- MCP dashboard (admin-only, hidden)
+- IDEN as separate app (concept merged into bento/pinned-app flow)
+- Intelligence dashboard as separate app (AI is everywhere, not an app)
+- Notes/Files as separate sidebar items (they're entities in Library)
+
+---
+
+## Implementation Priority
+
+1. **Sidebar rewrite** — Two tabs, icons+text, 3 core items, pinned section
+2. **Library app** — Masonry feed as default, Views tab, unified entry point
+3. **Chat consolidation** — AI Chat as "Chat", proposals as badge
+4. **Hide advanced features** — Progressive disclosure rules
+5. **Capture shortcuts** — Browser bookmark, Cmd+Shift+S, Telegram forward
+6. **AI app suggestions** — Proactive dashboard proposals after entity thresholds
+7. **Import pipeline** — ChatGPT/Gemini export, browser bookmarks, Notion

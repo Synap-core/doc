@@ -1,0 +1,91 @@
+# Synap Telegram Mini App — Project Status
+
+> See [README.md](./README.md) for architecture, user flows, and deployment docs.
+
+## Status (2026-03-14)
+
+### Phase 1 — Foundation: COMPLETE
+
+| # | Task | Status |
+|---|------|--------|
+| 1.1 | Scaffold Next.js app | [x] |
+| 1.2 | Telegram theme (15 CSS vars → Synap tokens) | [x] |
+| 1.3 | TelegramProvider (SDK, haptics, buttons) | [x] |
+| 1.4 | Auth endpoint (zero-secret proxy) | [x] |
+| 1.5 | Backend auth (pod-side HMAC validation) | [x] |
+| 1.6 | Message persistence for external channels | [x] |
+| 1.7 | Connection store (pod URL + session) | [x] |
+| 1.8 | CP auth proxy routes (signin, pods, handshake) | [x] |
+
+### Phase 2 — Core Screens: COMPLETE
+
+| # | Task | Status |
+|---|------|--------|
+| 2.1 | TelegramShell (bottom tabs, BackButton, haptics) | [x] |
+| 2.2 | ChatScreen (AI chat, streaming, file uploads) | [x] |
+| 2.3 | DataScreen (entity search, list, detail) | [x] |
+| 2.4 | ProposalsScreen (inbox, approve/reject, haptics) | [x] |
+| 2.5 | SidebarDrawer (slide-in, pinned items, workspace picker) | [x] |
+| 2.6 | ConnectionScreen (Synap Cloud login + self-hosted) | [x] |
+
+### Phase 3 — Bot Integration: MOSTLY COMPLETE
+
+| # | Task | Status |
+|---|------|--------|
+| 3.1 | Bot menu button → opens Mini App | [x] |
+| 3.2 | Bot push notifications (proposals) | [x] |
+| 3.3 | Deep link routing (entity, proposal, workspace) | [x] |
+| 3.4 | Workspace switching | [x] |
+| 3.5 | Morning brief digest (8 AM daily) | [x] |
+| 3.6 | Home screen shortcut | [x] |
+
+### Phase 4 — Advanced: DEFERRED
+
+| # | Task | Status |
+|---|------|--------|
+| 4.1 | QR scanner → link items to entities | [ ] |
+| 4.2 | Offline entity cache (CloudStorage) | [ ] |
+| 4.3 | View rendering (list/grid) | [ ] |
+
+### Cross-Cutting — File Upload System: COMPLETE
+
+| # | Task | Status |
+|---|------|--------|
+| F.1 | `@synap/file-hub` package (hooks, components, utils) | [x] |
+| F.2 | Backend multipart upload endpoint (POST /api/files/upload) | [x] |
+| F.3 | Seed "file" profile + property definitions | [x] |
+| F.4 | sendMessage accepts attachmentEntityIds | [x] |
+| F.5 | getThreadContext includes file properties | [x] |
+| F.6 | IS context-manager injects presigned URLs for AI | [x] |
+| F.7 | ChatInput integration (browser + Telegram) | [x] |
+| F.8 | MessageContent/Bubble renders attachments | [x] |
+| F.9 | ImportDialog (folder/file batch import) | [x] |
+
+### Cross-Cutting — Browser Integration: COMPLETE
+
+| # | Task | Status |
+|---|------|--------|
+| B.1 | Brand icons (Telegram, WhatsApp, Discord SVGs) | [x] |
+| B.2 | IntegrationsSection (Settings → Integrations) | [x] |
+| B.3 | FirstTimeSetupFlow Telegram step | [x] |
+| B.4 | Fluid app TelegramStep in onboarding | [x] |
+| B.5 | Web app IntegrationsTab in workspace settings | [x] |
+| B.6 | TelegramPromoModal (15 min / 10 actions) | [x] |
+
+### Cross-Cutting — Backend: COMPLETE
+
+| # | Task | Status |
+|---|------|--------|
+| K.1 | Bot token resolution (vault → settings → env) | [x] |
+| K.2 | Telegram notification utility | [x] |
+| K.3 | Telegram digest pg-boss worker (daily 8 AM) | [x] |
+| K.4 | Permission-check fires proposal notifications | [x] |
+
+---
+
+## Remaining Work (Low Priority)
+
+- **QR scanner** — Telegram QR API for linking physical items to entities
+- **Offline cache** — Telegram CloudStorage for recently viewed entities
+- **View rendering** — Entity collection views (list/grid) in Mini App
+- **Self-hosted bot token UI** — Browser input field for self-hosted users to enter bot token (currently: vault/env only)

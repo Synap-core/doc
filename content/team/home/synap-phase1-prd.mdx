@@ -1,0 +1,481 @@
+# PRD: Phase 1 — Personal Data Pod AI Agent System
+## Single User, Personal Pod, Multi-Agent Architecture
+
+**Status:** Updated
+**Author:** Antoine
+**Date:** March 2026
+**Version:** 1.1
+**Agent Model Reference:** `docs/AGENT_MODEL.md`
+**Prerequisite:** Session-Scoped Memory System (implemented, feature-flagged)
+
+---
+
+## 1. What We're Building
+
+A complete personal AI agent system for a single user on their own data pod. The user gets:
+
+- A **personal agent** that knows them deeply, improves over time, and can express multiple specialist personalities — one continuous relationship
+- An **optional agent workspace** for staging — the agent can work freely without cluttering the user's space, but this is a convenience, not a requirement
+- A **proposal system** where agent writes in the user's workspace go through approval by default — same RBAC as users, one extra default
+- **Branching** — the personal agent spawns specialist branches for parallel work; branches communicate via A2AI channels
+- **Independent agents** — OpenClaw, custom agents, or marketplace agents connected via Hub Protocol, each with their own permission scope
+- **The UX** — session continuity, tool disclosures, branch cards, memory inspector, proposal cards, agent workspace panel
+
+---
+
+## 2. Architecture Principles (Non-Negotiable)
+
+See `docs/AGENT_MODEL.md` for the full spec. Key principles:
+
+1. **Three strict layers.** Backend = data + permissions. Intelligence service = AI logic. Frontend = UI. Nothing crosses.
+2. **Agent = user with proposal default.** Agents use the same RBAC as humans. The only difference: `writesRequireProposal: true` by default.
+3. **Agent workspace is optional staging, not fundamental.** Agents operate in the permission model. A dedicated workspace is a convenience for isolation.
+4. **One personal agent, multiple personalities.** The user has one AI. Personalities (OCto, CMO, etc.) are role overlays on the same agent — same memory, same relationship.
+5. **Data scope is first-class.** System (pod-wide) / shared (multi-workspace) / workspace / user — visible and configurable, not just a backend detail.
+6. **A2AI channels for agent-to-agent communication.** Agents don't share workspaces to communicate — they use channels.
+
+---
+
+## 3. What Already Exists
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Session-scoped memory (5-block compaction) | ✅ Implemented, `SESSION_SCOPED_MEMORY` flag | `compaction-engine.ts`, `bootstrap-assembler.ts` |
+| Hub protocol (50+ endpoints, typed client) | ✅ Production | `hub-protocol-rest.ts` |
+| Channel model (all types, parentChannelId, branchPurpose) | ✅ Production | `channels.ts` |
+| Agent runtime (orchestrator + specialists, ReAct loop) | ✅ Production | `agents/` |
+| Tool registry (11+ tools) | ✅ Production | `tools/` |
+| Knowledge facts + pgvector | ✅ Production | `knowledge-facts.ts` |
+| Memory service (remember/recall/forget) | ✅ Production | `memory.ts` |
+| Proposal governance | ✅ Production | `proposals.ts` |
+| MCP tool integration | ✅ Production | `mcp/` |
+| Personal channel per workspace (ai_thread) | ✅ Production | `personal-channel.ts` |
+| `workspaceType` + `linkedAgentId` on workspace | ✅ Added 2026-03-06 | JSONB, no migration needed |
+| PKM template + seed system | ✅ Added 2026-03-06 | `pkm-template.json`, auto-discovery |
+| FirstTimeSetupFlow (browser onboarding) | ✅ Added 2026-03-06 | PKM default + agent WS opt-in |
+| `create_branch` tool | ⚠️ Stub | Not wired to real channel creation |
+| Agent workspace auto-creation | ❌ Missing | `workspace-manager.ts` not built |
+| `currentContext` pass-through | ❌ Missing | Frontend → hub, ~4 hours |
+| Branch manager service | ❌ Missing | `branch-manager.ts` not built |
+| Personality switching | ❌ Missing | No concept in IS or frontend |
+| `parentAgentId` on agent users | ❌ Missing | Not in schema yet |
+| `isPersonalAgent` flag | ❌ Missing | Not in schema yet |
+| Frontend: tool disclosures | ❌ Missing | |
+| Frontend: branch cards | ❌ Missing | |
+| Frontend: session continuity | ❌ Missing | |
+| Frontend: memory inspector | ❌ Missing | |
+| Frontend: proposal cards in chat | ❌ Missing | |
+| Frontend: agent workspace panel | ❌ Missing | |
+
+---
+
+## 4. Agent Workspace Pair (Revised)
+
+### 4.1 The Optional Staging Pattern
+
+The personal agent's dedicated workspace is **one useful default** — not an architectural requirement. The system should support:
+
+- **No staging workspace:** Agent proposes everything in the user's workspace. Simple, no extra navigation.
+- **Dedicated staging workspace:** Agent has owner role. Direct writes within that workspace. User browses and "promotes" items via entity transfer. This is what Phase 1 creates.
+- **Future:** Project workspaces where agents are granted member/admin role for scoped work.
+
+The FirstTimeSetupFlow already offers the staging workspace as an opt-in (not default). That's correct.
+
+### 4.2 Auto-Creation Flow
+
+When the user opts in, or when the personal agent needs to stage work for the first time:
+
+1. Check if a workspace with `workspaceType: "agent"` and `linkedAgentId: personalAgentId` already exists
+2. If not: create it with `workspaceName: "[User's agent name]'s Workspace"`, type `"agent"`, linked to the agent
+3. Add the agent as `owner` role member of that workspace
+4. Add the user as `admin` role member (oversight without being the primary owner)
+5. Cache the `agentWorkspaceId` in the agent's session context
+
+### 4.3 Permission Model
+
+| Actor | In agent's staging WS | In user's personal WS |
+|-------|----------------------|-----------------------|
+| Agent | Full CRUD (owner role) | Read + propose (default) |
+| User | Full CRUD (admin role) | Full CRUD (owner role) |
+
+This falls out of the RBAC system naturally — no special cases needed.
+
+### 4.4 Entity Transfer (Staging → Personal)
+
+```
+POST /entities/:id/transfer-workspace
+Body: { targetWorkspaceId: string }
+```
+
+Permission: user must have write access to both workspaces. No proposal needed (user is doing it directly). Entity's `workspaceId` is updated; no data copy.
+
+---
+
+## 5. The Personal Agent
+
+### 5.1 One Agent, Multiple Personalities
+
+The user's personal agent is **one entity** with a single compacted state. When the user invokes a specialist role (or the agent decides to shift mode), a personality overlay is applied at the prompt assembly stage:
+
+```
+Base identity (from compacted state):
+  "[Agent name]. Direct communication style. Deep context about the user."
+
+Personality overlay (applied at session start or on mode switch):
+  "You are currently in [OCto/CMO/Analyst] mode.
+   Focus: [role-specific instructions].
+   Tools: [role-specific tool set].
+   Everything else about you and the user remains the same."
+```
+
+Personalities are **not separate agents** in the database. They are configurations stored in `agent_configs` under the personal agent's ID, applied dynamically.
+
+### 5.2 Agent Configuration
+
+```typescript
+interface PersonalAgentConfig {
+  name: string;
+  basePersonality: string;
+  primaryModel: string;
+  branchModel: string;
+  compactionModel: string;
+
+  // Workspace (optional staging)
+  agentWorkspaceId?: string;
+  defaultTargetWorkspaceId: string;
+
+  // Permissions
+  autoApproveFor: string[];          // default: ["search.*", "memory.*", "entity.read", "document.read"]
+
+  // Branching
+  enableBranching: boolean;
+  maxBranchDepth: number;            // default: 3
+  maxParallelBranches: number;       // default: 5
+
+  // Personalities
+  personalities: PersonalityConfig[];
+}
+
+interface PersonalityConfig {
+  id: string;                        // e.g. "octo", "cmo", "analyst"
+  name: string;                      // display name
+  description: string;               // when to use this mode
+  personalityOverride: string;       // prompt overlay
+  toolOverrides?: string[];          // restrict/expand tools for this mode
+  modelOverride?: string;            // use different model for this mode
+}
+```
+
+### 5.3 Tool Context
+
+The intelligence service assembles tool context per-session. Required fields for Phase 1:
+
+```typescript
+interface ToolContext {
+  userId: string;
+  agentUserId?: string;
+  channelId: string;
+  sessionId: string;
+  workspaceId: string;               // channel's workspace
+  agentWorkspaceId?: string;         // staging workspace if configured
+  personalWorkspaceId: string;       // user's primary workspace
+  sourceMessageId?: string;
+  dataPodUrl?: string;
+  dataPodApiKey?: string;
+  currentContext?: {                 // ← MISSING, needed for Phase 1
+    currentPage?: string;
+    deviceType?: "desktop" | "mobile";
+  };
+}
+```
+
+---
+
+## 6. Independent Agents
+
+Independent agents use the same RBAC + proposal default. They connect via Hub Protocol using API keys scoped to the pod.
+
+### 6.1 Registration
+
+```
+POST /intelligence/register
+Body: { agentType, name, capabilities, defaultScope }
+Returns: { agentUserId, apiKey }
+```
+
+The agent is created as a user with `userType: "agent"`, `isPersonalAgent: false`, added as a workspace member at the configured scope.
+
+### 6.2 Scope Options
+
+- `workspace` — added as member to a specific workspace only
+- `user` — can access all workspaces the user owns (useful for assistants)
+- `pod` — deprecated/not recommended for Phase 1; too broad
+
+### 6.3 Communication via A2AI Channels
+
+Agents communicate through channels, not through shared workspace access. The A2AI channel type (`channel_type: "a2ai"`) is already in the schema. Agent-to-agent messages go there.
+
+---
+
+## 7. Branching System
+
+Branches are channels (`channel_type: "BRANCH"`) with `parentChannelId` set. No separate branch table.
+
+### 7.1 Spawn Flow
+
+```
+1. Orchestrator calls create_branch tool
+2. Intelligence service creates channel: { type: BRANCH, parentChannelId, branchPurpose, agentType }
+3. Assemble branch bootstrap:
+   - Identity: parent compacted state identity + specialist overlay
+   - User model: full (same user)
+   - Continuity: task-specific context from parent's recent messages
+   - Goals: the specific branch task
+   - Entity context: entities relevant to the task
+4. Start session on branch channel
+5. Post branch_spawn system message to parent (for UX)
+6. Branch agent runs ReAct loop independently
+```
+
+### 7.2 Branch Communication
+
+When multiple branches run in parallel, an A2AI channel links them:
+
+```
+1. Orchestrator spawns Branch A and Branch B
+2. Creates A2AI channel linking both
+3. Both branches get context: "You are working in parallel with [other branch]"
+4. Branches use send_to_branch / check_branch_messages tools
+5. Cross-communication indicator shown in parent UX
+```
+
+### 7.3 Completion and Compaction
+
+```
+1. Branch finishes → writes resultSummary to channel
+2. Sets channel.status = "MERGED"
+3. Sends branch_result system message to parent channel
+4. Orchestrator synthesizes for user
+5. On next parent session compaction: branch summaries included in continuity block
+```
+
+---
+
+## 8. Hub Protocol Extensions Needed
+
+### New endpoints for Phase 1:
+
+```
+GET    /workspaces                         List all workspaces in pod
+GET    /workspaces/:id/entities            Entities scoped to workspace (paginated)
+GET    /workspaces/:id/documents           Documents scoped to workspace
+POST   /entities/:id/transfer-workspace    Transfer entity between workspaces
+GET    /agent-config                       Personal agent config
+PATCH  /agent-config                       Update agent config
+```
+
+### Extended existing endpoints:
+
+```
+POST /entities    — add optional workspaceId; if omitted, use channel's workspace
+POST /documents   — same workspace routing as entities
+POST /threads/:id/messages — add optional branchMetadata for branch_spawn/result/progress messages
+```
+
+---
+
+## 9. Intelligence Service Changes Needed
+
+### New services:
+
+**`services/workspace-manager.ts`**
+```typescript
+ensureAgentWorkspace(agentId, podUrl): Promise<{ workspaceId }>
+routeWrite(operation, targetWorkspace, data): Promise<{ direct: bool, proposalId? }>
+transferEntity(entityId, fromWsId, toWsId): Promise<void>
+```
+
+**`services/branch-manager.ts`**
+```typescript
+spawnBranch(parentChannelId, purpose, specialistType, linkedBranchIds?): Promise<{ branchChannelId, sessionId }>
+assembleBranchBootstrap(branchChannelId, parentState, purpose, specialistType): Promise<string>
+completeBranch(branchChannelId, parentChannelId, resultSummary, entities?, docs?): Promise<void>
+checkBranchMessages(a2aiChannelId): Promise<BranchMessage[]>
+```
+
+### Modified services:
+
+**`services/compaction-engine.ts`** — handle `branch_result` messages: include summaries in continuity block, branch-created entities in entity context block, update goals from outcomes.
+
+**`services/bootstrap-assembler.ts`** — include `activeBranches` list in assembled prompt.
+
+### Modified tools:
+
+**`tools/create_entity`** — add workspace routing: default to agent workspace if configured, else propose in personal workspace.
+
+**`tools/create_branch`** — replace stub with real `branchManager.spawnBranch()` call.
+
+### New tools:
+
+**`tools/send_to_branch`** — write message to A2AI channel between branches.
+
+**`tools/check_branch_messages`** — read unread messages from branch peers.
+
+**`tools/switch_personality`** — apply a personality overlay to the current session.
+
+---
+
+## 10. Frontend Requirements
+
+### 10.1 Chat UX (Phase 1 Launch)
+
+| Component | Description | Package |
+|-----------|-------------|---------|
+| Tool disclosures | Collapsible inline cards for each tool call. Shows tool name, params summary, result summary. Click to expand full output. | `@synap/ai-chat` |
+| Inline memory notes | One-line `✦ Noted` / `✦ Recalled` for remember/recall actions | `@synap/ai-chat` |
+| Branch cards (spawn) | Inline card when branch starts. Shows purpose, specialist type, "working..." spinner | `@synap/ai-chat` |
+| Branch cards (progress) | Subtle indented progress lines under active branch card | `@synap/ai-chat` |
+| Branch cards (complete) | Branch card updates to show summary + "View" button | `@synap/ai-chat` |
+| Session continuity indicator | "Picking up where we left off" — fades in on new session start | `@synap/ai-chat` |
+| Session dividers | Thin horizontal rule between sessions in message history | `@synap/channels` |
+| Compaction break | Subtle "✦ Context compacted" marker between sessions | `@synap/channels` |
+| AI message left border | Subtle warm accent border on AI messages | `@synap/channels` |
+| Proposal cards | Approve/dismiss inline cards for agent-proposed actions | `@synap/ai-chat` |
+| Entity link inline | Entity names in AI text rendered as `~~dashed underline~~` links | `@synap/channels` |
+| `currentContext` pass-through | Current page/device → hub with each message | `@synap/ai-chat` |
+
+### 10.2 Chat UX (Fast Follow)
+
+| Component | Description |
+|-----------|-------------|
+| Memory inspector panel | Slide-out showing 5 memory blocks. Editable. Toggle to show raw vs summarized. |
+| "Forget this" action | Right-click message → exclude from next compaction |
+| "Remember this" action | Right-click message → pin to knowledge facts |
+| Grouped parallel branch card | Multiple parallel branches in one stacked card with per-branch status |
+| Cross-communication indicator | Purple `⇄` on grouped cards when branches share findings |
+| Branch side panel | Click "View" → slide-out with branch execution log |
+
+### 10.3 Agent Workspace Panel
+
+| Component | Description |
+|-----------|-------------|
+| Agent workspace view | List of entities/docs in agent workspace. Grouped by source. |
+| Transfer action | "Add to my workspace" — triggers transfer or proposal |
+| Draft badge | Entity links referencing agent WS items show a "draft" badge |
+| Quick access | Button in chat header or workspace nav to open agent workspace |
+
+### 10.4 Personality Switcher
+
+| Component | Description |
+|-----------|-------------|
+| Personality selector | Dropdown/chip in chat header. Shows active personality. |
+| Mode indicator | Subtle badge on AI messages showing active personality |
+| Personality settings | In agent settings: add/edit/remove personalities |
+
+---
+
+## 11. Implementation Phases
+
+### Step 1 — Session Memory Live (1 day)
+- Enable `SESSION_SCOPED_MEMORY=true`
+- Add `currentContext` field to chat message payload (frontend → hub)
+- Verify: compaction runs, second session has full context, first session starts fast
+
+### Step 2 — Agent Data Model (0.5 days)
+- Add `isPersonalAgent` and `parentAgentId` to `agentMetadata` JSONB on users
+- Add `writesRequireProposal` to agent permission check path (already proxied via hub protocol)
+- No migration needed — JSONB additions
+
+### Step 3 — Agent Workspace (1 week)
+**Backend (pod):**
+- `GET /workspaces`, `GET /workspaces/:id/entities`, `GET /workspaces/:id/documents`
+- `POST /entities/:id/transfer-workspace`
+- Workspace routing in `POST /entities` and `POST /documents` (if workspaceId = agent WS → direct; else → proposal)
+
+**Intelligence service:**
+- `workspace-manager.ts` (ensureAgentWorkspace, routeWrite)
+- Tool workspace routing in `create_entity` and `create_document`
+- Add `agentWorkspaceId` + `personalWorkspaceId` to ToolContext
+
+**Frontend:**
+- Agent workspace panel
+- Draft badge on entity links
+- Transfer action
+
+### Step 4 — Branching (1-2 weeks)
+**Intelligence service:**
+- `branch-manager.ts` (spawn, complete, A2AI linking)
+- Real `create_branch` tool implementation
+- Branch bootstrap assembly (specialist identity overlay)
+- Branch progress emission in specialist prompts
+- `send_to_branch` + `check_branch_messages` tools
+
+**Frontend:**
+- Branch spawn/complete/progress cards
+- Branch side panel ("View" button → execution log)
+
+### Step 5 — Branch-Aware Compaction (3 days)
+- Compaction engine handles `branch_result` messages
+- Branch summaries in continuity block
+- Branch-created entities in entity context block
+- Goal updates from branch outcomes
+
+### Step 6 — Personality System (3 days)
+**Intelligence service:**
+- Personality configs in `agent_configs`
+- `switch_personality` tool
+- Personality overlay in bootstrap assembly
+
+**Frontend:**
+- Personality selector in chat header
+- Mode indicator on AI messages
+- Personality settings in agent config UI
+
+### Step 7 — UX Polish (1 week)
+- All tool disclosures (collapsible inline cards)
+- Memory inspector panel with edit capability
+- "Forget this" / "Remember this" message actions
+- Session continuity indicator + session dividers
+- Compaction break markers
+- Entity link inline styling
+- AI message left border
+
+---
+
+## 12. Success Metrics
+
+### Functional
+| Metric | Target |
+|--------|--------|
+| Session start-to-first-response | < 3 seconds |
+| Bootstrap assembly | < 100ms |
+| Compaction success rate | > 99% |
+| Branch spawn-to-first-progress | < 30 seconds |
+| Entity transfer (staging → personal) | < 500ms |
+| AI recalls facts from 5+ sessions ago | > 85% accuracy |
+
+### User Experience
+| Signal | What it means |
+|--------|--------------|
+| Users stop saying "as I mentioned before" | Memory working |
+| Users approve proposals within 1 minute | Proposals relevant, not noisy |
+| Users click "View" on < 20% of branches | Syntheses good enough |
+| Users edit memory blocks < once/week | Compaction quality high |
+
+---
+
+## 13. Open Questions
+
+1. **Agent workspace discoverability:** Show in main workspace switcher, or only via chat interface? (Current: opt-in in onboarding, accessible as normal workspace)
+
+2. **Personality persistence across sessions:** Does switching to "OCto mode" persist until explicitly switched back, or reset per session? (Recommendation: persist until reset)
+
+3. **Branch agent models:** Should branches always use a cheaper model, or should critical branches use the primary model? (Recommendation: configurable per personality/specialist type)
+
+4. **Agent workspace cleanup:** Auto-archive old items after N days, or let the agent manage its own cleanup? (Recommendation: agent manages, with a user-accessible "archive old items" action)
+
+5. **`isPersonalAgent` auto-provisioning:** When is the personal agent created? On pod setup? On first message? On opt-in? (Recommendation: on first message that would benefit from AI, lazy creation)
+
+---
+
+*For architectural decisions, see `docs/AGENT_MODEL.md`. This PRD is authoritative for implementation sequence and success metrics.*

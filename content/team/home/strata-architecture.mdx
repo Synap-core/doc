@@ -1,0 +1,280 @@
+# Strata — Architecture
+
+Technical reference for every subsystem. Read this to understand how the pieces connect before touching the code.
+
+---
+
+## The two-axis data model
+
+Everything in Strata is organized along two axes:
+
+**Scope** — who the code is for:
+- `product` — core user-facing product (what you ship to customers)
+- `admin` — back-office / internal ops panel
+- `devtools` — CLIs, scripts, tools used by engineers
+- `internal` — pure team code (infra, migrations, docs)
+- `shared` — libraries used across multiple scopes
+
+**Layer** — what kind of code it is:
+- `types` — TypeScript interfaces, type aliases, enums
+- `database` — Drizzle/SQL table schemas
+- `api` — tRPC procedures, Hono/Express route handlers
+- `pages` — UI pages / screens / views
+- `components` — reusable React components
+- `ui-system` — base component library / design system
+- `utils` — utility/helper functions
+- `config` — configuration files
+- `migrations` — database migrations
+- `tests` — test files
+
+A **zone** is the intersection: `{ scope, layer, patterns[] }`. The onboarding wizard Step 3 is a UI for building this matrix.
+
+---
+
+## Package layout
+
+```
+strata/
+├── packages/api/     @strata/api       — Zod schemas, shared types
+├── app/              strata-app        — Frontend (Vite + React)
+└── server/           strata-server     — Sidecar API (Hono + tRPC)
+```
+
+`@strata/api` is a pure Zod schema package. Both frontend and server import from it. It has no runtime dependencies other than Zod. Types are inferred from schemas — there are no hand-written TypeScript interfaces.
+
+The server imports `@strata/api` for input validation. The frontend imports it for type inference on tRPC responses. This is the contract.
+
+---
+
+## Shared schemas (`packages/api/src/schemas.ts`)
+
+Every type used across the system lives here. Key types:
+
+```typescript
+StrataNode          // discriminated union of all node kinds
+  TypeNode          // interfaces, types, enums
+  TableNode         // database tables (Drizzle)
+  RouteNode         // API routes (tRPC/Hono/Express)
+  ComponentNode     // React components
+  FunctionNode      // standalone functions
+  PackageNode       // packages/modules
+
+StrataEdge          // connection between two nodes
+  kind: maps_to | queries | renders | imports | exposes | calls | implements
+  confidence: high | medium | low
+  verified: boolean
+
+StrataZone          // analysis target
+  zoneType: ZoneType  (layer axis)
+  scope: ZoneScope    (scope axis)
+  patterns: string[]  (glob patterns)
+
+ProjectModule       // a folder/package in the analyzed project
+  path: string
+  tag: ModuleTag    (frontend | backend | api | database | shared | admin | ...)
+  enabled: boolean
+
+ZoneScope = "product" | "admin" | "devtools" | "internal" | "shared"
+ZoneType  = "types" | "database" | "api" | "pages" | "components" | ...
+```
+
+**Rule:** never define types in `app/` or `server/` that should be shared. Always add them to `schemas.ts` first.
+
+---
+
+## Server architecture
+
+### Entry point (`server/src/index.ts`)
+
+Hono server on port 5181. All routes are mounted under `/trpc/*` using `@trpc/server/adapters/fetch`. CORS allows `localhost:5180`.
+
+```
+POST /trpc/project.open
+POST /trpc/project.saveModules
+GET  /trpc/project.detect
+GET  /trpc/project.loadGraph
+GET  /trpc/project.loadModules
+POST /trpc/parse.analyze
+GET  /trpc/files.browse
+GET  /trpc/files.list
+GET  /trpc/files.read
+```
+
+**Critical:** Use `fetchRequestHandler` from `@trpc/server/adapters/fetch`, NOT `@hono/trpc-server`. The Hono adapter has body-parsing issues with tRPC mutations. This is a known gotcha — do not change it.
+
+### tRPC router (`server/src/trpc.ts`)
+
+All procedures in one file, organized as sub-routers: `project.*`, `parse.*`, `files.*`. No middleware, no auth. Context is empty `{}`.
+
+The `parse.analyze` procedure is the main entry point for the analysis pipeline:
+
+```
+1. Filter zones by type (types/database/api/components/pages/ui-system)
+2. Run each parser against its zones in parallel-ish (sequential for simplicity)
+3. Pass 1 edges: matchTypesToTables() — name-based type↔table
+4. Pass 2 edges: analyzeImports() — import resolution for route/component→type/table
+5. Merge, deduplicate by edge id
+6. Persist to .strata/graph.json
+7. Return { nodes, edges }
+```
+
+### Parsers (`server/src/parsers/`)
+
+All parsers follow the same contract:
+```typescript
+async function parseXxx(projectPath: string, pattern: string): Promise<XxxNode[]>
+```
+
+They use a local `findFiles()` walker (not the `glob` npm package — it's not installed). Pattern format: `some/path/**/*.ts`.
+
+| File | Input | Output | How |
+|---|---|---|---|
+| `typescript.ts` | `.ts` files | `TypeNode[]` | ts-morph: getInterfaces(), getTypeAliases(), getEnums() |
+| `drizzle.ts` | `.ts` files | `TableNode[]` | ts-morph: find `pgTable()`/`mysqlTable()` CallExpressions |
+| `routes.ts` | `.ts` files | `RouteNode[]` | ts-morph: find `.query()`/`.mutation()` for tRPC, `.get()`/`.post()` for Hono/Express |
+| `components.ts` | `.tsx` files | `ComponentNode[]` | ts-morph: exported functions/consts starting with uppercase, extract props + hooks |
+
+Node IDs are deterministic:
+- `type-${name}` — e.g. `type-User`
+- `table-${tableName}` — e.g. `table-users`
+- `route:${filePath}:${name}` (sanitized)
+- `component:${filePath}:${name}` (sanitized)
+
+### Edge services (`server/src/services/`)
+
+**`matcher.ts`** — name-based type↔table matching:
+- Converts `User` → `users`, `WorkspaceSettings` → `workspace_settings`, etc.
+- Produces `maps_to` edges (type↔table) with field-level mappings
+- Also produces `queries` edges for FK columns (`workspace_id` → `workspaces`)
+- Confidence: `high` if name matches + ≥2 fields match, `medium` otherwise
+
+**`import-analyzer.ts`** — import-based edges (the critical path):
+- Groups route/component nodes by file
+- Creates a ts-morph project for only those files (efficient)
+- **Pass 1 (high confidence):** resolves relative import paths → absolute → checks which nodes live in that file → only creates edge if the specific named import matches the node name
+- **Pass 2 (medium confidence):** for non-relative imports (path aliases, npm packages), matches imported symbol names against all known type/table names
+- Produces: `imports` (route→type), `queries` (route→table), `renders` (component→type)
+- Import resolution handles: named imports, default imports, `.ts`/`.tsx` extension elision, `/index.ts` fallback
+
+**`detector.ts`** — project structure auto-detection:
+- Scans directory tree for known structural patterns (types/, schema/, routers/, pages/, components/, etc.)
+- Infers `suggestedScope` from path segments (`admin/` → admin, `packages/` → shared, etc.)
+- Returns `DetectedZone[]` with `zoneType`, `pattern`, `confidence`, `reason`, `suggestedScope`
+- Used by the onboarding wizard to pre-fill Step 3
+
+---
+
+## Frontend architecture
+
+### State model (Zustand — `stores/strataStore.ts`)
+
+Pure UI state. No async. Graph data arrives via tRPC mutations and is stored here.
+
+```typescript
+{
+  // Project
+  projectPath: string | null
+  lastZones: StrataZone[]         // zones used in last analysis — for re-analyze
+
+  // Graph data
+  nodes: StrataNode[]
+  edges: StrataEdge[]
+
+  // UI
+  activeViewType: StrataViewType  // "dashboard" | "entity" | ...
+  selectedNodeId: string | null
+  detailPanelOpen: boolean
+  sidebarCollapsed: boolean
+  confidenceFilter: ConfidenceLevel
+  analyzing: boolean
+}
+```
+
+### tRPC client (`services/trpc.ts`)
+
+`createTRPCReact<AppRouter>()`. The `AppRouter` type is imported from `@strata/server/trpc` (type-only, resolved by Vite alias — the server is never bundled into the frontend). Uses `httpBatchLink` with URL `/trpc` (proxied by Vite to `:5181`).
+
+### Graph hooks
+
+**`hooks/useStrataGraph.ts`** — full-graph mode (Dashboard view):
+- Reads all nodes/edges from store
+- Applies confidence filter
+- Runs Dagre layout (`rankdir: "LR"`, nodesep 60, ranksep 120)
+- Returns `rfNodes: Node[]` and `rfEdges: Edge[]` for ReactFlow
+
+**`hooks/useEntityView.ts`** — focused subgraph (Entity view):
+- BFS from `selectedNodeId` up to depth 3
+- Collects all transitively connected nodes + edges
+- Re-layouts with Dagre (wider ranksep 140 for clarity)
+- Center node gets gold drop-shadow
+- Returns `rfNodes`, `rfEdges`, `nodeCount`
+
+### Canvas (`components/StrataCanvas.tsx`)
+
+Renders either full graph or entity view depending on `activeViewType`. Both use the same `FlowCanvas` inner component (ReactFlow + Background + Controls + MiniMap). Entity view adds a header showing the center node name and connection count, plus empty states for "no node selected" and "no connections found".
+
+### Onboarding wizard (`components/OpenProjectDialog.tsx`)
+
+3-step modal:
+
+**Step 1 — Browse:** `trpc.files.browse` query. Git repos highlighted in amber. Navigate up/down. "Select" button or "Use this directory" CTA.
+
+**Step 2 — Modules:** `trpc.project.detect` query. Loads saved module config from `.strata/config.json` if it exists (merges with fresh detector output to pick up new packages). Eye toggle + tag picker per module. Saved to disk on Next.
+
+**Step 3 — Configure:** Scope-first layout. Left panel = scope selector (product/shared/admin/devtools/internal). Right panel = layers for active scope. Each layer = zone card with pattern editor + scope mover dropdown. "Add layer" picker shows all layer types. Suggestions pre-sorted by scope. Existing project → load graph immediately, skip analysis.
+
+### Node visuals (`nodes/`)
+
+Each node kind has a custom ReactFlow component:
+
+| File | Kind | Color |
+|---|---|---|
+| `TypeNode.tsx` | type | Blue #3b82f6 |
+| `TableNode.tsx` | table | Green #10b981 |
+| `RouteNode.tsx` | route | Purple #8b5cf6 |
+| `ComponentNode.tsx` | component | Amber #f59e0b |
+| `PackageNode.tsx` | package | Amber #d97706 |
+
+All nodes have `Handle` on left (target) and right (source). The `selected` prop adds a 2px amber border.
+
+---
+
+## .strata/ directory
+
+Created in the root of the analyzed project. Safe to commit.
+
+```
+.strata/
+├── config.json     Project config: name, repos, zones, modules (tags + enabled state)
+├── graph.json      Last analysis result: { nodes: StrataNode[], edges: StrataEdge[] }
+├── docs/           Per-node markdown files (planned — dir created, not yet wired)
+├── views/          Saved view configs (planned)
+└── bindings/       Manually confirmed edges (planned)
+```
+
+`graph.json` is loaded automatically on re-open if it exists, skipping re-analysis. Re-analysis is triggered by the "Re-analyze" button in the toolbar (uses `lastZones` from Zustand).
+
+---
+
+## Dependency rules
+
+```
+@strata/api      ← imported by both app/ and server/
+strata-server    ← never imported by app/ (type-only via @strata/server alias)
+strata-app       ← never imported by server/
+```
+
+The Vite alias `@strata/server` points to `server/src/` and is **type-only** — Vite will never bundle server code into the frontend. It's used only to import `AppRouter` for tRPC client inference.
+
+---
+
+## Adding a new parser
+
+1. Create `server/src/parsers/yourparser.ts` following the existing pattern (local `findFiles`, return typed node array)
+2. Add the node kind to `zoneTypeSchema` in `packages/api/src/schemas.ts` if needed
+3. Add a case in `server/src/trpc.ts` `parse.analyze` to call your parser for the right zone type
+4. Add import-based edge logic in `import-analyzer.ts` if your nodes can be connected via imports
+5. Create a `nodes/YourNode.tsx` ReactFlow component following existing patterns
+6. Register it in `app/src/nodes/index.ts` and in `StrataCanvas.tsx` `nodeTypes`
+7. Add to `NODE_KIND_TO_TYPE` in `useStrataGraph.ts` and `useEntityView.ts`
+8. Add icon + color to `StrataSidebar.tsx` `KIND_CONFIG` and `StrataDetailPanel.tsx`

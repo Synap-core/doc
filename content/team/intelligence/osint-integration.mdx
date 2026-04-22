@@ -1,0 +1,447 @@
+# OSINT Dashboard + Synap Integration
+
+## Vision
+
+The OSINT Dashboard becomes a **first-class Synap app** — a standalone product that uses Synap pods as its backend, while its blocks (Map, Telegram, Polymarket, etc.) become installable widgets available across any Synap workspace dashboard.
+
+Two integration surfaces:
+1. **Standalone App** — OSINT Dashboard connects to a Synap pod for persistence, auth, and AI
+2. **Widget Package** — OSINT blocks ship as a Synap marketplace package, installable on any dashboard
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    Synap Browser                          │
+│  ┌─────────────────┐  ┌──────────────────────────────┐   │
+│  │ Workspace A      │  │ Workspace B (OSINT)          │   │
+│  │ Dashboard with   │  │ Full OSINT Dashboard         │   │
+│  │ 1-2 OSINT widgets│  │ (all blocks available)       │   │
+│  └─────────────────┘  └──────────────────────────────┘   │
+│                              │                            │
+│               ┌──────────────┘                            │
+│               ▼                                           │
+│  ┌──────────────────────────────────────┐                 │
+│  │ @osint/widgets (Synap Package)       │                 │
+│  │  - MapCell (8 live data layers)      │                 │
+│  │  - TelegramCell (channel monitor)    │                 │
+│  │  - PolymarketCell (prediction mkts)  │                 │
+│  │  - StockCell (ticker/watchlist)      │                 │
+│  │  - FeedCell (RSS/blog monitor)       │                 │
+│  │  - SubdomainCell (domain enum)       │                 │
+│  │  - DiscordCell (channel reader)      │                 │
+│  └──────────────────────────────────────┘                 │
+│               │                                           │
+│               ▼                                           │
+│  ┌──────────────────────────────────────┐                 │
+│  │ Synap Pod (Backend)                  │                 │
+│  │  - Entity storage (captures, intel)  │                 │
+│  │  - Auth (Kratos sessions)            │                 │
+│  │  - AI (structuring, analysis)        │                 │
+│  │  - Automations (OSINT triggers)      │                 │
+│  └──────────────────────────────────────┘                 │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│  OSINT Dashboard (Standalone App)                         │
+│  - Original grid UI (draw-to-place, 24-col)              │
+│  - All 16 block types                                    │
+│  - Connects to Synap pod via @synap/client (tRPC)        │
+│  - Saves dashboards as entities, not JSON files           │
+│  - Auth via pod session (Kratos), not Discord OAuth       │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Integration Path 1: OSINT Blocks as Synap Widgets
+
+### How Synap Widgets Work
+
+Synap has two widget integration models:
+
+#### Option A: Native Cells (React components)
+
+Register directly into the cell runtime. Full access to Synap hooks, stores, and navigation.
+
+```typescript
+// @osint/widgets/src/map-cell.tsx
+import { registerCell } from "@synap/cell-runtime";
+import { MapBlock } from "./blocks/map/MapBlock";
+
+registerCell({
+  key: "osint-map",
+  component: OSINTMapCell,
+  meta: {
+    name: "OSINT Map",
+    description: "Live geopolitical intelligence map with 8 data layers",
+    icon: "Globe",
+    category: "productivity",
+    displayModes: ["compact", "medium", "full"],
+    defaultSize: { w: 6, h: 4 },
+    minSize: { w: 3, h: 3 },
+  },
+  settingsComponent: OSINTMapSettings, // Config form for bento edit mode
+});
+```
+
+Cell receives these props:
+```typescript
+interface CellProps {
+  cellProps?: Record<string, unknown>;  // e.g. { visibleLayers: ["conflicts", "fires"] }
+  config?: Record<string, unknown>;     // Bento block config
+  workspaceId?: string;
+  blockId?: string;
+  isEditing?: boolean;
+}
+```
+
+And can use the runtime:
+```typescript
+const runtime = useCellRuntime();
+// runtime.navigate({ type: 'entity', id: '...' })  — open entity detail
+// runtime.openPanel('entity-detail', { entityId })  — open side panel
+// runtime.toast('Intel captured', 'success')        — show notification
+```
+
+#### Option B: Iframe Widgets (Sandboxed, any tech stack)
+
+For blocks that are hard to port to React or need isolation. Uses postMessage SDK:
+
+```html
+<!-- Widget rendered in sandboxed iframe -->
+<script>
+  window.SynapWidget.onInit((config, context) => {
+    // config = { visibleLayers: ["conflicts", "fires"], ... }
+    // context = { workspaceId: "ws_123" }
+    renderMap(config);
+  });
+
+  window.SynapWidget.onUpdate((config) => {
+    updateMapLayers(config);
+  });
+
+  // Tell host app to resize
+  window.SynapWidget.resize(600);
+
+  // Navigate host app
+  window.SynapWidget.navigate({ type: "entity", id: "ent_123" });
+
+  // Show notification in host
+  window.SynapWidget.toast("New earthquake detected", "info");
+</script>
+```
+
+**SDK Protocol** (postMessage):
+- Host → Widget: `synap:init`, `synap:update`
+- Widget → Host: `synap:ready`, `synap:resize`, `synap:navigate`, `synap:toast`, `synap:error`
+
+### Which OSINT Blocks Map to Which Model
+
+| Block | Integration Model | Why |
+|-------|------------------|-----|
+| Map | **Iframe** | Complex (Leaflet, 8 APIs, 6k+ lines). Isolate it. |
+| Telegram | **Native cell** | DOM scraping → can use React + fetch proxy |
+| Polymarket | **Native cell** | Pure API data → React renders |
+| Stock | **Native cell** | API + chart → React + Chart.js |
+| Feed (RSS) | **Native cell** | Fetch proxy + render |
+| Subdomain | **Native cell** | API call + table render |
+| Discord | **Native cell** | API + message list |
+| Browser | **Skip** | Synap already has a full browser |
+| Chat | **Skip** | Synap has channels |
+| Clock/Countdown | **Skip** | Synap has clock widget |
+| TradingView | **Iframe** | Already an embed |
+| Twitter | **Native cell** | Browserless API + render |
+| Notion | **Iframe** | Complex editor, isolate |
+
+### Package Manifest
+
+```typescript
+// @osint/widgets/src/index.ts
+import type { SynapPackage } from "@synap/cell-runtime";
+
+export const osintPackage: SynapPackage = {
+  id: "osint.intelligence-widgets",
+  name: "OSINT Intelligence",
+  description: "Live intelligence monitoring widgets — maps, feeds, markets, and more",
+  icon: "Shield",
+  version: "1.0.0",
+  tags: ["osint", "intelligence", "monitoring", "geopolitical"],
+
+  capabilities: [
+    { type: "cell", key: "osint-map",        name: "OSINT Map" },
+    { type: "cell", key: "osint-telegram",   name: "Telegram Monitor" },
+    { type: "cell", key: "osint-polymarket", name: "Polymarket Tracker" },
+    { type: "cell", key: "osint-stock",      name: "Stock Ticker" },
+    { type: "cell", key: "osint-feed",       name: "RSS Feed Monitor" },
+    { type: "cell", key: "osint-subdomain",  name: "Subdomain Scanner" },
+    { type: "cell", key: "osint-discord",    name: "Discord Monitor" },
+    { type: "cell", key: "osint-twitter",    name: "Twitter Feed" },
+  ],
+
+  register() {
+    // Sync registration for lightweight cells
+    registerTelegramCell();
+    registerPolymarketCell();
+    registerStockCell();
+    registerFeedCell();
+    registerSubdomainCell();
+    registerDiscordCell();
+    registerTwitterCell();
+  },
+
+  async registerAsync() {
+    // Async for heavy cells (Map loads Leaflet, tile layers, etc.)
+    await registerOSINTMapCell();
+  },
+};
+```
+
+### Workspace Template (Marketplace Install)
+
+When a user installs the OSINT package, they get a pre-configured workspace:
+
+```typescript
+const osintWorkspaceTemplate = {
+  slug: "osint-intelligence",
+  displayName: "OSINT Intelligence Hub",
+  description: "Live monitoring dashboard for geopolitical intelligence",
+  definition: {
+    profiles: [
+      {
+        slug: "intelligence-item",
+        displayName: "Intelligence Item",
+        propertyDefs: [
+          { slug: "source", valueType: "text", required: true },
+          { slug: "category", valueType: "select", constraints: {
+            options: ["conflict", "natural-disaster", "market", "cyber", "political"]
+          }},
+          { slug: "severity", valueType: "select", constraints: {
+            options: ["critical", "high", "medium", "low"]
+          }},
+          { slug: "coordinates", valueType: "text" },
+          { slug: "source-url", valueType: "url" },
+          { slug: "captured-at", valueType: "datetime" },
+        ],
+      },
+      {
+        slug: "feed-source",
+        displayName: "Feed Source",
+        propertyDefs: [
+          { slug: "feed-url", valueType: "url", required: true },
+          { slug: "type", valueType: "select", constraints: {
+            options: ["rss", "telegram", "twitter", "api"]
+          }},
+          { slug: "refresh-interval", valueType: "number" },
+        ],
+      },
+    ],
+    views: [
+      {
+        slug: "intel-feed",
+        displayName: "Intelligence Feed",
+        type: "table",
+        config: { sortBy: "captured-at", sortDirection: "desc" },
+        scopeProfileSlugs: ["intelligence-item"],
+      },
+      {
+        slug: "threat-board",
+        displayName: "Threat Board",
+        type: "kanban",
+        config: { groupBy: "severity" },
+        scopeProfileSlugs: ["intelligence-item"],
+      },
+    ],
+    widgets: [
+      { type: "osint-map", label: "OSINT Map", defaultSize: { w: 8, h: 5 },
+        defaultConfig: { visibleLayers: ["conflicts", "earthquakes", "fires"] } },
+      { type: "osint-telegram", label: "Telegram", defaultSize: { w: 4, h: 5 },
+        defaultConfig: { channel: "" } },
+      { type: "osint-polymarket", label: "Polymarket", defaultSize: { w: 4, h: 3 },
+        defaultConfig: {} },
+      { type: "osint-feed", label: "RSS Feed", defaultSize: { w: 4, h: 3 },
+        defaultConfig: {} },
+    ],
+    automations: [
+      {
+        slug: "auto-capture-intel",
+        displayName: "Auto-capture intelligence items",
+        trigger: { type: "webhook", config: { path: "/osint/ingest" } },
+        steps: [
+          { type: "create-entity", config: { profileSlug: "intelligence-item" } },
+        ],
+      },
+    ],
+  },
+};
+```
+
+---
+
+## Integration Path 2: Standalone App with Pod Backend
+
+### What Changes in the OSINT Dashboard
+
+Replace JSON file storage with Synap pod:
+
+| Current (JSON files) | Synap Pod |
+|----------------------|-----------|
+| `server/data/dashboards.json` | Entities (profile: `dashboard`) |
+| `server/data/users.json` | Kratos sessions (pod auth) |
+| `server/data/chats.json` | Channels (pod messaging) |
+| `server/data/webhooks.json` | Automations (triggers) |
+| Discord OAuth | Pod auth (Kratos) or CP auth (Better Auth) |
+| Express file CRUD | `@synap/client` tRPC calls |
+
+### Connection Pattern
+
+```javascript
+// osint-dashboard/src/synap-client.js
+import { createTRPCClient } from "@synap/client";
+
+const podUrl = localStorage.getItem("synap_pod_url");
+const client = createTRPCClient({ url: `${podUrl}/trpc` });
+
+// Save dashboard as entity
+await client.entities.create.mutate({
+  profileSlug: "osint-dashboard",
+  title: "Ukraine Monitoring",
+  properties: {
+    blocks: [...],
+    gridConfig: { columns: 24, rows: 16 },
+  },
+});
+
+// Load dashboards
+const dashboards = await client.entities.list.query({
+  profileSlug: "osint-dashboard",
+});
+```
+
+### Auth Flow
+
+1. User opens OSINT Dashboard standalone app
+2. App checks for stored pod session (Kratos cookie)
+3. If no session → redirect to pod login (same Kratos UI as Synap browser)
+4. Authenticated → load dashboards from pod entities
+5. All CRUD goes through `@synap/client` → pod tRPC
+
+---
+
+## Data Flow: OSINT Events → Synap Entities
+
+```
+External Data (USGS, NASA, GDELT, etc.)
+         │
+         ▼
+┌─────────────────────────┐
+│ OSINT Proxy Server      │   (can remain as Express, or become pod automation)
+│ /api/map/earthquakes    │
+│ /api/map/fires          │
+│ /api/map/gdelt          │
+└─────────┬───────────────┘
+          │
+          ▼
+┌─────────────────────────┐
+│ Widget (Map, Feed, etc.)│   Renders live data in browser
+│ Detects notable event   │
+│                         │
+│ User clicks "Capture"   │──────────────────┐
+│     OR                  │                  │
+│ Auto-trigger threshold  │                  │
+└─────────────────────────┘                  │
+                                             ▼
+                                   ┌──────────────────┐
+                                   │ Synap Pod         │
+                                   │ Entity created:   │
+                                   │  profile: intel   │
+                                   │  title: "M6.2..." │
+                                   │  props: {         │
+                                   │    lat, lng,       │
+                                   │    severity,       │
+                                   │    source: "USGS"  │
+                                   │  }                 │
+                                   └────────┬─────────┘
+                                            │
+                                            ▼
+                                   ┌──────────────────┐
+                                   │ AI Structuring    │
+                                   │ (Intelligence     │
+                                   │  Service)         │
+                                   │ - Auto-categorize │
+                                   │ - Link to related │
+                                   │ - Severity score  │
+                                   └──────────────────┘
+```
+
+---
+
+## Implementation Phases
+
+### Phase 1: Widget Package (2-3 weeks)
+- [ ] Create `@osint/widgets` Synap package skeleton
+- [ ] Port Telegram block → `osint-telegram` native cell
+- [ ] Port Polymarket block → `osint-polymarket` native cell
+- [ ] Port Feed block → `osint-feed` native cell
+- [ ] Wrap Map block → `osint-map` iframe cell
+- [ ] Register package in marketplace (CP)
+- [ ] Create workspace template with default OSINT dashboard layout
+
+### Phase 2: Pod Backend Integration (2-3 weeks)
+- [ ] Add `@synap/client` to OSINT Dashboard
+- [ ] Replace dashboard JSON CRUD with pod entity operations
+- [ ] Replace Discord auth with pod Kratos auth
+- [ ] Replace chat JSON with pod channels
+- [ ] Replace webhook JSON with pod automations
+
+### Phase 3: AI & Automation (1-2 weeks)
+- [ ] Webhook ingest → auto-create intelligence entities
+- [ ] AI auto-categorization of captured intel
+- [ ] Cross-reference: link related intelligence items
+- [ ] Alerts: automation triggers on severity thresholds
+
+---
+
+## API Surface for OSINT Proxy
+
+The OSINT Dashboard's Express proxy server aggregates 8+ external APIs. This can either:
+
+**Option A: Keep as standalone proxy** — OSINT widgets call the proxy directly (simplest)
+```
+Widget → https://osint-proxy.example.com/api/map/earthquakes → USGS API
+```
+
+**Option B: Pod-side automation** — Pod fetches data on schedule, stores as entities
+```
+Automation trigger (cron: every 5min) → fetch USGS → create/update entities → widgets query pod
+```
+
+Option A is recommended for Phase 1 (live data doesn't need persistence). Option B for Phase 3 (historical analysis, AI processing).
+
+---
+
+## Key Synap APIs to Use
+
+```typescript
+// Cell Runtime
+import { registerCell } from "@synap/cell-runtime";
+import { useCellRuntime, useCellContext } from "@synap/cell-runtime";
+
+// Data Access (from within cells)
+import { useEntities, useCreateEntity } from "@synap/hooks";
+
+// Package Declaration
+import type { SynapPackage, CellRegistration } from "@synap/cell-runtime";
+
+// Iframe Widget SDK (for complex blocks)
+// Available as window.SynapWidget in iframe context
+```
+
+## Questions to Resolve
+
+1. **Proxy hosting**: Where does the OSINT proxy live? Separate service, or bundled into the pod?
+2. **API keys**: OSINT data sources (NASA FIRMS, Browserless, etc.) — per-user or shared?
+3. **Rate limiting**: External APIs have limits — cache at proxy level or pod level?
+4. **Offline mode**: Should OSINT widgets work without pod? (local-only dashboard)

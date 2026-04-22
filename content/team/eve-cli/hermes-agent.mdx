@@ -1,7 +1,7 @@
 ---
 title: 'Hermes Agent'
 description: >-
-  Headless dev orchestrator — polls Synap for tasks, spawns opencode,
+  Headless dev orchestrator — polls Synap for tasks, spawns codegen tool (opencode or OpenClaude),
   writes results to Synap.
 section: general
 audience: users
@@ -15,12 +15,13 @@ toc: true
 
 ## What it is
 
-**Hermes Agent** is an open-source agent framework from Nous Research (~108k stars on GitHub). In Eve v2.0, it replaces the previous OpenClaude/OpenHands orchestration as the **headless dev orchestrator** — the "project manager" that runs entirely in the background.
+**Hermes Agent** is an open-source agent framework from Nous Research (~108k stars on GitHub). In Eve v2.0, it   replaces the previous OpenClaude/OpenHands orchestration as the **headless dev orchestrator**
+  (OpenClaude may be used as the codegen tool, but as a subprocess — not as the agent framework) — the "project manager" that runs entirely in the background.
 
 Hermes is a **Python-based agent** with:
 - Built-in cron scheduler for periodic task polling
 - HTTP tool for making API calls (e.g., to Synap)
-- Subagent delegation (spawns opencode)
+- Subagent delegation (spawns opencode or OpenClaude)
 - Skill system (Python plugins)
 - MCP tool support
 - SQLite session persistence for transient context
@@ -29,8 +30,8 @@ Hermes is a **Python-based agent** with:
 
 - **Battle-tested**: Nous Research's Hermes Agent is open-source with a large community and proven reliability.
 - **Native cron scheduler**: Unlike the previous builder stack, Hermes has built-in periodic task discovery — no need for external cron or polling scripts.
-- **Subagent model**: Natively supports spawning child agents/tools, which maps directly to the opencode invocation pattern.
-- **Python skills**: Easy to extend with custom skills (e.g., `tools/execute_opencode.py`).
+- **Subagent model**: Natively supports spawning child agents/tools, which maps directly to the codegen invocation pattern (opencode or OpenClaude).
+- **Python skills**: Easy to extend with custom skills (e.g., `tools/execute_opencode.py` or `tools/execute_openclaude.py`).
 - **SQLite session store**: Appropriate for transient in-session state, while the Synap Memory Provider handles long-term persistence.
 
 ## How it integrates
@@ -41,8 +42,9 @@ Hermes Agent (Docker container)
     ├── Synap REST API (poll for tasks, write results)
     │   └── via plugins/memory/synap_provider.py (sync_turn, prefetch)
     │
-    ├── opencode (local subprocess)
+    ├── opencode / OpenClaude (local subprocess)
     │   └── subprocess.run(['opencode', '--task', '<desc>', '--cwd', '<dir>'])
+    │       # or ['openclaude', '--task', '<desc>', '--cwd', '<dir>']
     │
     └── Dokploy API (optional, when enabled)
         └── env vars: DOKPLOY_API_URL, DOKPLOY_API_KEY
@@ -56,14 +58,14 @@ Hermes never connects to messaging apps. It exists as a background service that 
 |-----------|-------------|-----------|
 | **Synap** | Polls task queue, writes results | Reads/writes |
 | **OpenClaw** | Indirect — OpenClaw creates tasks in Synap, Hermes reads them | No direct communication |
-| **opencode** | Spawns as subprocess for each task | Writes env vars (Dokploy, task desc, workspace dir) |
+| **opencode / OpenClaude** | Spawns as subprocess for each task | Writes env vars (Dokploy, task desc, workspace dir) |
 | **Dokploy** | Calls REST API when deploying generated code | Reads/writes |
 
 ## Guidelines
 
 - **Hermes config**: Stored in Docker environment variables, primarily `SYNAP_API_URL` and `SYNAP_API_KEY` (referenced from `.eve/secrets/secrets.json` → `builder.synapApiKey`).
 - **Cron interval**: Configurable via Hermes Agent config. Default should be 60 seconds for task polling — fast enough for responsive task handling, not so fast as to overwhelm Synap.
-- **Workspace directory**: Workspace projects live in `~/.eve/workspace/` by default (configurable in secrets). opencode is invoked with `--cwd` pointing to the relevant project.
+- **Workspace directory**: Workspace projects live in `~/.eve/workspace/` by default (configurable in secrets). Codegen tool is invoked with `--cwd` pointing to the relevant project.
 - **Skills**: Custom skills live under the Eve skills directory (default: `~/.eve/skills/`). The opencode execution skill follows the pattern:
 
 ```python
@@ -74,6 +76,7 @@ import sys
 def execute(task_description: str, project_dir: str) -> dict:
     result = subprocess.run(
         ['opencode', '--task', task_description, '--cwd', project_dir],
+    # or ['openclaude', '--task', task_description, '--cwd', project_dir]
         capture_output=True,
         text=True,
         timeout=300
@@ -86,5 +89,5 @@ def execute(task_description: str, project_dir: str) -> dict:
 ```
 
 - **Synap Memory Provider Plugin**: Located at `plugins/memory/synap_provider.py` within the Hermes deployment container. This maps Hermes's `sync_turn` and `prefetch` hooks to Synap REST API calls. Without this plugin, Hermes would fall back to local SQLite (which is not allowed per the Golden Rule).
-- **Timeout handling**: opencode runs should have a hard timeout (e.g., 5 minutes). If it exceeds this, Hermes should mark the task as "error" and write the partial output to Synap.
+- **Timeout handling**: Codegen runs (opencode or OpenClaude) should have a hard timeout (e.g., 5 minutes). If it exceeds this, Hermes should mark the task as "error" and write the partial output to Synap.
 - **Error recovery**: If Hermes's session becomes corrupted, it should be able to restart and fetch any in-progress task state from Synap (tasks are persistent in Synap, not lost when Hermes restarts).

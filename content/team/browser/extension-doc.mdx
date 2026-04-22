@@ -1,0 +1,485 @@
+# Synap Browser Extension
+
+> **Your browser's second brain. Capture anything, AI organizes it.**
+
+Chrome extension (MV3) that brings Synap capture, entity lookup, and onboarding into any browser tab.
+
+---
+
+## What it does
+
+Three problems solved:
+
+1. **Cold-start** — A new pod is empty. The extension reads all open tabs, clusters them by domain/topic (AI-powered via Hub Protocol → IS, local heuristics as fallback), and bulk-imports them as pod-wide entities. Your pod starts full, not empty.
+
+2. **Frictionless capture** — One click saves the current tab as a Synap entity (bookmark, article, website, note, task) with a profile inferred from the URL. No copy-paste, no manual tagging.
+
+3. **Ambient awareness** — As you browse, the extension silently checks whether the current page already exists in your pod. If yes, it shows the entity card in the side panel with a badge count. If no, it offers a one-click save.
+
+---
+
+## Architecture
+
+### Contexts (isolated JS environments)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Chrome Browser                                              │
+│                                                              │
+│  ┌──────────────────┐   ┌────────────────────────────────┐  │
+│  │  Service Worker  │   │   Side Panel / Popup (React)   │  │
+│  │  background.js   │◄──►   side-panel.html              │  │
+│  │                  │   │                                │  │
+│  │  ✓ Credentials   │   │   ✓ UI + Zustand state         │  │
+│  │  ✓ API calls     │   │   ✗ No credentials             │  │
+│  │  ✓ Tab events    │   │   ✗ No direct API calls        │  │
+│  └──────────────────┘   └────────────────────────────────┘  │
+│           ▲                                                   │
+│           │  chrome.runtime.sendMessage (typed message bus)  │
+│           ▼                                                   │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │  Content Script  (injected in every tab)             │    │
+│  │                                                      │    │
+│  │  ✓ Reads DOM metadata (og:, article:, YouTube)       │    │
+│  │  ✓ Detects SPA navigation (history API + MutationObs)│    │
+│  │  ✗ No credentials, no API calls                      │    │
+│  └──────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Security model:**
+- All credentials live exclusively in `chrome.storage.session` (in-memory, wiped on browser restart). Managed by `@synap-core/auth` via a Chrome session storage adapter.
+- `TRUSTED_CONTEXTS` gate applied on install/update: content scripts cannot read session storage
+- All requests flow through the service worker via the typed message bus — the side panel and content scripts never call the pod API directly
+- Privileged message types (all auth mutations + API calls) are rejected if they originate from web pages (not the extension's own origin)
+
+### Storage tiers
+
+| Store | Type | Contents |
+|-------|------|----------|
+| `chrome.storage.session` | In-memory, cleared on browser restart | CP session (token, userId, email), pod session tokens — all managed by `@synap-core/auth` |
+| `chrome.storage.local` | On-disk, persistent | `podUrl` (last connected pod), `cpUrl` (dev override), `onboardingComplete` |
+
+The Kratos session token lives in session storage and is re-issued via the CP handshake on every browser restart. `podUrl` is the only pod reference stored on disk.
+
+### Build
+
+Three entry points, compiled by Vite 6 (ES module output):
+
+| File | Context | Description |
+|------|---------|-------------|
+| `background.js` | Service Worker | Auth, entity creation, message dispatcher, tab tracker |
+| `content.js` | Web pages | DOM metadata extraction, SPA navigation events |
+| `side-panel.html` | Side Panel / Popup | React 19 SPA (all views) |
+
+---
+
+## Auth flow
+
+The extension has a **6-phase auth state machine**:
+
+```
+┌─────────┐
+│ loading │  Checking stored credentials on boot
+└────┬────┘
+     │
+     ▼
+┌──────────┐   No CP account / token expired / sign out
+│ cp-signin│◄──────────────────────────────────────────────┐
+└────┬─────┘                                                │
+     │ CP sign-in succeeds                                  │
+     ▼                                                      │
+     ├──── 0 pods ──────────────► [no-pod]                  │
+     │                                                      │
+     ├──── 1 pod ───────────────► auto-handshake ─────────► │
+     │                            (silent)         │        │
+     │                                             │        │
+     └──── 2+ pods ─────────────► [cp-pods] ───────┘        │
+                                  (user picks)    │         │
+                                                  │         │
+                                     handshake fails        │
+                                                  ▼         │
+                                          [pod-login] ──────┤
+                                     (direct Kratos login)  │
+                                                  │         │
+                                                  ▼         │
+                                           [connected] ─────┘
+                                             sign out
+```
+
+**Phases:**
+
+| Phase | Screen | What user sees |
+|-------|--------|----------------|
+| `loading` | Spinner | — |
+| `cp-signin` | `SignInView` | Email + password form (sign in or sign up) |
+| `cp-pods` | `PodSelectView` | Pick which pod to connect; colored status dots |
+| `no-pod` | `NoPodView` | "Create a pod" CTA → synap.live |
+| `pod-login` | `PodLoginView` | Direct Kratos login — fallback when CP handshake fails |
+| `connected` | `HomeView` + nav | Normal app |
+
+### CP → Pod handshake (auto-connect)
+
+When a pod is selected (or auto-selected because only one exists):
+
+1. Calls `POST /pods/handshake` on the CP → gets a short-lived ES256 JWT. Falls back to `POST /pods/shared-handshake` if the pod is on the free shared tier.
+2. Calls `POST ${podUrl}/api/handshake` with that JWT → pod verifies via JWKS, returns a **Kratos session token**
+3. Session stored in `chrome.storage.session` via the `createChromeSessionStorage` adapter
+4. `podUrl` persisted to `chrome.storage.local` for reconnection after SW restart
+
+The Kratos session token is the single credential for all subsequent pod API calls.
+
+### Direct Kratos login fallback (`pod-login`)
+
+If `connectViaCPHandshake` fails (self-hosted pod, pod offline during handshake, shared-tier mismatch), the auth machine transitions to `pod-login`. The user enters their pod email + password directly. On submit, `auth.connectDirectLogin(podUrl, email, password)` runs the full Kratos API flow (init flow → submit credentials → get session token) and stores the resulting session.
+
+### Auth library
+
+All CP and pod auth is delegated to `@synap-core/auth` (`createAuthClient`). The extension provides two adapters:
+
+- **`createChromeSessionStorage()`** (`src/shared/auth-adapter.ts`) — wraps `chrome.storage.session` as a `TokenStorage` for auth tokens
+- **`createFetchTransport()`** — standard fetch transport from `@synap-core/auth`
+
+The auth client singleton lives in `src/background/auth-instance.ts` and is shared between `message-handler.ts` and `tab-handler.ts`.
+
+### Session-token auth in Hub Protocol
+
+Hub Protocol (`/api/hub/*`) accepts two credential types:
+
+| Type | Header | Used by |
+|------|--------|---------|
+| API key | `Authorization: Bearer <key>` | IS agents, OpenClaw, CLI |
+| Kratos session | `X-Session-Token: <token>` | Browser extension, web clients |
+
+Session-token callers automatically receive `hub-protocol.read` + `hub-protocol.write` scopes. No API key provisioning needed.
+
+---
+
+## Entity model — pod-wide captures
+
+**All entities created by the extension are pod-wide.** No `workspaceId` is specified at capture time.
+
+The backend resolves workspace placement from the profile's `entityScope`:
+- `entityScope = 'pod'` → `workspaceId = null` (visible in all workspaces)
+- `entityScope = 'workspace'` → auto-assigned to the user's first accessible workspace
+
+Profile assignments at capture time (URL heuristics in `src/shared/url-utils.ts`):
+
+| URL pattern | Profile slug |
+|-------------|-------------|
+| `youtube.com`, `vimeo.com` | `bookmark` |
+| `wikipedia.org`, `medium.com`, `substack.com`, `blog.*` | `article` |
+| Root domain (`*.com`, `*.io`, `*.dev`, `*.app`) | `website` |
+| Everything else | `bookmark` |
+
+---
+
+## User flows
+
+### First install — new user
+
+```
+Install extension
+  → Side panel opens
+  → [cp-signin] Enter email + password (or "Sign up")
+  → New account → [no-pod] "You need a pod"
+  → Click "Create a pod" → synap.live/pods/new opens
+  → Pod provisioned → click "I already have a pod" (re-fetches pod list)
+  → Auto-connects via handshake → [connected] HomeView
+  → Onboarding prompt: "Import your open tabs"
+```
+
+### First install — existing user, 1 pod
+
+```
+Install extension
+  → [cp-signin] Enter email + password
+  → 1 pod found → silent handshake → [connected] HomeView
+  → Onboarding prompt: "Import your open tabs"
+```
+
+### First install — existing user, multiple pods
+
+```
+Install extension
+  → [cp-signin] Sign in
+  → [cp-pods] Pick a pod (green = running, amber = starting, red = error)
+  → Handshake → [connected] HomeView
+```
+
+### Self-hosted pod (handshake fails)
+
+```
+[cp-pods] Select pod
+  → Handshake fails (pod not managed by CP, or offline)
+  → [pod-login] "Sign in to your pod"
+    Pod URL pre-filled. Email pre-filled from CP account.
+  → Enter pod password → Kratos login → [connected]
+  → Or: "Retry automatic connection" to re-attempt handshake
+```
+
+### Tab import onboarding
+
+```
+[connected] HomeView → "Import open tabs"
+  → Chrome asks for "tabs" permission (if not yet granted)
+  → Service worker reads all open tabs
+  → hubClusterTabs() → POST /api/hub/capture/cluster-tabs → IS AI grouping
+    (falls back to localClusterTabs() domain heuristics if IS unavailable)
+  → [onboarding] Review clusters — edit names, remove tabs
+  → Confirm
+  → Progress bar: "Importing X of Y"
+    └─ Each tab → POST /api/hub/entities (no workspaceId)
+       └─ Backend: entityScope='pod' → stored pod-wide
+  → [home] Complete
+```
+
+### Quick capture (daily flow)
+
+```
+User visits a page
+  → content.js extracts: og:title, og:description, article:*, YouTube data
+  → tab-handler: debounced URL lookup (600ms)
+    └─ search.entities tRPC query via @synap-core/sdk
+
+  If entity found:
+    → Badge shows count (amber)
+    → [home] "Already in your pod" → entity card
+    → "Open in Synap" → synap://entity/<id> (Electron deep link)
+
+  If not found:
+    → Badge cleared
+    → [home] "Save this page" CTA → [capture]
+      ├─ Profile shown (URL-inferred)
+      ├─ Title editable
+      ├─ Optional note
+      └─ Save → POST /api/hub/entities → [success]
+```
+
+### Save selected text (context menu)
+
+```
+Select text on any page
+  → Right-click → "Save selection to Synap"
+  → Context menu item fires SAVE_SELECTION message
+  → Service worker creates note entity with selected text as description
+  → Source URL stored as property
+```
+
+---
+
+## API layers
+
+### Hub Protocol (`src/shared/api/hub.ts`)
+
+Direct REST calls to the pod's Hub Protocol, authenticated with `X-Session-Token`:
+
+| Function | Method + Path | Used for |
+|----------|--------------|----------|
+| `hubCreateEntity` | `POST /api/hub/entities` | Capture page, save selection, tab import |
+| `hubGetEntity` | `GET /api/hub/entities/:id` | Entity card detail fetch |
+| `hubClusterTabs` | `POST /api/hub/capture/cluster-tabs` | AI tab grouping (→ IS) |
+
+All three routes exist and accept `X-Session-Token`. `userId` is derived from the session token — not required in the request body for extension callers.
+
+### tRPC SDK (`@synap-core/sdk`)
+
+Used for entity search only (tab-handler ambient lookup):
+
+| Procedure | Used for |
+|-----------|----------|
+| `search.entities` | Full-text entity search by URL — ambient awareness |
+
+The SDK is initialized with `sessionToken` → sends `X-Session-Token` header to `${podUrl}/trpc`. `workspaceId: ""` is passed because `search.entities` is a `protectedProcedure` (no workspace scope needed).
+
+`search.entities` returns `{ entities: [...] }` where each entity has `id`, `title`, `type` (maps to `profileSlug`), `description`, `properties`.
+
+---
+
+## Design system
+
+The extension uses **plain CSS with CSS modules** (no Tamagui — too heavy for a MV3 extension context). All design values come from `styles/tokens.css` as CSS custom properties. Values mirror `@synap-core/design-tokens` exactly; dark mode values updated to match the design system's actual dark palette.
+
+**Light mode** (`#FAFAF9` bg, `#F4A460` amber primary, `#1C1917` text):
+- Matches Synap's warm light palette
+
+**Dark mode** (`#020617` slate bg, `#38BDF8` cyan primary, `#F1F5F9` text):
+- Matches `@synap-core/design-tokens`'s dark palette exactly
+
+**Theme detection — dual mechanism:**
+1. **Inline script** in `<head>` of `side-panel.html` — sets `document.documentElement.dataset.theme` before any CSS loads (no flash)
+2. **`matchMedia` listener** in `main.tsx` — updates `data-theme` live if the user switches OS appearance while the panel is open
+3. **`@media (prefers-color-scheme: dark)` fallback** in `tokens.css` — used only if the inline script hasn't run
+
+CSS selectors used:
+```css
+:root[data-theme="dark"] { ... }           /* primary */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { ... }  /* fallback */
+}
+```
+
+**Logo** — uses `chrome.runtime.getURL("assets/icons/48.png")` / `128.png`. This constructs the correct `chrome-extension://ID/assets/icons/…` URL unconditionally, guaranteed to resolve regardless of Vite's asset processing. Icons are present at this path via the postbuild `cp -r assets dist/`.
+
+**No `@import` of design-tokens CSS** — PostCSS (via postcss-import) can't handle `--synap-space-0.5` (decimal in custom property name). Token values are inlined directly; they're stable and match design-tokens exactly.
+
+---
+
+## File structure
+
+```
+packages/apps/extension/
+├── manifest.json              # Chrome MV3: permissions, CSP, entry points
+├── side-panel.html            # HTML shell — inline theme script, React root
+├── EXTENSION.md               # This document
+├── vite.config.ts             # Multi-entry build, @synap-core/* path aliases
+│
+├── assets/
+│   └── icons/                 # 16px, 48px, 128px octopus PNGs
+│
+├── styles/
+│   ├── tokens.css             # Design tokens as CSS variables (light + dark)
+│   └── base.css               # Reset, typography, utility classes, html sizing
+│
+└── src/
+    ├── global.d.ts            # CSS module + PNG type declarations
+    │
+    ├── background/            # Service Worker — credentials live here only
+    │   ├── index.ts           # Registers all Chrome listeners
+    │   ├── install-handler.ts # onInstalled: TRUSTED_CONTEXTS gate, context menus
+    │   ├── auth-instance.ts   # AuthClient singleton (getAuth, getPodSession)
+    │   ├── message-handler.ts # Auth state machine, all pod API dispatching
+    │   └── tab-handler.ts     # Tab navigation → debounced entity lookup + badge
+    │
+    ├── content/
+    │   └── index.ts           # DOM extraction, SPA history listener, PAGE_VISITED
+    │
+    ├── shared/
+    │   ├── types.ts           # AuthPhase, TabData, PageData, EntitySummary…
+    │   ├── messaging.ts       # ExtensionMessage discriminated union (28 variants)
+    │   ├── storage.ts         # Typed chrome.storage.local wrappers (non-auth)
+    │   ├── auth-adapter.ts    # createChromeSessionStorage() for @synap-core/auth
+    │   ├── url-utils.ts       # URL normalisation, profile slug heuristics
+    │   ├── tab-utils.ts       # Tab queries, local domain clustering fallback
+    │   └── api/
+    │       └── hub.ts         # Hub Protocol: create entity, get entity, cluster tabs
+    │
+    └── side-panel/
+        ├── main.tsx           # React 19 createRoot + matchMedia theme listener
+        ├── App.tsx            # Phase router + SW message bridge
+        ├── stores/
+        │   ├── auth.store.ts  # Phase, cpUser, cpPods, targetPodUrl (Zustand)
+        │   ├── panel.store.ts # View routing, currentPage, entity, scan data
+        │   └── capture.store.ts  # Capture success/error transient state
+        ├── components/
+        │   ├── PanelLayout.tsx       # 380px shell — logo, nav (hideNav for auth)
+        │   └── PanelLayout.module.css
+        └── views/
+            ├── SignInView.tsx         # [cp-signin] Email/password (sign in + sign up)
+            ├── PodSelectView.tsx      # [cp-pods] Pod list, status dots, spinner
+            ├── NoPodView.tsx          # [no-pod] Create pod CTA + re-check
+            ├── PodLoginView.tsx       # [pod-login] Direct Kratos login fallback
+            ├── PodConnectView.tsx     # [deprecated — returns null, kept for build]
+            ├── HomeView.tsx           # [connected] Dashboard: entity card + capture
+            ├── CaptureView.tsx        # [connected] Profile picker + note + save
+            ├── EntityCardView.tsx     # [connected] Saved entity detail + deep link
+            ├── OnboardingView.tsx     # [connected] Tab cluster review + import
+            └── SettingsView.tsx       # [connected] Account, pod URL, sign out
+```
+
+---
+
+## Context menus
+
+Two context menu items are registered on install:
+
+| ID | Contexts | Action |
+|----|----------|--------|
+| `save-to-synap` | `page`, `link` | Opens side panel for capture |
+| `save-selection` | `selection` | Saves highlighted text as a `note` entity directly |
+
+`save-selection` creates the entity immediately without opening the panel. The `SAVE_SELECTION` message carries `text` (highlighted content) and `sourceUrl` (page URL).
+
+---
+
+## Current status
+
+### What is working end-to-end
+
+| Feature | Notes |
+|---------|-------|
+| CP sign-in + sign-up | Better Auth (email/password), friendly error messages |
+| Automatic pod connection | CP handshake → Kratos session token, no API key entry |
+| Multi-pod picker | Status dots: green=running, amber=starting, red=error |
+| Self-hosted pod login | `pod-login` phase: direct Kratos login with retry handshake option |
+| No-pod state | CTA → synap.live, "I already have a pod" re-polls CP |
+| Session persistence | Pod URL on disk; session token in memory, re-issued on restart |
+| CP session caching | 5-minute in-memory TTL — avoids CP round-trip on repeated panel opens |
+| Tab import onboarding | Tabs permission → AI/local clustering → Hub Protocol bulk import |
+| Import keep-alive | `chrome.alarms` fires every 24s to keep SW alive during large imports |
+| Quick capture | Profile inference → Hub Protocol POST → success/error notification |
+| Save selection | Context menu → note entity with source URL |
+| Ambient entity lookup | Debounced on tab navigation (600ms), badge count, entity card shown |
+| Entity card | Fetches full entity via `GET /api/hub/entities/:id` |
+| "Open in Synap" deep link | `synap://entity/<id>` → Electron app |
+| Settings | Account info, pod URL, sign out |
+| Design tokens | Matches `@synap-core/design-tokens` light + dark values |
+| Theme switching | Inline script (no flash) + live `matchMedia` listener |
+| Logo | Real octopus PNG via `chrome.runtime.getURL` (no Vite asset URL issues) |
+| Security | Sender validation, TRUSTED_CONTEXTS gate, privileged types, CSP |
+| Pod-wide entities | No workspaceId at capture time; entityScope drives placement |
+| Hub Protocol session auth | `X-Session-Token` accepted for all extension calls |
+
+### What is incomplete / known gaps
+
+| Gap | Impact | Path forward |
+|-----|--------|--------------|
+| **AI profile inference on capture** | Medium | URL heuristics only. Could fire a background call to `POST /api/hub/capture/structure` with page content before save, pre-filling the form with a richer profile + extracted properties. Not yet wired. |
+| **Rich entity card properties** | UX | `EntityCardView` shows title, description, ~4 properties. No related entities, no tags, no full property tree. Needs `GET /api/hub/entities/:id` response to be mapped to the full property definition schema. |
+| **Workspace AI proposals after import** | Product | After bulk import, AI could analyse the entities and propose workspace groupings ("These 12 tabs look like a project — create a workspace?"). Maps to the existing proposal system. Not wired. |
+| **Error message polish** | Low | Some raw backend error strings surface to users. Should map through `mapHubError()` consistently (most already do, a few edge cases remain). |
+| **Firefox / Safari** | Future | MV3 WebExtensions API is compatible with Firefox Nightly. Safari requires Xcode wrapper + Apple Developer account. Not tested. |
+| **Keyboard shortcut** | Future | `Cmd+Shift+S` → open side panel to CaptureView. One `commands` entry in manifest.json + handler in background index. |
+| **Bookmark import** | Future | One-time opt-in import of existing browser bookmarks (`chrome.bookmarks` API). Same code path as tab import. |
+| **Onboarding workspace creation** | Future | Instead of pod-wide storage for all imported tabs, offer "Create a workspace per cluster" — each cluster becomes a workspace using `createWorkspaceFromDefinition`. |
+
+---
+
+## Manifest permissions
+
+| Permission | Why |
+|------------|-----|
+| `storage` | `chrome.storage.session` (auth tokens) + `chrome.storage.local` (pod URL) |
+| `activeTab` | Read the current tab's URL + metadata on capture |
+| `alarms` | Keep service worker alive during long tab imports |
+| `scripting` | Inject content script for richer metadata extraction |
+| `contextMenus` | "Save page to Synap" + "Save selection to Synap" right-click items |
+| `tabs` _(optional)_ | Read all tabs for the import onboarding. Requested on-demand with user prompt. |
+| `history` _(optional)_ | Reserved for future bookmark/history import. Not yet used. |
+| `https://*/*` _(optional host)_ | Allow entity search + Hub Protocol calls to any pod URL. |
+| `http://localhost/*` _(optional host)_ | Dev pods on localhost. |
+
+---
+
+## Security notes
+
+**Credentials:**
+- CP token + pod session stored in `chrome.storage.session` (cleared on browser restart, inaccessible from web pages)
+- `podUrl` is the only value on disk — not a credential
+- No API keys provisioned in the extension — only Kratos session tokens
+
+**Message security:**
+- `TRUSTED_CONTEXTS` gate (set on `chrome.runtime.onInstalled`) prevents content scripts from reading `chrome.storage.session`
+- All privileged message types reject requests from non-extension origins
+- `fromExtensionPage = sender.id === chrome.runtime.id && !sender.tab`
+
+**Content Security Policy** (`manifest.json`):
+```
+default-src 'self';
+script-src 'self';
+connect-src 'self' https://api.synap.live https://*.synap.live http://localhost:*
+```
+
+The inline script in `side-panel.html` (theme detector) uses no eval — it reads `matchMedia` and sets a `data-*` attribute, which is allowed under `script-src 'self'` when inlined in the HTML file itself (Chrome extension pages permit this).
+
+**Pod URL injection:** All Hub Protocol URLs are constructed as `${podUrl}/api/hub/…` where `podUrl` comes from `chrome.storage.local` (set only on successful CP handshake or validated direct login). No user-supplied URLs are used without prior authentication.

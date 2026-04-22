@@ -330,9 +330,16 @@ implementation (SSE, WebSocket, mock) without touching the hooks.
 
 - Audit source: agent run 2026-04-12 (in-session)
 - Companion docs:
-  - `docs-internal/NATIVE-OS-UX-PLAN.md` — Layer 3 real-time plan for chat
-  - `docs-internal/NATIVE-OS-DEFERRED.md` — what else is deferred
+  - `/team/relay/native-os-ux` — Layer 3 real-time plan for chat
+  - `/team/relay/native-os-deferred` — what else is deferred
   - `synap-app/packages/core/chat-interface/` — UI component package (stays)
   - `synap-app/packages/core/channels/` — source of hooks to extract
   - `synap-app/packages/features/ai-chat/` — source of ai-specific hooks
   - `relay-app/src/hooks/useAIChat.ts` — what to replace
+
+## Related
+
+- [Chat Architecture](./chat-architecture.mdx) — Unification plan across surfaces
+- [AI Interaction Architecture](./ai-interaction.mdx) — How agents interact with channels
+- [Hold Menu](./hold-menu.mdx) — Quick actions from chat surfaces
+- [Intelligence UX](./intelligence-ux.mdx) — What users experience in the AI app

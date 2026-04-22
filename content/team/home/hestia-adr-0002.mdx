@@ -1,0 +1,26 @@
+# ADR-0002 — Ventoy autoinstall vs custom ISO rebuild
+
+## Document control
+| Field | Value |
+|---|---|
+| ADR ID | ADR-0002 |
+| Title | Ventoy autoinstall vs custom ISO rebuild |
+| Status | Accepted |
+| Date | 2026-04-12 |
+
+## Context
+We need unattended Ubuntu Server installs in USB mode while keeping the build process simple and update-friendly.
+
+## Decision
+Use Ventoy's Auto Install plugin with cloud-init templates to avoid rebuilding ISO images.
+
+## Consequences
+* Pros:
+    * Updates are easier: replace ISO file without remastering.
+    * Keep templates/scripts separate and editable.
+* Cons:
+    * Requires careful validation of templates and disk selection.
+
+## References
+* Ventoy autoinstall plugin: https://www.ventoy.net/en/plugin_autoinstall.html
+* Ubuntu autoinstall format: https://canonical-subiquity.readthedocs-hosted.com/en/latest/intro-to-autoinstall.html

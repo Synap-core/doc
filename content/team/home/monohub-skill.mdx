@@ -1,0 +1,109 @@
+---
+name: monohub
+version: 1.0.0
+description: >
+  MonoHub — terminal intelligence for the Synap monorepo. Inspect packages,
+  analyze dependency blast radius, lint for circular deps, check outdated
+  external deps, generate architecture docs, and plan releases.
+tags: [monorepo, npm, publishing, dependencies, architecture, typescript]
+tools:
+  - name: monohub_list_packages
+    description: List all packages with category, version, and npm status
+  - name: monohub_get_package
+    description: Get full detail for one package by name
+  - name: monohub_impact_analysis
+    description: Blast radius and publish order for changing a package
+  - name: monohub_lint
+    description: Detect circular deps, stale published packages
+  - name: monohub_check_outdated
+    description: Check external npm dep staleness across the workspace
+  - name: monohub_publish_order
+    description: Safe topological publish sequence for packages
+  - name: monohub_architecture_docs
+    description: Generate Mermaid-embedded architecture documentation
+  - name: monohub_changelog
+    description: Unified changelog rollup across packages
+  - name: monohub_get_capabilities
+    description: Get the full capability manifest — all registered widget types, view types, and which packages provide them
+  - name: monohub_generate_capability
+    description: Scaffold a new capability package — creates all files and patches the 5 required config locations
+mcp:
+  transport: stdio
+  command: monohub serve --mcp
+---
+
+# MonoHub Skill
+
+MonoHub is the monorepo intelligence layer for the Synap workspace. You can use
+it to answer questions about packages, dependencies, publishing state, and
+architecture — without reading source files directly.
+
+## When to use MonoHub
+
+- User asks "which packages depend on X?" → `monohub_impact_analysis`
+- User asks "what needs to be published?" → `monohub_list_packages` with `status=stale`
+- User asks "are there circular deps?" → `monohub_lint`
+- User asks "is library X outdated?" → `monohub_check_outdated`
+- User asks "what's the architecture?" → `monohub_architecture_docs`
+- User asks "what changed since last release?" → `monohub_changelog` with `since=<date>`
+- User asks "what order do I publish in?" → `monohub_publish_order`
+- User asks "what widgets/views are available?" → `monohub_get_capabilities`
+- User asks "create a new capability/widget" → `monohub_generate_capability`
+
+## Package categories
+
+| Category | Meaning |
+|---|---|
+| `core` | Foundation packages — shared utilities, types, base hooks |
+| `feature` | Product feature packages — channels, views, entities |
+| `app` | Deployable application packages |
+| `view` | UI view/screen packages |
+| `infra` | Infrastructure — database, auth, config |
+| `backend` | Backend service packages |
+| `control` | Control plane packages |
+| `browser` | Electron browser packages |
+| `tool` | Developer tools (like this one) |
+
+## npm status values
+
+| Status | Meaning |
+|---|---|
+| `local` | Not yet published to npm |
+| `published` | Published and up to date |
+| `stale` | Published but local version differs — needs republish |
+
+## Impact analysis — risk levels
+
+| Risk | Criteria |
+|---|---|
+| `critical` | 10+ direct dependents |
+| `high` | Published package with depth ≤ 2 |
+| `medium` | Feature or app package |
+| `low` | Everything else |
+
+## Tips
+
+- Always check `monohub_lint` before planning a release — circular deps block topological sort
+- Use `monohub_impact_analysis` to understand the ripple effect before bumping a core package
+- `monohub_publish_order` accounts for internal workspace deps — use it for the right sequence
+- Changelog is parsed from `CHANGELOG.md` files in each package — not all packages maintain one
+- Outdated checks query npm live (cached 30min) — results reflect real registry state
+
+## Example queries
+
+```
+# What packages are affected if I change @synap-core/types?
+monohub_impact_analysis({ name: "@synap-core/types" })
+
+# Which external deps need major version updates?
+monohub_check_outdated({ severity: ["major"] })
+
+# What changed in @synap/channels since February?
+monohub_changelog({ since: "2026-02-01", packages: ["@synap/channels"] })
+
+# Is it safe to publish — any circular deps?
+monohub_lint({})
+
+# What's the right order to publish the core layer?
+monohub_publish_order({ packages: ["@synap-core/types", "@synap/client", "@synap/stores"] })
+```

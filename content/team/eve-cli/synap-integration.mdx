@@ -15,7 +15,7 @@ toc: true
 
 ## The Golden Rule
 
-> Synap is the exclusive source of long-term truth. Every agent (OpenClaw, Hermes, opencode) reads from and writes to Synap via REST API. No agent is permitted to maintain its own long-term state (SQLite, Vector DBs, local files).
+> Synap is the exclusive source of long-term truth. Every agent (OpenClaw, Hermes, codegen tools) reads from and writes to Synap via REST API. No agent is permitted to maintain its own long-term state (SQLite, Vector DBs, local files).
 
 This applies to both OpenClaw (`@eve/arms`) and Hermes (`@eve/builder`). Their conversation history, user profiles, sessions, tool results, and logs are all in Synap — never duplicated elsewhere.
 
@@ -33,7 +33,7 @@ User message → OpenClaw → Synap REST API (writes event/message)
                                 Hermes polls task via REST API
                                          │
                                          ▼
-                                Hermes spawns opencode → captures output
+                                 Hermes spawns codegen tool (opencode / OpenClaude) → captures output
                                          │
                                          ▼
                                 Results written to Synap via REST API
@@ -70,7 +70,7 @@ Each agent authenticates to Synap via API keys stored in `.eve/secrets/secrets.j
 |-------|------------|----------|
 | **OpenClaw** | `arms.synapApiKey` (or similar) | REST API calls to read/write conversation state, device profiles |
 | **Hermes** | `builder.synapApiKey` (or similar) | REST API polling for queued tasks, writing results |
-| **opencode** | No direct auth — invoked by Hermes, inherits Hermes's context | Codegen tool, no API calls to Synap |
+| **opencode / OpenClaude** | No direct auth — invoked by Hermes, inherits Hermes's context | Codegen tool, no API calls to Synap |
 
 ---
 
@@ -101,23 +101,25 @@ Hermes uses its native SQLite for **session-scoped** ephemeral state (current ex
 - **Task execution**: For each queued task, Hermes:
   1. Calls `GET /api/hub/tasks/:id` to read task details
   2. Updates task status to `processing` via `PATCH /api/hub/tasks/:id`
-  3. Spawns opencode via subprocess: `subprocess.run(['opencode', '--task', '...', '--cwd', projectDir])`
-  4. Captures stdout/stderr from opencode
+  3. Spawns opencode (or OpenClaude) via subprocess: `subprocess.run(['opencode', '--task', '...', '--cwd', projectDir])`
+  4. Captures stdout/stderr from codegen tool (opencode or OpenClaude)
   5. Writes result back to Synap via `PATCH /api/hub/tasks/:id` with `status = "done"` + result data
 - **Ephemeral state**: Hermes's built-in SQLite/session store is for single-run transient context only (tool call arguments, intermediate outputs). Not a long-term store.
 - **API integration**: Hermes uses a custom Python Memory Provider Plugin (`plugins/memory/synap_provider.py`) to map its internal `sync_turn` and `prefetch` hooks to Synap's REST API. This is the mechanism by which all agent state is kept in Synap rather than local stores.
 
 ---
 
-## opencode invocation pattern
+## Codegen tool invocation pattern (opencode / OpenClaude)
 
-opencode is a **passive code generation tool** — it does not talk to Synap directly. It is invoked by Hermes via local subprocess:
+The codegen tool is a **passive code generation tool** — it does not talk to Synap directly. It is invoked by Hermes via local subprocess:
 
 ```python
-# Inside Hermes's execute_opencode.py skill
+# Inside Hermes's execute_opencode.py skill (use opencode by default)
+# or execute_openclaude.py (use openclaude binary instead)
 import subprocess
 result = subprocess.run(
     ['opencode', '--task', task_description, '--cwd', project_dir],
+    # or: ['openclaude', '--task', task_description, '--cwd', project_dir]
     capture_output=True,
     text=True
 )
@@ -125,7 +127,7 @@ result = subprocess.run(
 # Hermes writes this to Synap as task result
 ```
 
-When Dokploy is enabled, Hermes passes `DOKPLOY_API_URL` and `DOKPLOY_API_KEY` as env vars to the subprocess call so opencode can deploy within the session. When Dokploy is disabled, opencode writes to local disk only.
+When Dokploy is enabled, Hermes passes `DOKPLOY_API_URL` and `DOKPLOY_API_KEY` as env vars to the subprocess call so the codegen tool can deploy within the session. When Dokploy is disabled, the codegen tool writes to local disk only.
 
 ---
 

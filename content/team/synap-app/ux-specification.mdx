@@ -1,0 +1,2716 @@
+# Synap UX Specification Document
+
+**Document Type:** Complete UX specification for implementation  
+**Purpose:** Define layouts, features, and user experience for all Synap apps  
+**Audience:** AI developers familiar with the codebase  
+**Version:** 1.0 (Final)  
+**Date:** January 2025
+
+---
+
+## TABLE OF CONTENTS
+
+1. [Philosophy & Architecture](#1-philosophy--architecture)
+2. [Global UI Patterns](#2-global-ui-patterns)
+3. [App 1: Dashboard](#3-app-1-dashboard)
+4. [App 2: Canvas](#4-app-2-canvas)
+5. [App 3: Data](#5-app-3-data)
+6. [App 4: Views](#6-app-4-views)
+7. [App 5: Docs](#7-app-5-docs)
+8. [App 6: AI Chat](#8-app-6-ai-chat)
+9. [Component Requirements](#9-component-requirements)
+10. [User Flows](#10-user-flows)
+11. [Implementation Notes](#11-implementation-notes)
+
+---
+
+## 1. PHILOSOPHY & ARCHITECTURE
+
+### 1.1 Core Principle: Separation by Purpose
+
+Synap separates apps by **purpose** rather than by entity type or view type. Each app serves a distinct cognitive mode:
+
+```
+CANVAS    → Create spatially (visual thinking)
+DATA      → Manage entities (database operations)
+VIEWS     → Analyze custom (saved queries)
+DOCS      → Compose narratives (document writing)
+AI CHAT   → Collaborate with intelligence (conversation)
+DASHBOARD → Access quickly (entry point)
+```
+
+This is different from Notion (everything is a page) or Airtable (everything is a database). We **intentionally separate** entity management (Data), custom queries (Views), and documents (Docs).
+
+### 1.2 The LEGO Brick Metaphor
+
+**Entities are LEGO bricks** - atomic typed data (Task, Person, Company, Project, etc.)
+
+**Apps are ways to work with bricks:**
+- Canvas: Arrange bricks spatially on infinite whiteboard
+- Data: View brick inventory, modify brick types
+- Views: Create custom arrangements of bricks
+- Docs: Write about bricks, embed brick arrangements
+- AI Chat: Talk with intelligence that operates on bricks
+
+### 1.3 Entity Type Architecture
+
+**Entity types are first-class:**
+- Task, Person, Company, Project, Document, Event, etc.
+- Each has **typed metadata** (columns/properties)
+- Metadata is **flexible** but **typed** (not schema-less chaos)
+- Users can define entity types and their metadata (in Data app, modification mode)
+
+**Important distinction from Notion:**
+We don't treat everything as pages. A Task is a Task. A Document is a Document. They have different behaviors and different metadata.
+
+### 1.4 Organization Philosophy: No Folders
+
+**We deliberately avoid folder hierarchies.**
+
+**Instead, organization happens through:**
+
+1. **Projects** (hierarchical entities)
+   - Can have sub-projects
+   - Example: Company → V1 Launch → Feature A
+   - Projects ARE entities (have metadata, can be visualized)
+   
+2. **Tags** (flat, cross-cutting)
+   - Multiple tags per entity
+   - No nested tags (keeps it simple)
+   - Filter by tag combinations
+
+3. **Entity relationships** (typed connections)
+   - depends_on, assigned_to, part_of, etc.
+   - First-class relationships in event-sourced DB
+
+4. **Search** (full-text, fuzzy)
+   - Primary navigation method
+   - Command palette (Cmd+K) everywhere
+
+### 1.5 Workspace Model: No Team Separation
+
+**Critical difference from Linear:**
+
+We do **NOT** separate by teams. We have **ONE workspace** with:
+- Roles (Owner, Admin, Member, Guest)
+- Permissions based on roles
+- Optional: Users can create "groups" but they're NOT structural separators
+
+**Views are:**
+- Personal (only you see)
+- Shared (everyone in workspace sees)
+- NO "team views" concept
+
+### 1.6 The Two Inbox Pattern
+
+**Inbox 1: External Items**
+- Emails, messages, external data
+- Things coming FROM outside
+
+**Inbox 2: Request Approvals**
+- AI-proposed changes awaiting approval
+- User requests without permission
+- Things needing YOUR action
+
+Both inboxes surface on Dashboard and have badge counts.
+
+---
+
+## 2. GLOBAL UI PATTERNS
+
+### 2.1 Layout Structure
+
+```
+┌────────────────────────────────────────────────────┐
+│  [Header - Optional, contextual]                   │
+├────┬───────────────────────────────────────────────┤
+│    │                                               │
+│ S  │          MAIN CONTENT AREA                    │
+│ I  │                                               │
+│ D  │                                               │
+│ E  │                                               │
+│ B  │                                               │
+│ A  │                                               │
+│ R  │                                               │
+│    │                                               │
+│    │                                               │
+└────┴───────────────────────────────────────────────┘
+```
+
+**Sidebar (Icon-only, Notion-style):**
+- Position: Fixed left
+- Width: 48-56px
+- Collapsible: `[` key
+- Icons vertically stacked
+- Active app highlighted
+
+**Header:**
+- NOT always present (app-specific)
+- When present: breadcrumbs, context, actions
+- Height: 48-64px
+
+**Main content:**
+- Full viewport width (minus sidebar)
+- Scrollable
+- May contain panels
+
+### 2.2 Sidebar App Icons (Top to Bottom)
+
+```
+┌────┐
+│ 🏠 │ Dashboard (default landing)
+├────┤
+│ 🔍 │ Search (opens command palette)
+├────┤
+│ 🎨 │ Canvas
+├────┤
+│ 📊 │ Data
+├────┤
+│ 👁️ │ Views
+├────┤
+│ 📄 │ Docs
+├────┤
+│ 💬 │ AI Chat
+├────┤
+│ ─── │ (separator)
+├────┤
+│ ⚙️ │ Settings (bottom)
+├────┤
+│ 🌙 │ Dark mode toggle (bottom)
+└────┘
+```
+
+**Interaction:**
+- Click icon → Navigate to app
+- Active app → Icon highlighted (cyan/accent color)
+- Hover → Tooltip with app name + shortcut
+
+### 2.3 Multi-Panel Support
+
+**Apps can split into multiple panels:**
+
+```
+┌────┬──────────────┬──────────────┐
+│ S  │  Panel 1     │  Panel 2     │
+│ I  │  (60%)       │  (40%)       │
+│ D  │              │              │
+│ E  │              │              │
+└────┴──────────────┴──────────────┘
+```
+
+**Panel controls:**
+- Drag separator to resize (min 30%, max 70%)
+- Click X on panel to close
+- Click + to add panel (if app supports)
+- Panels can show different apps OR same app with different content
+
+**Common panel combinations:**
+- Canvas + Data (draw, see list)
+- Data + Properties (table, detail view)
+- Docs + Canvas (write about visual)
+- Data Table + Data Graph (same data, two views)
+
+**Per-app panel support:**
+- Dashboard: No (always single)
+- Canvas: Yes (split canvas OR canvas + other app)
+- Data: Yes (table + graph OR table + detail)
+- Views: Yes (multiple saved views side-by-side)
+- Docs: Yes (doc + reference material)
+- AI Chat: Yes (chat + context)
+
+### 2.4 Command Palette (Global)
+
+**Trigger:** `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux)
+
+**Functionality:**
+- Search all entities
+- Navigate to apps
+- Create new items
+- Execute actions
+- Recently used items
+
+**Structure:**
+```
+┌────────────────────────────────────────┐
+│  🔍 Search or command...               │
+├────────────────────────────────────────┤
+│                                        │
+│  Recent                                │
+│  📄 Product Brief (opened 2h ago)      │
+│  ✅ User Research (task)                │
+│                                        │
+│  Go to                                 │
+│  🎨 Canvas                             │
+│  📊 Data                               │
+│                                        │
+│  Create                                │
+│  + New document                        │
+│  + New entity                          │
+│  + New chat branch                     │
+│                                        │
+└────────────────────────────────────────┘
+```
+
+**Keyboard shortcuts within palette:**
+- `↑` `↓` - Navigate results
+- `Enter` - Execute selected
+- `Cmd+Enter` - Execute in new panel
+- `Esc` - Close palette
+
+### 2.5 Contextual Menus
+
+**Right-click on entities:**
+```
+┌────────────────────────┐
+│ Open                   │
+│ Open in new panel      │
+│ ───────────────────    │
+│ Edit                   │
+│ Duplicate              │
+│ ───────────────────    │
+│ Add to view            │
+│ Copy link              │
+│ ───────────────────    │
+│ Delete                 │
+└────────────────────────┘
+```
+
+**Consistent across all apps** for entities.
+
+### 2.6 Keyboard Shortcut Philosophy
+
+**Follow Linear's two-key pattern:**
+- `G` then letter = **Go to** (navigation)
+- `C` then letter = **Create** (new items)
+- `V` then letter = **View** (switch views)
+
+**Examples:**
+- `G` → `D` = Go to Dashboard
+- `G` → `C` = Go to Canvas
+- `C` → `T` = Create Task
+- `C` → `D` = Create Document
+- `V` → `T` = View as Table
+- `V` → `G` = View as Graph
+
+**Single-key shortcuts:**
+- `[` = Toggle sidebar
+- `/` = Focus search (if applicable)
+- `?` = Show shortcut help
+- `Esc` = Close modals/panels
+
+### 2.7 Empty States (Universal Pattern)
+
+**All empty states must have:**
+1. Icon (48×48px, relevant to context)
+2. Headline (clear, positive)
+3. Description (1-2 sentences explaining benefits)
+4. Primary action button
+5. Optional: Link to documentation
+
+**Example:**
+```
+┌────────────────────────────────────┐
+│          📊                        │
+│                                    │
+│    No views created yet            │
+│                                    │
+│    Create custom dashboards with   │
+│    filtered entity lists, graphs,  │
+│    and timelines.                  │
+│                                    │
+│    [Create your first view]        │
+│                                    │
+│    Learn about views →             │
+└────────────────────────────────────┘
+```
+
+---
+
+## 3. APP 1: DASHBOARD
+
+### 3.1 Purpose
+
+**Dashboard is the default landing page** - quick access to recent work and important updates.
+
+**Mental model:** "Home base" - where you start, where you return
+
+### 3.2 Layout
+
+**Current dashboard layout is GOOD - keep it with additions:**
+
+```
+┌────────────────────────────────────────────────────┐
+│  WORKSPACE HEADER                                  │
+│  Personal Workspace | Connected | Change Pod       │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│  QUICK ACCESS                                      │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐            │
+│  │ New  │ │ New  │ │ New   │ │ Graph │           │
+│  │ Doc  │ │ Chat │ │ Entity│ │ View  │           │
+│  └──────┘ └──────┘ └──────┘ └──────┘            │
+│  ┌──────┐ ┌──────┐ ┌──────┐                      │
+│  │White-│ │ AI    │ (more...)                    │
+│  │board │ │ Assist│                              │
+│  └──────┘ └──────┘                               │
+│                                                    │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│  INBOX: EXTERNAL ITEMS              [2 new]       │
+│  • Email from client about Q1 timeline             │
+│  • Slack message in #design channel                │
+│                                                    │
+│  INBOX: APPROVALS                   [1 pending]    │
+│  • AI proposed: Update project status to "Done"    │
+│    [Approve] [Reject] [Review]                     │
+│                                                    │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│  RECENTLY OPENED                                   │
+│  📄 Q1 2025 Project Roadmap (Doc, 2h ago)         │
+│  💬 Q1 Project Planning (Chat, 1d ago)            │
+│  ✅ Q4 Marketing Strategy (Task, 1d ago)           │
+│  👤 Sarah Jenkins (Person, 2d ago)                │
+│                                                    │
+└────────────────────────────────────────────────────┘
+
+[Right sidebar: NOTIFICATIONS panel]
+```
+
+### 3.3 Components
+
+**Workspace Header:**
+- Name: "Personal Workspace" (or custom name)
+- Status: "Connected" indicator (green dot)
+- Action: "Change Pod" button
+- Sync info: "Last sync: [timestamp]"
+
+**Quick Access Cards (keep existing):**
+- Grid layout (3-4 per row)
+- Icon + label
+- Highlighted active card (currently selected)
+- Customizable: User can pin/unpin actions
+
+**NEW: Inbox Sections (add these):**
+
+**Inbox 1: External Items**
+```
+INBOX: EXTERNAL ITEMS              [2 new]
+─────────────────────────────────────────
+• 📧 Email from client about Q1 timeline
+  2 hours ago
+  
+• 💬 Slack message in #design channel  
+  "Can you review the mockups?"
+  1 day ago
+
+[Mark all as read] [View all →]
+```
+
+**Inbox 2: Approvals**
+```
+INBOX: APPROVALS                   [1 pending]
+─────────────────────────────────────────
+• 🤖 AI proposed change
+  Update "Mobile App Redesign" status to Done
+  
+  Context: All subtasks completed, ready to close
+  
+  [Approve] [Reject] [Review details →]
+
+[View all requests →]
+```
+
+**Recently Opened:**
+- List of last 10 items
+- Icon (entity type) + Name + Type + Timestamp
+- Click to open
+- Hover shows preview card
+
+**Notifications (Right Sidebar):**
+- Keep existing design
+- Badge count on items
+
+### 3.4 Interactions
+
+**Quick Access:**
+- Click card → Navigate to app OR create new item
+- Example: "New Doc" → Opens Docs app with blank doc
+- Example: "Graph View" → Opens Canvas or Views with graph
+
+**Inbox Items:**
+- Click item → Opens detail view or navigates to source
+- "Mark as read" → Item disappears from inbox
+- Badge count updates in real-time
+
+**Approval Actions:**
+- "Approve" → Applies change, shows success toast, removes from inbox
+- "Reject" → Shows reason modal, rejects, removes
+- "Review details" → Opens side panel with full context
+
+**Recently Opened:**
+- Click item → Opens in current panel
+- `Cmd/Ctrl+Click` → Opens in new panel
+- Right-click → Context menu (Pin, Remove, etc.)
+
+### 3.5 States
+
+**Empty state (first login):**
+```
+┌────────────────────────────────────┐
+│          👋                        │
+│                                    │
+│    Welcome to Synap!               │
+│                                    │
+│    Get started by creating your    │
+│    first document or whiteboard.   │
+│                                    │
+│    [Create document]               │
+│    [Create whiteboard]             │
+│                                    │
+└────────────────────────────────────┘
+```
+
+**No notifications:**
+```
+NOTIFICATIONS               [All clear ✓]
+────────────────────────────────────────
+You're all caught up!
+```
+
+**No inbox items:**
+```
+INBOX: EXTERNAL ITEMS              [0 new]
+────────────────────────────────────────
+No new external items
+
+INBOX: APPROVALS                   [0 pending]
+────────────────────────────────────────
+No pending approvals
+```
+
+### 3.6 Permissions
+
+- All users see Dashboard
+- Inbox content filtered by user permissions
+- Approval requests only for users with appropriate role
+
+---
+
+## 4. APP 2: CANVAS
+
+### 4.1 Purpose
+
+**Canvas is the infinite whiteboard** for spatial thinking and entity creation.
+
+**Mental model:** "Freeform creation space" - draw, arrange, connect
+
+### 4.2 Layout
+
+**Current canvas implementation is good - keep it.**
+
+**Optional enhancements:**
+
+```
+┌────────────────────────────────────────────────────┐
+│  [Optional Header]                                 │
+│  Canvas Name | Last edited 2h ago | [Share]       │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│                                                    │
+│                INFINITE CANVAS                     │
+│                                                    │
+│         [Entities, connections, drawings]          │
+│                                                    │
+│                                                    │
+│                                                    │
+│  [Toolbar: bottom-center]                         │
+│  [Mini-map: bottom-right]                         │
+│  [Zoom: bottom-right near mini-map]               │
+└────────────────────────────────────────────────────┘
+```
+
+### 4.3 Components
+
+**Toolbar (Bottom-Center):**
+```
+┌────────────────────────────────────────┐
+│ [Select] [Draw] [Text] [Shape] [Line] │
+│   ↑       ✏️      A      □      →     │
+└────────────────────────────────────────┘
+```
+
+**Tools:**
+- Select (V) - Default, select and move entities
+- Draw (D) - Freehand drawing
+- Text (T) - Add text labels
+- Shape (R) - Rectangles, circles
+- Line (L) - Connections between entities
+
+**Mini-map (Bottom-Right):**
+```
+┌──────────┐
+│ [.....]  │ ← Viewport indicator
+│ [....]   │
+│ [.....]  │
+└──────────┘
+```
+- Toggle visibility: M key
+- Click to navigate
+- Shows all content bounds
+
+**Zoom Controls (Bottom-Right):**
+```
+[−] [100%] [+]
+```
+- Click percentage → Dropdown presets (25%, 50%, 100%, 200%)
+- Fit to screen: `Cmd+0`
+- Zoom to selection: `Cmd+2`
+
+**Property Panel (Right Sidebar, conditional):**
+- Opens when entity selected
+- Shows entity metadata
+- Inline editing
+
+```
+┌────────────────────────┐
+│ TASK                   │
+│ ──────────────────     │
+│ Title                  │
+│ [User Research]        │
+│                        │
+│ Status                 │
+│ [Todo ▾]              │
+│                        │
+│ Assigned to            │
+│ [@Maria ▾]            │
+│                        │
+│ Due date               │
+│ [Jan 15, 2025]        │
+│                        │
+│ Relationships          │
+│ depends_on:            │
+│ • Design Sprint        │
+│                        │
+│ [View in Data →]      │
+└────────────────────────┘
+```
+
+### 4.4 Entity Creation
+
+**Draw box → Entity created automatically:**
+1. User draws rectangle with Draw tool
+2. System detects closed shape
+3. Entity created with type inference:
+   - Rectangle + text inside → Task (if action words)
+   - Rectangle + name → Person (if proper noun)
+   - Rectangle + date → Event
+4. User can change type via property panel
+
+**Draw line → Relationship created:**
+1. User draws line from Entity A to Entity B
+2. System creates typed relationship
+3. Default type: "related_to"
+4. User can change type via context menu
+   - depends_on, assigned_to, part_of, blocks, etc.
+
+**Flowchart mode (optional enhancement):**
+- Toggle: Switches canvas to "structured mode"
+- Entities snap to grid
+- Only boxes and arrows allowed
+- Auto-alignment
+
+### 4.5 Interactions
+
+**Canvas navigation:**
+- Pan: Space + drag OR two-finger trackpad
+- Zoom: Cmd/Ctrl + scroll
+- Fit all: `Cmd+0`
+- Select all: `Cmd+A`
+
+**Entity manipulation:**
+- Click to select
+- Drag to move
+- Cmd+Click for multi-select
+- Shift+Drag for area selection
+
+**Context menus:**
+- Right-click entity → Change type, Delete, Duplicate, View in Data
+- Right-click canvas → New entity, Paste
+
+**Multi-panel:**
+- Split canvas (two canvases side-by-side)
+- Canvas + Data (draw left, see table right)
+- Canvas + Docs (reference document while drawing)
+
+### 4.6 States
+
+**Empty canvas:**
+```
+┌────────────────────────────────────┐
+│          ✏️                        │
+│                                    │
+│    Start creating                  │
+│                                    │
+│    Draw shapes to create entities. │
+│    Connect them with lines.        │
+│                                    │
+│    [Show tutorial]                 │
+└────────────────────────────────────┘
+```
+
+**First entity created:**
+- Confetti animation (subtle)
+- Tooltip: "Great! Now try connecting it to another entity"
+
+### 4.7 Permissions
+
+- View: All users
+- Edit: Owner + users with edit permission
+- Comments: All users (if collaboration enabled)
+
+---
+
+## 5. APP 3: DATA
+
+### 5.1 Purpose
+
+**Data app is the entity database view** - Airtable/Supabase for knowledge workers.
+
+**Mental model:** "Database view" - see raw entities, modify schema, CRUD operations
+
+**Critical distinction:** This is NOT Views app. Data shows ALL entities with database-level operations. Views shows CUSTOM filtered queries.
+
+### 5.2 Layout
+
+```
+┌────────────────────────────────────────────────────┐
+│  DATA                                 [🔧 Modify]  │
+├─────────┬──────────────────────────────────────────┤
+│         │                                          │
+│ Entity  │  SELECTED: Task                         │
+│ Types   │                                          │
+│         │  [Search entities...] [+ New] [Export]  │
+│ ☑ Task  │                                          │
+│   (47)  │  ┌─────────────────────────────────────┐│
+│         │  │ Title      │Status│Due │Assigned    ││
+│ ○ Person│  │────────────────────────────────────  ││
+│   (12)  │  │ User Res.. │ Done │J15 │ Maria      ││
+│         │  │ Design Spr │ Todo │J20 │ You        ││
+│ ○ Company│  │ MVP Launch │ Todo │F01 │ Team      ││
+│   (8)   │  │ [+ Add new task]                     ││
+│         │  └─────────────────────────────────────┘│
+│ ○ Project│                                         │
+│   (15)  │  [Showing 3 of 47 tasks]                │
+│         │                                          │
+│ ○ Event │                                          │
+│   (3)   │                                          │
+│         │                                          │
+│ ───────│                                          │
+│         │                                          │
+│ [+ New  │                                          │
+│  Type]  │                                          │
+│         │                                          │
+└─────────┴──────────────────────────────────────────┘
+```
+
+### 5.3 Components
+
+**Left Sidebar: Entity Type Selector**
+```
+Entity Types
+────────────
+☑ Task (47)        ← Active
+○ Person (12)
+○ Company (8)
+○ Project (15)
+○ Event (3)
+○ Document (24)
+○ View (6)
+─────────────
+[+ New Entity Type]
+```
+
+**Interaction:**
+- Click type → Loads that entity type in main area
+- Active type: Checkmark + highlighted
+- Count badge shows number of entities
+
+**Top Bar (Simple Mode):**
+```
+[Search entities...]  [+ New Task]  [Export ▾]
+```
+
+**Top Bar (Modification Mode):**
+```
+[Search...]  [+ New Task]  [+ Add Column]  [Export ▾]  [Exit Modify Mode]
+```
+
+**Main Table View:**
+- Standard data table (similar to Airtable)
+- Sortable columns (click header)
+- Resizable columns (drag border)
+- Inline editing (click cell)
+- Row selection (checkbox)
+
+**Table Structure:**
+```
+┌──────────────┬────────┬────────┬───────────┬─────────┐
+│ [✓] Title    │ Status │ Due    │ Assigned  │ ... ▾   │
+├──────────────┼────────┼────────┼───────────┼─────────┤
+│ [ ] User Res │ Done   │ Jan 15 │ Maria     │         │
+│ [ ] Design   │ Todo   │ Jan 20 │ You       │         │
+│ [ ] MVP      │ Todo   │ Feb 01 │ Team      │         │
+├──────────────┴────────┴────────┴───────────┴─────────┤
+│ [+ Add new task]                                      │
+└───────────────────────────────────────────────────────┘
+```
+
+**Column Header (Modification Mode):**
+```
+┌─────────────┐
+│ Status ▾    │  ← Dropdown on click
+└─────────────┘
+    ↓
+┌──────────────────────┐
+│ Rename               │
+│ Change type          │
+│ Edit options         │
+│ ───────────────      │
+│ Hide column          │
+│ Delete column        │
+└──────────────────────┘
+```
+
+### 5.4 Progressive Disclosure: Simple vs Modification Mode
+
+**SIMPLE MODE (Default):**
+- See entities in table
+- Search, filter, sort
+- Add new entities
+- Edit entity data
+- NO schema editing
+
+**MODIFICATION MODE (Owner/Admin only):**
+- All simple mode features PLUS:
+- Add/remove columns (metadata)
+- Change column types
+- Create new entity types
+- Delete entity types
+- Configure relationships
+
+**Toggle between modes:**
+```
+┌─────────────────────────────────────────┐
+│  DATA                    [🔧 Modify]    │  ← Simple mode
+└─────────────────────────────────────────┘
+
+Click "Modify" →
+
+┌─────────────────────────────────────────┐
+│  DATA (Modify Mode)    [✓ Done]         │  ← Modification mode
+└─────────────────────────────────────────┘
+```
+
+**Visual indicator in modification mode:**
+- Background color: Subtle yellow/orange tint
+- Columns show [+ Add Column] button
+- Entity Types list shows [+ New Entity Type]
+- Tooltip: "You're in modification mode - schema changes affect all users"
+
+### 5.5 Entity Type Management (Modification Mode)
+
+**Create new entity type:**
+
+1. Click "[+ New Entity Type]" in left sidebar
+2. Modal opens:
+
+```
+┌────────────────────────────────┐
+│ Create Entity Type             │
+├────────────────────────────────┤
+│                                │
+│ Name                           │
+│ [________________]             │
+│                                │
+│ Icon (optional)                │
+│ [🎯] [Change]                 │
+│                                │
+│ Default Columns                │
+│ ☑ Title (text)                │
+│ ☑ Created (date)              │
+│ ☑ Owner (user)                │
+│                                │
+│ [Cancel]         [Create]      │
+└────────────────────────────────┘
+```
+
+3. Entity type created, appears in left sidebar
+
+**Add column to entity type:**
+
+1. In modification mode, click "[+ Add Column]" in table header
+2. Dropdown appears:
+
+```
+┌────────────────────────────┐
+│ Column Name                │
+│ [_______________]          │
+│                            │
+│ Type                       │
+│ ○ Text                     │
+│ ○ Number                   │
+│ ○ Select (dropdown)        │
+│ ○ Date                     │
+│ ○ User                     │
+│ ○ Relation (to entity)     │
+│ ○ Formula                  │
+│                            │
+│ Required?                  │
+│ ☐ Yes                     │
+│                            │
+│ [Cancel]      [Add]        │
+└────────────────────────────┘
+```
+
+3. Column added, appears in table
+
+**Edit column type:**
+
+1. Click column header dropdown → "Change type"
+2. Select new type
+3. Warning if data will be lost
+4. Convert or confirm
+
+### 5.6 Metadata & Categories (Entity Subtypes)
+
+**Question:** How to handle Person (generic) vs Person (Family) vs Person (Client)?
+
+**Implementation: Category Field**
+
+Every entity type CAN have a "Category" metadata field:
+
+**Example for Person entity type:**
+
+```
+Person entity has:
+- Base metadata: name, email, phone (always present)
+- Category field: [Dropdown]
+  - Generic (default)
+  - Family
+  - Prospect  
+  - Client
+
+Conditional metadata based on category:
+- If category = Family → Show: birthday, relationship
+- If category = Prospect → Show: lead_source, stage
+- If category = Client → Show: contract_value, renewal_date
+```
+
+**How it appears in Data app (Modification Mode):**
+
+```
+PERSON ENTITY TYPE
+
+Base Metadata (always visible)
+┌────────┬──────┬───────────┐
+│ Name   │ Type │ Required? │
+├────────┼──────┼───────────┤
+│ name   │ text │ ☑ Yes    │
+│ email  │ text │ ☑ Yes    │
+│ phone  │ text │ ☐ No     │
+└────────┴──────┴───────────┘
+
+Category Field
+[Enabled ☑]
+Options: Generic, Family, Prospect, Client
+
+Conditional Metadata
+┌────────────────┬──────┬──────────────┐
+│ Field          │ Type │ Show when    │
+├────────────────┼──────┼──────────────┤
+│ birthday       │ date │ Family       │
+│ relationship   │ text │ Family       │
+│ lead_source    │ sel  │ Prospect     │
+│ stage          │ sel  │ Prospect     │
+│ contract_value │ num  │ Client       │
+│ renewal_date   │ date │ Client       │
+└────────────────┴──────┴──────────────┘
+```
+
+**For MVP:** Skip conditional metadata, just use flat metadata for all.
+
+**For V1:** Add conditional metadata based on category.
+
+### 5.7 View Modes
+
+**Table View (Default):**
+- Standard spreadsheet-style
+- Sortable, filterable, searchable
+
+**List View:**
+- Card-based compact list
+- Shows title + 2-3 key fields
+- Good for mobile
+
+**Graph View (if entity has relationships):**
+- Network visualization
+- Shows entity connections
+- Click node → View/edit entity
+
+**Timeline View (if entity has dates):**
+- Chronological layout
+- Gantt-style bars
+- Drag to adjust dates
+
+**View switcher (top-right):**
+```
+[Table ▾]  ← Dropdown
+   ↓
+┌────────────┐
+│ ☑ Table    │
+│ ○ List     │
+│ ○ Graph    │
+│ ○ Timeline │
+└────────────┘
+```
+
+### 5.8 Interactions
+
+**Search:**
+- Searches current entity type
+- Full-text across all columns
+- Shows results immediately (no "submit")
+
+**Filter:**
+- Click "Filter" button → Filter bar appears
+- Add conditions: "Status = Done", "Assigned to = Me"
+- Filters are AND by default
+- Can toggle to OR
+
+**Sort:**
+- Click column header → Sort ascending
+- Click again → Sort descending
+- Click third time → Clear sort
+
+**Bulk operations:**
+- Select rows via checkbox
+- Actions appear in top bar: "Delete (5)", "Export (5)", "Assign to..."
+
+**Create entity:**
+- Click "[+ New Task]" → New row appears
+- Inline editing for all fields
+- Press Enter to save
+- OR click row → Opens detail panel for full editing
+
+**Multi-panel:**
+- Table + Detail (select row → detail in right panel)
+- Table + Graph (same data, two views)
+
+### 5.9 States
+
+**Empty entity type:**
+```
+┌────────────────────────────────────┐
+│          📋                        │
+│                                    │
+│    No tasks yet                    │
+│                                    │
+│    Create your first task to get   │
+│    started tracking work.          │
+│                                    │
+│    [+ Create task]                 │
+└────────────────────────────────────┘
+```
+
+**No entity types created (first time):**
+```
+┌────────────────────────────────────┐
+│          📊                        │
+│                                    │
+│    Welcome to Data                 │
+│                                    │
+│    Create your first entity type   │
+│    (like Task, Person, or Project) │
+│    to start organizing.            │
+│                                    │
+│    [🔧 Enter Modify Mode]         │
+│    [Learn about entity types →]   │
+└────────────────────────────────────┘
+```
+
+### 5.10 Permissions
+
+**Simple Mode:**
+- View: All users
+- Create entities: All users
+- Edit entities: Owner + Editor role
+- Delete entities: Owner only
+
+**Modification Mode:**
+- Access: Owner + Admin role only
+- Create entity types: Owner + Admin
+- Modify schema: Owner + Admin
+- Delete entity types: Owner only
+
+**Toggle appears only if user has permission.**
+
+---
+
+## 6. APP 4: VIEWS
+
+### 6.1 Purpose
+
+**Views app is for custom dashboards** - saved filtered queries of entities.
+
+**Mental model:** "Saved searches" or "Custom dashboards" - user-created filtered views
+
+**Critical distinction from Data app:**
+- Data = See ALL entities, database operations
+- Views = See SPECIFIC FILTERED entities, custom layouts
+
+### 6.2 Layout
+
+```
+┌────────────────────────────────────────────────────┐
+│  VIEWS                                [+ New View] │
+├──────────┬─────────────────────────────────────────┤
+│          │                                         │
+│ Personal │  MY OPEN TASKS                         │
+│ ──────── │                                         │
+│ ☑ My Open│  Filters: Status = Todo OR In Progress │
+│   Tasks  │          Assigned = Me                  │
+│          │                                         │
+│ ○ Team   │  [Table ▾] [Edit] [Share] [...]       │
+│   Backlog│                                         │
+│          │  ┌──────────────────────────────────┐  │
+│ ○ Upcmng │  │ Title        │Status│Due│Owner ││  │
+│   Deadlin│  │──────────────────────────────────││  │
+│          │  │ User Research│ Todo │J15│ You  ││  │
+│ Shared   │  │ Design Sprint│ Prog │J20│ You  ││  │
+│ ──────── │  │ MVP Launch   │ Todo │F01│ You  ││  │
+│          │  └──────────────────────────────────┘  │
+│ ○ Project│                                         │
+│   Dashbrd│  3 tasks                                │
+│          │                                         │
+│ ○ All    │                                         │
+│   Tasks  │                                         │
+│          │                                         │
+│ ─────────│                                         │
+│ [+ New]  │                                         │
+│          │                                         │
+└──────────┴─────────────────────────────────────────┘
+```
+
+### 6.3 Components
+
+**Left Sidebar: Saved Views**
+```
+Personal Views
+──────────────
+☑ My Open Tasks      ← Active
+○ Upcoming Deadlines
+○ Team Backlog
+
+Shared Views
+────────────
+○ Project Dashboard
+○ All Tasks
+○ Q1 Priorities
+
+─────────────
+[+ New View]
+```
+
+**Top Bar:**
+```
+VIEW NAME                      [Table ▾] [Edit] [Share] [...]
+Filters: Status = Todo, Assigned = Me
+```
+
+**Filter Bar (when editing):**
+```
+┌────────────────────────────────────────────────┐
+│ Filters (All must match)         [Any ▾]      │
+│                                                │
+│ [Status] [is] [Todo ▾]               [×]      │
+│ [Assigned] [is] [Me ▾]               [×]      │
+│                                                │
+│ [+ Add filter]                                 │
+└────────────────────────────────────────────────┘
+```
+
+**View Configuration Panel (when editing):**
+```
+┌────────────────────────────────┐
+│ VIEW SETTINGS                  │
+├────────────────────────────────┤
+│                                │
+│ Name                           │
+│ [My Open Tasks]                │
+│                                │
+│ Entity Type                    │
+│ [Task ▾]                      │
+│                                │
+│ Layout                         │
+│ ○ Table                        │
+│ ○ List                         │
+│ ○ Graph                        │
+│ ○ Timeline                     │
+│ ○ Board (Kanban)              │
+│ ○ Gallery                      │
+│                                │
+│ Sharing                        │
+│ ○ Personal (only you)          │
+│ ○ Shared (everyone)            │
+│                                │
+│ Display Options                │
+│ ☑ Show ID                     │
+│ ☑ Show status                 │
+│ ☑ Show assignee               │
+│ ☐ Show description            │
+│                                │
+│ [Cancel]          [Save View]  │
+└────────────────────────────────┘
+```
+
+### 6.4 View Creation Workflow
+
+**From scratch (in Views app):**
+
+1. Click "[+ New View]" in left sidebar
+2. View configuration panel opens (see above)
+3. User fills:
+   - Name: "My Open Tasks"
+   - Entity type: Task
+   - Layout: Table
+   - Sharing: Personal
+4. Click "Add filter" → Filter builder opens
+5. Add filters: Status = Todo, Assigned = Me
+6. Configure display options (which columns to show)
+7. Click "Save View"
+8. View appears in sidebar, becomes active
+
+**Contextual (from Data app or other view):**
+
+1. User in Data app, applies filters: Status = Todo, Assigned = Me
+2. Top bar shows: "Filters active" with icon
+3. Click "Save as view" button (or `Alt+V` shortcut)
+4. Quick save modal:
+
+```
+┌────────────────────────────┐
+│ Save as View               │
+├────────────────────────────┤
+│ Name                       │
+│ [My Open Tasks]            │
+│                            │
+│ ○ Personal                 │
+│ ○ Shared                   │
+│                            │
+│ [Save]                     │
+└────────────────────────────┘
+```
+
+5. View saved, appears in Views app sidebar
+
+**This is the LINEAR PATTERN - filters → saved views**
+
+### 6.5 View Types & Layouts
+
+**Table View:**
+- Default, spreadsheet-style
+- Sortable columns
+- Inline editing
+- Compact or comfortable density
+
+**List View:**
+- Card-based vertical list
+- Shows thumbnail + key fields
+- Good for content-heavy entities
+
+**Graph View:**
+- Network visualization
+- Nodes = entities
+- Edges = relationships
+- Interactive (drag nodes, zoom, pan)
+
+**Timeline View:**
+- Gantt chart style
+- Requires date field
+- Shows duration bars
+- Drag to adjust dates
+
+**Board View (Kanban):**
+- Columns = status values
+- Cards = entities
+- Drag to change status
+- Group by any field (not just status)
+
+**Gallery View:**
+- Grid of cards with preview images
+- Good for visual entities (projects, designs)
+- Configurable card size
+
+**View switcher in top bar:**
+```
+[Table ▾]
+   ↓
+┌──────────────┐
+│ Table        │
+│ List         │
+│ Graph        │
+│ Timeline     │
+│ Board        │
+│ Gallery      │
+└──────────────┘
+```
+
+### 6.6 Filter Builder (Visual, Linear-style)
+
+**Opening filter builder:**
+- Press `F` key
+- Click "Add filter" button
+- Modal OR inline bar (depending on space)
+
+**Filter structure:**
+```
+[Field ▾] [Operator ▾] [Value ▾] [×]
+
+Examples:
+[Status] [is] [Todo] [×]
+[Assigned] [is] [Me] [×]
+[Due date] [is before] [Jan 31] [×]
+[Priority] [is either of] [High, Urgent] [×]
+```
+
+**Available operators:**
+- is / is not
+- is either of (multi-select)
+- contains / does not contain
+- is empty / is not empty
+- is before / is after (dates)
+- is greater than / less than (numbers)
+
+**Filter matching logic:**
+- Default: "All must match" (AND)
+- Toggle: "Any can match" (OR)
+
+**Shown as:**
+```
+Filters (All must match)  [Any ▾]
+```
+
+**Advanced: Nested filters (V2):**
+- Group filters with AND/OR
+- Not needed for MVP
+
+### 6.7 Saved View Management
+
+**Favoriting:**
+- Star icon next to view name
+- Favorited views appear at top of sidebar
+
+**Editing:**
+- Click "Edit" button → Opens config panel
+- Modify filters, layout, sharing
+- Click "Save" to update
+
+**Duplicating:**
+- Right-click view → "Duplicate"
+- Creates copy with " (Copy)" suffix
+- User can modify copy
+
+**Deleting:**
+- Right-click view → "Delete"
+- Confirmation modal (if shared)
+- Irreversible
+
+**Sharing:**
+- Personal → Shared: Click "Share" button
+- Shared → Personal: Not allowed (would hide from others)
+- Shared views show "Shared" badge
+
+### 6.8 Empty States
+
+**No views created yet:**
+```
+┌────────────────────────────────────┐
+│          👁️                        │
+│                                    │
+│    No views created yet            │
+│                                    │
+│    Create custom dashboards with   │
+│    filtered entity lists, graphs,  │
+│    and timelines.                  │
+│                                    │
+│    Examples:                       │
+│    • "My open tasks"               │
+│    • "Team backlog"                │
+│    • "Upcoming deadlines"          │
+│                                    │
+│    [Create your first view]        │
+│    [Browse templates]              │
+│                                    │
+└────────────────────────────────────┘
+```
+
+**Templates button → Shows example views:**
+```
+┌────────────────────────────────────┐
+│ VIEW TEMPLATES                     │
+├────────────────────────────────────┤
+│                                    │
+│ 📋 My Open Tasks                   │
+│    Tasks assigned to you that      │
+│    are not completed               │
+│    [Create from template]          │
+│                                    │
+│ 📅 Upcoming Deadlines              │
+│    Tasks due in next 7 days        │
+│    [Create from template]          │
+│                                    │
+│ 🎯 Project Dashboard               │
+│    All projects with status &      │
+│    progress indicators             │
+│    [Create from template]          │
+│                                    │
+└────────────────────────────────────┘
+```
+
+Templates = pre-configured filter/layout combinations
+
+### 6.9 Multi-Panel Support
+
+**Split view examples:**
+- Two views side-by-side (compare data)
+- View + Detail panel (select entity → see detail)
+- View + Graph (table + network viz of same data)
+
+### 6.10 Keyboard Shortcuts
+
+- `F` - Open filter builder
+- `V` - Toggle between saved views (cycles through)
+- `Alt+V` - Save current filters as view
+- `Cmd+B` - Toggle list/board layout
+- `T` - Collapse/expand groups
+
+### 6.11 Permissions
+
+**Personal views:**
+- Creator only can see/edit/delete
+
+**Shared views:**
+- All users can see
+- Creator + Admins can edit
+- Creator + Owner can delete
+
+**Sharing permissions:**
+- Any user can create personal views
+- Only Owner + Admin can create shared views
+
+---
+
+## 7. APP 5: DOCS
+
+### 7.1 Purpose
+
+**Docs app is the document drive** - markdown documents with entity references and embedded views.
+
+**Mental model:** "Google Drive without folders" - organized by projects, tags, search
+
+### 7.2 Layout
+
+**Drive-style list view (default):**
+
+```
+┌────────────────────────────────────────────────────┐
+│ DOCS                     [Grid/List] [+ New Doc]   │
+├──────────┬─────────────────────────────────────────┤
+│          │                                         │
+│ Filter   │ [Search docs...]                        │
+│ ─────    │                                         │
+│          │ Recent                                  │
+│ Projects │ ──────                                  │
+│ ▼ Mobile │ 📄 Q1 Project Roadmap      2h ago      │
+│   App    │ 📄 User Research Notes     1d ago      │
+│   (8)    │                                         │
+│          │ By Project                              │
+│ ▼ Q1     │ ──────────                              │
+│   Launch │ ▼ Mobile App Redesign                  │
+│   (12)   │   📄 Design Specs          3d ago      │
+│          │   📄 Technical Architecture 1w ago      │
+│ Tags     │   📄 User Testing Plan     1w ago      │
+│ #design  │                                         │
+│   (15)   │ ▼ Q1 Launch                            │
+│ #product │   📄 Launch Plan           2d ago      │
+│   (23)   │   📄 Marketing Strategy    5d ago      │
+│          │                                         │
+│ Pinned   │ Pinned                                  │
+│ ──────   │ ──────                                  │
+│ 📌 Team  │ 📄 Team Handbook                        │
+│   Handbook│ 📄 Product Roadmap                     │
+│          │                                         │
+└──────────┴─────────────────────────────────────────┘
+```
+
+**Document editor view:**
+
+```
+┌────────────────────────────────────────────────────┐
+│ [Back] Q1 Project Roadmap    [Share] [•••]        │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│  # Q1 Project Roadmap                             │
+│                                                    │
+│  Our focus this quarter is completing             │
+│  @User Research and launching @Mobile App v2.     │
+│                                                    │
+│  ## Key Milestones                                │
+│                                                    │
+│  • @Design Sprint (Jan 15)                        │
+│  • @Development (Feb 1)                           │
+│  • @Testing (Mar 1)                               │
+│                                                    │
+│  ## Task Breakdown                                │
+│                                                    │
+│  [Embedded View: My Tasks]                        │
+│  ┌──────────────────────────────────┐            │
+│  │ Task        │ Due  │ Status       │            │
+│  │─────────────────────────────────│             │
+│  │ User Study  │ J15  │ Done         │            │
+│  │ Wireframes  │ J20  │ In Progress  │            │
+│  │ Prototype   │ J25  │ Todo         │            │
+│  └──────────────────────────────────┘            │
+│  [Open in Views →]                                │
+│                                                    │
+│  _Cursor here_                                    │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+### 7.3 Document Organization (NO FOLDERS)
+
+**Documents are organized by:**
+
+1. **Projects** (hierarchical tree)
+2. **Tags** (flat, multiple per doc)
+3. **Recency** (auto-sorted)
+4. **Search** (full-text)
+5. **Pinned** (user-curated)
+
+**NOT organized by folders** - this is critical philosophical choice.
+
+**Projects as organization:**
+
+```
+Projects (in left sidebar)
+──────────────────────────
+▼ Mobile App Redesign
+  📄 Design Specs
+  📄 Technical Architecture
+  📄 User Testing Plan
+  
+▼ Q1 Launch
+  📄 Launch Plan
+  📄 Marketing Strategy
+  
+  ▼ Sub-project: Feature A
+    📄 Feature A Spec
+    📄 Feature A Testing
+```
+
+**Documents can belong to MULTIPLE projects** (many-to-many relationship)
+
+**Tags as cross-cutting organization:**
+
+```
+Tags (in left sidebar)
+──────────────────────
+#design (15 docs)
+#product (23 docs)
+#engineering (12 docs)
+#research (8 docs)
+```
+
+Click tag → Filters to docs with that tag
+
+### 7.4 Components
+
+**Left Sidebar:**
+```
+DOCS
+
+Filter by:
+──────────
+
+Projects
+▼ Mobile App (8)
+▼ Q1 Launch (12)
+○ Book Project (5)
+
+Tags
+#design (15)
+#product (23)
+#engineering (12)
+
+──────────
+Recent
+Pinned
+All Docs
+```
+
+**Document List (Main Area):**
+
+Grid view:
+```
+┌─────┐ ┌─────┐ ┌─────┐
+│ 📄  │ │ 📄  │ │ 📄  │
+│ Doc │ │ Doc │ │ Doc │
+│ 1   │ │ 2   │ │ 3   │
+└─────┘ └─────┘ └─────┘
+```
+
+List view:
+```
+📄 Q1 Project Roadmap        2h ago   #product
+📄 User Research Notes       1d ago   #research
+📄 Design Specs              3d ago   #design
+```
+
+**Document Card (Grid):**
+```
+┌────────────────────┐
+│ 📄                 │
+│                    │
+│ Q1 Project         │
+│ Roadmap            │
+│                    │
+│ Last edited 2h ago │
+│ by You             │
+│                    │
+│ #product           │
+└────────────────────┘
+```
+
+**Document Card (List):**
+```
+📄 Q1 Project Roadmap    |  Last edited 2h ago  |  #product  |  [•••]
+```
+
+### 7.5 Document Editor
+
+**Markdown + Rich Text:**
+- Markdown syntax supported
+- WYSIWYG-style editing (like Notion)
+- Slash commands for blocks
+- Formatting toolbar (appears on selection)
+
+**Formatting Toolbar (on text selection):**
+```
+[B] [I] [U] [Code] [Link] [Comment]
+```
+
+**Slash Commands:**
+```
+Type / to insert:
+
+/h1     Heading 1
+/h2     Heading 2
+/ul     Bullet list
+/ol     Numbered list
+/code   Code block
+/table  Table
+/embed  Embed view
+/@      Mention entity
+/image  Upload image
+```
+
+**Entity References (@mentions):**
+
+Type `@` → Entity picker appears:
+
+```
+┌────────────────────────┐
+│ @___                   │
+│                        │
+│ Search entities...     │
+│                        │
+│ Recent                 │
+│ • User Research        │
+│ • Design Sprint        │
+│                        │
+│ By type                │
+│ Tasks (47)             │
+│ People (12)            │
+│ Projects (15)          │
+│                        │
+└────────────────────────┘
+```
+
+Select entity → Inserts `@User Research` as clickable link
+
+**Rendered @mention:**
+```
+Completing @User Research    ← Hover shows preview card
+             └─────────────────────────────┐
+                                           ↓
+                           ┌───────────────────────┐
+                           │ USER RESEARCH         │
+                           │ ───────────────────── │
+                           │ Type: Task            │
+                           │ Status: In Progress   │
+                           │ Assigned: Maria       │
+                           │ Due: Jan 15, 2025     │
+                           │                       │
+                           │ [Open →]              │
+                           └───────────────────────┘
+```
+
+**Embedded Views:**
+
+Type `/embed` → View selector appears:
+
+```
+┌────────────────────────┐
+│ Embed a view           │
+│                        │
+│ Saved Views            │
+│ • My Open Tasks        │
+│ • Team Backlog         │
+│ • Project Dashboard    │
+│                        │
+│ Or create new filter   │
+│ [+ Custom view]        │
+│                        │
+└────────────────────────┘
+```
+
+Select view → Embeds live table/graph/timeline
+
+**Rendered embedded view:**
+```
+## Task Breakdown
+
+[Embedded View: My Tasks]
+┌────────────────────────────────────┐
+│ Task        │ Due  │ Status        │
+│─────────────────────────────────── │
+│ User Study  │ J15  │ Done          │
+│ Wireframes  │ J20  │ In Progress   │
+│ Prototype   │ J25  │ Todo          │
+└────────────────────────────────────┘
+[Open in Views →] [Refresh]
+
+Embedded view updates LIVE when underlying data changes.
+```
+
+**Inline Comments:**
+- Select text → Click "Comment" in toolbar
+- Comment appears in margin
+- Threaded replies supported
+- Resolved comments hide but remain accessible
+
+### 7.6 Document Properties
+
+**Every document has:**
+```
+┌────────────────────────────┐
+│ DOCUMENT PROPERTIES        │
+├────────────────────────────┤
+│ Title                      │
+│ [Q1 Project Roadmap]       │
+│                            │
+│ Projects                   │
+│ [Mobile App ▾] [+ Add]    │
+│ [Q1 Launch ▾] [×]         │
+│                            │
+│ Tags                       │
+│ [#product] [#planning]     │
+│ [+ Add tag]                │
+│                            │
+│ Owner                      │
+│ [You ▾]                   │
+│                            │
+│ Collaborators              │
+│ [+ Add]                    │
+│ • Maria (Editor)           │
+│ • John (Viewer)            │
+│                            │
+│ Created                    │
+│ Jan 10, 2025               │
+│                            │
+│ Last edited                │
+│ 2 hours ago by You         │
+│                            │
+└────────────────────────────┘
+```
+
+Accessible via:
+- Properties icon in doc header
+- Right sidebar panel
+
+### 7.7 Navigation & Discovery
+
+**Primary navigation methods:**
+
+1. **Search** (Cmd+K anywhere)
+   - Searches doc titles and content
+   - Results ranked by relevance + recency
+
+2. **Filter by project**
+   - Click project in sidebar
+   - Shows docs in that project
+
+3. **Filter by tag**
+   - Click tag in sidebar
+   - Shows docs with that tag
+
+4. **Recent**
+   - Auto-sorted by last edited
+   - Appears at top of list
+
+5. **Pinned**
+   - User-curated shortcuts
+   - Right-click doc → "Pin"
+
+**Breadcrumbs in doc editor:**
+```
+Docs / Mobile App / Design Specs
+      ↑ Project      ↑ Doc name
+```
+
+### 7.8 Collaboration
+
+**Real-time:**
+- Multiple users can edit simultaneously
+- Cursors shown with user names/colors
+- Changes sync immediately
+- Conflict resolution: Last write wins with 5-second merge window
+
+**Presence indicators:**
+```
+[Editing now: Maria 🟢, John 🟢]
+```
+
+**Comments:**
+- Inline comments on selected text
+- General doc comments (in right panel)
+- @mention users to notify
+- Resolve when addressed
+
+**Version History:**
+- Access via doc menu → "Version History"
+- Shows timeline of changes
+- Click version → Preview + restore option
+
+### 7.9 Interactions
+
+**Creating doc:**
+- Click "[+ New Doc]" → Opens editor with blank doc
+- Or `C` → `D` shortcut
+
+**Opening doc:**
+- Click doc card in list
+- Or search → select result
+- Or @mention in another doc → click link
+
+**Editing doc:**
+- Click anywhere in editor → Start typing
+- Selection → Formatting toolbar appears
+- Slash commands for blocks
+- @mention for entities
+- /embed for views
+
+**Moving between docs:**
+- [Back] button in doc header
+- Or Cmd+K → Search → Select different doc
+- Or click doc link in sidebar
+
+**Multi-panel:**
+- Doc + Reference doc (side-by-side)
+- Doc + Canvas (document visual work)
+- Doc + Data (reference entity while writing)
+
+### 7.10 States
+
+**Empty docs list (first time):**
+```
+┌────────────────────────────────────┐
+│          📄                        │
+│                                    │
+│    No documents yet                │
+│                                    │
+│    Create your first document to   │
+│    start writing.                  │
+│                                    │
+│    [+ Create document]             │
+│    [Import from Notion →]         │
+│                                    │
+└────────────────────────────────────┘
+```
+
+**No results (search/filter):**
+```
+No documents match your filter
+
+Try:
+• Adjusting your filters
+• Searching by content
+• Creating a new document
+```
+
+**New blank doc:**
+```
+┌────────────────────────────────────┐
+│                                    │
+│  Untitled                          │
+│                                    │
+│  Start typing or press / for       │
+│  commands...                       │
+│                                    │
+│  _                                 │
+│                                    │
+└────────────────────────────────────┘
+```
+
+### 7.11 Permissions
+
+**Per-document permissions:**
+- Owner: Full control (creator by default)
+- Editor: Can edit, can't delete or change permissions
+- Viewer: Read-only, can comment
+- No access: Can't see doc
+
+**Workspace-level:**
+- All users can create docs
+- Sharing options: Private, Specific users, Everyone in workspace
+
+**Link sharing:**
+- Generate shareable link
+- Options: View-only, Can edit, Expires after X days
+
+---
+
+## 8. APP 6: AI CHAT
+
+### 8.1 Purpose
+
+**AI Chat is the intelligence layer** - conversation with AI that has git-like branching.
+
+**Mental model:** "Git for conversations" - branch, merge, parallel exploration
+
+**Critical innovation:** TWO distinct views for different use cases
+
+### 8.2 The Two-View Architecture
+
+**VIEW A: Conversation Sidebar (Document-style)**
+- Purpose: Navigate CURRENT conversation
+- Like: Google Docs outline, PDF table of contents
+- Shows: Structure of active chat thread
+- Access: While actively chatting
+
+**VIEW B: Workspace Network Graph**
+- Purpose: Understand ALL conversations and their relationships
+- Like: Git branch visualization, project timeline
+- Shows: All chats, branches, merges, agents
+- Access: Full-screen view in AI Chat app
+
+### 8.3 Layout - View A: Conversation Sidebar
+
+**When in an active chat:**
+
+```
+┌────────────────────────────────────────────────────┐
+│ [AI Chat]                                          │
+├──────────┬─────────────────────────────────────────┤
+│          │                                         │
+│ Outline  │ ACTIVE CONVERSATION                     │
+│ ────     │                                         │
+│          │ You: Help me plan Q1 launch            │
+│ ☑ Main   │                                         │
+│   Thread │ AI: I'll help you create a launch...   │
+│          │                                         │
+│ ○ Branch │ You: What about timeline?              │
+│   1: Alt │                                         │
+│   Budget │ AI: Here's a suggested timeline...     │
+│          │                                         │
+│ ○ Branch │ [Branch checkpoint]                    │
+│   2: More│ Created: Branch exploring budget       │
+│   Detail │                                         │
+│          │ You: Let's explore the marketing...    │
+│ [+ New   │                                         │
+│  Branch] │ AI: For marketing budget I recommend..│
+│          │                                         │
+│ ────     │                                         │
+│ Auto-    │ _Type message..._                      │
+│ Recreate │                                         │
+│ Points   │ [Send] [🎯 Branch]                     │
+│          │                                         │
+│ ○ Chunk 1│                                         │
+│ ○ Chunk 2│                                         │
+│ ○ Current│                                         │
+│          │                                         │
+└──────────┴─────────────────────────────────────────┘
+```
+
+**Left Sidebar Components:**
+
+**Outline Section:**
+Shows structure of current conversation
+- Main Thread (always present)
+- Branches (user-created or auto-created)
+- Click branch → Jump to that branch point
+
+**Auto-Recreate Points (collapsed by default):**
+- Reveals the underlying "chunk" structure
+- Behind scenes: Chat is auto-recreated every N messages
+- User rarely needs to see this
+- Shown for power users who want to understand
+
+**Sidebar can be toggled:** `Cmd+\`
+
+### 8.4 Layout - View B: Workspace Network Graph
+
+**Full-screen graph view in AI Chat app:**
+
+```
+┌────────────────────────────────────────────────────┐
+│ AI CHAT WORKSPACE                [+ New Chat]      │
+│ [All] [Active] [Merged]                            │
+├────────────────────────────────────────────────────┤
+│                                                    │
+│               BRANCH VISUALIZATION                 │
+│                                                    │
+│   ┌──────────────┐                                │
+│   │ MAIN THREAD  │  ← ROOT                        │
+│   │ Q3 Strategy  │                                │
+│   │ 24 messages  │                                │
+│   └──────┬───────┘                                │
+│          │                                         │
+│          ├──────┐                                 │
+│          │      │                                 │
+│  ┌───────▼──┐  ┌▼────────────┐                   │
+│  │ Research:│  │ Business:   │ ACTIVE             │
+│  │ Competit │  │ Pricing     │                    │
+│  │ Analysis │  │ Strategy    │                    │
+│  │ 5 msgs   │  │ 12 msgs     │                    │
+│  └──────────┘  └─────────────┘                    │
+│                       │                            │
+│               ┌───────▼────────┐                  │
+│               │ Marketing:     │ DRAFT             │
+│               │ Landing Page   │                   │
+│               │ 2 msgs         │                   │
+│               └────────────────┘                   │
+│                                                    │
+│                      [Stale chat cards ...]       │
+│                                                    │
+│  Legend:                                           │
+│  🔵 Active  🟢 Merged  ⚫ Stale  💭 Concept       │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+**Your mockup exactly - card-based flow visualization**
+
+### 8.5 Components - View B (Workspace Graph)
+
+**Filter Tabs:**
+```
+[All] [Active] [Merged] [Stale]
+```
+
+**Chat Card:**
+```
+┌────────────────────────┐
+│ 🔵 ACTIVE              │
+│                        │
+│ Research: Competitor   │
+│ Analysis               │
+│                        │
+│ Comparing feature      │
+│ sets of top 3...       │
+│                        │
+│ 👤 ×2    💬 5         │
+│ 1h ago                 │
+└────────────────────────┘
+```
+
+**Card metadata:**
+- Status badge (Active, Merged, Draft, Stale, Concept)
+- Title (user-defined or auto-generated)
+- Preview text (first few words)
+- Participant icons (if multi-user)
+- Message count
+- Last activity timestamp
+
+**Connection Lines:**
+- Visual lines showing branch relationships
+- Parent → Child arrows
+- Merge indicators (two lines converging)
+- Can be horizontal OR vertical layout
+
+**Layout Options:**
+```
+[Cards] [Timeline] [List]
+```
+
+- Cards: Vertical flow (your mockup)
+- Timeline: Horizontal with dates
+- List: Compact text list with hierarchy
+
+### 8.6 Branching Mechanics
+
+**Creating a branch:**
+
+Method 1: Explicit
+```
+User in conversation
+Click [Branch] button
+→ "Create branch from this point"
+→ Name branch (optional): "Alternative Budget"
+→ Branch created, switches to new branch
+```
+
+Method 2: Auto-branch (when using specific agent)
+```
+User: "Let's have the Finance agent review this"
+→ System auto-creates branch
+→ Name: "Finance Review Branch"
+→ Prevents polluting main conversation
+```
+
+Method 3: Contextual
+```
+User at any message: Right-click → "Branch from here"
+```
+
+**Branch indicator in conversation:**
+```
+─────────────────────────────────
+🌿 Branch created: Alternative Budget
+You are now in a parallel conversation
+─────────────────────────────────
+```
+
+**Switching branches:**
+- Click branch in sidebar (View A)
+- Click card in graph (View B)
+- Navigate with breadcrumbs
+
+**Merging branches:**
+```
+User in branch conversation
+Click [Merge] button
+→ Modal: "Merge into main thread?"
+→ Options:
+   ○ Merge and close branch
+   ○ Merge but keep branch active
+   ○ Cherry-pick messages (select specific)
+→ [Confirm Merge]
+```
+
+**Merge behavior:**
+- Merged messages appear in main thread
+- Branch marked as "Merged" (green badge)
+- Branch still visible in graph (for history)
+- Can "revert merge" if needed
+
+**Revert (undo changes on branch):**
+```
+Similar to git revert
+User can:
+- Create new branch from earlier point
+- Explicitly revert specific changes
+```
+
+### 8.7 Auto-Recreation (Infinite Chat Illusion)
+
+**Behind the scenes:**
+
+Synap auto-recreates chats to maintain performance and context window limits.
+
+**Every N messages (e.g., 20):**
+1. System saves conversation state
+2. Creates new chat with summarized context
+3. User sees seamless "infinite" conversation
+4. Old chunks archived but accessible
+
+**Visible to user (optional):**
+- Sidebar shows "Recreation points" (collapsed by default)
+- Click to see chunks: "Messages 1-20", "Messages 21-40"
+- Power users can navigate chunks
+- Most users never see this
+
+**Benefits:**
+- Performance stays fast
+- Context window never overflows
+- Complete history preserved
+- Transparent to user
+
+### 8.8 Agent Management
+
+**Agents are AI personalities/roles:**
+- Finance Agent
+- Research Agent
+- Writing Agent
+- Code Agent
+- Custom agents
+
+**Using agents in conversation:**
+```
+User: "Let me bring in the Finance agent"
+AI: "I've invited Finance Agent to this branch."
+
+[Finance Agent joined the conversation]
+
+Finance Agent: "Looking at your budget..."
+```
+
+**Agent appears as:**
+- Separate avatar in messages
+- Different color/icon per agent
+- Listed in chat card metadata
+
+**Agent marketplace (V2):**
+- Browse pre-built agents
+- Install with one click
+- Configure for workspace
+- Create custom agents
+
+### 8.9 Parallel Work & Context Sharing
+
+**Critical feature:** Branches can reference each other's work
+
+**Example:**
+```
+Branch A creates document: "Marketing Plan"
+Branch B can reference: "Use the Marketing Plan from Branch A"
+System: "I've accessed the Marketing Plan and..."
+```
+
+**How it works:**
+- Underlying data is shared (event-sourced)
+- Documents/entities accessible across branches
+- Changes in one branch CAN affect others
+- Auto-updates if configured
+
+**Merge conflicts:**
+- When two branches modify same entity
+- User shown diff + resolution options
+- Can keep Branch A, Branch B, or merge manually
+
+### 8.10 View Modes & Display
+
+**Message display:**
+```
+┌────────────────────────────────────┐
+│ 👤 You               2:45 PM      │
+│ Help me plan Q1 launch             │
+└────────────────────────────────────┘
+
+┌────────────────────────────────────┐
+│ 🤖 AI                2:45 PM      │
+│                                    │
+│ I'll help you create a launch plan.│
+│ Let's start with:                  │
+│ 1. Timeline                        │
+│ 2. Budget                          │
+│ 3. Marketing                       │
+│                                    │
+│ Which would you like to explore?   │
+└────────────────────────────────────┘
+```
+
+**Interactive elements in AI responses:**
+- Code blocks (syntax highlighted, copyable)
+- Tables (formatted)
+- Links to entities (clickable @mentions)
+- Action buttons ("Create task", "Update doc")
+
+**AI Proposals (Human-in-the-loop):**
+
+```
+┌────────────────────────────────────┐
+│ 🤖 AI                2:45 PM      │
+│                                    │
+│ I propose updating the project     │
+│ status to "Done" since all         │
+│ subtasks are completed.            │
+│                                    │
+│ Changes:                           │
+│ • Mobile App Redesign              │
+│   Status: In Progress → Done       │
+│                                    │
+│ [Approve] [Reject] [Modify]       │
+└────────────────────────────────────┘
+```
+
+If user lacks permission → Goes to approval inbox
+
+### 8.11 States
+
+**Empty AI Chat (first time):**
+```
+┌────────────────────────────────────┐
+│          💬                        │
+│                                    │
+│    Start a conversation            │
+│                                    │
+│    Ask questions, brainstorm ideas,│
+│    or request help with tasks.     │
+│                                    │
+│    Try:                            │
+│    • "Help me plan Q1 roadmap"     │
+│    • "Summarize my open tasks"     │
+│    • "Draft an email to client"    │
+│                                    │
+│    [Start chat]                    │
+└────────────────────────────────────┘
+```
+
+**No branches yet (in graph view):**
+```
+Only main thread exists
+Create branches to explore alternatives
+or work on parallel tasks
+
+[+ Create branch]
+```
+
+### 8.12 Keyboard Shortcuts
+
+- `Cmd+Shift+K` - Open AI Chat
+- `Cmd+Enter` - Send message
+- `Cmd+\` - Toggle sidebar (View A)
+- `B` - Create branch
+- `M` - Merge current branch
+- `Cmd+Up/Down` - Navigate branches
+
+### 8.13 Permissions
+
+- All users can chat with AI
+- Branching: All users
+- Merging: Creator + collaborators
+- Agent access: Based on workspace settings
+- Approvals: Based on entity permissions
+
+---
+
+## 9. COMPONENT REQUIREMENTS
+
+### 9.1 Existing Components (To Use)
+
+Based on what you said you already have:
+- ✅ Button
+- ✅ Input
+- ✅ Card
+- ✅ Sidebar
+- ✅ Floor-tip panel
+- ✅ Side panels
+
+### 9.2 Required New Components
+
+**Navigation:**
+- [ ] Command Palette (Cmd+K)
+- [ ] App Icon Sidebar (vertical, icon-only)
+- [ ] Breadcrumbs
+- [ ] Tab Navigation
+
+**Data Display:**
+- [ ] Data Table (sortable, filterable, resizable columns)
+- [ ] Tree View (collapsible hierarchy)
+- [ ] Network Graph (nodes + edges visualization)
+- [ ] Timeline View (Gantt-style)
+- [ ] Kanban Board (drag-drop columns)
+- [ ] Gallery Grid (card grid layout)
+
+**Forms:**
+- [ ] Filter Builder (visual query builder)
+- [ ] Property Panel (entity metadata editor)
+- [ ] Multi-Select Dropdown
+- [ ] Date Picker
+- [ ] User Picker (@mention style)
+- [ ] Entity Type Selector
+
+**Content:**
+- [ ] Markdown Editor (WYSIWYG)
+- [ ] Rich Text Toolbar
+- [ ] Slash Command Menu (/)
+- [ ] Entity Picker (@mention)
+- [ ] Embedded View Block
+
+**Feedback:**
+- [ ] Toast Notification (success, error, info)
+- [ ] Empty State (icon + text + CTA)
+- [ ] Loading Spinner
+- [ ] Skeleton Loader
+- [ ] Progress Bar
+
+**Chat:**
+- [ ] Message Bubble (user + AI)
+- [ ] Branch Indicator
+- [ ] Chat Card (for graph view)
+- [ ] Connection Lines (branch visualization)
+- [ ] Agent Avatar
+
+**Actions:**
+- [ ] Context Menu (right-click)
+- [ ] Dropdown Menu
+- [ ] Modal Dialog
+- [ ] Confirmation Dialog
+- [ ] Approval Card (inbox)
+
+**Layout:**
+- [ ] Multi-Panel Container (resizable)
+- [ ] Panel Separator (draggable)
+- [ ] Collapsible Sidebar
+- [ ] Split View Container
+
+### 9.3 Component Priority
+
+**P0 (Must have for MVP):**
+- Command Palette
+- App Icon Sidebar
+- Data Table
+- Markdown Editor
+- Entity Picker
+- Filter Builder
+- Empty States
+- Toast Notifications
+- Message Bubble
+
+**P1 (Important for good UX):**
+- Tree View
+- Property Panel
+- Context Menu
+- Modal Dialog
+- Multi-Panel Container
+- Breadcrumbs
+
+**P2 (Nice to have):**
+- Network Graph
+- Timeline View
+- Kanban Board
+- Gallery Grid
+- Skeleton Loader
+
+---
+
+## 10. USER FLOWS
+
+### 10.1 Flow: New User Onboarding
+
+**Scenario:** User signs up for first time
+
+**Steps:**
+1. User arrives at Dashboard (empty state)
+2. Quick Access cards shown with tooltips
+3. Click "New Whiteboard" → Opens Canvas
+4. Tooltip: "Draw a box to create your first entity"
+5. User draws box → Entity created (confetti animation)
+6. Tooltip: "Try connecting it to another entity"
+7. User draws line → Relationship created
+8. Tooltip: "View your data in the Data app" (highlights Data icon)
+9. User clicks Data app → Sees entities in table
+10. Tooltip: "You can create custom views in the Views app"
+11. Onboarding complete
+
+**Progressive, hands-on, skippable at any time**
+
+### 10.2 Flow: Visual Brainstorming → Structured Analysis
+
+**Scenario:** User planning project visually, then wants to analyze
+
+**Steps:**
+1. User in Canvas app
+2. Draws project structure: "User Research", "Design", "Development"
+3. Connects with dependencies
+4. Entities auto-created as Tasks
+5. User opens Data app (click icon OR split panel)
+6. Sees all entities in table view
+7. Adds metadata: due dates, assignees, status
+8. Filters to "Assigned to Me"
+9. Clicks "Save as view" → Names "My Tasks"
+10. View appears in Views app sidebar
+11. User embeds view in Doc: "Project Plan"
+12. Complete loop: Canvas → Data → Views → Docs
+
+### 10.3 Flow: Create Custom Dashboard
+
+**Scenario:** User wants to see "High Priority Tasks Due This Week"
+
+**Steps:**
+1. User clicks Views app
+2. Empty state shown with templates
+3. Click "Create your first view"
+4. Configuration panel opens:
+   - Name: "High Priority This Week"
+   - Entity Type: Task
+   - Layout: List
+5. Add filters:
+   - Priority = High OR Urgent
+   - Due Date = This Week
+6. Configure display: Show status, assignee, due date
+7. Save as Personal view
+8. View appears in sidebar
+9. User clicks view → Sees filtered list
+10. Can share with workspace if desired
+
+### 10.4 Flow: Document with Entity References
+
+**Scenario:** User writing project update, wants to reference tasks
+
+**Steps:**
+1. User in Docs app
+2. Click "+ New Doc"
+3. Editor opens, starts typing: "Project Update"
+4. Types: "We completed the " then `@`
+5. Entity picker appears
+6. Types "User" → Filters to "User Research"
+7. Selects → Inserts as link
+8. Continues: "and started the @Design Sprint"
+9. Types `/embed`
+10. Selects view: "My Tasks"
+11. Embedded table appears in doc
+12. Document now has live references + live view
+13. When task status changes → Doc stays current
+
+### 10.5 Flow: AI Chat Branching
+
+**Scenario:** User exploring product pricing, wants to try alternative without losing main thread
+
+**Steps:**
+1. User in AI Chat (main conversation about launch plan)
+2. AI suggests: "Let's discuss pricing"
+3. User: "Actually, let me explore pricing separately"
+4. Clicks [Branch] button
+5. Names branch: "Pricing Strategy"
+6. New branch created, sidebar shows branch
+7. User in branch: "What if we do freemium?"
+8. AI responds with freemium analysis
+9. User: "Actually, enterprise-only might be better"
+10. Explores enterprise pricing
+11. Decides enterprise is better
+12. Clicks [Merge] → "Merge into main thread"
+13. Enterprise pricing discussion appears in main
+14. Branch marked as Merged but remains visible in graph
+
+### 10.6 Flow: Approval Workflow
+
+**Scenario:** AI proposes change user doesn't have permission to make
+
+**Steps:**
+1. User chatting with AI
+2. AI: "I propose marking Mobile App as Done"
+3. AI checks permissions → User can't update project status
+4. AI: "I've submitted this for approval"
+5. Request appears in Dashboard > Inbox: Approvals
+6. Owner sees notification badge
+7. Owner clicks request → Detail view
+8. Shows: AI proposal + context + changes
+9. Owner clicks [Approve]
+10. Change applied
+11. User notified: "Your request was approved"
+12. AI continues conversation with confirmation
+
+---
+
+## 11. IMPLEMENTATION NOTES
+
+### 11.1 For AI Developers
+
+This document is intended for AI agents familiar with the Synap codebase. Key integration points:
+
+**Backend:**
+- Event-sourced architecture (all actions are events)
+- Hub Protocol for AI routing
+- Entities stored with typed metadata
+- Relationships as first-class connections
+
+**Frontend:**
+- Existing component library (reuse Button, Input, Card, etc.)
+- Multi-panel support (DnD-kit or similar for resizing)
+- Command palette (cmdk library recommended)
+- Keyboard shortcuts (react-hotkeys or similar)
+
+**Data Flow:**
+- Canvas → Creates entity events
+- Data app → CRUD operations on entities
+- Views → Query entities with filters
+- Docs → Reference entities by ID
+- AI Chat → Operates on entities via Hub Protocol
+
+### 11.2 State Management
+
+**Global state:**
+- Current user
+- Active workspace
+- Sidebar collapsed state
+- Active app
+- Command palette open/closed
+
+**Per-app state:**
+- Canvas: Current zoom, selected entities
+- Data: Selected entity type, sort/filter
+- Views: Active view, filter state
+- Docs: Open document, cursor position
+- AI Chat: Active conversation, branch
+
+**Persistence:**
+- User preferences → localStorage
+- Workspace data → Backend sync
+- Draft content → IndexedDB for offline
+
+### 11.3 Performance Considerations
+
+**Canvas:**
+- Virtualize large canvases
+- Use canvas element for drawings
+- React components for entities
+- Throttle pan/zoom events
+
+**Data app:**
+- Virtualize table rows (react-window)
+- Lazy load entity data
+- Debounce search/filter
+- Paginate large datasets
+
+**AI Chat:**
+- Lazy load conversation history
+- Virtualize message list
+- Stream AI responses
+- Background sync for branches
+
+### 11.4 Accessibility
+
+**Required ARIA:**
+- Semantic HTML (nav, main, aside, article)
+- Button roles for clickable icons
+- Labels for form inputs
+- Aria-expanded for collapsible elements
+- Aria-selected for active items
+
+**Keyboard Navigation:**
+- All actions accessible via keyboard
+- Focus indicators visible
+- Tab order logical
+- Escape closes modals/menus
+
+**Screen Reader:**
+- Announce state changes (toasts)
+- Describe complex visuals (graphs)
+- Alt text for icons
+- Live regions for updates
+
+### 11.5 Responsive Design
+
+**Breakpoints:**
+- Desktop: 1440px+
+- Laptop: 1024px - 1439px
+- Tablet: 768px - 1023px
+- Mobile: 375px - 767px
+
+**Mobile adaptations:**
+- Sidebar becomes bottom tab bar
+- Tables become card lists
+- Multi-panel → Single panel with navigation
+- Command palette → Full screen
+- Canvas → Touch gestures for pan/zoom
+
+### 11.6 Testing Strategy
+
+**Unit tests:**
+- Component rendering
+- State management logic
+- Filter builder logic
+- Entity creation
+
+**Integration tests:**
+- Canvas → Data flow
+- Entity references in Docs
+- View saving and loading
+- Branch creation/merging
+
+**E2E tests:**
+- Complete user flows (section 10)
+- Multi-panel interactions
+- Command palette navigation
+- Collaboration features
+
+### 11.7 Deployment Checklist
+
+**Pre-launch:**
+- [ ] All P0 components implemented
+- [ ] All 6 apps functional
+- [ ] Command palette working
+- [ ] Data persistence tested
+- [ ] Performance benchmarks met
+- [ ] Accessibility audit passed
+- [ ] Cross-browser tested
+- [ ] Mobile responsive verified
+- [ ] Onboarding flow tested
+- [ ] Error handling robust
+
+**Launch:**
+- [ ] Analytics tracking setup
+- [ ] Error reporting configured
+- [ ] Feature flags enabled
+- [ ] Documentation complete
+- [ ] Support resources ready
+
+---
+
+## APPENDIX A: DESIGN PRINCIPLES
+
+**1. Progressive Disclosure**
+Show simple interface by default, reveal complexity on demand
+
+**2. Keyboard-First**
+All actions accessible via keyboard, shortcuts discoverable
+
+**3. Context-Aware**
+UI adapts based on what user is doing and what data they have
+
+**4. Consistent Patterns**
+Similar actions work the same way across all apps
+
+**5. Instant Feedback**
+UI responds immediately, async operations show progress
+
+**6. Forgiving UX**
+Undo/redo everywhere, confirmations for destructive actions
+
+**7. Empty States Teach**
+Every empty state explains what's possible and how to start
+
+**8. Search Over Navigate**
+Command palette and search preferred over deep navigation
+
+---
+
+## APPENDIX B: GLOSSARY
+
+**Entity:** Typed data object (Task, Person, Company, etc.)  
+**Metadata:** Properties/columns of an entity type  
+**Relationship:** Typed connection between entities  
+**View:** Saved filtered query of entities  
+**Project:** Hierarchical entity for organization  
+**Tag:** Flat label for cross-cutting organization  
+**Branch:** Parallel AI conversation path  
+**Merge:** Combining branch back into main conversation  
+**Hub Protocol:** Intelligence routing layer for AI agents  
+**Event-sourced:** Architecture where all changes are immutable events  
+**Modification Mode:** Schema editing mode in Data app (Owner/Admin only)  
+**Progressive Disclosure:** Revealing complexity gradually as needed  
+**Multi-panel:** Split-screen layout with resizable panels  
+
+---
+
+## DOCUMENT END
+
+**Version:** 1.0  
+**Status:** ✅ Final - Ready for Implementation  
+**Last Updated:** January 2025
+
+This specification provides everything needed to build Synap's UX. Refer to this document as the source of truth for all UI/UX decisions.

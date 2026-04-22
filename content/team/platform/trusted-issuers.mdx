@@ -231,3 +231,10 @@ Future improvement: call `NotificationService.create()` (type `system`, category
 **4. `/api/handshake` is not migrated**
 
 The user SSO handshake endpoint still uses the `CONTROL_PLANE_URL` env-var path. Its threat model differs (it's a browser-initiated login, not a service-to-service call) so the migration is intentionally deferred, but it remains an inconsistency.
+
+## Related
+
+- [Auth Architecture](./auth-architecture.mdx) — Authorization and access control
+- [Security](./security.mdx) — Security practices and threat model
+- [API Keys](./api-keys.mdx) — API key lifecycle and management
+- [Permissions](./permissions.mdx) — RBAC and proposal governance

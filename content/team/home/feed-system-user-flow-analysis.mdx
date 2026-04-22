@@ -1,0 +1,735 @@
+# Unified Feed System - User Flow Analysis
+
+## Executive Summary
+
+This document analyzes the user flows for Synap's unified feed system, which consolidates RSS feeds, proactive AI briefings, and signal feeds into a single channel-based architecture. The system is **partially implemented** with core infrastructure in place but several UX gaps remain.
+
+**Status:** 
+- ✅ Backend infrastructure (channels, workers, migrations) - **COMPLETE**
+- ✅ Feed execution engine (RSS + Proactive) - **COMPLETE**
+- ⚠️ First-time user auto-creation - **PARTIAL** (depends on workspace join)
+- ⚠️ Feed creation UI/API - **MISSING** (no user-facing creation flow)
+- ✅ Relay Feed integration - **COMPLETE**
+- ⚠️ Capture/dismiss actions - **MISSING** (metadata exists, no UI)
+- ⚠️ Cross-feed references - **PARTIAL** (types defined, no implementation)
+
+---
+
+## 1. First-Time User Opens Browser
+
+### What Feeds Are Auto-Created?
+
+**Trigger Point:** When a user joins a workspace (`workspaces.addMember`)
+
+```
+Sequence: User Joins Workspace
+─────────────────────────────────────────────────────────────
+
+User Action                    Backend Response
+───────────                    ────────────────
+Accept workspace invite   →    POST /workspaces/:id/join
+                                    ↓
+                         ┌──────┴──────┐
+                         ↓             ↓
+              ensurePersonalChannel()  ensureProactiveFeedChannel()
+                         ↓             ↓
+                   [channel_type='personal']  [channel_type='feed', feedScope='user']
+                         ↓             ↓
+                    ┌────┴────┐   ┌────┴────┐
+                    ↓         ↓   ↓         ↓
+              SELECT or INSERT (idempotent)
+                    ↓         ↓
+              Returns channel IDs
+```
+
+**Code Location:** `synap-backend/packages/api/src/routers/workspaces.ts:652-664`
+
+**Feeds Created:**
+
+| Feed Type | Channel Type | Feed Scope | Created When |
+|-----------|-------------|------------|--------------|
+| Personal Chat | `personal` | - | On workspace join |
+| Proactive Feed | `feed` | `user` | On workspace join |
+
+**Key Finding:** ❌ **No default RSS feeds are auto-created for new users.** The signal feed migration only runs for users with *existing* subscriptions.
+
+### How They Discover Feed Channels
+
+**Current State:** Feed channels are **NOT prominently surfaced** in the UI.
+
+```
+Current Discovery Paths:
+────────────────────────
+
+1. Chat Tab → Personal channel (sidebar, always visible)
+                    ↓
+            Proactive messages appear here as SYSTEM role
+                    ↓
+            User sees "Morning Briefing", "Weekly Digest"
+
+2. Browser Apps → Signal Feed app (if enabled)
+                    ↓
+            Shows aggregated content from RSS sources
+                    ↓
+            ⚠️ Discovery is poor - buried in apps list
+
+3. Relay App → Feed tab (primary navigation)
+                    ↓
+            Shows proactive + encounter + campaign items
+                    ↓
+            ✅ Best discovery experience
+```
+
+**Discovery Gap:** There's no "Feeds" section in the Browser sidebar. Feed channels exist in the DB but aren't listed in any dedicated UI.
+
+### Onboarding Experience
+
+**Current Flow:**
+
+```
+First-Time User Onboarding
+──────────────────────────
+
+1. StoryOnboardingFlow → Preset selection (second-brain, etc.)
+                                ↓
+2. Workspace creation  → "On my Data Pod" / "Keep it local"
+                                ↓
+3. Backend provisions  → Personal channel + Proactive feed channel
+                                ↓
+4. User lands on       → Dashboard (bento grid) or Chat
+                                ↓
+5. First proactive     → Morning briefing (next day at 8am)
+     message
+```
+
+**Onboarding Gap:** ❌ No guided feed setup during onboarding. Users don't know feeds exist unless they explore.
+
+---
+
+## 2. User Wants to Create a Feed
+
+### API Flow (Backend-Ready)
+
+**Note:** The backend supports feed creation, but there's **NO UI** for it.
+
+```
+Feed Creation API Flow
+──────────────────────
+
+User Request: POST /trpc/feeds.createFeedChannel
+
+Request Body:
+{
+  "title": "Tech News",
+  "feedType": "rss",  // or "proactive"
+  "workspaceId": "...",  // optional (null = pod-wide)
+  
+  // For RSS feeds:
+  "config": {
+    "feedType": "rss",
+    "sources": [
+      {
+        "url": "https://hnrss.org/frontpage",
+        "name": "Hacker News"
+      }
+    ],
+    "schedule": "0 */6 * * *",  // Every 6 hours
+    "postMode": "individual"     // or "batch"
+  }
+  
+  // For Proactive feeds:
+  "config": {
+    "feedType": "proactive",
+    "schedule": "0 9 * * *",     // Daily at 9am
+    "include": {
+      "tasksDue": true,
+      "pendingProposals": true,
+      "recentEntities": true
+    },
+    "summarization": {
+      "style": "brief"
+    }
+  }
+}
+
+Backend Processing:
+1. Validate config with FeedConfigSchema (zod)
+2. Calculate nextRunAt from cron expression
+3. Create channel with channel_type='feed'
+4. Store config in channel.metadata.feedConfig
+5. Store status in channel.metadata.feedStatus
+6. Return channel ID
+
+Response:
+{
+  "channelId": "uuid",
+  "title": "Tech News",
+  "nextRunAt": "2026-04-13T06:00:00Z",
+  "status": "active"
+}
+```
+
+### Configuration Options
+
+**RSS Feed Config:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `sources` | Required | Array of RSS/Atom URLs |
+| `schedule` | `0 */6 * * *` | Cron expression (6 hours) |
+| `maxItemsPerRun` | 10 | Max items to post per execution |
+| `dedupWindowDays` | 30 | How long to track seen URLs |
+| `minRelevanceScore` | 0 | Minimum AI relevance (0-100) |
+| `postMode` | `individual` | `individual` or `batch` digest |
+| `rsshubConfig.useCpProxy` | true | Use CP RSSHub proxy |
+
+**Proactive Feed Config:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `include.tasksDue` | true | Include tasks due soon |
+| `include.tasksDueDays` | 3 | Days ahead to look |
+| `include.pendingProposals` | true | Include pending proposals |
+| `include.recentEntities` | true | Recent entity activity |
+| `include.activitySummary` | true | Workspace activity counts |
+| `summarization.style` | `brief` | `brief`, `detailed`, `bullet_points` |
+
+### Missing: Feed Creation UI
+
+**Gap:** There's no interface for users to:
+- Browse/create RSS feeds
+- Configure proactive feed settings
+- Choose between RSS vs Proactive (users must understand the difference)
+- View feed status/health
+
+**Deferred Features (from code comments):**
+```typescript
+// feeds.ts:325
+/**
+ * Create or update feed configuration.
+ * Note: Creating the actual feed channel is done through channels.createFeedChannel
+ * or similar. This endpoint just validates and updates the config.
+ */
+```
+
+---
+
+## 3. User Opens Relay App
+
+### Relay Feed Creation
+
+**Trigger:** App initialization → `useRelayFeed` hook
+
+```
+Relay Feed Initialization Flow
+──────────────────────────────
+
+App Open
+   ↓
+useRelayFeed() hook mounts
+   ↓
+┌─────────────────────────────────────┐
+│ Query: ['relay-feed-channel', wsId] │
+└─────────────────────────────────────┘
+   ↓
+Check for existing channel:
+   ├─ WHERE name = 'Relay Feed'
+   └─ OR metadata->isRelayFeed = true
+   ↓
+If exists → Return channel
+If NOT exists → Create new channel
+   ↓
+POST /trpc/chat.createChannel
+{
+  "name": "Relay Feed",
+  "type": "ai_thread",
+  "metadata": {
+    "isRelayFeed": true,
+    "feedConfig": {  // Full config object
+      "feedType": "proactive",
+      "schedule": { "cron": "0 8 * * *" },
+      "retention": { "archiveAfterDays": 7 }
+    }
+  }
+}
+```
+
+**Key Difference:** Relay creates an `ai_thread` channel, NOT a `feed` channel. This is a **legacy design** - the unified feed system uses `channel_type='feed'`.
+
+**Code:** `relay-app/src/hooks/useRelayFeed.ts:186-223`
+
+### Refresh Behavior
+
+```
+Refresh Flow
+────────────
+
+User pulls to refresh
+   ↓
+onRefresh() callback
+   ↓
+┌──────────────────────────────────┐
+│ 1. trigger({ channelId, force }) │
+│    → POST /trpc/feeds.trigger    │
+│    → Sets metadata.triggerRequestedAt
+└──────────────────────────────────┘
+   ↓
+┌──────────────────────────────────┐
+│ 2. refetch()                     │
+│    → GET /trpc/feeds.getStatus   │
+└──────────────────────────────────┘
+   ↓
+┌──────────────────────────────────┐
+│ 3. refetchMessages()             │
+│    → GET messages from channel   │
+└──────────────────────────────────┘
+```
+
+**Cooldown:** 5 minutes between refreshes (enforced client-side via `relay:feedLastTriggered` localStorage key)
+
+### Loading States
+
+**Initial Load:**
+```typescript
+// useRelayFeed.ts:182-186
+const { isLoading: isChannelLoading } = useQuery(...)
+const { isLoading: isMessagesLoading } = useQuery(...)
+
+isLoading = isChannelLoading || isMessagesLoading
+```
+
+**Skeleton UI:**
+```
+┌─────────────────────────────┐
+│  ○  ○  ○  ○  ○  (skeleton)   │
+│  ────────                   │
+│  ────────                   │
+│  ────────                   │
+└─────────────────────────────┘
+```
+
+**Error State:**
+```
+┌─────────────────────────────┐
+│  ⚠️ Could not load feed      │
+└─────────────────────────────┘
+```
+
+---
+
+## 4. User Views a Feed
+
+### Cross-Feed References
+
+**Status:** ❌ **Types defined but NOT implemented**
+
+```typescript
+// synap-app/packages/core/channels/src/types/feed.ts:63
+export interface FeedMessageMetadata {
+  // ... other fields ...
+  crossFeeds?: CrossFeedReference[];  // ← Never populated
+}
+
+export interface CrossFeedReference {
+  feedId: string;
+  feedName: string;
+  feedType: FeedSourceType;
+  href?: string;
+}
+```
+
+**Gap:** The system doesn't track when the same item appears in multiple feeds. To implement:
+
+1. Index items by URL in `feed_items` table
+2. Query for duplicates across user feeds
+3. Populate `crossFeeds` in message metadata
+
+### Capture an Item
+
+**Status:** ❌ **Not implemented end-to-end**
+
+```
+Capture Flow (Partial Implementation)
+────────────────────────────────────
+
+UI Layer (Relay):
+┌─────────────────────────────┐
+│ Feed Item Card              │
+│ ┌─────────────────────────┐ │
+│ │ Title...                │ │
+│ │ Description...          │ │
+│ │              [Capture] ←┼─┼── onPress → openCaptureModal()
+│ └─────────────────────────┘ │
+└─────────────────────────────┘
+   ↓
+CaptureModal opens
+   ↓
+User selects entity type
+   ↓
+POST /trpc/captures.create (implied)
+   ↓
+Create entity with source URL
+```
+
+**Code:** `relay-app/app/(tabs)/feed.tsx:67-71`
+
+**Missing:** 
+- No `isCaptured` flag persistence in feed message metadata
+- No capture entity ID linking back to feed item
+- Browser-side capture UI not connected to feeds
+
+### Dismiss an Item
+
+**Status:** ❌ **Not implemented**
+
+```typescript
+// Types defined but unused:
+export interface FeedMessageMetadata {
+  isDismissed?: boolean;  // ← Never read/written
+}
+```
+
+**Required Implementation:**
+1. Add `dismissedItems` array to user preferences
+2. Filter dismissed items in feed queries
+3. Add "Undo dismiss" action
+
+---
+
+## 5. User Receives Morning Briefing
+
+### How It Appears
+
+```
+Morning Briefing Delivery Flow
+──────────────────────────────
+
+8:00 AM User's Local Time
+   ↓
+proactive-morning-briefing worker
+   ↓
+1. Query workspaces with morningBriefing.enabled=true
+2. Check isWithinWindow(timezone, cronHour, cronMinute)
+3. Aggregate data:
+   - pendingProposals count
+   - tasksDueToday (from entities.properties.dueDate)
+   - recentEntities (last 24h)
+   - updatedCount
+   ↓
+4. Compose briefing markdown
+   ↓
+routeProactiveMessage({
+  userId,
+  workspaceId,
+  content: composeMorningBriefing(data),
+  proactiveType: "morning_briefing"
+})
+   ↓
+┌────────────────────────────────────┐
+│ Check deliveryPreferences          │
+│   surfaces: ['feed', 'chat', 'notification']
+└────────────────────────────────────┘
+   ↓
+Post to each enabled surface
+```
+
+**Sample Content:**
+```markdown
+## Good morning ☀️
+
+Here's what's happening in **My Workspace** today:
+
+**2** pending proposals awaiting your review
+
+**Due today**: 3 tasks
+- Review Q2 roadmap
+- Sync with design team
+- Update documentation
+
+**Yesterday's activity**: 5 new items, 12 updates
+- 2 notes
+- 2 tasks
+- 1 project
+
+Have a productive day!
+```
+
+### Where It Posts
+
+**Default:** Feed channel only (`surfaces: ['feed']`)
+
+**Configuration:** Users can change via `trpc.proactive.updatePrefs`:
+
+```typescript
+// workspace.settings.proactiveAi
+{
+  enabled: true,
+  morningBriefing: {
+    enabled: true,
+    cronHour: 8,
+    cronMinute: 0,
+    timezone: "America/New_York"
+  },
+  deliveryPreferences: {
+    proactive: {
+      surfaces: ['feed', 'notification']  // Also send notification
+    }
+  }
+}
+```
+
+### How It's Different
+
+| Aspect | Morning Briefing | Regular Proactive | RSS Feed |
+|--------|------------------|-------------------|----------|
+| **Trigger** | Scheduled (daily) | Event-driven | Scheduled (varies) |
+| **Content** | Workspace summary | AI insights | External content |
+| **Source** | Database queries | IS generation | RSS/Atom feeds |
+| **Channel** | Personal proactive feed | Personal proactive feed | Dedicated RSS feed |
+| **Author** | SYSTEM (bot) | SYSTEM (bot) | SYSTEM (bot) |
+| **Deduplication** | Once per day | Per-type per day | URL-based |
+
+---
+
+## Implementation Status Summary
+
+### ✅ Complete
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| Feed channel schema | `synap-backend/packages/database/src/schema/channels.ts` | ✅ |
+| Feed config types | `synap-backend/packages/api/src/types/feed-config.ts` | ✅ |
+| Feed scheduler worker | `synap-backend/packages/jobs/src/workers/feed-scheduler.ts` | ✅ |
+| RSS executor | `synap-backend/packages/jobs/src/workers/feed-rss-executor.ts` | ✅ |
+| Proactive executor | `synap-backend/packages/jobs/src/workers/feed-proactive-executor.ts` | ✅ |
+| RSS fetcher | `synap-backend/packages/jobs/src/fetchers/rss-fetcher.ts` | ✅ |
+| Proactive aggregator | `synap-backend/packages/jobs/src/fetchers/proactive-aggregator.ts` | ✅ |
+| Migration runner | `synap-backend/packages/jobs/src/migrations/run-feed-migrations.ts` | ✅ |
+| Morning briefing worker | `synap-backend/packages/jobs/src/workers/proactive-morning-briefing.ts` | ✅ |
+| Feed status API | `synap-backend/packages/api/src/routers/feeds.ts` | ✅ |
+| Relay feed hook | `relay-app/src/hooks/useRelayFeed.ts` | ✅ |
+| Trigger feed hook | `relay-app/src/hooks/useTriggerFeed.ts` | ✅ |
+
+### ⚠️ Partial
+
+| Component | Gap |
+|-----------|-----|
+| First-time feed creation | Only proactive feed, no default RSS feeds |
+| Cross-feed references | Types defined, not implemented |
+| Feed discovery | Feed channels exist but no dedicated UI |
+
+### ❌ Missing
+
+| Feature | Priority | Notes |
+|---------|----------|-------|
+| Feed creation UI | HIGH | No way for users to create RSS feeds |
+| Feed management UI | HIGH | Can't list, edit, delete feeds |
+| Capture action | MEDIUM | Modal exists, no persistence |
+| Dismiss action | MEDIUM | Types exist, no implementation |
+| Cross-feed reference UI | LOW | Types exist, no deduplication logic |
+| Feed health monitoring | LOW | No UI for failed feeds |
+| Feed import/export | LOW | No OPML support |
+
+---
+
+## Sequence Diagrams
+
+### Full Feed Execution Flow
+
+```
+┌────────┐     ┌──────────┐     ┌──────────┐     ┌────────┐     ┌──────────┐
+│Cron    │     │Scheduler │     │pg-boss   │     │Executor│     │Database  │
+│Trigger │     │Worker    │     │Queue     │     │Worker  │     │          │
+└───┬────┘     └────┬─────┘     └────┬─────┘     └───┬────┘     └────┬─────┘
+    │               │                │               │               │
+    │ Every minute  │                │               │               │
+    │──────────────>│                │               │               │
+    │               │                │               │               │
+    │               │ Query active   │               │               │
+    │               │ feed channels  │               │               │
+    │               │───────────────────────────────>│               │
+    │               │                │               │               │
+    │               │ Return channels│               │               │
+    │               │<───────────────────────────────│               │
+    │               │                │               │               │
+    │               │ Check if due   │               │               │
+    │               │ (nextRunAt /   │               │               │
+    │               │  triggerFlag)  │               │               │
+    │               │                │               │               │
+    │               │ Enqueue job    │               │               │
+    │               │───────────────>│               │               │
+    │               │                │               │               │
+    │               │ Update status  │               │               │
+    │               │ to 'running'   │               │               │
+    │               │───────────────────────────────>│               │
+    │               │                │               │               │
+    │               │                │ Pickup job    │               │
+    │               │                │──────────────>│               │
+    │               │                │               │               │
+    │               │                │               │ Fetch RSS /   │
+    │               │                │               │ Aggregate data│
+    │               │                │               │──────────────>│
+    │               │                │               │               │
+    │               │                │               │ Return items  │
+    │               │                │               │<──────────────│
+    │               │                │               │               │
+    │               │                │               │ Classify /    │
+    │               │                │               │ Summarize     │
+    │               │                │               │ (via IS)      │
+    │               │                │               │               │
+    │               │                │               │ Post messages │
+    │               │                │               │──────────────>│
+    │               │                │               │               │
+    │               │                │               │ Emit events   │
+    │               │                │               │──────────────>│
+    │               │                │               │               │
+    │               │                │               │ Update status │
+    │               │                │               │ to 'success'  │
+    │               │                │               │──────────────>│
+```
+
+### User Views Feed (Relay)
+
+```
+┌────────┐     ┌──────────┐     ┌────────┐     ┌─────────┐
+│User    │     │Relay App │     │Backend │     │Database │
+└───┬────┘     └────┬─────┘     └───┬────┘     └────┬────┘
+    │               │               │               │
+    │ Open Feed tab │               │               │
+    │──────────────>│               │               │
+    │               │               │               │
+    │               │ Get/create    │               │
+    │               │ feed channel  │               │
+    │               │──────────────>│               │
+    │               │               │               │
+    │               │               │ Query/create  │
+    │               │               │──────────────>│
+    │               │               │               │
+    │               │               │ Return channel│
+    │               │               │<──────────────│
+    │               │               │               │
+    │               │<──────────────│               │
+    │               │               │               │
+    │               │ Get messages  │               │
+    │               │──────────────>│               │
+    │               │               │               │
+    │               │               │ Query messages│
+    │               │               │──────────────>│
+    │               │               │               │
+    │               │               │ Return items  │
+    │               │               │<──────────────│
+    │               │               │               │
+    │               │<──────────────│               │
+    │               │               │               │
+    │ Render feed   │               │               │
+    │<──────────────│               │               │
+```
+
+---
+
+## Error States
+
+### Feed Execution Errors
+
+| Error | Handling | User Impact |
+|-------|----------|-------------|
+| RSS fetch timeout | Logged, continues with other sources | Partial content |
+| RSS parse error | Logged, skipped | Missing source |
+| IS classification unavailable | Stub scoring (50/100) | All items included |
+| Database connection lost | Worker retries | Delayed posts |
+
+### User-Facing Errors
+
+**Feed Status API Returns:**
+```typescript
+{
+  channelId: "uuid",
+  status: {
+    lastRunAt: "2026-04-12T06:00:00Z",
+    lastRunStatus: "error",  // ← Error state
+    lastError: "Connection timeout to rss.example.com",
+    isRunning: false
+  }
+}
+```
+
+**Missing:** UI to display feed errors to users.
+
+---
+
+## Recommendations
+
+### High Priority
+
+1. **Create Feed Management UI**
+   - List all user feeds with status
+   - Create new RSS feed wizard
+   - Edit feed settings (schedule, sources)
+   - Delete/archive feeds
+
+2. **Fix Feed Discovery**
+   - Add "Feeds" section to Browser sidebar
+   - Show feed channels in channel list
+   - Add feed indicator to chat messages
+
+3. **Implement Capture/Dismiss**
+   - Add `isCaptured`/`isDismissed` to message metadata
+   - Store dismissed item IDs in user prefs
+   - Filter dismissed items from feed queries
+
+### Medium Priority
+
+4. **Complete Cross-Feed References**
+   - Index items by URL hash
+   - Query for duplicates across feeds
+   - Show "Also appears in X feeds" badge
+
+5. **Add Feed Health Monitoring**
+   - Show last successful fetch time
+   - Display error messages for failed sources
+   - Offer retry/resync actions
+
+### Low Priority
+
+6. **Import/Export**
+   - OPML import for RSS subscriptions
+   - Export feed config as JSON
+   - Share feed templates
+
+---
+
+## Appendix: Database Schema
+
+```sql
+-- Feed channels are regular channels with type='feed'
+CREATE TABLE channels (
+  id UUID PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  workspace_id UUID,  -- NULL = pod-wide
+  channel_type TEXT NOT NULL CHECK (channel_type IN ('feed', 'personal', 'thread', ...)),
+  feed_scope TEXT CHECK (feed_scope IN ('user', 'workspace')),
+  status TEXT NOT NULL,
+  
+  -- Feed config stored in metadata JSONB
+  metadata JSONB DEFAULT '{}'::jsonb
+);
+
+-- Feed config structure in metadata:
+{
+  "feedConfig": {
+    "feedType": "rss" | "proactive",
+    "enabled": boolean,
+    "schedule": string,  // cron expression
+    "sources": [...],    // for RSS
+    "include": {...},    // for proactive
+    ...
+  },
+  "feedStatus": {
+    "lastRunAt": string,
+    "lastRunStatus": "success" | "error" | "running",
+    "nextRunAt": string,
+    "lastError": string,
+    "triggerRequestedAt": string
+  }
+}
+```

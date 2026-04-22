@@ -1,0 +1,438 @@
+# Implementation Quick Start
+
+> Once decisions are made, here's the exact order of implementation
+
+## Phase 0: Foundation (Pre-Implementation)
+
+### Checklist Before Starting
+
+- [ ] Review `DECISIONS-REQUIRED.md` and decide on 8 key questions
+- [ ] Update `INTEGRATION-PLAN.md` with decisions
+- [ ] Confirm backend repository access and branch strategy
+- [ ] Confirm CLI repository access and branch strategy
+- [ ] Set up test environment (local pod or staging)
+
+### Estimated Time
+- Decision making: 1-2 hours of discussion
+- Documentation updates: 2-3 hours
+- Test environment setup: 1-2 hours
+
+**Total: 1 day to complete Phase 0**
+
+---
+
+## Phase 1: Backend Templates (Day 1-2)
+
+### Files to Create
+
+1. **Templates** (no code changes needed, just JSON):
+   ```
+   synap-backend/templates/orion-os.json
+   ```
+
+2. **Content**: Use specification from `BACKEND-EXTENSION-SPEC.md` Section 1.3
+
+### Testing
+- [ ] Template validates against existing template schema
+- [ ] Can create workspace from template via Hub Protocol
+- [ ] Entities are created with correct profiles
+
+### Definition of Done
+- [ ] Template file exists in repo
+- [ ] Template can be used to create workspace
+- [ ] 4 entity profiles are functional
+
+---
+
+## Phase 2: Hub Protocol Orion Router (Day 2-4)
+
+### Files to Create
+
+1. **New Router**:
+   ```
+   synap-backend/packages/api/src/routers/hub-protocol/orion.ts
+   ```
+
+2. **Mount in Main Router**:
+   ```
+   synap-backend/packages/api/src/routers/hub-protocol-rest.ts
+   ```
+   - Add: `import orionRouter from './hub-protocol/orion'`
+   - Add: `app.route('/orion', orionRouter)`
+
+### Endpoints to Implement
+
+Priority 1 (Core):
+- [ ] `POST /api/hub/orion/register` - Node registration
+- [ ] `POST /api/hub/orion/heartbeat` - Health updates
+- [ ] `GET /api/hub/orion/status/:nodeId` - Node status
+
+Priority 2 (Builder):
+- [ ] `POST /api/hub/orion/deploy` - Trigger deployment
+- [ ] `POST /api/hub/orion/approval/:requestId/respond` - Approval flow
+
+### Testing
+```bash
+# Test registration
+curl -X POST http://localhost:4000/api/hub/orion/register \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{"hostname": "test-node", "installMode": "script", "role": "control-plane", "brainMode": "local"}'
+
+# Test heartbeat
+curl -X POST http://localhost:4000/api/hub/orion/heartbeat \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{"nodeId": "...", "services": [...], "phases": {...}}'
+```
+
+### Definition of Done
+- [ ] All Priority 1 endpoints return 200
+- [ ] Entities created in database
+- [ ] Heartbeats update timestamps
+- [ ] API tests pass
+
+---
+
+## Phase 3: Database Schema (Optional, Day 3-5)
+
+### Decision Point
+**Only if Decision 2 = "Option B or C" (dedicated tables)**
+
+### Files to Create
+
+1. **Schema**:
+   ```
+   synap-backend/packages/database/src/schema/orion.ts
+   ```
+
+2. **Migration**:
+   ```
+   synap-backend/packages/database/migrations-drizzle/XXXX_add_orion_tables.sql
+   ```
+
+3. **Export from index**:
+   ```
+   synap-backend/packages/database/src/index.ts
+   ```
+   - Add exports for new tables
+
+### Testing
+- [ ] Migration runs successfully
+- [ ] Tables created with correct columns
+- [ ] Relations work correctly
+
+### Definition of Done
+- [ ] Migration applies cleanly
+- [ ] Tables appear in database
+- [ ] Can insert/query records
+
+---
+
+## Phase 4: CLI Orion Commands (Day 4-6)
+
+### Files to Create
+
+1. **Command**:
+   ```
+   synap-cli/src/commands/orion.ts
+   ```
+
+2. **Library**:
+   ```
+   synap-cli/src/lib/orion.ts
+   ```
+
+3. **Modify init**:
+   ```
+   synap-cli/src/commands/init.ts
+   ```
+   - Add `detectOrion()` function
+   - Add `pathOrion()` flow
+
+### Commands to Implement
+
+Priority 1:
+- [ ] `synap orion register` - Register with backend
+- [ ] `synap orion status` - Show node status
+- [ ] `synap orion heartbeat` - Send heartbeat (for cron)
+
+Priority 2:
+- [ ] `synap orion deploy` - Deploy artifact
+- [ ] `synap orion logs` - Stream build logs
+
+### Testing
+```bash
+# Build CLI
+cd synap-cli && pnpm build
+
+# Test register
+./dist/index.js orion register \
+  --pod-url http://localhost:4000 \
+  --token $PROVISIONING_TOKEN
+
+# Test status
+./dist/index.js orion status
+
+# Test heartbeat
+./dist/index.js orion heartbeat
+```
+
+### Definition of Done
+- [ ] Commands execute without errors
+- [ ] Register creates node entity
+- [ ] Heartbeat updates backend
+- [ ] Status displays correctly
+
+---
+
+## Phase 5: Installer Scripts (Day 6-8)
+
+### Files to Create
+
+1. **Main Installer**:
+   ```
+   synap-stack/install/install.sh
+   ```
+
+2. **Wizard**:
+   ```
+   synap-stack/install/wizard/wizard.sh
+   ```
+
+3. **Ansible Playbooks** (if using Ansible):
+   ```
+   synap-stack/ansible/
+   ├── site.yml
+   └── roles/
+       ├── base/
+       ├── docker/
+       ├── nvidia/
+       ├── security/
+       └── orion/
+   ```
+
+### Phases to Implement
+
+- [ ] `install.sh phase1` - Foundation (Docker, UFW, SSH)
+- [ ] `install.sh phase2` - Synap + OpenClaw (Docker Compose)
+- [ ] `install.sh phase3` - OpenClaude (builder)
+
+### Testing
+```bash
+# Test Phase 1
+sudo ./install.sh phase1 --mode=script
+
+# Verify
+docker ps
+ufw status
+ls -la /etc/synap-stack/
+
+# Test Phase 2
+sudo ./install.sh phase2
+
+# Verify
+synap orion status
+curl http://localhost:4000/health
+```
+
+### Definition of Done
+- [ ] Phase 1 runs idempotently
+- [ ] Phase 2 deploys Synap Backend
+- [ ] Phase 2 deploys OpenClaw
+- [ ] Orion can connect to deployed services
+
+---
+
+## Phase 6: USB Templates (Day 8-10)
+
+### Files to Create
+
+1. **Ventoy Config**:
+   ```
+   synap-stack/usb/ventoy/ventoy.json
+   ```
+
+2. **Autoinstall Templates**:
+   ```
+   synap-stack/usb/ventoy/scripts/
+   ├── ubuntu-24.04-safe.user-data
+   └── ubuntu-24.04-wipe.user-data
+   ```
+
+### Testing
+- [ ] Create USB with Ventoy
+- [ ] Boot in VM (QEMU)
+- [ ] SAFE template stops at storage selection
+- [ ] WIPE template completes unattended
+- [ ] First-boot wizard runs
+- [ ] Node registers with backend (if token provided)
+
+### Definition of Done
+- [ ] USB boots in VM
+- [ ] Ubuntu installs successfully
+- [ ] Wizard runs on first boot
+- [ ] Node appears in Synap backend (if connected)
+
+---
+
+## Phase 7: Builder Integration (Day 10-14)
+
+### Files to Create
+
+1. **Job Worker**:
+   ```
+   synap-backend/packages/jobs/src/workers/orion/build-deploy.ts
+   ```
+
+2. **Real-time Handler** (optional):
+   ```
+   synap-backend/packages/realtime/src/handlers/orion.ts
+   ```
+
+3. **Skill**:
+   ```
+   synap-backend/skills/orion/SKILL.md
+   ```
+
+### Features to Implement
+
+- [ ] Build job queue
+- [ ] Log streaming (WebSocket or polling)
+- [ ] Approval workflow
+- [ ] Deployment status tracking
+
+### Testing
+```bash
+# From channel (via OpenClaw):
+"Build a website from my project files"
+
+# Should:
+# 1. Create deployment entity
+# 2. Request approval (if needed)
+# 3. Queue build job
+# 4. Stream logs
+# 5. Return URL on completion
+```
+
+### Definition of Done
+- [ ] Can trigger build from channel
+- [ ] Approval requests work
+- [ ] Logs stream to channel
+- [ ] Deployment URL returned
+- [ ] Artifact accessible at URL
+
+---
+
+## Phase 8: Integration & E2E Testing (Day 14-16)
+
+### Test Scenarios
+
+1. **USB Install Flow**:
+   - [ ] Flash USB
+   - [ ] Boot bare metal
+   - [ ] Complete wizard
+   - [ ] Register with backend
+   - [ ] Deploy via channel
+
+2. **Script Install Flow**:
+   - [ ] Run install.sh on fresh Ubuntu
+   - [ ] Complete all phases
+   - [ ] Connect to channel
+   - [ ] Build and deploy
+
+3. **Split-Brain Flow**:
+   - [ ] Install control-plane on Node A
+   - [ ] Install brain-only on Node B
+   - [ ] Configure remote brain
+   - [ ] Verify inference works
+
+### Definition of Done
+- [ ] All 3 test scenarios pass
+- [ ] End-to-end latency < 30 minutes (script) / < 60 minutes (USB)
+- [ ] No critical bugs
+
+---
+
+## Phase 9: Documentation & Release (Day 16-18)
+
+### Documentation to Update
+
+- [ ] `orion/README.md` - User-facing overview
+- [ ] `orion/docs/QUICKSTART.md` - Installation guide
+- [ ] `orion/docs/TROUBLESHOOTING.md` - Common issues
+- [ ] API documentation (auto-generated from code)
+
+### Release Checklist
+
+- [ ] Version tagged
+- [ ] USB image built and tested
+- [ ] Script installer tested on multiple Ubuntu versions
+- [ ] Documentation reviewed
+- [ ] Known issues documented
+
+---
+
+## Resource Requirements
+
+### Development Time
+- Single developer: 18 working days (4 weeks)
+- Two developers: 10 working days (2 weeks)
+- Three developers: 7 working days (1.5 weeks)
+
+### Infrastructure
+- Development pod (local or cloud)
+- Test hardware for USB install (spare PC)
+- QEMU/VM for testing autoinstall
+- Test channel (Telegram bot)
+
+### Dependencies
+- Access to synap-backend repo
+- Access to synap-cli repo
+- OpenClaw installed (for testing)
+- Ollama (for brain endpoint testing)
+
+---
+
+## Risk Mitigation
+
+### Technical Risks
+
+1. **Backend changes break existing functionality**
+   - Mitigation: Comprehensive tests, feature flags
+
+2. **USB installer fails on diverse hardware**
+   - Mitigation: Test matrix of common hardware, fallback to manual install
+
+3. **CLI separation breaks existing users**
+   - Mitigation: Gradual rollout, clear migration guide
+
+### Schedule Risks
+
+1. **Backend review/approval takes longer than expected**
+   - Mitigation: Start with templates (no code review needed)
+
+2. **USB hardware logistics delays testing**
+   - Mitigation: Prioritize script install, USB as stretch goal
+
+---
+
+## Success Metrics
+
+By end of implementation:
+
+- [ ] User can install via USB in < 60 minutes
+- [ ] User can install via script in < 30 minutes
+- [ ] Node registers with backend and heartbeats successfully
+- [ ] User can message from channel and receive response
+- [ ] User can request build and get URL back
+- [ ] All actions logged in audit trail
+
+---
+
+## Questions?
+
+If any implementation detail is unclear:
+1. Check `BACKEND-EXTENSION-SPEC.md` for exact API contracts
+2. Check `INTEGRATION-PLAN.md` for architecture overview
+3. Check example code in `orion/usb/examples/`
+
+Ready to start? Confirm the 8 decisions in `DECISIONS-REQUIRED.md` and begin Phase 1.

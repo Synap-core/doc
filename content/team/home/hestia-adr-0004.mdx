@@ -1,0 +1,32 @@
+# ADR-0004 — Split-brain as first-class configuration
+
+## Document control
+| Field | Value |
+|---|---|
+| ADR ID | ADR-0004 |
+| Title | Split-brain as first-class configuration |
+| Status | Accepted |
+| Date | 2026-04-12 |
+
+## Context
+Inference is resource-intensive and often needs a dedicated GPU host, while routing/memory/build can run elsewhere.
+
+## Decision
+Treat the Brain endpoint as a pluggable dependency:
+* local mode
+* remote mode (URL + optional API key)
+
+All components must read this from `/etc/synap-stack/config.yaml` and never hardcode localhost.
+
+## Consequences
+* Pros:
+    * Flexibility to run GPU workloads on separate hardware
+    * Better resource utilization
+    * Easier scaling
+* Cons:
+    * Network dependency for remote brain
+    * Additional configuration complexity
+
+## References
+* OpenClaw getting started (provider config patterns): https://docs.openclaw.ai/start/getting-started
+* Cloud-init first boot patterns (one-time init markers): https://cloudinit.readthedocs.io/en/latest/explanation/first_boot.html

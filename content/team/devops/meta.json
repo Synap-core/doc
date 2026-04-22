@@ -23,7 +23,9 @@
     "security-practices",
     "ai-governance",
     "auth-audit",
-    "---Infrastructure---",
+    "---Infrastructure & Operations---",
+    "infrastructure-architecture",
+    "operations-runbook",
     "docker-architecture",
     "backlink-strategy"
   ]

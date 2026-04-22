@@ -1,0 +1,342 @@
+# Strata — Development Guide
+
+Setup, gotchas, how to extend. Read this before touching the code.
+
+---
+
+## Prerequisites
+
+- **Node.js 20+** (use `nvm use 20` or `fnm use 20`)
+- **pnpm 9+** (`npm install -g pnpm@9`)
+- **The `synap` monorepo** checked out at the same level as `strata/`
+
+```
+~/code/
+├── synap/          ← must exist (provides @synap-core/ui-system, @synap-core/icons)
+│   └── strata/     ← this project lives here
+│       ├── app/
+│       ├── server/
+│       └── packages/
+```
+
+Strata reuses `@synap-core/ui-system` (Tamagui components) and `@synap-core/icons` (Lucide registry) from the parent monorepo via Vite path aliases. The server doesn't import these — they're frontend-only.
+
+---
+
+## Running locally
+
+```bash
+# Terminal 1 — sidecar server (port 5181)
+cd strata/server
+pnpm install
+pnpm dev
+
+# Terminal 2 — frontend (port 5180)
+cd strata/app
+pnpm install
+pnpm dev
+```
+
+Open http://localhost:5180 → **Open Project** → navigate to any TypeScript codebase.
+
+The frontend Vite dev server proxies `/trpc` → `localhost:5181`. This is configured in `app/vite.config.ts`.
+
+---
+
+## Path aliases (critical)
+
+`app/vite.config.ts` defines Vite resolve aliases:
+
+```typescript
+"@synap-core/ui-system": path.resolve(__dirname, "../../synap-app/packages/core/ui-system/src"),
+"@synap-core/icons":     path.resolve(__dirname, "../../synap-app/packages/core/icons/src"),
+"@strata/api":           path.resolve(__dirname, "../packages/api/src"),
+"@strata/server":        path.resolve(__dirname, "../server/src"),  // type-only
+```
+
+If `@synap-core/ui-system` fails to resolve, check that:
+1. The parent `synap/` directory exists at the relative path above
+2. The ui-system package has been built (`pnpm build` in that package)
+
+**`@strata/server` is type-only.** Vite will never bundle server code into the frontend. It's used only to import `AppRouter` for tRPC type inference. Do not import runtime values through this alias.
+
+---
+
+## Package layout
+
+```
+strata/
+├── packages/
+│   └── api/src/schemas.ts    @strata/api — single source of truth for all types
+│
+├── app/src/
+│   ├── components/           UI shell + wizard
+│   ├── hooks/                useStrataGraph, useEntityView
+│   ├── nodes/                ReactFlow custom node components
+│   ├── stores/               strataStore.ts (Zustand)
+│   ├── services/             tRPC React client
+│   └── types/                Re-exports from @strata/api
+│
+└── server/src/
+    ├── index.ts              Hono entry, port 5181
+    ├── trpc.ts               Full tRPC router
+    ├── parsers/              typescript, drizzle, routes, components
+    └── services/             detector, matcher, import-analyzer
+```
+
+---
+
+## Known gotchas
+
+### 1. Use `fetchRequestHandler`, NOT `@hono/trpc-server`
+
+`server/src/index.ts` uses:
+```typescript
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
+```
+
+**Do not switch to `@hono/trpc-server`.** The Hono tRPC adapter has body-parsing issues with tRPC mutations — POST bodies arrive empty. This was discovered the hard way. `fetchRequestHandler` is the correct approach.
+
+### 2. No `glob` npm package on the server
+
+`server/` does not have `glob` in its `package.json`. All parsers use a local `findFiles()` function:
+
+```typescript
+function findFiles(dir: string, ext: string): string[] {
+  const results: string[] = [];
+  function walk(current: string) {
+    const entries = readdirSync(current, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.name.startsWith(".") || e.name === "node_modules" || e.name === "dist") continue;
+      const full = join(current, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (e.name.endsWith(ext)) results.push(full);
+    }
+  }
+  walk(dir);
+  return results;
+}
+```
+
+Do not `import { glob }` from anywhere in server code.
+
+### 3. Tamagui deduplication
+
+Tamagui must be deduplicated in `app/vite.config.ts`:
+
+```typescript
+optimizeDeps: {
+  include: ["@tamagui/core", "react", "react-dom"],
+},
+```
+
+If you see "Multiple Tamagui instances" errors or styling breaks, check that `tamagui` and `@tamagui/core` are not duplicated in the dependency tree.
+
+### 4. tRPC v11 query syntax
+
+Strata uses tRPC v11. The React hooks are:
+- `.useQuery(input)` for queries
+- `.useMutation()` for mutations
+- `trpc.useUtils()` for imperative fetching
+
+**v10 syntax (`useQuery`, `useMutation` from `@trpc/react-query`)** is deprecated — don't use it.
+
+### 5. Types in `@strata/api`, not in app/ or server/
+
+All types shared between frontend and server live in `packages/api/src/schemas.ts`. Types are inferred from Zod schemas — no hand-written TypeScript interfaces.
+
+**Wrong:** Define an interface in `app/src/types/` for something the server also uses.
+**Right:** Add a Zod schema to `schemas.ts`, export the inferred type.
+
+### 6. Zone patterns are relative to `projectPath`
+
+Zone patterns like `src/types/**/*.ts` are resolved relative to the project root passed to `parse.analyze`. The parsers call `findFiles(join(projectPath, patternBasePath), ext)`. Make sure patterns don't accidentally start with `/`.
+
+### 7. Graph auto-load skips re-analysis
+
+When `project.open` returns `{ existing: true }`, `StrataApp.tsx` loads the graph from `.strata/graph.json` and skips the wizard. This means changes to zone config won't re-analyze until the user clicks "Re-analyze". This is by design — re-analysis is explicit.
+
+---
+
+## Adding a new parser
+
+Full guide in `ARCHITECTURE.md`. Short version:
+
+1. Create `server/src/parsers/yourparser.ts`
+2. Follow the pattern: `findFiles()` + ts-morph project + return typed node array
+3. Add the node kind to `zoneTypeSchema` in `packages/api/src/schemas.ts`
+4. Add a case in `server/src/trpc.ts` `parse.analyze`
+5. Add import-edge logic in `import-analyzer.ts` if nodes connect via imports
+6. Create `app/src/nodes/YourNode.tsx` ReactFlow component
+7. Register in `app/src/nodes/index.ts` and `StrataCanvas.tsx` `nodeTypes`
+8. Add to `NODE_KIND_TO_TYPE` in both `useStrataGraph.ts` and `useEntityView.ts`
+9. Add icon + color to `StrataSidebar.tsx` `KIND_CONFIG` and `StrataDetailPanel.tsx`
+
+---
+
+## Hook zone type
+
+Add a zone with `zoneType: "hooks"` in Step 3 of the wizard to point the hook parser at your hooks directory. Typical pattern: `src/hooks/**/*.ts` or `src/hooks/**/*.tsx`.
+
+The hook parser looks for exported functions starting with `use` (both `export function useX` and `export const useX = () => {}`). It extracts:
+- `trpcCalls` — tRPC procedures called (`trpc.*.useQuery`, `trpc.*.useMutation`, etc.)
+- `hookCalls` — other hooks called
+- `typeRefs` — PascalCase names from import declarations (for type edge inference)
+
+Hook → route `calls` edges are produced from `trpcCalls`. The tRPC procedure path must match a RouteNode name or path exactly (e.g. `users.list`).
+
+---
+
+## Adding a new edge kind
+
+1. Add to `edgeKindSchema` in `packages/api/src/schemas.ts`
+2. Produce the edge in `matcher.ts` or `import-analyzer.ts`
+3. Add a label to `EDGE_KIND_LABEL` in both `useStrataGraph.ts` and `useEntityView.ts`
+4. Add a color/style to `CONFIDENCE_STYLES` if this edge kind should look different
+
+---
+
+## Adding a new view
+
+Views are controlled by `activeViewType` in `strataStore.ts`.
+
+1. Add the view type to `StrataViewType` in `stores/strataStore.ts`
+2. Add a button to `StrataToolbar.tsx`
+3. Add a case in `StrataCanvas.tsx` to render the new view
+4. Create a hook `hooks/useYourView.ts` if it needs custom layout logic
+
+---
+
+## Feature schema (`.strata/features.json`)
+
+```json
+{
+  "features": [
+    {
+      "id": "feat-1",
+      "name": "Whiteboard",
+      "nodeIds": ["type-Whiteboard", "table-whiteboards", "route:src/routers/whiteboard.ts:whiteboard.list"],
+      "description": "Real-time collaborative whiteboard feature",
+      "color": "#8b5cf6"
+    }
+  ]
+}
+```
+
+Managed by `features.load` (query) and `features.save` (mutation) tRPC procedures. The frontend loads features on project open alongside the graph, and saves after any mutation (create feature, tag node).
+
+---
+
+## Project config schema (`.strata/config.json`)
+
+```json
+{
+  "name": "my-project",
+  "repos": [{ "id": "repo-1", "name": "my-project", "path": "/abs/path", "packages": [] }],
+  "zones": [
+    { "id": "z1", "zoneType": "types", "scope": "product", "patterns": ["src/types/**/*.ts"] }
+  ],
+  "modules": [
+    { "id": "m1", "path": "src/", "name": "src", "tag": "frontend", "enabled": true }
+  ]
+}
+```
+
+Do not write to this file outside of `project.saveModules` and `project.addZone` tRPC procedures.
+
+---
+
+## Graph schema (`.strata/graph.json`)
+
+```json
+{
+  "nodes": [ /* StrataNode[] — discriminated union by kind */ ],
+  "edges": [ /* StrataEdge[] */ ]
+}
+```
+
+Node IDs are deterministic (see `ARCHITECTURE.md`). If you re-analyze, the same node gets the same ID, so the store can patch in-place.
+
+---
+
+## Debugging edge analysis
+
+Add verbose logging to `import-analyzer.ts`:
+
+```typescript
+// At top of analyzeImports()
+console.log(`[import-analyzer] ${routeNodes.length} routes, ${componentNodes.length} components to analyze`);
+
+// After pass 1
+console.log(`[import-analyzer] Pass 1: ${edges.length} high-confidence edges`);
+
+// After pass 2
+console.log(`[import-analyzer] Pass 2: ${edges.length} total edges`);
+```
+
+Common failure modes:
+- **Zero edges from pass 1**: all imports are non-relative (path aliases). Fix: add `tsconfig.json` path alias resolution.
+- **Zero edges from pass 2**: node names don't match import symbols. Check that parser names match exactly (e.g., `User` not `IUser`).
+- **Too many false-positive edges**: name matching is too broad. Filter by checking that the import source looks like an internal package (not `react`, `lodash`, etc.).
+
+---
+
+## Running tests
+
+No test suite yet. The co-founder test is the integration test:
+
+```bash
+# 1. Start the server
+cd strata/server && pnpm dev
+
+# 2. Open the app
+cd strata/app && pnpm dev
+
+# 3. Open Project → point at synap-backend/
+# 4. Configure zones:
+#    - types: packages/*/src/types/**/*.ts  (scope: product)
+#    - database: packages/*/src/schema/**/*.ts  (scope: product)
+#    - api: packages/*/src/routers/**/*.ts  (scope: product)
+# 5. Analyze
+# 6. Click the "User" TypeNode → Entity view
+# 7. Verify: connected to users table + at least one route + at least one component
+```
+
+---
+
+## TypeScript config
+
+`app/tsconfig.json` and `server/tsconfig.json` are standard. The `packages/api/` package has its own `tsconfig.json` configured for library output.
+
+The server uses `tsx` for development (via `pnpm dev` → `tsx watch src/index.ts`). No build step needed for dev.
+
+The frontend uses Vite with `@vitejs/plugin-react`. No SWC — standard Babel transform.
+
+---
+
+## Dependency graph
+
+```
+@strata/api (packages/api/)
+  └── zod only
+
+strata-server (server/)
+  ├── @strata/api
+  ├── @trpc/server
+  ├── hono + @hono/node-server
+  ├── ts-morph
+  └── chokidar (installed, not yet wired)
+
+strata-app (app/)
+  ├── @strata/api
+  ├── @strata/server (type-only alias)
+  ├── @trpc/client + @trpc/react-query
+  ├── react + react-dom
+  ├── reactflow
+  ├── dagre
+  ├── zustand
+  ├── @synap-core/ui-system (via Vite alias)
+  └── @synap-core/icons (via Vite alias)
+```
+
+The server never imports `@synap-core/*`. Those are frontend-only Tamagui packages.

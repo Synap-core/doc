@@ -116,6 +116,12 @@ interface ToolContext {
   proposalMode?: boolean;    // true → return proposals instead of executing
   dataPodUrl?: string;       // Backend REST API URL
   dataPodApiKey?: string;    // Backend auth header value
-  workspaceId?: string;      // Required for entity create/update operations
+   workspaceId?: string;      // Required for entity create/update operations
 }
-```
+
+## Related
+
+- [Monitor: Agents](./monitor-agents.mdx) — which tools each agent type uses
+- [Monitor: Skills](./monitor-skills.mdx) — user-created skills as tools
+- [Agent System](./agent-system.mdx) — tool registration and agent tool allocation
+- [External Agents](./external-agents.mdx) — tool wrappers for external IS

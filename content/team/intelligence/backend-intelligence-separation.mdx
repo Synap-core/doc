@@ -1,0 +1,212 @@
+---
+sidebar_position: 6
+---
+
+# Data Pod and Intelligence Service: Separation of Concerns
+
+**Architectural authority document — "Engraved on Marble"**
+
+This document defines the canonical separation of concerns between the **Synap Data Pod (Backend)** and the **Intelligence Service**. It is the authoritative reference for architectural decisions involving either layer. New features, refactors, or integrations must respect this boundary.
+
+---
+
+## Core Principle
+
+> **Backend = Base (data, protocol, orchestration)**  
+> **Intelligence Service = Add-On (AI behavior, agents, tools)**
+
+The Data Pod owns all data, events, permissions, and the contract that Intelligence Services must implement. The Intelligence Service owns agents, tools, LLM orchestration, and streaming behavior — but **never** persists data directly. All reads and writes go through the Hub Protocol.
+
+---
+
+## What the Data Pod (Backend) Owns
+
+### Data and Storage
+
+| Responsibility | Details |
+|----------------|---------|
+| **Entities** | All entity CRUD via event chain (requested → validated → completed) |
+| **Documents** | Document storage, versions, whiteboards |
+| **Views** | View definitions, queries, config |
+| **Relations** | Entity-to-entity relationships |
+| **Chat threads** | Thread metadata, message persistence |
+| **Proposals** | Stored proposals (AI-generated, awaiting approval) |
+| **Workspaces** | Workspace config, members, settings |
+| **Users** | User profiles, preferences |
+
+### Commands
+
+| Responsibility | Details |
+|----------------|---------|
+| **Command definitions** | `intelligence_commands` table: prompt templates, derived inputs, permissions, output mode |
+| **Command execution flow** | Compile prompt from template + args + selection → send as query to Intelligence Service |
+| **Command runs** | Audit trail (command_runs table) |
+| **Default commands** | Seeded per workspace (ensureDefaultCommands) |
+
+The Intelligence Service **does not** know what a "command" is. It receives a compiled prompt string. The backend owns the concept of commands entirely.
+
+### Service Discovery and Routing
+
+| Responsibility | Details |
+|----------------|---------|
+| **Intelligence services registry** | `intelligence_services` table: serviceId, webhookUrl, capabilities |
+| **Resolution logic** | Workspace → User → Default (resolveIntelligenceService) |
+| **Workspace service selector** | `workspaces.settings.intelligenceServiceId` |
+| **User preferences** | Per-capability service override |
+
+### Hub Protocol (Server)
+
+The backend exposes REST endpoints that Intelligence Services call:
+
+- `GET /api/hub/threads/:id/context` — Thread messages, linked entities/documents
+- `PATCH /api/hub/threads/:id/context` — Update thread context
+- `POST /api/hub/entities` — Create entity (emits requested event)
+- `POST /api/hub/documents` — Create document
+- `GET /api/hub/search` — Unified search (entities, documents, views)
+- `GET /api/hub/users/:id/context` — User context
+- Additional endpoints as defined in hub-protocol-rest
+
+Authentication: API key (Bearer token) with scopes `hub-protocol.read`, `hub-protocol.write`.
+
+### Calling the Intelligence Service
+
+The backend calls the Intelligence Service via:
+
+- `POST {webhookUrl}/api/chat/stream` — Streaming chat
+- `POST {webhookUrl}/api/embeddings` — Generate embedding (for entity indexing)
+- `GET {webhookUrl}/health` — Health check
+
+Request payload includes: `query`, `threadId`, `userId`, `workspaceId`, `dataPodUrl`, `dataPodApiKey` (so the service can call back).
+
+---
+
+## What the Intelligence Service Owns
+
+### Agents
+
+| Responsibility | Details |
+|----------------|---------|
+| **Agent registry** | Default, meta, prompting, knowledge-search, code, writing, action, persona agents |
+| **Agent orchestration** | Orchestrator, branching, routing |
+| **Agent behavior** | System prompts, model selection, reasoning |
+
+The backend only forwards `agentId` / `agentType`. It does not define agents.
+
+### Tools
+
+| Responsibility | Details |
+|----------------|---------|
+| **Tool definitions** | create_entity, create_document, vector_search, memory_search, etc. |
+| **Tool schema** | Parameters (Zod), description |
+| **Tool execution** | Tools call back to Data Pod via Hub Protocol |
+
+Tools do not write to any database directly. They call Hub Protocol endpoints.
+
+### Flows and Orchestration
+
+| Responsibility | Details |
+|----------------|---------|
+| **LangGraph flows** | Agent workflows, branching, state machines |
+| **Streaming** | SSE format, chunk/step/proposal events |
+| **Proposal extraction** | Parse LLM output into structured proposals |
+| **Branching logic** | Create branches, merge context |
+
+### LLM and Embeddings
+
+| Responsibility | Details |
+|----------------|---------|
+| **Model selection** | Anthropic, OpenAI, or other providers |
+| **Embeddings** | Own embeddings API (backend jobs call it) |
+| **Memory** | Mem0 or other memory layer (internal to service) |
+
+---
+
+## Request Flow (Canonical)
+
+```
+Frontend
+   │
+   ▼
+Data Pod (tRPC: infiniteChat.sendMessage / intelligence.runCommand)
+   │  1. Validate workspace, user
+   │  2. Create/update thread, persist user message
+   │  3. Resolve Intelligence Service (default or custom)
+   │  4. For commands: compile prompt from template + args + selection
+   │
+   ▼
+Intelligence Service (POST /api/chat/stream)
+   │  5. Load thread context from Data Pod (Hub Protocol: getThreadContext)
+   │  6. Run agent (orchestrator, MVP chat, etc.)
+   │  7. Agent uses tools → Hub Protocol calls Data Pod (createEntity, search, etc.)
+   │  8. Stream chunks, steps, proposals back
+   │
+   ▼
+Data Pod
+   │  9. Persist assistant messages, proposals
+   │ 10. Broadcast to frontend (SSE/socket)
+   │
+   ▼
+Frontend
+```
+
+---
+
+## Ownership Matrix
+
+| Concept | Owner | Notes |
+|---------|-------|-------|
+| Commands | Data Pod | Prompt templates, args, permissions. Run = compile → send as query. |
+| Agents | Intelligence Service | Backend only forwards agentId. |
+| Tools | Intelligence Service | Definitions; execution via Hub Protocol. |
+| Flows | Intelligence Service | LangGraph, branching. |
+| Proposals | Shared | Intelligence Service emits; Data Pod stores. |
+| Threads/Messages | Data Pod | Persisted in Data Pod; Intelligence Service reads via Hub Protocol. |
+| Entities/Documents | Data Pod | All writes via event chain. |
+| Embeddings | Shared | Intelligence Service generates; Data Pod stores (entity_vectors). |
+
+---
+
+## Extensibility: Custom Intelligence Services
+
+A custom Intelligence Service (registered in `intelligence_services`) can:
+
+1. **Different agents** — New agent types (e.g., "analyst", "scheduler")
+2. **Different tools** — New tools that call Hub Protocol
+3. **Different models** — Swap provider (Anthropic, OpenAI, local)
+4. **Different UX** — Streaming format, branching behavior (within contract)
+5. **Different orchestration** — LangGraph flows, routing
+
+It **cannot**:
+
+- Change command definitions (stored in Data Pod DB)
+- Add Hub Protocol endpoints (Data Pod defines the contract)
+- Persist data directly (must go through Hub Protocol)
+- Define workspace commands (Data Pod seeds default commands)
+
+### Custom Service Contract
+
+Custom services must implement the same contract as the default:
+
+- `POST /api/chat/stream` — Accept `query`, `threadId`, `userId`, `workspaceId`, `dataPodUrl`, `dataPodApiKey`; stream SSE response
+- `POST /api/embeddings` — Optional, for embeddings
+- `GET /health` — Optional, for health checks
+
+---
+
+## Design Rationale
+
+1. **Data sovereignty** — All user data lives in the Data Pod. Intelligence Services are stateless processors.
+2. **Swappable AI** — Workspace can point to default or custom service. Same commands, different behavior.
+3. **Event sourcing** — All writes go through requested → validated → completed. Intelligence Service tools emit events via Hub Protocol; executors apply them.
+4. **Single source of truth** — Commands, threads, proposals are in Data Pod. Intelligence Service does not duplicate.
+5. **Extensibility** — New agents, tools, models can be added to Intelligence Service without Data Pod changes. New Hub Protocol endpoints require Data Pod changes.
+
+---
+
+## References
+
+- [Hub Protocol Flow](/docs/architecture/hub-protocol-flow) — Detailed flow and sequence
+- [Hub & Spoke](/docs/concepts/hub-and-spoke) — Conceptual model
+- [AI Architecture](/docs/architecture/ai-architecture) — Intelligence services model
+- Backend: `synap-backend/packages/api/src/clients/intelligence-hub.ts`, `routers/hub-protocol-rest.ts`
+- Intelligence Service: `synap-intelligence-service/apps/intelligence-hub/src/clients/hub-protocol.ts`, `routes/chat-stream.ts`

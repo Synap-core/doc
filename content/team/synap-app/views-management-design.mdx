@@ -1,0 +1,336 @@
+# Views Management Page - Design Brief
+
+## 🎯 Overview
+
+Create a beautiful, intuitive views management page where users can:
+- Browse all their views (table, kanban, graph, etc.)
+- Create new views
+- Organize views (favorites, recent, folders/categories)
+- Filter and search views
+- Quick actions (duplicate, delete, share)
+
+---
+
+## 📋 User Flows
+
+### Flow 1: Viewing All Views
+
+```
+User navigates to Views page
+     ↓
+Sees grid/list of all views
+     ↓
+Can filter by:
+  - View type (table, kanban, graph, etc.)
+  - Entity type (task, note, person, etc.)
+  - Favorites only
+  - Recent views
+  - Search by name
+```
+
+### Flow 2: Creating a New View
+
+```
+User clicks "Create View" button
+     ↓
+Modal/Panel opens:
+  - Select view type (table, kanban, etc.)
+  - Select entity type(s) to show
+  - Enter view name
+  - (Optional) Set initial filters/query
+     ↓
+View created and opened
+```
+
+### Flow 3: Organizing Views
+
+```
+User can:
+  - Star/Favorite views (toggle)
+  - Create folders/categories (future)
+  - Drag to reorder (future)
+  - Group by entity type or view type
+```
+
+### Flow 4: Quick Actions
+
+```
+On each view card:
+  - Click to open
+  - Star/Favorite icon (toggle)
+  - Menu with options:
+    - Duplicate
+    - Delete
+    - Share (future)
+    - Edit name/description
+```
+
+---
+
+## 🎨 Design Requirements
+
+### Layout Options
+
+**Option A: Grid View (Card-based)**
+- Cards with preview/thumbnail
+- View name, type, entity type
+- Last modified date
+- Favorite indicator
+- Quick actions menu
+
+**Option B: List View (Table-like)**
+- Compact rows
+- Columns: Name, Type, Entity Type, Last Modified, Actions
+- Sortable columns
+- Checkbox selection for bulk actions
+
+**Option C: Hybrid (Recommended)**
+- Toggle between Grid and List
+- Default: Grid (visual, modern)
+- List for power users (dense information)
+
+### Visual Elements
+
+**View Cards Should Show:**
+1. **Preview/Thumbnail**
+   - Small screenshot or icon representation
+   - Color-coded by view type
+   - Shows entity count if available
+
+2. **Metadata**
+   - View name (editable inline?)
+   - View type badge (Table, Kanban, Graph, etc.)
+   - Entity type badge (Task, Note, etc.)
+   - Last modified (relative time: "2 hours ago")
+
+3. **Actions**
+   - Favorite/Star button (always visible)
+   - Overflow menu (3-dots) with:
+     - Open
+     - Duplicate
+     - Delete
+     - Share (future)
+     - Edit
+
+4. **Status Indicators**
+   - Favorite (star icon, filled/hollow)
+   - Pinned (pin icon, if implemented)
+   - Shared (if shared with workspace)
+
+### Filtering & Search
+
+**Top Bar Should Include:**
+1. **Search Bar**
+   - Search by view name
+   - Full-text search
+
+2. **Filter Chips/Buttons**
+   - View Type: All | Table | Kanban | Graph | List | Grid
+   - Entity Type: All | Task | Note | Person | Event | File
+   - Status: All | Favorites | Recent | Pinned
+   - Sort: Recently Modified | Name A-Z | Name Z-A | Most Used
+
+3. **View Toggle**
+   - Grid view icon
+   - List view icon
+
+4. **Create Button**
+   - Prominent "+ Create View" button
+   - Dropdown with view type options:
+     - Create Table View
+     - Create Kanban View
+     - Create Graph View
+     - etc.
+
+### Responsive Design
+
+- **Desktop**: Grid with 3-4 columns, full sidebar filters
+- **Tablet**: Grid with 2-3 columns, collapsible filters
+- **Mobile**: Single column, bottom sheet filters
+
+---
+
+## 🎨 Design Style (Synap Branding)
+
+### Colors & Theming
+- Follow Synap's glassmorphism design language
+- Use existing color tokens (`$background`, `$primary`, etc.)
+- Support light/dark mode
+- Subtle shadows and borders
+
+### Typography
+- View names: Medium weight, readable size
+- Metadata: Smaller, muted color
+- Badges: Compact, rounded
+
+### Interactions
+- Hover effects on cards (lift/shadow)
+- Smooth transitions
+- Loading states (skeleton cards)
+- Empty states (illustrations + helpful text)
+
+### Icons
+- Use Lucide React icons (consistent with codebase)
+- View type icons (Table, Columns, LayoutGrid, etc.)
+- Entity type icons (from entity-views package)
+
+---
+
+## 📱 Component Structure
+
+```
+ViewsManagementPage
+├── ViewsHeader
+│   ├── SearchBar
+│   ├── FilterChips (View Type, Entity Type, Status)
+│   ├── SortDropdown
+│   ├── ViewToggle (Grid/List)
+│   └── CreateButton
+│
+├── ViewsContent
+│   ├── ViewsGrid (grid view)
+│   │   └── ViewCard[] (each with preview, metadata, actions)
+│   │
+│   └── ViewsList (list view)
+│       └── ViewRow[] (compact table rows)
+│
+└── EmptyState (when no views match filters)
+```
+
+---
+
+## 🚀 Features to Implement
+
+### Phase 1 (MVP)
+- ✅ Grid view of all views
+- ✅ Search by name
+- ✅ Filter by view type
+- ✅ Filter by entity type
+- ✅ Favorite/unfavorite
+- ✅ Create new view button
+- ✅ Open view on click
+- ✅ Delete view (with confirmation)
+
+### Phase 2 (Enhanced)
+- ⚠️ List view toggle
+- ⚠️ Sort options (recent, name, etc.)
+- ⚠️ Duplicate view
+- ⚠️ Edit view name/description
+- ⚠️ Bulk actions (select multiple, delete)
+- ⚠️ Recent views section
+- ⚠️ Favorites section
+
+### Phase 3 (Advanced)
+- 🔲 Folders/categories
+- 🔲 Drag-and-drop reordering
+- 🔲 Share views (workspace)
+- 🔲 View templates
+- 🔲 Import/export views
+
+---
+
+## 📐 Layout Specifications
+
+### Grid View Card Size
+- **Width**: 280-320px (responsive)
+- **Height**: 180-220px (content-dependent)
+- **Gap**: 16px (1rem)
+- **Padding**: 16px inside card
+
+### List View Row
+- **Height**: 56-64px
+- **Padding**: 12px horizontal, 8px vertical
+- **Columns**: 
+  - Favorite (24px)
+  - Preview/Icon (40px)
+  - Name (flex)
+  - Type badges (120px)
+  - Last Modified (100px)
+  - Actions (40px)
+
+---
+
+## 🎯 Design Prompt for AI Designer
+
+**Prompt:**
+"Design a modern, beautiful views management page for a productivity app. Users should be able to browse, filter, and manage different types of views (table views, kanban boards, graph visualizations, etc.). The design should feature:
+
+1. A clean grid layout with view cards showing previews, names, types, and quick actions
+2. A searchable, filterable top bar
+3. Favorite/star functionality
+4. Modern glassmorphism design with subtle shadows
+5. Support for both light and dark themes
+6. Responsive design (desktop, tablet, mobile)
+
+The page should feel premium, organized, and easy to navigate. Use a card-based layout with hover effects, clear typography hierarchy, and intuitive iconography.
+
+Include:
+- Header with search, filters, and create button
+- Grid of view cards (3-4 columns on desktop)
+- Each card showing: thumbnail/preview, name, type badges, favorite icon, actions menu
+- Empty states
+- Loading states
+- Responsive breakpoints
+
+Style: Modern, clean, glassmorphism, premium feel, consistent with Notion/Airtable but with Synap's unique identity."
+
+---
+
+## 📋 Implementation Checklist
+
+### Components to Create
+- [ ] `ViewsManagementPage` - Main page component
+- [ ] `ViewsHeader` - Search, filters, actions
+- [ ] `ViewCard` - Grid view card
+- [ ] `ViewRow` - List view row
+- [ ] `ViewCardPreview` - Thumbnail/preview generation
+- [ ] `CreateViewDialog` - Modal for creating views
+- [ ] `ViewFilters` - Filter chips component
+- [ ] `EmptyViewsState` - Empty state component
+
+### Hooks to Create
+- [ ] `useViewsList` - Fetch and manage views list
+- [ ] `useViewFilters` - Filtering logic
+- [ ] `useViewActions` - Delete, duplicate, favorite actions
+
+### API Integration
+- [ ] `GET /api/views` - List views with filters
+- [ ] `POST /api/views` - Create view
+- [ ] `DELETE /api/views/:id` - Delete view
+- [ ] `PATCH /api/views/:id` - Update (favorite, name, etc.)
+
+---
+
+## 🎨 Design Deliverables Needed
+
+1. **Mockups**
+   - Desktop grid view
+   - Desktop list view
+   - Mobile view
+   - Empty state
+   - Loading state
+   - Create view modal
+
+2. **Components Specs**
+   - ViewCard dimensions and spacing
+   - Typography scale
+   - Color tokens used
+   - Icon sizes and positions
+   - Interactive states (hover, active, disabled)
+
+3. **User Flow Diagrams**
+   - Creating a view
+   - Filtering/searching
+   - Favoriting
+   - Deleting
+
+---
+
+**Ready for AI Designer!** 🎨
+
+
+
+
+
+
+

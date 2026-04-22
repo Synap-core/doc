@@ -1,0 +1,61 @@
+# Browser & Extensions Space Consolidation
+
+## Current State
+- Browser documentation exists at `/content/team/browser/`
+- No separate browser extension documentation found
+- User mentioned having both browser app and browser extension
+
+## Consolidation Plan
+
+### 1. Unified Browser & Extensions Space
+We will maintain `/content/team/browser/` as the unified space covering:
+- Desktop/Electron application (primary browser)
+- Browser extensions (Chrome, Firefox, Safari) 
+- Shared code between browser and extensions
+- Extension-specific APIs and capabilities
+
+### 2. Documentation Updates Needed
+
+#### Update `/content/team/browser/index.mdx`:
+- Update title to "Browser & Extensions"
+- Update description to cover both browser and extensions
+- Update purpose to include extension development
+- Update target users to include extension developers
+- Update main flows to include extension-specific flows
+- Update dependencies to include extension-related services
+
+#### Create Extension Documentation (if missing):
+If browser extension documentation doesn't exist, create:
+- `/content/team/browser/extensions/` directory
+- Extension architecture document
+- Extension APIs reference
+- Extension development guide
+- Extension publishing process
+
+### 3. Implementation Approach
+
+#### Phase 1: Assessment
+1. Check if any extension documentation exists elsewhere in the codebase
+2. Determine what extension-specific content needs to be created
+3. Update the browser index to reflect the unified scope
+
+#### Phase 2: Content Creation/Merging
+1. Merge any existing extension docs into browser space
+2. Create missing extension documentation
+3. Update cross-references from other spaces
+
+#### Phase 3: Validation
+1. Verify all links work correctly
+2. Ensure documentation is clear for both browser and extension developers
+3. Check that the space properly represents the user's mental model
+
+## Success Criteria
+- Single source of truth for all browser-related documentation
+- Clear distinction between browser-only, extension-only, and shared content
+- Easy navigation for developers working on either platform
+- Proper representation of the browser/extension relationship in the team space structure
+
+## Next Steps
+1. Begin with assessing current browser documentation
+2. Check for any extension-related content in the codebase
+3. Update the browser space documentation accordingly

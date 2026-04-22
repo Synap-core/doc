@@ -1,0 +1,1365 @@
+# AI Design Prompts for View System
+
+## 📋 How to Use These Prompts
+
+Each prompt below is standalone and can be used with:
+- Image generation AI (Midjourney, DALL-E, Stable Diffusion)
+- Design AI assistants (Claude with image generation, GPT-4 with DALL-E)
+- As briefs for human designers
+
+**Format**: Copy the entire prompt for the view you want to generate.
+
+---
+
+## 🎨 Brand Guidelines (Apply to All Views)
+
+### **Color System**
+- **Light Mode Primary**: Amber/Orange tones (#F59E0B, #FBBF24, #FCD34D)
+- **Dark Mode Primary**: Blue tones (#3B82F6, #60A5FA, #93C5FD)
+- **Entity Type Colors**:
+  - Tasks: Green (#10B981)
+  - People: Blue (#3B82F6)
+  - Notes/Documents: Amber (#F59E0B)
+  - Events: Purple (#8B5CF6)
+  - Files: Gray (#6B7280)
+
+### **Visual Style**
+- Modern, clean, minimal
+- Glassmorphism for overlays (blur, translucency)
+- Solid backgrounds for content cards
+- Subtle shadows for depth
+- Smooth animations and transitions
+- Beautiful, professional, trustworthy
+
+### **Typography**
+- **Headings**: Fraunces (serif, elegant)
+- **Body**: DM Sans (sans-serif, clean)
+- Clear hierarchy (size, weight, color)
+
+### **Spacing**
+- Generous white space
+- Consistent padding and gaps
+- Never cramped or cluttered
+
+---
+
+# 1. LIST VIEW
+
+## Prompt
+
+```
+Design a modern, beautiful list view interface for a knowledge management application called Synap. This is a list of entities (tasks, notes, people, events) displayed as cards with rich metadata.
+
+VISUAL STYLE:
+- Modern, clean, professional design
+- Light mode: white background (#FFFFFF), amber accent (#F59E0B)
+- Dark mode: dark gray background (#1E1E1E), blue accent (#3B82F6)
+- Cards have subtle elevation with soft shadows
+- Smooth hover effects (cards lift slightly, show actions)
+
+LAYOUT:
+- Vertical scrolling list
+- Each item is a horizontal card (full width, ~80px height)
+- Left side: checkbox (optional) + icon + content (title, subtitle, badges)
+- Right side: metadata columns (category, timestamp, user avatar)
+- Far right: action buttons appear on hover
+
+CARD STRUCTURE:
+1. Checkbox (16px, rounded, subtle border)
+2. Entity Icon (48px square, rounded corners, colored background based on type)
+   - Tasks: green background, checkmark icon
+   - People: blue background, user icon
+   - Notes: amber background, document icon
+   - Events: purple background, calendar icon
+3. Content Area (flex, grows):
+   - Title (bold, ~16px, high contrast)
+   - Subtitle (lighter, ~14px, secondary text)
+   - Badges (small pills, colored by type: "Top Hit" in orange, status in green/red)
+4. Metadata Columns (fixed width, centered):
+   - Category (icon + text, ~128px)
+   - Timestamp (icon + relative time, ~128px)
+   - User (avatar + name, ~96px)
+5. Hover Actions (appear on right):
+   - 3-4 icon buttons in a rounded container
+   - Subtle background, border
+   - Actions: preview, share, edit
+
+INTERACTIONS:
+- Hover: card lifts (translateY(-2px)), shadow increases, actions appear
+- Selected: highlighted border in primary color
+- Top Hit: special styling (orange glow, badge)
+
+VISUAL DETAILS:
+- 12px gap between cards
+- Smooth transitions (200ms ease)
+- Icons are 16-24px, clean line style
+- Consistent border radius (8-12px)
+- Text truncates with ellipsis if too long
+
+FEELING:
+- Organized, scannable, efficient
+- Information at a glance
+- Delightful interactions
+- Professional yet friendly
+- "Everything has its place"
+
+EXAMPLES TO SHOW:
+- 5-7 list items with varying content
+- Mix of entity types (tasks, people, notes)
+- One item hovered (showing actions)
+- One item selected (highlighted)
+- One "Top Hit" item with special badge
+- Both light and dark mode versions
+
+AVOID:
+- Clutter or cramped spacing
+- Harsh shadows or borders
+- Too many colors competing
+- Text that's hard to read
+- Generic/boring design
+```
+
+---
+
+# 2. GRID VIEW
+
+## Prompt
+
+```
+Design a modern, beautiful grid view interface for a knowledge management application called Synap. This displays entities as cards in a responsive grid layout, similar to Pinterest or Notion gallery view.
+
+VISUAL STYLE:
+- Modern, clean, card-based design
+- Light mode: light gray background (#F9FAFB), white cards, amber accent (#F59E0B)
+- Dark mode: dark background (#0F0F0F), dark gray cards (#1E1E1E), blue accent (#3B82F6)
+- Cards have elevation with subtle shadows
+- Smooth hover effects (scale, lift, reveal actions)
+
+LAYOUT:
+- Responsive grid: 1 column (mobile), 2 (tablet), 3 (desktop), 4 (large screens)
+- Cards have consistent width, variable height based on content
+- 24px gap between cards
+- Cards contain: icon, type badge, title, description, footer
+
+CARD STRUCTURE:
+1. Header Section:
+   - Large entity icon (64px, top-left, colored by type)
+   - Type badge (top-right, subtle, shows "Task", "Note", etc.)
+   - Hover: action button appears (top-right, opens entity)
+2. Content Section:
+   - Title (bold, ~18px, 2-3 lines max)
+   - Description/Preview (lighter, ~14px, 3-4 lines max)
+3. Footer Section (horizontal scroll if needed):
+   - Status indicator (dot + text, colored)
+   - Timestamp (icon + relative time)
+   - User avatars (if multiple users)
+   - Priority badge (if applicable)
+   - Custom metadata (tags, category)
+
+CARD STYLING:
+- Background: white (light) / #1E1E1E (dark)
+- Border: 1px solid, subtle
+- Border radius: 16px
+- Padding: 20px
+- Min height: 240px
+- Hover: translateY(-4px), shadow increases, border glows
+
+ENTITY TYPE STYLING:
+- Tasks: Green icon background, checkmark icon
+- People: Blue icon background, user icon, show online status (green dot)
+- Notes: Amber icon background, document icon
+- Events: Purple icon background, calendar icon
+
+INTERACTIONS:
+- Hover: card lifts, action button appears (open icon, primary color)
+- Click: opens entity in detail view or modal
+- Footer scrolls horizontally if too much metadata
+- Smooth animations (300ms ease-out)
+
+FOOTER DETAILS:
+- Horizontally scrollable (if content overflows)
+- Items have min-width, don't shrink
+- Hide scrollbar but maintain scroll functionality
+- Each metadata item: icon + text, subtle styling
+- Spacing between items: 12px
+
+FEELING:
+- Visual, scannable, explorable
+- Content-first approach
+- Inviting to browse and discover
+- Beautiful cards you want to click
+- "Gallery of ideas"
+
+EXAMPLES TO SHOW:
+- Grid with 8-12 cards
+- Mix of entity types
+- One card hovered (showing open action)
+- Cards with varying content lengths
+- Footer with multiple metadata items (showing scroll)
+- Both light and dark mode versions
+
+AVOID:
+- Cards feeling cramped
+- Text overflow without truncation
+- Footer items overlapping
+- Inconsistent card heights (too jarring)
+- Boring, lifeless cards
+```
+
+---
+
+# 3. TABLE VIEW
+
+## Prompt
+
+```
+Design a modern, professional table view interface for a knowledge management application called Synap. This is a data-dense, spreadsheet-like view optimized for comparing and managing many entities.
+
+VISUAL STYLE:
+- Clean, professional, data-focused design
+- Light mode: white background, subtle gray borders (#E5E7EB), amber highlights (#F59E0B)
+- Dark mode: dark background (#0F0F0F), subtle borders (#374151), blue highlights (#3B82F6)
+- Minimal decoration, focus on data clarity
+- Subtle hover effects on rows
+
+LAYOUT:
+- Full-width table with fixed header
+- Sticky header row (stays visible on scroll)
+- Columns: checkbox, icon, title, status, priority, assignee, due date, tags, actions
+- Rows: 48-56px height, alternating subtle background (zebra striping optional)
+- Horizontal scroll if needed (many columns)
+- Vertical scroll for rows
+
+TABLE STRUCTURE:
+1. Header Row:
+   - Column titles (bold, ~14px, uppercase or sentence case)
+   - Sort indicators (arrow icons, appear on hover)
+   - Resize handles between columns
+   - Filter icons (appear on hover)
+   - Background: slightly darker than body
+   - Sticky (stays at top)
+
+2. Data Rows:
+   - Checkbox column (40px, left-aligned)
+   - Icon column (48px, entity type icon with colored background)
+   - Title column (flexible width, primary data, bold)
+   - Status column (120px, badge with color)
+   - Priority column (100px, colored indicator)
+   - Assignee column (120px, avatar + name)
+   - Due Date column (140px, formatted date, colored if overdue)
+   - Tags column (flexible, multiple tag pills)
+   - Actions column (60px, three-dot menu, appears on hover)
+
+CELL STYLING:
+- Padding: 12px horizontal, 16px vertical
+- Text: left-aligned for text, center for icons
+- Truncate with ellipsis if too long
+- Hover: show full text in tooltip
+
+ROW INTERACTIONS:
+- Hover: subtle background change, actions appear
+- Selected: checkbox checked, row highlighted with primary color tint
+- Multi-select: multiple rows can be selected
+- Click: opens entity detail (not checkbox/actions)
+
+COLUMN FEATURES:
+- Sortable: click header to sort (arrow indicates direction)
+- Resizable: drag border between headers
+- Reorderable: drag header to reorder columns
+- Filterable: click filter icon to show filter UI
+- Hideable: right-click to hide columns
+
+SPECIAL CELL TYPES:
+- Status: pill badge (green/amber/red/gray)
+- Priority: colored dot + text (red=high, amber=medium, gray=low)
+- Assignee: small avatar (32px) + name
+- Due Date: colored text (red if overdue, amber if soon, gray if not urgent)
+- Tags: small pills, scrollable horizontally if many
+
+FEELING:
+- Professional, powerful, efficient
+- Optimized for bulk actions and comparison
+- "Spreadsheet meets beautiful design"
+- Scannable and organized
+- Command over data
+
+EXAMPLES TO SHOW:
+- Table with 10-15 rows
+- Mix of entity types
+- One row hovered (showing actions)
+- Multiple rows selected
+- Sortable headers with indicators
+- Both light and dark mode versions
+
+AVOID:
+- Cramped cells
+- Harsh grid lines (use subtle borders)
+- Too many colors competing
+- Information overload
+- Generic spreadsheet look
+```
+
+---
+
+# 4. GRAPH VIEW (NETWORK/KNOWLEDGE GRAPH)
+
+## Prompt
+
+```
+Design a modern, beautiful graph/network view interface for a knowledge management application called Synap. This shows entities as nodes and relationships as edges in a force-directed network visualization.
+
+VISUAL STYLE:
+- Modern, futuristic, elegant design
+- Light mode: light background (#F9FAFB), colorful nodes, subtle edges
+- Dark mode: dark background (#0A0A0A), vibrant nodes, glowing edges
+- Nodes have depth (shadows, gradients optional)
+- Edges have color based on relationship type
+- Beautiful, organic layout (force-directed)
+
+LAYOUT:
+- Canvas fills entire viewport
+- Nodes are positioned using force-directed algorithm (related items closer)
+- Central node (if focused) is larger and prominent
+- Zoom controls (bottom-right)
+- Filter panel (top-right, collapsible)
+- Mini-map (bottom-left, shows overview)
+
+NODE DESIGN:
+- Size: 60-120px diameter (varies by importance/connections)
+- Shape: Rounded rectangle or circle
+- Structure:
+  1. Background: colored by entity type, subtle gradient
+  2. Icon: centered, white or contrasting color (32-48px)
+  3. Label: below node, 1-2 lines, bold
+  4. Badge: small indicator (connection count, status)
+- Entity Type Colors:
+  - Tasks: Green (#10B981)
+  - People: Blue (#3B82F6)
+  - Notes: Amber (#F59E0B)
+  - Events: Purple (#8B5CF6)
+  - Files: Gray (#6B7280)
+
+NODE STATES:
+- Default: solid color, subtle shadow
+- Hover: scale up slightly (1.1x), glow effect, show details panel
+- Selected: prominent glow/ring, stronger shadow
+- Connected: when hovering a node, connected nodes highlight
+- Dimmed: when filtering, non-matching nodes fade (opacity 0.3)
+
+EDGE DESIGN:
+- Line width: 2-4px (thicker for stronger relationships)
+- Color: based on relationship type
+  - "assigned_to": Orange
+  - "depends_on": Red
+  - "mentions": Purple
+  - "links_to": Cyan
+  - "relates_to": Gray
+- Style: curved paths (bezier), not straight lines
+- Arrow: subtle arrow at target end
+- Hover: thicker, brighter, show relationship label
+
+EDGE STATES:
+- Default: subtle, doesn't overwhelm
+- Hover: highlighted, shows tooltip with relationship type
+- Connected: when hovering node, its edges highlight
+
+UI OVERLAYS:
+1. Zoom Controls (bottom-right):
+   - Glassmorphic panel
+   - Buttons: zoom in, zoom out, fit to screen
+   - Current zoom level indicator
+   
+2. Filter Panel (top-right):
+   - Glassmorphic panel, collapsible
+   - Entity type checkboxes
+   - Relationship type checkboxes
+   - Search input
+   
+3. Mini-map (bottom-left):
+   - Small overview of entire graph
+   - Current viewport shown as rectangle
+   - Simplified view (dots for nodes)
+
+4. Node Detail Panel (appears on hover/select):
+   - Floats near node
+   - Shows: title, type, metadata, quick actions
+   - Glassmorphic design
+
+INTERACTIONS:
+- Pan: drag canvas to move around
+- Zoom: scroll wheel or pinch
+- Node: click to select, drag to reposition
+- Hover: shows details, highlights connections
+- Double-click node: opens in detail view
+- Physics: nodes repel each other, edges pull connected nodes together
+
+VISUAL EFFECTS:
+- Smooth animations (300ms ease-out)
+- Subtle particle effects on edges (optional)
+- Node shadows for depth
+- Glow effects on hover/select
+- Glassmorphism on UI panels (blur, transparency)
+
+FEELING:
+- Exploratory, organic, alive
+- "Network of ideas coming to life"
+- Discover connections naturally
+- Beautiful, almost hypnotic
+- Powerful yet playful
+- "Your knowledge, visualized"
+
+EXAMPLES TO SHOW:
+- Graph with 15-25 nodes
+- Mix of entity types
+- Various edge types and colors
+- One node hovered (showing detail panel and highlighted connections)
+- One node selected (with glow)
+- UI overlays (zoom, filter, mini-map)
+- Both light and dark mode versions
+
+AVOID:
+- Cluttered, overlapping nodes
+- Too many edges (looks like spaghetti)
+- Harsh colors
+- Confusing layout
+- Generic network diagram look
+- Nodes too small to read
+```
+
+---
+
+# 5. WHITEBOARD VIEW (INFINITE CANVAS)
+
+## Prompt
+
+```
+Design a modern, beautiful infinite canvas/whiteboard interface for a knowledge management application called Synap. This is a spatial workspace where users can arrange entities, notes, drawings, and embedded views freely.
+
+VISUAL STYLE:
+- Modern, clean, expansive design
+- Light mode: subtle dot grid background (#F9FAFB), white elements
+- Dark mode: subtle dot grid background (#0F0F0F), dark gray elements
+- Elements have elevation (shadows, borders)
+- Smooth zoom and pan
+- Professional yet creative
+
+CANVAS:
+- Infinite in all directions
+- Subtle dot grid (helps with spatial orientation)
+- Grid size: 24px, dots are subtle (#E5E7EB light, #262626 dark)
+- Zoom levels: 25% to 400%
+- Smooth pan and zoom transitions
+
+ELEMENT TYPES:
+1. Entity Cards:
+   - Similar to grid view cards
+   - Draggable, resizable
+   - Shows icon, title, preview
+   - Can be different sizes (S, M, L)
+   
+2. Text Boxes:
+   - Rich text editor (inline)
+   - Markdown support
+   - Resizable, colored backgrounds optional
+   
+3. Sticky Notes:
+   - Small, colored squares
+   - Quick notes, reminders
+   - Colors: yellow, green, blue, pink, purple
+   
+4. Images:
+   - Display uploaded images
+   - Resizable, maintain aspect ratio
+   
+5. Embedded Views:
+   - Any other view (list, graph, etc.) embedded
+   - Has border and resize handles
+   - Shows mini version of the view
+   
+6. Connectors:
+   - Lines/arrows between elements
+   - Can be labeled
+   - Curved or straight
+
+ELEMENT INTERACTIONS:
+- Drag: move elements around
+- Resize: corner handles appear on select
+- Rotate: rotation handle at top (optional)
+- Connect: draw lines between elements
+- Group: select multiple, group into container
+- Z-order: right-click to bring to front/send to back
+
+UI CHROME:
+1. Toolbar (top):
+   - Glassmorphic panel, centered
+   - Tools: select, text, sticky note, shape, connector, image, embed view
+   - Each tool: icon + label
+   
+2. Zoom Controls (bottom-right):
+   - Current zoom percentage
+   - Buttons: zoom in, out, fit all, 100%
+   
+3. Mini-map (bottom-left):
+   - Shows overview of canvas
+   - Current viewport rectangle
+   - Click to jump to area
+   
+4. Collaboration Cursors:
+   - Other users' cursors shown in real-time
+   - Colored by user
+   - Shows user name next to cursor
+
+VISUAL DESIGN FOR ELEMENTS:
+- Cards: white/dark gray, subtle shadow, 12px border radius
+- Sticky Notes: solid colors (yellow, green, pink), handwriting font optional
+- Text Boxes: minimal, focus on content
+- Embedded Views: border, shows "loading" state initially
+- Connectors: 2-3px lines, arrows at ends, can be colored
+
+SELECTION & EDITING:
+- Selected element: blue outline, resize handles at corners/edges
+- Multi-select: drag rectangle to select multiple
+- Selected elements: can move together, align, distribute
+- Alignment guides: snap to other elements (dotted lines appear)
+- Smart guides: show center, edges when aligning
+
+CANVAS INTERACTIONS:
+- Pan: drag canvas (space + drag, or middle mouse)
+- Zoom: pinch, scroll wheel, or zoom buttons
+- Select: click element
+- Multi-select: shift+click or drag rectangle
+- Quick add: double-click canvas to add text
+- Context menu: right-click for options
+
+VISUAL EFFECTS:
+- Smooth zoom with transform origin at cursor
+- Element shadows increase when dragging
+- Subtle fade-in when creating new elements
+- Smooth transitions for all movements
+- Cursor changes based on tool/action
+
+SPECIAL FEATURES:
+- Snap to grid (toggle-able)
+- Auto-arrange selected elements
+- Templates (pre-made layouts)
+- Comments on elements (appear as pins)
+- Presentations mode (hide UI, fullscreen)
+
+FEELING:
+- Expansive, limitless, free
+- "Your ideas have room to breathe"
+- Creative and organized
+- Collaborative and alive
+- "Thinking canvas"
+- Freedom to organize spatially
+- Both structure and creativity
+
+EXAMPLES TO SHOW:
+- Canvas with mix of elements:
+  - 3-4 entity cards
+  - 2-3 sticky notes
+  - 1 text box with content
+  - 1 embedded view (list or graph)
+  - Connectors between some elements
+- Toolbar and zoom controls visible
+- Mini-map showing overview
+- One element being dragged (with shadow)
+- Collaboration cursor of another user
+- Both light and dark mode versions
+
+AVOID:
+- Cluttered canvas
+- Hard-to-see grid
+- Clunky drag interactions
+- Generic whiteboard look
+- Missing visual feedback
+- Elements looking flat/boring
+```
+
+---
+
+# 6. TREEMAP VIEW (HIERARCHICAL VISUALIZATION)
+
+## Prompt
+
+```
+Design a modern, beautiful treemap visualization for a knowledge management application called Synap. This displays hierarchical data as nested rectangles, where size represents importance/quantity.
+
+VISUAL STYLE:
+- Modern, clean, geometric design
+- Light mode: white background, colored rectangles with subtle borders
+- Dark mode: dark background (#0F0F0F), vibrant colored rectangles
+- Rectangles have subtle gradients and borders
+- Smooth zoom and animation
+
+LAYOUT:
+- Full viewport treemap
+- Nested rectangles (parent contains children)
+- Size = quantity or importance (number of children, relevance score, word count)
+- Color = entity type or category
+- Labeled rectangles (title visible)
+
+RECTANGLE HIERARCHY:
+1. Root Level (largest):
+   - Fills viewport
+   - Shows project/system name
+   - Background: semi-transparent, subtle
+   
+2. Category Level:
+   - Large rectangles (25-40% of parent)
+   - Shows category name (Tasks, Notes, People, etc.)
+   - Colored by type (green, amber, blue, purple)
+   
+3. Entity Level:
+   - Smaller rectangles within categories
+   - Shows entity title (truncated if needed)
+   - Same color as parent, slightly lighter/darker
+
+RECTANGLE STYLING:
+- Border: 2px solid, slightly darker than fill
+- Border radius: 8px (outer), 4px (inner)
+- Padding: 8px between nested rectangles
+- Fill: solid color + subtle gradient (lighter at top)
+- Opacity: 0.9 for categories, 1.0 for entities
+
+COLORS BY ENTITY TYPE:
+- Tasks: Green spectrum (#10B981, #34D399, #6EE7B7)
+- People: Blue spectrum (#3B82F6, #60A5FA, #93C5FD)
+- Notes: Amber spectrum (#F59E0B, #FBBF24, #FCD34D)
+- Events: Purple spectrum (#8B5CF6, #A78BFA, #C4B5FD)
+- Files: Gray spectrum (#6B7280, #9CA3AF, #D1D5DB)
+
+LABELS:
+- Category labels: bold, ~18px, high contrast
+- Entity labels: regular, ~14px, fits in rectangle
+- Show only if rectangle is large enough (min 80x40px)
+- If too small: show on hover
+- Label position: top-left of rectangle, with padding
+
+INTERACTIONS:
+- Hover: rectangle brightens, border glows, shows tooltip with full info
+- Click: zoom into that rectangle (it expands to fill viewport, showing children)
+- Breadcrumb: top bar shows path (Root > Category > Entity)
+- Back: click breadcrumb to zoom out
+- Resize animation: smooth transition (400ms ease-out)
+
+HOVER STATE:
+- Rectangle: brightness +10%, border width +1px, shadow appears
+- Tooltip: appears near cursor, glassmorphic panel
+  - Shows: full title, type, count, metadata
+  - Appears after 300ms hover
+
+ZOOM INTERACTION:
+- Click rectangle: animated zoom (selected rectangle expands to viewport)
+- Children appear as the zoom completes
+- Parent rectangles fade out
+- Breadcrumb updates to show current level
+- Back button/breadcrumb to zoom out
+
+TOP UI:
+1. Breadcrumb Navigation:
+   - Top-left, glassmorphic panel
+   - Shows: Root > Category > Entity
+   - Click any level to zoom to it
+   
+2. Controls (top-right):
+   - Size by: dropdown (count, importance, size)
+   - Color by: dropdown (type, status, priority)
+   - View mode: button to switch to other views
+   
+3. Legend (bottom-right):
+   - Shows color mapping
+   - Entity types and their colors
+
+VISUAL EFFECTS:
+- Smooth zoom animations
+- Rectangles fade in when appearing
+- Subtle gradient on fills
+- Shadow on hover
+- Glow effect on selected
+
+FEELING:
+- Organized, hierarchical, clear
+- "See the big picture at a glance"
+- Discover structure naturally
+- Beautiful data visualization
+- "Your data, spatially organized"
+- Intuitive navigation
+- Satisfying to explore
+
+EXAMPLES TO SHOW:
+- Root view with 3-4 categories visible
+  - Each category with multiple entities
+- Size variation (some large, some small)
+- One rectangle hovered (glowing, tooltip)
+- Breadcrumb showing current level
+- Legend showing color mapping
+- Both light and dark mode versions
+
+EXAMPLES OF DATA:
+- Project treemap:
+  - Root: "Project Alpha"
+  - Categories: "Tasks" (green), "Documents" (amber), "People" (blue)
+  - Entities: individual tasks, docs, people
+- Book treemap:
+  - Root: "My Book"
+  - Categories: "Chapter 1", "Chapter 2", "Chapter 3"
+  - Entities: sections within chapters
+
+AVOID:
+- Rectangles too small to see
+- Labels overlapping or unreadable
+- Too many colors (confusing)
+- Harsh borders or colors
+- Janky zoom animations
+- Feeling lost in hierarchy
+```
+
+---
+
+# 7. TIMELINE VIEW (TEMPORAL VISUALIZATION)
+
+## Prompt
+
+```
+Design a modern, beautiful timeline view for a knowledge management application called Synap. This displays entities chronologically, showing events, tasks, and activities over time.
+
+VISUAL STYLE:
+- Modern, clean, elegant design
+- Light mode: white background, subtle gray line, colored events
+- Dark mode: dark background (#0F0F0F), subtle white line, vibrant events
+- Events displayed as cards along a timeline
+- Smooth scrolling, zoom for time ranges
+
+LAYOUT:
+- Horizontal timeline (left to right = past to future)
+- Central timeline line (2-3px, subtle)
+- Events positioned along timeline
+- Multiple "swim lanes" if many events at same time
+- Time labels on timeline (dates, months, years)
+
+TIMELINE LINE:
+- Horizontal, runs through center
+- Color: subtle gray (#D1D5DB light, #374151 dark)
+- Width: 2-3px
+- Milestones: dots/diamonds on line (project start, deadlines)
+- Current time indicator: vertical line (primary color, glowing)
+
+TIME LABELS:
+- Positioned above timeline line
+- Shows: dates, months, years (depends on zoom level)
+- Font: ~12px, secondary color
+- Spacing: every 100-200px
+- Format changes with zoom:
+  - Wide: "Jan 15, 2024"
+  - Medium: "Jan 2024"
+  - Narrow: "2024"
+
+EVENT CARDS:
+- Positioned on timeline at their date
+- Connected to timeline with short line (20-30px)
+- Card structure:
+  1. Icon (entity type, colored circle, 32px)
+  2. Title (bold, ~14px)
+  3. Date/time (lighter, ~12px)
+  4. Preview (1-2 lines, lighter)
+  5. Status indicator (if task: done/pending)
+
+CARD STYLING:
+- Background: white (light) / #1E1E1E (dark)
+- Border: 1px solid, subtle
+- Border radius: 12px
+- Padding: 16px
+- Width: 240px
+- Shadow: subtle
+- Hover: lifts, shadow increases
+
+CARD POSITIONING:
+- If multiple events at similar time: offset vertically (swim lanes)
+- Connector line from card to timeline
+- Cards alternate above/below line (or all on one side)
+
+ENTITY TYPE COLORS:
+- Tasks: Green (#10B981) - checkmark icon
+- Events: Purple (#8B5CF6) - calendar icon
+- Notes: Amber (#F59E0B) - document icon
+- Milestones: Red (#EF4444) - flag icon
+
+INTERACTIONS:
+- Scroll: horizontal scroll to move through time
+- Zoom: buttons or pinch to zoom time scale
+- Hover: card lifts, shows more details
+- Click: opens entity detail
+- Drag: move event to different date (if editable)
+
+TIME NAVIGATION:
+1. Zoom Controls (top-right):
+   - Buttons: Day, Week, Month, Year, All
+   - Current zoom level indicator
+   
+2. Date Navigator (top-center):
+   - Shows current visible date range
+   - Click to jump to date (date picker)
+   - Prev/Next buttons
+   
+3. Mini Timeline (bottom):
+   - Shows full timeline in miniature
+   - Current viewport shown as rectangle
+   - Click to jump to period
+
+SPECIAL ELEMENTS:
+- Today indicator: vertical line (primary color, glowing), "Today" label
+- Milestones: diamond shapes on line (red for deadlines, green for completed)
+- Periods: shaded regions for date ranges (projects, sprints)
+- Connections: dotted lines between related events
+
+GROUPING:
+- Group by: day, week, month (depending on zoom)
+- Group labels: date headers above groups
+- Separator lines: subtle, between groups
+
+VISUAL EFFECTS:
+- Smooth scroll (momentum)
+- Smooth zoom (cards resize/reposition)
+- Cards fade in when scrolling
+- Hover effects (lift, shadow)
+- Today line pulses subtly
+
+FILTERS (sidebar or top):
+- Entity types: checkboxes
+- Date range: slider or calendar
+- Tags: multi-select
+- Show completed: toggle
+
+FEELING:
+- Temporal, flowing, chronological
+- "Your journey through time"
+- Clear progression
+- Easy to spot patterns
+- "See what happened when"
+- Organized, yet dynamic
+- Professional timeline
+
+EXAMPLES TO SHOW:
+- Timeline spanning 3-4 months
+- 15-20 events distributed
+- Mix of entity types (tasks, events, notes)
+- One event hovered (lifted)
+- Today indicator visible
+- Milestones (project start, deadline)
+- Event groups at similar times (swim lanes)
+- Zoom controls and date navigator
+- Both light and dark mode versions
+
+AVOID:
+- Cluttered, overlapping events
+- Hard to tell dates
+- Boring, generic timeline
+- Events too small
+- Confusing which event is when
+- Static, lifeless
+```
+
+---
+
+# 8. KANBAN VIEW (TASK BOARD)
+
+## Prompt
+
+```
+Design a modern, beautiful Kanban board for a knowledge management application called Synap. This displays tasks as cards in columns representing status or workflow stages.
+
+VISUAL STYLE:
+- Modern, clean, organized design
+- Light mode: light gray background (#F3F4F6), white cards, colored columns
+- Dark mode: dark background (#0F0F0F), dark gray cards (#1E1E1E), subtle columns
+- Cards have elevation, smooth drag-and-drop
+- Professional yet friendly
+
+LAYOUT:
+- Horizontal columns (3-6 columns)
+- Each column: header + scrollable card list
+- Columns are equal width, fill viewport
+- Horizontal scroll if many columns
+- Drag cards between columns
+
+COLUMNS:
+- Common columns: "To Do", "In Progress", "Review", "Done"
+- Column structure:
+  1. Header:
+     - Title (bold, ~16px)
+     - Count (number of cards, lighter)
+     - Color indicator (top border, 4px)
+     - Add button (+ icon)
+  2. Card list:
+     - Vertical scrolling
+     - 12px gap between cards
+     - Drag target indicator when dragging
+
+COLUMN STYLING:
+- Background: slightly different shade from main background
+- Border: subtle, 1px
+- Border radius: 12px (top only)
+- Padding: 16px
+- Top border: 4px, colored by status
+  - To Do: Gray (#9CA3AF)
+  - In Progress: Blue (#3B82F6)
+  - Review: Amber (#F59E0B)
+  - Done: Green (#10B981)
+
+CARD DESIGN:
+- Card structure:
+  1. Priority indicator (left border, 4px, colored)
+  2. Title (bold, ~14px, 2-3 lines max)
+  3. Tags (small pills, if any)
+  4. Metadata row:
+     - Due date (icon + text, colored if overdue)
+     - Assignee (avatar, 28px)
+     - Comments count (icon + number)
+     - Attachments count (icon + number)
+
+CARD STYLING:
+- Background: white (light) / #1E1E1E (dark)
+- Border: 1px solid, subtle
+- Border radius: 8px
+- Padding: 12px
+- Shadow: subtle
+- Hover: lifts slightly, shadow increases
+- Dragging: lifts more, shadow stronger, rotates 2-3°
+
+PRIORITY COLORS (left border):
+- High: Red (#EF4444)
+- Medium: Amber (#F59E0B)
+- Low: Gray (#9CA3AF)
+- None: Transparent
+
+CARD INTERACTIONS:
+- Hover: lifts, cursor becomes grab
+- Drag: card follows cursor, other cards shift to make space
+- Drop: smooth animation to new position
+- Click: opens card detail modal
+- Quick edit: hover shows edit icon (top-right)
+
+DRAG & DROP:
+- Drag preview: card follows cursor, slightly transparent
+- Drop zone: column highlights subtly
+- Between cards: dotted line shows insertion point
+- Smooth animation when dropping
+- Haptic feedback (web vibration API)
+
+COLUMN FEATURES:
+- Add card: click + button or double-click empty space
+- Collapse: click header to collapse column (show count only)
+- Reorder: drag column headers to reorder
+- Limits: show limit (e.g., "In Progress: 3/5")
+
+VISUAL INDICATORS:
+- Overdue: red text/icon on due date
+- Blocked: red banner at top of card
+- Priority: colored left border
+- Assignee: avatar in bottom-right
+- Progress: subtle progress bar if subtasks
+
+TOP UI:
+1. Board Header:
+   - Board title (editable, ~24px)
+   - View switcher (Kanban, List, Timeline)
+   - Filter button
+   - Group by dropdown (status, assignee, priority)
+   
+2. Filters (sidebar or modal):
+   - Assignee: multi-select
+   - Priority: checkboxes
+   - Tags: multi-select
+   - Due date: range picker
+
+EMPTY STATES:
+- Empty column: dashed border, "Drop cards here" text
+- No cards matching filter: friendly message, "Clear filters" button
+
+VISUAL EFFECTS:
+- Smooth card drag (follows cursor exactly)
+- Cards shift smoothly when reordering
+- Fade in when adding new card
+- Subtle animation when moving between columns
+- Column highlights when drag over it
+
+FEELING:
+- Organized, clear workflow
+- Satisfying to move cards
+- Progress is visible
+- "Getting things done"
+- Team collaboration
+- Smooth, delightful interactions
+- Professional task management
+
+EXAMPLES TO SHOW:
+- 4 columns: "To Do", "In Progress", "Review", "Done"
+- 15-20 cards distributed across columns
+- Cards with varying priority (colored borders)
+- One card being dragged (lifted, rotated)
+- Drop zone indicator (dotted line between cards)
+- Mix of cards with/without assignees, due dates
+- One column with limit indicator (e.g., "3/5")
+- Board header with title and controls
+- Both light and dark mode versions
+
+AVOID:
+- Cluttered cards (too much info)
+- Hard to drag
+- Janky animations
+- Columns feeling separate (should feel cohesive)
+- Generic Trello clone
+- Static, boring design
+```
+
+---
+
+# 9. SUNBURST VIEW (RADIAL HIERARCHY)
+
+## Prompt
+
+```
+Design a modern, beautiful sunburst/radial tree visualization for a knowledge management application called Synap. This displays hierarchical data as concentric rings, where each ring represents a level in the hierarchy.
+
+VISUAL STYLE:
+- Modern, elegant, circular design
+- Light mode: white background, colored segments with subtle borders
+- Dark mode: dark background (#0A0A0A), vibrant colored segments with glow
+- Circular layout, center = root
+- Smooth rotations and zoom animations
+
+LAYOUT:
+- Centered circle (sunburst) fills most of viewport
+- Root in center (smallest circle)
+- Each ring outward = deeper level in hierarchy
+- Segments = children of parent
+- Segment size (arc angle) = importance/quantity
+
+RING STRUCTURE:
+1. Center Circle (root):
+   - Diameter: 80-120px
+   - Shows root title (project, book, system name)
+   - Background: primary color gradient
+   - Icon in center
+   
+2. Ring 1 (categories):
+   - Width: 60-80px
+   - Segments for each top-level category
+   - Colored by category type
+   - Labels along curve (if space)
+   
+3. Ring 2+ (entities, sub-categories):
+   - Width: 50-60px each
+   - Narrower as you go out
+   - Same color as parent, but lighter/darker
+   - Labels on hover
+
+SEGMENT STYLING:
+- Fill: solid color, subtle gradient (radial)
+- Border: 2px, white (light) / dark gray (dark)
+- Opacity: 0.85-1.0
+- Hover: brightness +15%, border glow
+
+COLORS:
+- Segments colored by entity type or category
+- Each category has unique color (green, blue, amber, purple)
+- Children inherit parent color, with lightness variation
+- Gradient from inner to outer (darker to lighter)
+
+LABELS:
+- Center: always visible, bold
+- Ring 1: labels along arc (curved text)
+- Ring 2+: show on hover only (too small)
+- Font size decreases with depth
+- High contrast with segment color
+
+INTERACTIONS:
+- Hover: segment brightens, shows tooltip with details
+  - Tooltip: title, type, count, path (breadcrumb)
+- Click: zoom into segment (it becomes new center, children expand)
+- Breadcrumb: center shows current root, click to go back
+- Rotate: drag to rotate entire sunburst (optional)
+
+ZOOM INTERACTION:
+- Click segment: animated zoom
+  - Selected segment moves to center
+  - Its children expand into rings
+  - Parent segments fade out or become smaller
+- Back: click center to zoom out
+- Smooth animation: 500ms ease-out
+
+HOVER STATE:
+- Segment: brightness +15%, stroke glow (primary color)
+- Tooltip: glassmorphic panel near cursor
+  - Shows: title, type, quantity, percentage of parent
+  - Path: Home > Category > Item
+
+UI OVERLAYS:
+1. Center Label:
+   - Shows current root title
+   - Click to zoom out
+   - Back arrow icon if not at top level
+   
+2. Legend (bottom-right):
+   - Shows color mapping
+   - Entity types or categories
+   
+3. Controls (top-right):
+   - Size by: dropdown (count, importance)
+   - Color by: dropdown (type, status)
+   - Reset: button to reset to root view
+
+VISUAL EFFECTS:
+- Smooth zoom/rotate animations
+- Segments fade in when appearing
+- Radial gradient on fills (subtle)
+- Glow on hover
+- Pulsing animation on center (optional)
+
+SPECIAL FEATURES:
+- Empty segments: dashed border, dimmed
+- Highlighted path: when hovering, show path from root to segment (brighten all ancestors)
+- Percentage labels: show if segment is large enough (e.g., "45%")
+
+FEELING:
+- Organic, circular, harmonious
+- "Layers of knowledge unfolding"
+- Discover structure naturally
+- Beautiful, mesmerizing
+- "Your hierarchy, visualized radially"
+- Intuitive to explore
+- Elegant data visualization
+
+EXAMPLES TO SHOW:
+- Sunburst with 3-4 rings
+- Center: "My Project"
+- Ring 1: 4-5 categories (Tasks, Docs, People, Events)
+- Ring 2+: individual entities within categories
+- One segment hovered (glowing, tooltip)
+- Size variation (some segments large, some small)
+- Legend showing color mapping
+- Both light and dark mode versions
+
+EXAMPLE HIERARCHIES:
+- Project:
+  - Center: "Project Alpha"
+  - Ring 1: Tasks, Documents, People, Events
+  - Ring 2: Individual items
+  
+- Book:
+  - Center: "My Book"
+  - Ring 1: Chapter 1, Chapter 2, Chapter 3
+  - Ring 2: Sections within chapters
+  - Ring 3: Pages/paragraphs
+
+AVOID:
+- Segments too thin to see
+- Labels overlapping or unreadable
+- Too many rings (max 4-5)
+- Harsh colors
+- Confusing which segment is which
+- Janky animations
+- Feeling lost in hierarchy (always show path)
+```
+
+---
+
+# 10. MIND MAP VIEW (RADIAL TREE)
+
+## Prompt
+
+```
+Design a modern, beautiful mind map view for a knowledge management application called Synap. This displays ideas and entities as nodes branching from a central concept, similar to Tony Buzan's mind mapping technique.
+
+VISUAL STYLE:
+- Modern, organic, creative design
+- Light mode: light background (#FAFAFA), colorful nodes, curved branches
+- Dark mode: dark background (#0A0A0A), vibrant nodes, glowing branches
+- Organic, hand-drawn feel (but clean and modern)
+- Radial layout from center
+
+LAYOUT:
+- Central node (main topic) in center
+- Primary branches radiate outward (4-8 directions)
+- Secondary branches extend from primary
+- Auto-layout: evenly distribute branches
+- Organic spacing (not rigid grid)
+
+NODE DESIGN:
+- Central node:
+  - Large (120-160px wide)
+  - Rounded rectangle or ellipse
+  - Bold title (~20px)
+  - Icon in corner
+  - Primary color background
+  
+- Primary nodes:
+  - Medium (100-120px wide)
+  - Colored by category (different color per branch)
+  - Title (~16px)
+  - Icon
+  
+- Secondary nodes:
+  - Small (80-100px wide)
+  - Same color as parent, lighter
+  - Title (~14px)
+  - Icon (optional)
+
+NODE STYLING:
+- Background: solid color + subtle gradient
+- Border: 2-3px, slightly darker than fill
+- Border radius: 20-30px (very rounded)
+- Shadow: subtle depth
+- Hover: lifts, shadow increases, scale up slightly
+
+BRANCH DESIGN:
+- Curved lines (bezier curves), not straight
+- Width: 3-4px, tapers toward end
+- Color: matches child node color
+- Style: organic, flowing
+- Smooth curves, natural appearance
+
+BRANCH STYLING:
+- Start thick (4px) at parent, end thin (2px) at child
+- Color matches destination node
+- Hover: brightens, glows
+- Animated: subtle flow animation (optional)
+
+COLORS:
+- Each primary branch has unique color:
+  - Branch 1: Green (#10B981)
+  - Branch 2: Blue (#3B82F6)
+  - Branch 3: Amber (#F59E0B)
+  - Branch 4: Purple (#8B5CF6)
+  - Branch 5: Cyan (#06B6D4)
+  - Branch 6: Pink (#EC4899)
+- Children inherit parent color (lighter tints)
+
+LAYOUT ALGORITHM:
+- Central node at origin
+- Primary nodes: radiate evenly (360° / count)
+- Secondary nodes: branch from primary
+- Spacing: maintain min distance between nodes
+- Avoid overlaps
+
+INTERACTIONS:
+- Pan: drag canvas to move around
+- Zoom: scroll wheel or pinch
+- Node hover: lifts, shows details
+- Node click: expand/collapse children
+- Double-click: opens entity detail
+- Add node: button appears on hover
+- Drag node: reposition (branches follow)
+
+NODE STATES:
+- Default: solid color, shadow
+- Hover: scale 1.05x, shadow increases, shows action buttons
+- Selected: bold border (primary color), glow
+- Collapsed: small indicator (+ icon) if has hidden children
+- Expanded: children visible
+
+ACTION BUTTONS (on hover):
+- Add child: + icon
+- Edit: pencil icon
+- Delete: X icon
+- Buttons appear around node, small circles
+
+UI OVERLAYS:
+1. Toolbar (top-center):
+   - Glassmorphic panel
+   - Add node, auto-layout, collapse all, expand all
+   - Export as image
+   
+2. Zoom Controls (bottom-right):
+   - Zoom in, out, fit all
+   
+3. Mini-map (bottom-left):
+   - Simplified view of entire map
+   - Current viewport rectangle
+
+VISUAL EFFECTS:
+- Smooth node drag (branches follow, animated)
+- Expand/collapse: children fade in/out, branches grow/shrink
+- Add node: fades in, scales up from parent
+- Hover glow (subtle)
+- Subtle animations on branches (flow effect optional)
+
+TEXT STYLING:
+- Central node: bold, ~20px
+- Primary nodes: bold, ~16px
+- Secondary nodes: regular, ~14px
+- Truncate with ellipsis if too long
+- Show full text on hover (tooltip)
+
+SPECIAL FEATURES:
+- Collapsible branches: click node to hide/show children
+- Smart layout: auto-arrange to avoid overlaps
+- Focus mode: dim other branches, highlight one
+- Export: save as PNG/SVG
+- Templates: pre-made structures
+
+FEELING:
+- Creative, organic, brainstormy
+- "Ideas branching naturally"
+- Visual thinking
+- Non-linear exploration
+- "Your thoughts, mapped"
+- Playful yet organized
+- Inspiring and clear
+
+EXAMPLES TO SHOW:
+- Mind map with central node
+- 5-6 primary branches (different colors)
+- 2-3 secondary nodes per primary branch
+- Curved, organic branches
+- One branch hovered (glowing)
+- One branch collapsed (with + indicator)
+- Action buttons on hovered node
+- Both light and dark mode versions
+
+EXAMPLE CONTENT:
+- Central: "Project Planning"
+- Primary branches:
+  - "Goals" (green)
+  - "Tasks" (blue)
+  - "Resources" (amber)
+  - "Timeline" (purple)
+  - "Team" (cyan)
+- Secondary: specific items under each
+
+AVOID:
+- Rigid, geometric layout (should feel organic)
+- Straight lines (use curves)
+- Overlapping nodes
+- Too small to read
+- Boring colors
+- Generic mind map tool look
+- Cluttered, confusing
+```
+
+---
+
+# USAGE NOTES
+
+## For Image Generation AI (Midjourney, DALL-E):
+- Add to end of prompt: "Modern UI design, high-quality, professional, clean, beautiful, Figma-style, 2024 design trends, 4K"
+- Specify: "Light mode version" or "Dark mode version"
+- Add: "Show full interface, not just icon"
+
+## For Design AI (Claude, GPT-4):
+- Use prompt as-is
+- Ask for variations or specific scenarios
+- Request both light and dark mode
+
+## For Human Designers:
+- Use as design brief
+- Focus on "FEELING" section for direction
+- Reference "EXAMPLES TO SHOW" for deliverables
+
+---
+
+**Created**: For Synap view system design
+**Version**: 1.0
+**Last Updated**: January 2025
+

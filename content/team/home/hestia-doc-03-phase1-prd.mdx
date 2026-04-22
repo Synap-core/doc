@@ -1,0 +1,122 @@
+# DOC-03 — Phase 1 PRD: Foundation (USB + Script)
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-03 |
+| Title | Phase 1 PRD — Foundation Engine |
+| Status | Draft |
+| Version | 0.4 |
+| Date | 2026-04-12 |
+
+## 1) Phase goal
+Deliver a hardened baseline host (Docker-ready, secure defaults, GPU-ready when applicable) provisioned via:
+* USB (bare metal install) or
+* Script (install on an existing Ubuntu server)
+
+Phase 1 ends with:
+* `/etc/synap-stack/config.yaml` present
+* `/etc/synap-stack/secrets.env` present
+* SSH + UFW baseline applied
+* Docker installed and working
+* Optional NVIDIA + container toolkit installed and verified
+
+## 2) Supported platforms (Phase 1)
+* x86_64 only (initially)
+* Ubuntu Server 24.04 LTS recommended (USB path)
+* Ubuntu Server 22.04/24.04 supported (script path)
+
+## 3) Key requirements
+
+### 3.1 Dual install modes
+* USB mode uses Ventoy for multiboot and unattended Ubuntu install.
+* Script mode uses a rerunnable `install.sh phase1` that uses Ansible locally.
+
+References:
+* Ventoy autoinstall plugin supports unattended installs using templates/scripts without rebuilding ISOs.
+* Ubuntu autoinstall is Subiquity YAML format for Ubuntu Server 20.04+.
+* Subiquity supports match specs for disk selection and has a zero-touch safeguard prompt.
+
+## 4) USB mode (bare metal) — deliverables and UX
+
+### 4.1 USB contents (minimum)
+* Ubuntu Server ISO
+* Optional diagnostics ISOs (RAM/disk tools)
+* Ventoy configuration:
+    * `ventoy.json` mapping ISO → template(s)
+    * Two templates:
+        * SAFE: interactive storage selection (recommended default)
+        * WIPE: full unattended wipe and install (dangerous; opt-in)
+
+### 4.2 Disk safety model (mandatory)
+Because a wrong disk wipe is catastrophic, USB mode MUST ship two templates:
+* SAFE template:
+    * uses `interactive-sections: [storage]` so the installer asks the user to confirm/choose disk layout
+* WIPE template:
+    * uses explicit storage config with match specs (e.g., largest SSD) and is only selectable by an explicit "DANGEROUS" menu entry
+
+Disk selection tools:
+* Prefer explicit matching by `serial` for deterministic installs where possible.
+* Otherwise use `match: { ssd: true, size: largest }` (best-effort) and document risks.
+
+### 4.3 Zero-touch behavior (no confirmation prompt)
+Subiquity includes a safeguard: it will prompt for confirmation before writing disks unless `autoinstall` is present on the kernel command line.
+* SAFE template may allow prompt/interaction (acceptable).
+* WIPE template SHOULD be configured to boot with `autoinstall` kernel arg (via Ventoy boot conf replace or equivalent) to avoid stopping at the confirmation prompt.
+
+## 5) Script mode — functional requirements
+
+### 5.1 Idempotency
+`install.sh phase1` MUST be rerunnable:
+* re-running does not break services or duplicate config
+* config merges are stable
+* secrets are not overwritten unless user requests rotation
+
+### 5.2 Outputs
+* `/etc/synap-stack/config.yaml`
+* `/etc/synap-stack/secrets.env` mode 0600
+* `/var/log/synap-stack/install.log`
+* `/var/log/synap-stack/audit.jsonl` (created, even if empty)
+
+### 5.3 Baseline security
+* SSH hardening:
+    * disable root login
+    * disable password auth optionally (future toggle); keep password auth allowed in Phase 1 if needed for onboarding
+* Firewall:
+    * UFW enabled
+    * default deny incoming
+    * allow SSH
+    * do NOT open 80/443 by default (only when proxy is installed in later phases)
+
+## 6) Autoinstall templates (Ubuntu Server 24.04) — required examples
+
+### 6.1 SAFE template (interactive storage)
+Key points:
+* `interactive-sections: [storage]`
+* runs Phase 1 installer script in `late-commands`
+* leaves storage choice to the user
+
+### 6.2 WIPE template (fully unattended)
+Key points:
+* uses `storage: layout:` or explicit `storage: config:` with match spec
+* selects largest SSD (or serial) deterministically where possible
+* includes a prominent warning in Ventoy menu and in docs
+
+Subiquity match spec supports:
+* `serial`, `model`, `vendor`, `path`, `id_path`, `devpath`, `ssd`, and `size: largest|smallest`
+
+## 7) Acceptance criteria
+* SSH reachable (LAN/VPN)
+* UFW active, SSH allowed
+* Docker installed and running
+* `config.yaml` and `secrets.env` exist with correct permissions
+* If GPU path selected:
+    * `nvidia-smi` passes
+    * container GPU test passes
+
+## 8) References
+* Ventoy autoinstall plugin: https://www.ventoy.net/en/plugin_autoinstall.html
+* Ubuntu autoinstall reference (match specs, storage): https://canonical-subiquity.readthedocs-hosted.com/en/latest/reference/autoinstall-reference.html
+* Zero-touch autoinstall safeguard: https://canonical-subiquity.readthedocs-hosted.com/en/latest/explanation/zero-touch-autoinstall.html
+* Autoinstall support overview: https://canonical-subiquity.readthedocs-hosted.com/en/latest/intro-to-autoinstall.html
+* UFW vs firewalld: https://betterstack.com/community/guides/linux/ufw-vs-firewalld/

@@ -1,0 +1,488 @@
+# Professional Component Library Guide
+
+This is your arsenal of reusable, production-ready components for creating stunning motion graphics in Remotion.
+
+---
+
+## 📝 Text Components
+
+### 1. GradientText
+Beautiful gradient text with animations.
+
+```tsx
+import { GradientText } from "./components/text/GradientText";
+
+<GradientText
+  from="#38BDF8"
+  to="#F8FAFC"
+  angle={135}
+  fontSize={96}
+  fontWeight={800}
+  animate="scaleIn"
+  delay={30}
+>
+  The Death of SaaS
+</GradientText>
+```
+
+**Props:**
+- `from`, `to`: Gradient colors
+- `angle`: Gradient angle (degrees)
+- `fontSize`: Font size in pixels
+- `fontWeight`: 400-900
+- `animate`: `"fadeIn"`, `"scaleIn"`, or `"none"`
+- `delay`: Start animation after N frames
+
+---
+
+### 2. TypewriterText
+Classic typewriter effect with optional cursor.
+
+```tsx
+import { TypewriterText } from "./components/text/TypewriterText";
+
+<TypewriterText
+  startFrame={60}
+  charsPerFrame={2}
+  cursor={true}
+  cursorBlinkSpeed={16}
+  style={{ fontSize: 48, color: "#F8FAFC" }}
+>
+  Your data. Your rules. Any interface you want.
+</TypewriterText>
+```
+
+**Props:**
+- `startFrame`: When to start typing
+- `charsPerFrame`: Speed (lower = faster)
+- `cursor`: Show blinking cursor
+- `cursorBlinkSpeed`: Frames per blink cycle
+
+---
+
+### 3. HighlightText
+Animated highlight effect like a marker pen.
+
+```tsx
+import { HighlightText } from "./components/text/HighlightText";
+
+<span style={{ fontSize: 64 }}>
+  We built a{" "}
+  <HighlightText
+    highlightColor="#38BDF8"
+    startFrame={90}
+    durationInFrames={20}
+  >
+    structured brain
+  </HighlightText>
+  {" "}for your business
+</span>
+```
+
+**Best for:** Emphasizing key words in quotes or statements.
+
+---
+
+### 4. GlitchText
+Cyberpunk-style glitch effect with chromatic aberration.
+
+```tsx
+import { GlitchText } from "./components/text/GlitchText";
+
+<GlitchText
+  intensity={0.8}
+  glitchFrameStart={0}
+  glitchFrameEnd={30}
+  fontSize={72}
+  fontWeight={800}
+  color="#F8FAFC"
+>
+  BROKEN
+</GlitchText>
+```
+
+**Use cases:** Error states, disruption moments, dramatic emphasis.
+
+---
+
+## ✨ Visual Effects
+
+### 5. ParticleField
+Floating particles with customizable behavior.
+
+```tsx
+import { ParticleField } from "./components/effects/ParticleField";
+
+<ParticleField
+  count={200}
+  speed={0.5}
+  color="#38BDF8"
+  opacity={0.3}
+  size={[2, 6]}
+  direction="up"
+/>
+```
+
+**Directions:**
+- `"up"`: Rising particles (dust in light)
+- `"down"`: Falling particles (rain, snow)
+- `"random"`: Organic drift
+- `"left"`, `"right"`: Horizontal flow
+
+**Performance:** Keep count under 300 for smooth rendering.
+
+---
+
+### 6. Vignette
+Subtle edge darkening for cinematic focus.
+
+```tsx
+import { Vignette } from "./components/effects/Vignette";
+
+<Vignette intensity={0.5} color="#000000" />
+```
+
+**Best practices:**
+- Use `0.3-0.5` intensity for subtlety
+- Add to dramatic scenes, testimonials, closeups
+
+---
+
+### 7. FilmGrain
+Organic film texture overlay.
+
+```tsx
+import { FilmGrain } from "./components/effects/FilmGrain";
+
+<FilmGrain intensity={0.05} />
+```
+
+**Tip:** Lower is better. `0.03-0.08` range looks natural.
+
+---
+
+### 8. ChromaticAberration
+RGB channel separation effect.
+
+```tsx
+import { ChromaticAberration } from "./components/effects/ChromaticAberration";
+
+<ChromaticAberration intensity={5} startFrame={0} endFrame={30}>
+  <YourContent />
+</ChromaticAberration>
+```
+
+**Use for:** Glitch moments, VHS aesthetic, impact frames.
+
+---
+
+## 🎨 3D Components
+
+### 9. DataPod3D
+Rotating 3D cube with glow (placeholder until packages installed).
+
+```tsx
+import { DataPod3D } from "./components/3d/DataPod3D";
+
+<DataPod3D
+  scale={1.5}
+  rotationSpeed={0.02}
+  glowIntensity={0.8}
+  color="#38BDF8"
+  animateIn={true}
+  startFrame={0}
+/>
+```
+
+**Requires:** `@remotion/three`, `three`, `@react-three/fiber`
+
+---
+
+## 🎬 Real-World Composition Examples
+
+### Example 1: Opening Title with Multiple Effects
+
+```tsx
+import { AbsoluteFill } from "remotion";
+import { GradientText } from "./components/text/GradientText";
+import { ParticleField } from "./components/effects/ParticleField";
+import { Vignette } from "./components/effects/Vignette";
+import { FilmGrain } from "./components/effects/FilmGrain";
+
+export const OpeningScene = () => {
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#0A0A0A" }}>
+      {/* Background effects */}
+      <ParticleField count={150} speed={0.3} direction="up" opacity={0.2} />
+      <Vignette intensity={0.4} />
+      <FilmGrain intensity={0.04} />
+
+      {/* Main title */}
+      <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
+        <GradientText
+          from="#38BDF8"
+          to="#F8FAFC"
+          fontSize={120}
+          fontWeight={900}
+          animate="scaleIn"
+          delay={10}
+        >
+          The Death of SaaS
+        </GradientText>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+```
+
+---
+
+### Example 2: Typewriter Quote with Highlight
+
+```tsx
+import { AbsoluteFill } from "remotion";
+import { TypewriterText } from "./components/text/TypewriterText";
+import { HighlightText } from "./components/text/HighlightText";
+
+export const QuoteScene = () => {
+  return (
+    <AbsoluteFill
+      style={{
+        backgroundColor: "#0A0A0A",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 100,
+      }}
+    >
+      <div style={{ fontSize: 56, fontWeight: 600, color: "#F8FAFC", lineHeight: 1.4 }}>
+        <TypewriterText startFrame={0} charsPerFrame={2}>
+          We didn't build a suite of productivity tools. We built a{" "}
+        </TypewriterText>
+        <HighlightText highlightColor="#38BDF8" startFrame={120} durationInFrames={20}>
+          structured brain
+        </HighlightText>
+        <TypewriterText startFrame={140} charsPerFrame={2}>
+          {" "}for your business.
+        </TypewriterText>
+      </div>
+    </AbsoluteFill>
+  );
+};
+```
+
+---
+
+### Example 3: Dramatic Glitch Transition
+
+```tsx
+import { AbsoluteFill, Sequence } from "remotion";
+import { GlitchText } from "./components/text/GlitchText";
+import { ChromaticAberration } from "./components/effects/ChromaticAberration";
+
+export const GlitchTransition = () => {
+  return (
+    <>
+      {/* Normal scene */}
+      <Sequence durationInFrames={60}>
+        <NormalContent />
+      </Sequence>
+
+      {/* Glitch moment */}
+      <Sequence from={60} durationInFrames={30}>
+        <AbsoluteFill style={{ backgroundColor: "#0A0A0A" }}>
+          <ChromaticAberration intensity={10} startFrame={0} endFrame={30}>
+            <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
+              <GlitchText intensity={1} glitchFrameStart={0} glitchFrameEnd={30}>
+                BROKEN
+              </GlitchText>
+            </AbsoluteFill>
+          </ChromaticAberration>
+        </AbsoluteFill>
+      </Sequence>
+
+      {/* Next scene */}
+      <Sequence from={90}>
+        <NextScene />
+      </Sequence>
+    </>
+  );
+};
+```
+
+---
+
+### Example 4: Layered Depth with Particles
+
+```tsx
+import { AbsoluteFill } from "remotion";
+import { ParticleField } from "./components/effects/ParticleField";
+import { DataPod3D } from "./components/3d/DataPod3D";
+
+export const LayeredScene = () => {
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#0A0A0A" }}>
+      {/* Far background particles */}
+      <ParticleField count={100} speed={0.2} size={[1, 3]} opacity={0.1} direction="random" />
+
+      {/* Mid-ground 3D element */}
+      <DataPod3D scale={1.5} rotationSpeed={0.01} />
+
+      {/* Foreground particles */}
+      <ParticleField count={50} speed={0.8} size={[4, 8]} opacity={0.4} direction="up" />
+
+      {/* Vignette to focus center */}
+      <Vignette intensity={0.6} />
+    </AbsoluteFill>
+  );
+};
+```
+
+---
+
+## 🎯 Advanced Techniques
+
+### Combining Multiple Text Effects
+
+```tsx
+<GradientText from="#38BDF8" to="#F8FAFC" fontSize={72} animate="fadeIn">
+  <TypewriterText charsPerFrame={3}>
+    The future is{" "}
+  </TypewriterText>
+  <HighlightText highlightColor="#10B981" startFrame={60}>
+    open source
+  </HighlightText>
+</GradientText>
+```
+
+### Stacking Effects for Depth
+
+```tsx
+<AbsoluteFill>
+  {/* Layer 1: Background */}
+  <ParticleField count={200} opacity={0.1} />
+
+  {/* Layer 2: Main content */}
+  <YourContent />
+
+  {/* Layer 3: Foreground effects */}
+  <FilmGrain intensity={0.05} />
+  <Vignette intensity={0.5} />
+</AbsoluteFill>
+```
+
+### Synchronized Animations
+
+```tsx
+const ENTRANCE_DELAY = 30;
+
+<>
+  <GradientText animate="scaleIn" delay={ENTRANCE_DELAY}>
+    Title
+  </GradientText>
+
+  <HighlightText startFrame={ENTRANCE_DELAY + 60}>
+    Highlighted word
+  </HighlightText>
+
+  <DataPod3D animateIn startFrame={ENTRANCE_DELAY} />
+</>
+```
+
+---
+
+## 🚀 Performance Tips
+
+### Do's ✅
+- Keep particle counts under 300
+- Use `spring()` with `damping: 200` for smooth animations
+- Premount sequences: `<Sequence premountFor={30}>`
+- Memoize heavy computations with `React.useMemo()`
+
+### Don'ts ❌
+- Don't use CSS animations (use `interpolate()` instead)
+- Don't create particles in render loop (use `useMemo`)
+- Don't exceed 5000 particles total
+- Don't use `useState` for animations (use `useCurrentFrame`)
+
+---
+
+## 🎨 Synap Brand Guidelines
+
+### Colors
+```typescript
+const COLORS = {
+  primary: "#38BDF8",      // Cyan
+  background: "#0A0A0A",   // Near black
+  text: "#F8FAFC",         // Off-white
+  muted: "#94A3B8",        // Slate gray
+  success: "#10B981",      // Green
+  warning: "#F59E0B",      // Amber
+};
+```
+
+### Typography
+- **Headlines:** 72-120px, Weight 700-900
+- **Body:** 32-56px, Weight 500-700
+- **Captions:** 20-32px, Weight 400-600
+- **Font:** Inter (loaded via `@remotion/google-fonts`)
+
+### Animation Timing
+```typescript
+const TIMINGS = {
+  quick: 15,        // frames - button hover, small movements
+  normal: 30,       // frames - most text/element entrances
+  slow: 60,         // frames - scene transitions
+  emphasis: 45,     // frames - highlighted moments
+};
+```
+
+---
+
+## 📦 Component Export Index
+
+Create `src/components/index.ts`:
+
+```typescript
+// Text
+export { GradientText } from "./text/GradientText";
+export { TypewriterText } from "./text/TypewriterText";
+export { HighlightText } from "./text/HighlightText";
+export { GlitchText } from "./text/GlitchText";
+
+// Effects
+export { ParticleField } from "./effects/ParticleField";
+export { Vignette } from "./effects/Vignette";
+export { FilmGrain } from "./effects/FilmGrain";
+export { ChromaticAberration } from "./effects/ChromaticAberration";
+
+// 3D
+export { DataPod3D } from "./3d/DataPod3D";
+```
+
+Then import easily:
+```typescript
+import { GradientText, ParticleField, Vignette } from "./components";
+```
+
+---
+
+## 🎬 Ready to Build
+
+You now have a professional motion graphics toolkit. Start with:
+
+1. **Scene 1 of "Death of SaaS"** - Combine `GradientText` + `ParticleField` + `Vignette`
+2. **Test your animations** in Remotion Studio (`npm start`)
+3. **Iterate timing** using the timeline scrubber
+4. **Add music/SFX** once visual locked
+5. **Render final** with `npx remotion render`
+
+---
+
+## Questions?
+
+- **Remotion Docs:** https://remotion.dev/docs
+- **Remotion Discord:** https://remotion.dev/discord
+- **Three.js Docs:** https://threejs.org/docs
+- **React Three Fiber:** https://docs.pmnd.rs/react-three-fiber
+
+Happy creating! 🎬

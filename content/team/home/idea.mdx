@@ -1,0 +1,305 @@
+# PRD — Synap: Sovereign Data Vault on Rayls
+## Rayls Hackathon #2 | EthCC Cannes — March 28-29, 2026
+
+**Track:** #3 — Autonomous Institution Agent  
+**Team:** The Signal (Antoine, Samir, Leo)  
+**Tagline:** *"Your data. Your node. Your rules. AI just executes."*
+
+---
+
+## 1. Executive Summary
+
+### 1.1 What We Build
+
+A sovereign personal data vault running on a Rayls Privacy Node, where an AI agent autonomously manages the full lifecycle of a user's professional credentials: ingestion, structuring, compliance review, disclosure governance, and bridging to the Rayls Public L1. The user interacts exclusively through Telegram. The AI agent operates the entire institutional pipeline — detecting assets, attesting them, submitting governance, bridging, and listing — while the human retains final authority via approve/reject commands.
+
+### 1.2 The Reframe
+
+The hackathon Track 3 says "Autonomous Institution Agent" — build an AI that runs an entire institutional treasury. We reframe **the individual as the institution**. In a sovereign data model, every person IS an institution: they hold assets (their credentials, identity, work history), they need compliance (selective disclosure, privacy rules), they need governance (who gets access to what), and they need a public marketplace presence (portable, verifiable proofs).
+
+Synap is the operating system for that institution-of-one.
+
+### 1.3 Why This Exists
+
+Today, professional identity is fragmented across LinkedIn profiles, PDF resumes, email threads, Telegram messages, and scattered documents. None of it is verifiable. None of it is sovereign. You don't own your professional reputation — platforms do.
+
+Synap on Rayls flips this: your credentials live on YOUR Privacy Node. An AI agent structures and attests them. You decide what becomes public. The proof lives on-chain. No platform can revoke, modify, or gatekeep your identity.
+
+### 1.4 Strategic Value
+
+This is Synap's core thesis made tangible: sovereign data infrastructure where the individual controls ingestion, storage, processing, and disclosure — with AI as the operational layer and blockchain as the trust layer. The hackathon forces us to build the irreducible kernel of Synap in a weekend.
+
+**Pitch line:** *"We turned a person into an institution. The AI runs the treasury. The human holds the keys."*
+
+---
+
+## 2. Hackathon Fit
+
+### 2.1 Track Alignment — Autonomous Institution Agent
+
+| Hackathon Requirement | Our Implementation |
+|---|---|
+| AI agent detects assets | Agent ingests raw documents/data, identifies credential types, structures them |
+| AI agent attests assets | Agent produces signed attestation proofs for each credential |
+| AI agent submits governance | Agent submits disclosure requests when external queries arrive |
+| AI agent bridges and lists | Agent packages approved credentials and bridges to Public L1 marketplace |
+| Humans watch, agent operates | User only sees Telegram notifications. Approve/reject. Everything else is autonomous |
+
+### 2.2 Judging Criteria Mapping
+
+**Sovereignty** — Each user gets a Privacy Node (or namespace on a shared node for the hackathon). Their raw data — documents, identity proofs, work history — never leaves. The Privacy Node IS their sovereign vault. This is not optional privacy — it's the architecture.
+
+**Disclosure Design** — The AI agent maintains a Disclosure Policy (user-configurable rules about what can be shared, with whom, under what conditions). Every disclosure is a deliberate, auditable act. The split between private vault and public proof is governed by explicit rules, not defaults.
+
+**AI Integration** — The AI agent is the star. It does EVERYTHING autonomously: ingests data, structures it into typed credentials, reviews completeness, generates attestation proofs, handles incoming access requests, evaluates them against disclosure policy, packages approved data, bridges proofs. The human only approves/rejects. This is full Track 3 — autonomous orchestration.
+
+**Public Market Viability** — The Public L1 hosts a "Credential Marketplace" where anyone can discover verified professionals and their attested credentials. Each credential is a portable, on-chain proof. Employers, DAOs, protocols can query it.
+
+**Working Prototype** — End-to-end: user drops a document in Telegram → AI structures it → attestation on-chain → external query arrives → AI evaluates → user approves → proof bridges to public → credential visible on marketplace.
+
+---
+
+## 3. System Architecture
+
+### 3.1 High-Level Overview
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                  PRIVACY NODE (User's Sovereign Vault)        │
+│                                                              │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
+│  │ DataVault   │  │ Attestation  │  │ DisclosureGate    │   │
+│  │ Registry    │──▶│ Engine       │  │ (Governance)      │   │
+│  └─────────────┘  └──────────────┘  └────────┬──────────┘   │
+│                                               │              │
+│  ┌─────────────┐                     ┌────────▼──────────┐   │
+│  │ Disclosure  │                     │ BridgeHandler     │   │
+│  │ Policy      │                     │                   │   │
+│  └─────────────┘                     └────────┬──────────┘   │
+└───────────────────────────────────────────────┼──────────────┘
+                                                │
+                          TELEPORT (Rayls Protocol)
+                                                │
+┌───────────────────────────────────────────────┼──────────────┐
+│                  PUBLIC L1 (Rayls)             │              │
+│                                        ┌──────▼───────────┐  │
+│  ┌────────────────┐                    │ Credential       │  │
+│  │ Credential     │◀───────────────────│ Proof (ERC-721)  │  │
+│  │ Marketplace    │                    └──────────────────┘  │
+│  └────────────────┘                                         │
+└─────────────────────────────────────────────────────────────┘
+
+        ┌──────────────────────────────────────────┐
+        │           OFF-CHAIN SERVICES              │
+        │                                          │
+        │  ┌──────────────────────────────────┐    │
+        │  │ ORACLE — AI Orchestrator Agent   │    │
+        │  │                                  │    │
+        │  │  ├─ Ingestion Engine             │    │
+        │  │  ├─ Structuring Engine           │    │
+        │  │  ├─ Attestation Generator        │    │
+        │  │  ├─ Disclosure Evaluator         │    │
+        │  │  └─ Bridge Packager             │    │
+        │  └──────────────────────────────────┘    │
+        │                                          │
+        │  ┌──────────────┐                        │
+        │  │ Telegram Bot │                        │
+        │  │ (User + Admin│                        │
+        │  │  Interface)  │                        │
+        │  └──────────────┘                        │
+        └──────────────────────────────────────────┘
+```
+
+### 3.2 Layer Responsibilities
+
+**Privacy Node (Sovereign Vault)**
+- Stores ALL raw user data: documents, credentials, identity proofs, work history
+- Hosts attestation proofs (signed by AI agent)
+- Stores disclosure policy (user's rules)
+- Manages governance state for each disclosure request
+- Maintains the full event chain (every action is an append-only event)
+
+**Public L1 (Proof Space)**
+- Hosts Credential Proof tokens (ERC-721) — lightweight, non-sensitive proofs
+- Hosts the Credential Marketplace contract
+- Publicly queryable — anyone can verify a credential exists and is attested
+- Contains ZERO sensitive data — only proofs, categories, and attestation hashes
+
+**Off-Chain: ORACLE Agent**
+- The autonomous orchestrator — this is the core of Track 3
+- Handles: ingestion → structuring → attestation → disclosure evaluation → bridging
+- Operates continuously, human only intervenes at disclosure approval
+- Named "ORACLE" to map directly to Synap's architecture
+
+**Telegram Bot**
+- User's sole interface to their vault
+- Drop documents, view credentials, set disclosure policy, approve/reject disclosure requests
+
+### 3.3 Synap Architecture Principles Applied
+
+| Synap Principle | Implementation |
+|---|---|
+| Sovereign data pods | Privacy Node = the user's data pod. They own it. Nothing leaves without consent. |
+| Event chains (not CRUD) | Every action is an immutable event. Full provenance. Time-travel through credential history. |
+| ORACLE command center | The AI agent IS the ORACLE — autonomous orchestration of the entire pipeline |
+| Human-in-the-Loop | User approves/rejects disclosures via Telegram. Agent handles everything else. |
+| Entities with custom schemas | Each credential type has a defined schema. Extensible. |
+| Channels as interaction surface | Telegram is the universal channel — ingestion, notifications, governance |
+| Workspaces as lenses | The public marketplace is a "lens" on the private vault — showing only what's disclosed |
+
+---
+
+## 4. Module Breakdown
+
+### Module 1 — DataVault Registry (Smart Contract — Privacy Node)
+
+**Purpose:** Stores all user credentials as structured, typed, on-chain entities. The user's sovereign data store.
+
+**Functions:**
+- `storeCredential(credentialData)` — ORACLE agent stores a structured credential after ingestion and processing. Emits `CredentialStored` event.
+- `updateCredential(credentialId, updatedData)` — Updates a credential (append-only: old version archived, new version created with link to previous). Emits `CredentialUpdated` event.
+- `getCredential(credentialId)` — Returns full credential data
+- `getCredentialsByType(credentialType)` — Returns all credentials of a given type
+- `getAllCredentials(userAddress)` — Returns the user's full credential inventory
+- `getEventHistory(credentialId)` — Returns full event chain for a credential
+
+**Events Emitted:**
+- `CredentialStored(credentialId, credentialType, dataHash, timestamp)`
+- `CredentialUpdated(credentialId, previousHash, newHash, timestamp)`
+
+**Credential Types (enumerated):**
+- `IDENTITY` — Government ID, passport, proof of address
+- `EDUCATION` — Degrees, certifications, courses
+- `PROFESSIONAL` — Work experience, employment history, roles
+- `PROJECT` — Portfolio items, contributions, case studies
+- `SKILL` — Technical skills, assessments, endorsements
+- `FINANCIAL` — Bank statements, revenue proofs, funding history
+- `REPUTATION` — Reviews, testimonials, ratings from clients/peers
+- `MEMBERSHIP` — DAO memberships, protocol contributions, community roles
+- `CUSTOM` — User-defined credential type
+
+**State:**
+- Mapping: `credentialId → Credential`
+- Mapping: `userAddress → credentialId[]`
+- Mapping: `credentialId → Event[]` (append-only)
+
+---
+
+### Module 2 — AttestationEngine (Smart Contract — Privacy Node)
+
+**Purpose:** Stores AI-generated attestation proofs for each credential. Proves the AI reviewed and validated the credential.
+
+**Functions:**
+- `submitAttestation(credentialId, attestationData, agentSignature)` — ORACLE agent submits an attestation after reviewing a credential. Validates agent signature. Emits `AttestationCreated` event.
+- `getAttestation(credentialId)` — Returns the attestation for a credential
+- `isAttested(credentialId)` — Boolean check
+- `registerAgent(agentAddress)` — Admin registers authorized ORACLE agent
+
+**Events Emitted:**
+- `AttestationCreated(credentialId, confidenceScore, attestationHash, agentAddress, timestamp)`
+
+**Attestation Data Structure:**
+```
+Attestation {
+  credentialId:      bytes32
+  credentialType:    enum
+  confidenceScore:   uint8 (0-100) — how confident the AI is in the credential's validity
+  completeness:      uint8 (0-100) — how complete the credential data is
+  consistencyFlags:  Flag[] — any inconsistencies detected
+  attestationHash:   bytes32 — hash of the full attestation reasoning
+  agentAddress:      address
+  agentSignature:    bytes
+  attestedAt:        uint256
+}
+```
+
+**What the AI evaluates per credential type:**
+
+| Credential Type | AI Checks |
+|---|---|
+| IDENTITY | Document format validity, expiry date, country consistency |
+| EDUCATION | Institution name plausibility, date ranges, degree/field consistency |
+| PROFESSIONAL | Role/company consistency, timeline gaps, seniority progression |
+| PROJECT | Description quality, tech stack consistency, date validity |
+| SKILL | Alignment with professional history, endorsement source quality |
+| FINANCIAL | Currency/amount plausibility, date ranges, format validity |
+| REPUTATION | Source attribution, sentiment analysis, authenticity indicators |
+
+---
+
+### Module 3 — DisclosurePolicy (Smart Contract — Privacy Node)
+
+**Purpose:** Stores the user's rules governing what can be disclosed, to whom, and under what conditions. The user's sovereignty configuration.
+
+**Functions:**
+- `setPolicy(policyRules)` — User sets or updates their disclosure policy via Telegram
+- `getPolicy()` — Returns current policy
+- `evaluateRequest(disclosureRequest)` — Called by ORACLE agent to check a request against the policy. Returns: AUTO_APPROVE / REQUIRES_APPROVAL / AUTO_DENY
+
+**Policy Structure:**
+```
+DisclosurePolicy {
+  defaultRule:        enum (DENY_ALL | ASK_ALWAYS | ALLOW_ATTESTED)
+  credentialRules:    CredentialRule[]
+  requesterRules:     RequesterRule[]
+  expiryDefault:      uint256 (how long a disclosed proof remains valid)
+}
+
+CredentialRule {
+  credentialType:     enum
+  action:             enum (NEVER_DISCLOSE | ASK | AUTO_DISCLOSE)
+  maxDetailLevel:     enum (EXISTENCE_ONLY | SUMMARY | FULL)
+}
+
+RequesterRule {
+  requesterCategory:  enum (EMPLOYER | DAO | PROTOCOL | PUBLIC | SPECIFIC_ADDRESS)
+  requesterAddress:   address (optional, for specific address rules)
+  action:             enum (DENY | ASK | TRUST)
+}
+```
+
+**Default Policy (set on initialization):**
+- `defaultRule: ASK_ALWAYS` — nothing goes out without explicit approval
+- `IDENTITY: NEVER_DISCLOSE` — raw identity docs never leave the vault
+- `EDUCATION: ASK` — user decides per request
+- `PROFESSIONAL: ASK` — user decides per request
+- `SKILL: AUTO_DISCLOSE` — skills are generally public
+- `FINANCIAL: NEVER_DISCLOSE` — financial data never leaves
+
+**Detail Levels (what gets disclosed):**
+- `EXISTENCE_ONLY` — "This user has a credential of type X, attested on date Y" (no content)
+- `SUMMARY` — Category + date range + attestation score (no specifics)
+- `FULL` — All non-sensitive fields of the credential (still not raw documents)
+
+---
+
+### Module 4 — DisclosureGate (Smart Contract — Privacy Node)
+
+**Purpose:** Manages incoming disclosure requests and the governance flow. The equivalent of GovernanceGate from the KYB idea, but generalized.
+
+**Functions:**
+- `submitRequest(requesterAddress, requestedCredentials, purpose)` — External party (or ORACLE on their behalf) submits a disclosure request. Emits `DisclosureRequested` event.
+- `evaluateRequest(requestId)` — ORACLE agent evaluates request against DisclosurePolicy. Sets status to AUTO_APPROVED, PENDING_APPROVAL, or AUTO_DENIED.
+- `approve(requestId)` — User approves via Telegram. Emits `DisclosureApproved`.
+- `reject(requestId, reason)` — User rejects. Emits `DisclosureRejected`.
+- `getRequest(requestId)` — Returns request details and status
+
+**Request Lifecycle:**
+`SUBMITTED → EVALUATED → AUTO_APPROVED / PENDING_APPROVAL / AUTO_DENIED → APPROVED / REJECTED → DISCLOSED → EXPIRED`
+
+**Events Emitted:**
+- `DisclosureRequested(requestId, requesterAddress, credentialTypes[], timestamp)`
+- `DisclosureEvaluated(requestId, policyResult, timestamp)`
+- `DisclosureApproved(requestId, approvedCredentials[], detailLevel, timestamp)`
+- `DisclosureRejected(requestId, reason, timestamp)`
+- `DisclosureExecuted(requestId, proofTokenIds[], timestamp)`
+
+**Disclosure Request Structure:**
+```
+DisclosureRequest {
+  requestId:             bytes32
+  requesterAddress:      address
+  requesterCategory:     enum (EMPLOYER | DAO | PROTOCOL | PUBLIC | OTHER)
+  requestedCredentials:  CredentialType[] — what types they want to see
+
+  

@@ -1,0 +1,369 @@
+# Hestia Core Implementation Summary
+
+> Core structure, types, and backend integration implemented.
+
+## What Has Been Created
+
+### 1. Synap Backend Integration
+
+#### Files Created:
+
+**Template**:
+- `/synap-backend/templates/hestia-os.json` — Workspace template with 4 profiles:
+  - `hearth_node` — Hestia node management
+  - `intelligence_provider` — Agnostic IS configuration
+  - `package_instance` — Package lifecycle tracking
+  - `hearth_deployment` — Deployment tracking
+
+**Hub Protocol Routers**:
+- `/synap-backend/packages/api/src/routers/hub-protocol/hearth.ts` — Hearth management endpoints:
+  - `POST /hearth/register` — Register new hearth node
+  - `POST /hearth/heartbeat` — Health updates
+  - `GET /hearth/status/:id` — Get hearth status
+  - `GET /hearth/list` — List all hearths
+  - `POST /packages/register` — Register package instance
+  
+- `/synap-backend/packages/api/src/routers/hub-protocol/intelligence.ts` — Agnostic IS interface:
+  - `POST /intelligence/query` — Query any provider (OpenAI-compatible output)
+  - `GET /intelligence/models/:hearth_id` — List available models
+  - `GET /intelligence/health/:hearth_id` — Check provider health
+  
+  **Supported Providers**:
+  - Ollama (local)
+  - OpenRouter (multi-provider)
+  - Anthropic (Claude)
+  - OpenAI (GPT)
+  - Custom (any OpenAI-compatible endpoint)
+
+**Migration**:
+- `/synap-backend/packages/database/migrations/0100_hestia_property_definitions.sql` — Property definitions for Hestia profiles
+
+**Integration**:
+- Updated `/synap-backend/packages/api/src/routers/hub-protocol-rest.ts`:
+  - Added imports for hearth and intelligence routers
+  - Mounted routes at `/hearth` and `/intelligence`
+
+### 2. Hestia CLI Core
+
+#### Directory Structure:
+
+```
+hestia-cli/
+├── packages/
+│   ├── core/                          # Core CLI framework
+│   │   ├── src/
+│   │   │   ├── commands/
+│   │   │   │   └── init.ts            # Initialize hearth
+│   │   │   ├── lib/
+│   │   │   │   ├── config.ts          # Configuration management
+│   │   │   │   ├── api-client.ts      # Synap Backend API client
+│   │   │   │   └── package-service.ts # Package lifecycle management
+│   │   │   ├── types.ts               # Central type definitions
+│   │   │   └── hestia.ts              # Main CLI entry point
+│   │   └── package.json               # Package manifest
+│   │
+│   ├── install/                       # Script installer (to be built)
+│   ├── usb/                           # USB boot creator (to be built)
+│   └── registry/                      # Package registry (to be built)
+│
+├── plugins/                           # Optional extensions
+│   ├── openclaw/                      # Gateway commands (to be built)
+│   ├── openclaude/                    # Builder commands (to be built)
+│   └── control-plane/                 # CP connector (to be built)
+│
+└── config/                            # Shared configuration
+```
+
+#### Core Types (`types.ts`):
+
+- **Package Management**: `Package`, `PackageInstance`, `PackageDependency`
+- **Hearth**: `HearthNode`, `RegisterHearthConfig`, `HeartbeatData`
+- **Intelligence**: `IntelligenceProvider`, `IntelligenceConfig`, `ChatCompletionRequest`, `ChatCompletionResponse`
+- **Deployment**: `Deployment`, `Approval`
+- **Configuration**: `HestiaConfig`, `PackageConfig`, `ControlPlaneConfig`
+- **Services**: `EntityService`, `PackageService`, `HearthService`, `IntelligenceService`
+- **Errors**: `HestiaError`, `PackageError`, `HearthError`, `IntelligenceError`
+
+#### Configuration System (`lib/config.ts`):
+
+- **Paths**: `getConfigPaths()` — Returns config, credentials, cache paths
+- **Load/Save**: `loadConfig()`, `saveConfig()` — YAML-based configuration
+- **Merge**: `mergeConfigs()` — System < User < Custom overrides
+- **Update**: `updateConfig()` — Partial updates
+- **Credentials**: `loadCredentials()`, `saveCredentials()` — Separate secrets file
+- **Utilities**: `expandEnvVars()`, `createInitialConfig()`, `validateConfig()`
+
+#### API Client (`lib/api-client.ts`):
+
+- **Class**: `APIClient` — HTTP client for Hub Protocol
+- **Endpoints**:
+  - Hearth: `registerHearth()`, `heartbeat()`, `getHearthStatus()`, `listHearths()`
+  - Packages: `registerPackage()`
+  - Intelligence: `queryIntelligence()`, `listIntelligenceModels()`, `checkIntelligenceHealth()`
+  - Deployments: `createDeployment()`
+- **Factory**: `createAPIClient()` — Auto-configures from environment
+- **Health Check**: `checkPodHealth()` — Discovery without auth
+
+#### Package Service (`lib/package-service.ts`):
+
+- **Lifecycle**: `install()`, `start()`, `stop()`, `restart()`, `update()`, `remove()`
+- **Status**: `status()`, `list()` — With health checks
+- **Package Types**:
+  - Docker Compose — Pull, up, down, health checks
+  - Binary — Service management (systemd)
+  - npm — Install, start, stop
+  - Git — Clone, install script, start/stop scripts
+- **Configuration**: `configurePackage()` — Generates .env from config
+- **Dependencies**: `checkDependencies()` — Validates requirements
+
+#### Commands (`commands/init.ts`):
+
+- Interactive setup wizard (inquirer)
+- Quick setup with `--quick` flag
+- Backend health check
+- Configuration generation
+- Registration preparation
+
+## Key Design Decisions Implemented
+
+### 1. Agnostic Intelligence ✓
+
+**Backend**: The `/intelligence/query` endpoint accepts any provider and returns OpenAI-compatible format:
+
+```typescript
+// Request
+POST /api/hub/intelligence/query
+{
+  "hearth_node_id": "uuid",
+  "messages": [{"role": "user", "content": "Hello"}],
+  "model": "llama3.1:8b"
+}
+
+// Response (OpenAI-compatible)
+{
+  "id": "chatcmpl-123",
+  "object": "chat.completion",
+  "choices": [{"message": {"role": "assistant", "content": "Hi!"}}]
+}
+```
+
+**CLI**: Configuration supports any provider:
+
+```yaml
+intelligence:
+  provider: ollama  # or openrouter, anthropic, openai, custom
+  endpoint: http://localhost:11434
+  model: llama3.1:8b
+```
+
+### 2. Pure Entity System ✓
+
+**No new database tables.** All Hestia concepts are entities:
+
+- `hearth_node` → Entity with profile `hearth_node`
+- `intelligence_provider` → Entity with profile `intelligence_provider`
+- `package_instance` → Entity with profile `package_instance`
+- `hearth_deployment` → Entity with profile `hearth_deployment`
+
+**Benefits**:
+- Temporal queries work automatically
+- Relations work via existing system
+- Proposals/approvals work via existing governance
+- Search/indexing work via existing infrastructure
+
+### 3. Package-Based Architecture ✓
+
+**Structure**:
+```
+hestia-cli/packages/
+├── core/           # Required: CLI framework, types, config
+├── install/        # Script installer (foundation)
+├── usb/            # USB wrapper (calls install)
+└── registry/       # Package discovery
+
+plugins/
+├── openclaw/       # Gateway commands
+├── openclaude/     # Builder commands
+└── control-plane/  # CP connector (optional)
+```
+
+**Package Interface**:
+```typescript
+interface Package {
+  name: string;
+  version: string;
+  type: "core" | "gateway" | "builder" | "intelligence" | ...;
+  source: {
+    type: "docker_compose" | "binary" | "npm" | "git";
+    url: string;
+  };
+  requires?: PackageDependency[];
+  provides: string[];
+}
+```
+
+### 4. Script-First, USB Wrapper ✓
+
+**Script installer** (`packages/install/`) is the foundation:
+- Phase 1: Foundation (Docker, UFW, SSH)
+- Phase 2: Core + Gateway (Synap Backend + OpenClaw)
+- Phase 3: Builder (OpenClaude)
+
+**USB** (`packages/usb/`) just calls the installer:
+```bash
+# In USB late-command
+./install.sh phase1 --mode=usb
+```
+
+## API Endpoints Summary
+
+### Hearth Endpoints
+
+| Method | Endpoint | Description | Scope |
+|--------|----------|-------------|-------|
+| POST | `/hearth/register` | Register new hearth node | `hearth.write` |
+| POST | `/hearth/heartbeat` | Health update | `hearth.write` |
+| GET | `/hearth/status/:id` | Get hearth status | `hearth.read` |
+| GET | `/hearth/list` | List all hearths | `hearth.read` |
+| POST | `/packages/register` | Register package | `package.manage` |
+| POST | `/hearth/deploy` | Create deployment | `hearth.deploy` |
+
+### Intelligence Endpoints
+
+| Method | Endpoint | Description | Scope |
+|--------|----------|-------------|-------|
+| POST | `/intelligence/query` | Query any provider | `intelligence.query` |
+| GET | `/intelligence/models/:id` | List models | `intelligence.query` |
+| GET | `/intelligence/health/:id` | Health check | `hearth.read` |
+
+## Configuration Files
+
+### User Config (`~/.hestia/config.yaml`)
+
+```yaml
+version: "1.0"
+hearth:
+  id: "hearth-xxx"
+  name: "My Digital Hearth"
+  role: primary
+packages:
+  core:
+    enabled: true
+  intelligence:
+    enabled: true
+    config:
+      provider: ollama
+      endpoint: http://localhost:11434
+      model: llama3.1:8b
+```
+
+### Credentials (`~/.hestia/credentials.yaml`)
+
+```yaml
+HESTIA_API_KEY: hub_xxx
+TELEGRAM_TOKEN: xxx
+OPENROUTER_KEY: xxx
+```
+
+## Next Steps to Complete
+
+### 1. Backend (Remaining)
+
+- [ ] Add API key scopes: `hearth.read`, `hearth.write`, `hearth.deploy`, `intelligence.query`, `package.manage`
+- [ ] Add job workers: `hearth.build`, `hearth.health-check`
+- [ ] Test endpoints manually
+- [ ] Add integration tests
+
+### 2. CLI Core (Remaining)
+
+- [ ] Add remaining commands: `add`, `remove`, `status`, `ignite`, `extinguish`, `config`, `install`, `package`
+- [ ] Add TypeScript configuration
+- [ ] Add build scripts
+- [ ] Add logger utility
+- [ ] Add progress reporter (ora/listr2)
+- [ ] Test CLI manually
+
+### 3. Install Package
+
+- [ ] Create phase1.sh (Docker, UFW, SSH)
+- [ ] Create phase2.sh (Synap Backend + OpenClaw)
+- [ ] Create phase3.sh (OpenClaude)
+- [ ] Create first-fire.sh (TUI wizard)
+- [ ] Test install on fresh Ubuntu
+
+### 4. USB Package
+
+- [ ] Create create-usb.sh
+- [ ] Create Ventoy configs
+- [ ] Create autoinstall templates (safe/wipe)
+- [ ] Test USB creation and boot
+
+### 5. Plugins
+
+- [ ] Create openclaw plugin
+- [ ] Create openclaude plugin
+- [ ] Create control-plane plugin (optional)
+
+## Usage Example
+
+```bash
+# 1. Install CLI
+npm install -g @hestia/cli
+
+# 2. Initialize hearth
+hestia init
+# → Interactive wizard
+# → Creates ~/.hestia/config.yaml
+
+# 3. Start hearth
+hestia ignite
+# → Starts core package (Synap Backend)
+# → Starts intelligence package (Ollama)
+
+# 4. Check status
+hestia status
+# → Shows all packages and health
+
+# 5. Add gateway
+hestia add gateway --source=openclaw
+# → Installs OpenClaw
+# → Configures Telegram/Discord
+
+# 6. Add builder
+hestia add builder --source=openclaude
+# → Installs OpenClaude
+# → Configures workspace
+
+# 7. Deploy from channel
+# User: "Build a website from my project"
+# → OpenClaw → Synap Backend → OpenClaude
+# → Deploys to /srv/www/
+# → Returns URL
+```
+
+## File Count Summary
+
+| Component | Files Created |
+|-----------|---------------|
+| Backend Template | 1 |
+| Backend Routers | 2 |
+| Backend Migration | 1 |
+| Backend Integration | 1 (updated) |
+| CLI Types | 1 |
+| CLI Config | 1 |
+| CLI API Client | 1 |
+| CLI Package Service | 1 |
+| CLI Commands | 1 (init) |
+| CLI Entry Point | 1 |
+| CLI Package.json | 1 |
+| **Total** | **12** |
+
+## Architecture Validation
+
+✓ **Entity-First**: No new tables, all entities  
+✓ **Agnostic IS**: Any OpenAI-compatible provider  
+✓ **Package-Based**: Modular, composable  
+✓ **Script-First**: USB wraps installer  
+✓ **CP Optional**: Works without control plane  
+
+Ready for implementation phase 1: Testing and building the remaining components.

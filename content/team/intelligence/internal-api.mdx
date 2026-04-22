@@ -1,16 +1,3 @@
----
-title: 'Internal API'
-description: 'IS internal REST API — all endpoints, auth, request/response shapes.'
-section: general
-audience: users
-version: 1.0+
-last_updated: '2026-04-20'
-tags: []
-sidebar_position: null
-hide_title: false
-toc: true
----
-
 # Intelligence Hub Environment Variables
 
 ## Intelligence Service (.env)
@@ -63,5 +50,12 @@ echo ""
 echo "Add this to both .env files:"
 echo "INTELLIGENCE_HUB_INTERNAL_KEY=$KEY"
 echo ""
-echo "  Save this key securely - you'll need it in both services"
+echo "⚠️  Save this key securely - you'll need it in both services"
 ```
+
+## Related
+
+- [Operations](./operations.mdx) — environment config in production IS deployment
+- [Hub Protocol](../platform/hub-protocol.mdx) — the API key used for Hub auth
+- [Agent System](./agent-system.mdx) — how the IS communicates with the backend
+- [Infrastructure](../control-plane/infrastructure.mdx) — IS server and env config

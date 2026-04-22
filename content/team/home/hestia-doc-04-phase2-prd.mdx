@@ -1,0 +1,88 @@
+# DOC-04 — Phase 2 PRD: Brain + Memory + Communication
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-04 |
+| Title | Phase 2 PRD — Brain + Memory + Communication |
+| Status | Draft |
+| Version | 0.3 |
+| Date | 2026-04-12 |
+
+## 1) Phase goal
+Ship a usable assistant that:
+* can be reached from chat channels (OpenClaw)
+* persists temporal memory (Synap Backend)
+* uses a configurable brain endpoint (local or remote)
+
+## 2) Architectural rule (Phase 2)
+Split-brain must be supported:
+* Control-plane node runs Synap + OpenClaw (+ Orchestrator if present).
+* Brain endpoint may run on a separate GPU node and is referenced by URL in config.
+
+## 3) Install interface
+`install.sh phase2`:
+* reads `/etc/synap-stack/config.yaml`
+* deploys Synap + OpenClaw via Docker Compose
+* writes/updates secrets in `/etc/synap-stack/secrets.env` (0600)
+* prints a "ready report" including:
+    * OpenClaw dashboard URL (usually localhost/LAN)
+    * channel setup links
+    * health check status
+
+## 4) OpenClaw deployment (Docker)
+We will use OpenClaw's Docker flow to standardize installs.
+
+Minimum operational requirements:
+* persistent config dir (bind mount)
+* persistent workspace dir (bind mount)
+* gateway token stored as secret env var
+
+OpenClaw provides a Docker install guide and includes a docker-compose.yml in its repo, which we can vendor or template.
+
+### 4.1 Onboarding
+Phase 2 must support two "brain wiring" strategies:
+* Strategy A (preferred): Orchestrator owns brain calls; OpenClaw is a gateway/router.
+* Strategy B (fallback): OpenClaw is configured with a model provider directly and Synap is used primarily for long-term knowledge.
+
+We start with Strategy B if OpenClaw cannot be cleanly configured to forward to Orchestrator without internal modifications, then move to Strategy A when integration is stable.
+
+## 5) Synap deployment requirements
+* Synap runs as a Compose service with persistent storage.
+* Synap API auth enabled by default.
+* Minimal backup:
+    * `synap-backup.sh` dumps Synap volumes + config into a timestamped tarball.
+
+## 6) Brain endpoint configuration
+`/etc/synap-stack/config.yaml` must define:
+* `brain.mode: local|remote`
+* `brain.endpoint_url` if remote
+* `brain.api_key_env` optional
+
+Phase 2 must implement:
+* health check (HTTP)
+* clear error to the user if remote brain is offline
+
+## 7) Channels (Phase 2)
+At least one channel must be supported end-to-end; recommend Telegram first.
+
+Requirements:
+* tokens stored in secrets.env
+* OpenClaw channel setup documented and accessible from "ready report"
+* channel messages result in:
+    * response delivered
+    * event persisted to Synap (minimum: raw inbound message + timestamp)
+
+## 8) Acceptance criteria
+* Channel Hello World:
+    * message from Telegram (or another configured channel) gets a response
+* Persistence:
+    * Synap contains the message, response, timestamp
+* Split-brain:
+    * remote brain endpoint can be used and failure is handled gracefully
+
+## 9) References
+* OpenClaw getting started: https://docs.openclaw.ai/start/getting-started
+* OpenClaw channels: https://docs.openclaw.ai/channels
+* OpenClaw Docker install: https://docs.openclaw.ai/install/docker
+* Synap Backend: https://github.com/Synap-core/backend

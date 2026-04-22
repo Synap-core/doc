@@ -1,0 +1,475 @@
+# Intelligence Integration Audit Report
+
+> **Date:** 2026-02-19 (Revised)
+> **Objective:** Compare current implementation against Frontend Intelligence Integration Guide requirements
+> **Scope:** Socket.IO events, tRPC routers, hooks, stores, types, and UI components
+
+---
+
+## Executive Summary
+
+The infrastructure is **more complete than initially assessed**. The architecture is sound and most real-time plumbing is in place.
+
+### Resolved Issues
+
+- **Streaming bug fixed:** `useStreamingMessage` hook now called in `ChatView.tsx`
+- **Branch decision:** Backend now emits via Socket.IO (confirmed resolved)
+
+### Remaining Work
+
+1. **Commands Feature** - New feature requiring backend router + frontend UI
+2. **Agents Tab** - Currently empty state, needs agent directory UI
+3. **Connections Tab** - Currently empty state, needs integration management UI
+4. **Runs Tab** - Needs backend data source for command execution history
+
+**Estimated effort:** 3 phases, primarily new feature development.
+
+---
+
+## 1. Architecture (Confirmed Correct)
+
+```
+┌─────────────────────┐
+│   Synap App         │
+│   (Mobile / Web)    │
+├──────────┬──────────┤
+│  tRPC    │ Socket.IO│
+└────┬─────┴─────┬────┘
+     │           │
+     ▼           ▼
+┌─────────┐  ┌───────────┐
+│ Backend │  │ Realtime  │
+│ :4000   │  │ :4001     │
+│         │  │           │
+│ Auth    │  │ Socket.IO │
+│ DB      │  │ Broadcast │
+│ Events  │  │           │
+└────┬────┘  └─────▲─────┘
+     │             │
+     │  /bridge/emit (fire-and-forget)
+     │             │
+     ├─────────────┘
+     │
+     │  POST /api/chat/stream (SSE)
+     │  GET /api/hub/* (hub-protocol-rest)
+     ▼
+┌──────────────────────┐
+│  Intelligence Hub    │
+│  :3001               │
+│                      │
+│  AI Agents           │
+│  Tools               │
+│  LLM Calls           │
+│  NO DATABASE         │
+│                      │
+│  Calls BACK to       │
+│  backend via         │
+│  hub-protocol-rest   │
+└──────────────────────┘
+```
+
+**Key insight:** The app NEVER calls Intelligence Hub directly. Backend is the single gateway.
+
+---
+
+## 2. Socket.IO Events - Status
+
+### All Events Working
+
+| Event             | Backend Emits | Frontend Subscribes      | Status       |
+| ----------------- | ------------- | ------------------------ | ------------ |
+| `entity:created`  | ✅            | ✅ `useRealtimeSync`     | Working      |
+| `entity:updated`  | ✅            | ✅ `useRealtimeSync`     | Working      |
+| `entity:deleted`  | ✅            | ✅ `useRealtimeSync`     | Working      |
+| `chat:message`    | ✅            | ✅ `useRealtimeSync`     | Working      |
+| `chat:stream`     | ✅            | ✅ `useStreamingMessage` | **Fixed**    |
+| `ai:step`         | ✅            | ✅ `useStreamingMessage` | **Fixed**    |
+| `ai:proposal`     | ✅            | ✅ `useAIProposals`      | Working      |
+| `branch_decision` | ✅            | ✅                       | **Resolved** |
+| `thread:created`  | ✅            | ✅ `useRealtimeSync`     | Working      |
+| `thread:updated`  | ✅            | ✅ `useRealtimeSync`     | Working      |
+| `branch:created`  | ✅            | ✅ `useRealtimeSync`     | Working      |
+| `branch:merged`   | ✅            | ✅ `useRealtimeSync`     | Working      |
+
+### Event Flow (Working)
+
+```
+Backend receives SSE from Hub
+    ↓
+POST /bridge/emit (fire-and-forget)
+    ↓
+Realtime server (:4001)
+    ↓
+Socket.IO broadcast to room
+    ↓
+useSocketEvent<T>(eventName, handler)  ← Direct socket subscription
+    ↓
+Hook updates store/cache
+    ↓
+Component re-renders
+```
+
+---
+
+## 3. tRPC Routers - Status
+
+### Currently Available (App Calls These)
+
+| Router         | Procedures                                                                                                              | Status      |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `chat`         | listThreads, getMessages, sendMessage, getThread, createThread, updateThread, archiveThread, getBranchTree, mergeBranch | ✅ Complete |
+| `proposals`    | list, approve, reject                                                                                                   | ✅ Complete |
+| `entities`     | CRUD operations                                                                                                         | ✅ Complete |
+| `documents`    | CRUD operations                                                                                                         | ✅ Complete |
+| `search`       | unified search                                                                                                          | ✅ Complete |
+| `intelligence` | getAccess, getApiKeys, generateApiKey, revokeApiKey, getQuotaStatus, getCatalogAgents                                   | ✅ Complete |
+
+### Not Yet Implemented (New Features)
+
+| Router                          | Procedures Needed                      | Priority |
+| ------------------------------- | -------------------------------------- | -------- |
+| `intelligence.commands`         | list, get, create, update, delete, run | **P0**   |
+| `intelligence.runs`             | list, get                              | **P1**   |
+| `intelligence.agents`           | list, get (from catalog or DB)         | **P2**   |
+| `intelligence.connections`      | list, get, create, update, delete      | **P3**   |
+| `intelligence.effectiveService` | getEffective                           | **P2**   |
+
+---
+
+## 4. Hooks - Status
+
+### Implemented and Working
+
+| Hook                  | Package            | Purpose                      | Status       |
+| --------------------- | ------------------ | ---------------------------- | ------------ |
+| `useChatMessages`     | `@synap/ai-chat`   | Infinite pagination          | ✅           |
+| `useSendMessage`      | `@synap/ai-chat`   | Send with optimistic updates | ✅           |
+| `useChatThread`       | `@synap/ai-chat`   | Thread + branching           | ✅           |
+| `useAISteps`          | `@synap/ai-chat`   | Extract from metadata        | ✅           |
+| `useStreamingMessage` | `@synap/ai-chat`   | Socket.IO streaming          | ✅ **Fixed** |
+| `useBranches`         | `@synap/ai-chat`   | Branch tree                  | ✅           |
+| `useRealtimeSync`     | `@synap/hooks`     | Cache sync                   | ✅           |
+| `useSocketEvent`      | `@synap/hooks`     | Generic event subscription   | ✅           |
+| `useAIProposals`      | `@synap/hooks`     | Proposal events              | ✅           |
+| `useChatStream`       | `@synap/hooks`     | Stream chunks                | ✅           |
+| `useProposals`        | `@synap/proposals` | Proposal CRUD                | ✅           |
+
+### Not Yet Implemented (New Features)
+
+| Hook                              | Package           | Purpose              | Priority |
+| --------------------------------- | ----------------- | -------------------- | -------- |
+| `useCommands`                     | `@synap/commands` | Commands CRUD        | **P0**   |
+| `useCommandRuns`                  | `@synap/commands` | Run history          | **P1**   |
+| `useEffectiveIntelligenceService` | `@synap/hooks`    | Current service info | **P2**   |
+
+---
+
+## 5. Stores - Status
+
+### Implemented and Working
+
+| Store                | Package          | Purpose              | Status |
+| -------------------- | ---------------- | -------------------- | ------ |
+| `chatStore`          | `@synap/ai-chat` | Thread/message state | ✅     |
+| `chatUIStore`        | `@synap/ai-chat` | UI preferences       | ✅     |
+| `streamingStore`     | `@synap/ai-chat` | Active streams       | ✅     |
+| `workspaceStore`     | `@synap/stores`  | Active workspace     | ✅     |
+| `collaborationStore` | `@synap/stores`  | Presence, cursors    | ✅     |
+
+### Not Yet Implemented (New Features)
+
+| Store           | Package           | Purpose                       | Priority |
+| --------------- | ----------------- | ----------------------------- | -------- |
+| `commandsStore` | `@synap/commands` | Selection context, active run | **P0**   |
+
+---
+
+## 6. UI Components - Status
+
+### Chat Components (Complete)
+
+| Component                | Status | Notes                                  |
+| ------------------------ | ------ | -------------------------------------- |
+| `ChatWorkspace`          | ✅     | Main container                         |
+| `ChatView`               | ✅     | Messages + input + **streaming fixed** |
+| `ChatThreadList`         | ✅     | Thread sidebar                         |
+| `ChatInput`              | ✅     | Message input                          |
+| `ChatHeader`             | ✅     | Thread header                          |
+| `StreamingIndicator`     | ✅     | Loading state                          |
+| `AIStepsPanel`           | ✅     | Step display                           |
+| `ThinkingStep`           | ✅     | Thinking visualization                 |
+| `ToolCallStep`           | ✅     | Tool call display                      |
+| `ToolResultStep`         | ✅     | Tool result display                    |
+| `VerificationStep`       | ✅     | Approval UI                            |
+| `BranchProposalStep`     | ✅     | Branch suggestion                      |
+| `ProposalCard`           | ✅     | Proposal display                       |
+| `ProposalInbox`          | ✅     | Proposal list                          |
+| `AgentSelector`          | ✅     | Agent dropdown                         |
+| `BranchTree`             | ✅     | Tree visualization                     |
+| `BranchTimeline`         | ✅     | Timeline view                          |
+| `BranchVisualization`    | ✅     | ReactFlow graph                        |
+| `ParallelChatView`       | ✅     | Side-by-side                           |
+| `WorkspaceVisualization` | ✅     | Thread graph                           |
+
+### Intelligence App (Partial)
+
+| Component             | Status         | Notes               |
+| --------------------- | -------------- | ------------------- |
+| `IntelligenceApp`     | ✅             | 5-tab shell         |
+| `ThreadsTab`          | ✅             | Uses ChatWorkspace  |
+| `CommandsTab`         | ⚠️ Placeholder | Needs CRUD UI       |
+| `AgentsTab`           | ⚠️ Empty       | Needs directory UI  |
+| `ConnectionsTab`      | ⚠️ Empty       | Needs management UI |
+| `RunsTab`             | ⚠️ Placeholder | Needs backend data  |
+| `CurrentServiceBlock` | ✅             | Service display     |
+
+### Not Yet Implemented (New Features)
+
+| Component         | Package               | Purpose             | Priority |
+| ----------------- | --------------------- | ------------------- | -------- |
+| `CommandList`     | `@synap/commands`     | Command CRUD list   | **P0**   |
+| `CommandForm`     | `@synap/commands`     | Create/edit form    | **P0**   |
+| `CommandRunSheet` | `@synap/commands`     | Argument form       | **P0**   |
+| `CommandRunner`   | `@synap/commands`     | Streaming execution | **P0**   |
+| `AgentCard`       | `@synap/intelligence` | Agent display       | **P2**   |
+| `AgentList`       | `@synap/intelligence` | Agent directory     | **P2**   |
+| `ConnectionCard`  | `@synap/intelligence` | Connection display  | **P3**   |
+| `ConnectionList`  | `@synap/intelligence` | Connection list     | **P3**   |
+
+---
+
+## 7. Types - Status
+
+### Defined in `@synap-core/types`
+
+- `AIStep`, `AIStepType` ✅
+- `ChatThread`, `ChatMessage` ✅
+- `ChatStreamEvent` ✅
+- `AIProposalEvent` ✅
+- `EntityCreatedEvent`, `EntityUpdatedEvent`, `EntityDeletedEvent` ✅
+
+### Defined in `@synap/ai-chat/types`
+
+- `FrontendAIStep` (extends backend with Date) ✅
+- `VerificationStep`, `BranchProposalStep` ✅
+- `StreamingMessage` ✅
+- `ChatUIState`, `ChatViewMode` ✅
+
+### Not Yet Defined (New Features)
+
+| Type                  | Location            | Priority |
+| --------------------- | ------------------- | -------- |
+| `IntelligenceCommand` | `@synap-core/types` | **P0**   |
+| `CommandRun`          | `@synap-core/types` | **P0**   |
+| `DerivedInput`        | `@synap-core/types` | **P0**   |
+| `SelectionContext`    | `@synap-core/types` | **P0**   |
+
+---
+
+## 8. Bug Fixes Applied
+
+### Fix 1: Streaming Not Wired (FIXED)
+
+**File:** `packages/features/ai-chat/src/components/ChatView.tsx`
+
+**Problem:** Component read from `useStreamingStore` but never called `useStreamingMessage` to subscribe to events.
+
+**Solution Applied:**
+
+```typescript
+// Added import
+import { useStreamingMessage } from "../hooks/useStreamingMessage";
+
+// Added hook call before store read
+useStreamingMessage(threadId || "");
+
+// Existing store read now receives data
+const streamingMessage = useStreamingStore((s) =>
+  threadId ? s.getStream(threadId) : undefined
+);
+```
+
+---
+
+## 9. Implementation Plan
+
+### Phase 1: Commands Feature (Priority P0)
+
+**Backend Tasks:**
+
+1. Create `intelligence_commands` table (prompt_template, derived_inputs, permissions)
+2. Create `command_runs` table (thread_id, status, inputs, outputs)
+3. Implement `intelligence.commands` router (list, get, create, update, delete, run)
+4. Implement `intelligence.runs` router (list, get)
+5. Template compiler (parse placeholders, derive inputs)
+
+**Frontend Tasks:**
+
+1. Create `@synap/commands` package
+2. Implement `useCommands` hook
+3. Implement `useCommandRuns` hook
+4. Create `commandsStore`
+5. Create `CommandList` component
+6. Create `CommandForm` component (create/edit)
+7. Create `CommandRunSheet` component (arguments form)
+8. Create `CommandRunner` component (streaming execution)
+9. Wire up `CommandsTab` in Intelligence app
+10. Add command palette integration
+
+**Types to Add:**
+
+```typescript
+interface IntelligenceCommand {
+  id: string;
+  workspaceId: string;
+  title: string;
+  promptTemplate: string;
+  derivedInputs: DerivedInput[];
+  outputMode: "text" | "proposal" | "view";
+  permissionsProfile: "read_only" | "propose_writes";
+  sharedScope: "workspace" | "user";
+  allowedTools?: string[];
+  maxEntitiesCreatedPerRun?: number;
+  canCreateViews?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DerivedInput {
+  name: string;
+  label?: string;
+  type?: string;
+  options?: string[];
+  default?: string;
+}
+
+interface CommandRun {
+  id: string;
+  threadId: string;
+  commandId: string;
+  workspaceId: string;
+  userId: string;
+  status: "running" | "completed" | "failed";
+  inputs: Record<string, string>;
+  selectionContextSnapshot?: SelectionContext;
+  permissionsSnapshot: Record<string, unknown>;
+  startedAt: string;
+  completedAt?: string;
+  errorMessage?: string;
+}
+
+interface SelectionContext {
+  type: "entities" | "viewRows" | "documents" | "text";
+  entityIds?: string[];
+  viewId?: string;
+  rowEntityIds?: string[];
+  documentIds?: string[];
+  text?: string;
+}
+```
+
+### Phase 2: Runs & Effective Service (Priority P1-P2)
+
+**Backend Tasks:**
+
+1. Implement `intelligence.effectiveService.getEffective`
+2. Return service manifest (name, version, capabilities)
+
+**Frontend Tasks:**
+
+1. Wire up `RunsTab` with `useCommandRuns`
+2. Create run detail view (inputs, outputs, thread link)
+3. Update `CurrentServiceBlock` to use `getEffective`
+4. Show service capabilities in UI
+
+### Phase 3: Agents & Connections (Priority P2-P3)
+
+**Backend Tasks:**
+
+1. Implement `intelligence.agents.list` (from catalog or DB)
+2. Implement `intelligence.connections` router
+
+**Frontend Tasks:**
+
+1. Create `AgentCard` and `AgentList` components
+2. Wire up `AgentsTab`
+3. Create `ConnectionCard` and `ConnectionList` components
+4. Wire up `ConnectionsTab`
+5. Add connection registration flow
+
+---
+
+## 10. File Changes Summary
+
+### Files Modified
+
+- `packages/features/ai-chat/src/components/ChatView.tsx` - Added `useStreamingMessage` call
+
+### Files to Create (Phase 1)
+
+**Backend:**
+
+- `apps/backend/src/database/schema/intelligence-commands.ts`
+- `apps/backend/src/database/schema/command-runs.ts`
+- `apps/backend/src/routers/intelligence/commands.ts`
+- `apps/backend/src/routers/intelligence/runs.ts`
+- `apps/backend/src/utils/command-template.ts`
+- Migration files
+
+**Frontend:**
+
+- `packages/features/commands/` (new package)
+  - `src/hooks/useCommands.ts`
+  - `src/hooks/useCommandRuns.ts`
+  - `src/stores/commandsStore.ts`
+  - `src/components/CommandList.tsx`
+  - `src/components/CommandForm.tsx`
+  - `src/components/CommandRunSheet.tsx`
+  - `src/components/CommandRunner.tsx`
+  - `src/utils/templateCompiler.ts`
+  - `src/index.ts`
+  - `package.json`
+
+---
+
+## 11. Success Criteria
+
+### Phase 1 Complete When:
+
+- [ ] Commands can be created with prompt templates
+- [ ] Template placeholders are parsed and form generated
+- [ ] Commands can be run with argument values
+- [ ] Streaming output displays in real-time
+- [ ] Run history shows in Runs tab
+- [ ] Command palette can search and run commands
+
+### Phase 2 Complete When:
+
+- [ ] Run detail shows inputs, outputs, thread link
+- [ ] Current service displays name and capabilities
+- [ ] "Create your own service" link works
+
+### Phase 3 Complete When:
+
+- [ ] Agents tab shows available agents
+- [ ] Connections tab shows registered integrations
+- [ ] New connections can be registered
+
+---
+
+## 12. Dependencies
+
+**Already installed:**
+
+- `socket.io-client` ✅
+- `zustand` ✅
+- `@xyflow/react` ✅
+- `react-markdown` ✅
+
+**No new dependencies required for Phase 1.**
+
+---
+
+_Document revised: 2026-02-19_
+_Streaming bug fixed in ChatView.tsx_
+_Branch decision confirmed resolved by backend_

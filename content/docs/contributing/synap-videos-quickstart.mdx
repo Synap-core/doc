@@ -1,0 +1,144 @@
+# Quick Start Guide
+
+## 🚀 Launch Remotion Studio
+
+```bash
+cd synap-videos
+npm start
+```
+
+This will open http://localhost:3000 in your browser with both videos ready to preview and edit.
+
+## 🎬 What You'll See
+
+### Video 1: The Death of SaaS (2.5 minutes)
+A provocative manifesto-style video with 7 scenes:
+1. **Opening** - Dramatic title reveal with gradient text
+2. **The Old World** - Tool fragmentation (Notion, Miro, Airtable, Slack)
+3. **The Problem** - Scattered knowledge, fragmented experience
+4. **The Shift** - Open-source revolution, AI democratization
+5. **The New World** - One backend, your data, personalized workspace
+6. **Synap** - The kernel that makes this possible
+7. **Closing** - "The future isn't another app..."
+
+### Video 2: The Event Chain Explained (75 seconds)
+Educational technical explainer with 6 scenes:
+1. **Opening** - Title reveal
+2. **Comparison** - Traditional apps UPDATE vs Synap RECORDS
+3. **3-Phase Flow** - Visual flow diagram with animated phases
+4. **Multiple Workers** - Shows how one event triggers multiple reactions
+5. **Time-Travel** - "This is why we can time-travel"
+6. **Closing** - "Every action. Recorded. Forever."
+
+## 🎨 Customization Tips
+
+### Change Colors
+Both videos use the Synap brand colors defined in the COLORS object:
+```typescript
+const COLORS = {
+  background: "#0A0A0A",
+  text: "#F8FAFC",
+  primary: "#38BDF8", // Synap cyan - change this!
+  // ... more colors
+};
+```
+
+### Adjust Timing
+Each scene is defined with:
+```typescript
+<Sequence from={START_FRAME} durationInFrames={DURATION}>
+  <YourScene />
+</Sequence>
+```
+
+At 30fps:
+- 30 frames = 1 second
+- 150 frames = 5 seconds
+- 300 frames = 10 seconds
+
+### Modify Animations
+All animations use Remotion's `spring()` and `interpolate()`:
+```typescript
+const opacity = spring({
+  frame: frame - delay,
+  fps,
+  config: { damping: 100 }, // Higher = faster settling
+});
+```
+
+## 📹 Rendering Videos
+
+### Quick Render (default quality)
+```bash
+npx remotion render DeathOfSaaS out/death-of-saas.mp4
+npx remotion render EventChainExplained out/event-chain-explained.mp4
+```
+
+### High Quality Render
+```bash
+npx remotion render DeathOfSaaS out/death-of-saas.mp4 --quality 100
+```
+
+### Different Formats
+```bash
+# MP4 (default)
+npx remotion render DeathOfSaaS out/death-of-saas.mp4
+
+# WebM
+npx remotion render DeathOfSaaS out/death-of-saas.webm
+
+# ProRes (for editing)
+npx remotion render DeathOfSaaS out/death-of-saas.mov --codec prores
+```
+
+### Social Media Presets
+```bash
+# Instagram (1080x1080)
+npx remotion render DeathOfSaaS out/instagram.mp4 --height 1080 --width 1080
+
+# Twitter (1280x720)
+npx remotion render DeathOfSaaS out/twitter.mp4 --height 720 --width 1280
+
+# LinkedIn (1920x1080 - default)
+npx remotion render DeathOfSaaS out/linkedin.mp4
+```
+
+## 🎯 Next Steps
+
+1. **Preview** - Run `npm start` and watch both videos
+2. **Customize** - Adjust colors, timing, or text in the .tsx files
+3. **Add Music** - Import audio files (see [Remotion Audio docs](https://www.remotion.dev/docs/using-audio))
+4. **Export** - Render final videos for your marketing channels
+
+## 💡 Tips
+
+- **Live Preview**: Changes auto-reload in Remotion Studio
+- **Scrub Timeline**: Use the timeline to jump to specific moments
+- **Keyboard Shortcuts**: Space = play/pause, ← → = frame by frame
+- **Multiple Compositions**: Both videos are in the same project for easy comparison
+
+## 🐛 Troubleshooting
+
+**Can't start Remotion Studio?**
+```bash
+# Clear cache and restart
+rm -rf node_modules .remotion
+npm install
+npm start
+```
+
+**TypeScript errors?**
+```bash
+npx tsc --noEmit
+```
+
+**Slow rendering?**
+- Reduce quality: `--quality 80`
+- Use fewer frames: `--every-nth-frame 2`
+- Use hardware acceleration: `--gl angle`
+
+## 📚 Resources
+
+- [Remotion Documentation](https://www.remotion.dev/docs/)
+- [Remotion Discord](https://remotion.dev/discord)
+- [Animation Examples](https://www.remotion.dev/docs/animation-math)

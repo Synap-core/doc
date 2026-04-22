@@ -1,0 +1,958 @@
+# Backend Extension Specification
+
+> Exact API contracts for eve integration — based on pure entity system and agnostic intelligence.
+
+## 1. Philosophy
+
+### Entity-First Approach
+Following Decision #2 (Option A): **Everything is an entity.**
+
+- `hearth_node` → Entity with `hearth_node` profile
+- `package_instance` → Entity with `package_instance` profile  
+- `intelligence_provider` → Entity with `intelligence_provider` profile
+- `hearth_deployment` → Entity with `hearth_deployment` profile
+
+**No new database tables.** We leverage the existing entity system.
+
+### Agnostic Intelligence
+Following Decision #3 & #6: **Any fire can warm the hearth.**
+
+The Synap Backend provides a uniform interface to any intelligence provider:
+- Local: Ollama, vLLM, llama.cpp
+- Cloud: OpenRouter, Anthropic, OpenAI
+- Custom: Any OpenAI-compatible endpoint
+
+---
+
+## 2. Workspace Template
+
+### File: `templates/eve-os.json`
+
+```json
+{
+  "name": "eve OS",
+  "description": "The digital hearth — sovereign, self-hosted infrastructure",
+  "icon": "flame",
+  "color": "orange",
+  "profiles": [
+    {
+      "slug": "hearth_node",
+      "name": "Hearth Node",
+      "icon": "flame",
+      "color": "orange",
+      "entityScope": "workspace",
+      "properties": [
+        {
+          "name": "hostname",
+          "type": "string",
+          "required": true,
+          "indexed": true,
+          "description": "Node hostname"
+        },
+        {
+          "name": "ip_address",
+          "type": "string",
+          "description": "IP address of the node"
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "enum": ["primary", "backup"],
+          "default": "primary",
+          "description": "Role in hearth constellation"
+        },
+        {
+          "name": "install_mode",
+          "type": "string",
+          "enum": ["usb", "script"],
+          "description": "How the node was installed"
+        },
+        {
+          "name": "packages",
+          "type": "array",
+          "itemType": "object",
+          "description": "Installed packages with versions"
+        },
+        {
+          "name": "intelligence_provider_id",
+          "type": "entity_id",
+          "targetProfile": "intelligence_provider",
+          "description": "Linked intelligence provider"
+        },
+        {
+          "name": "health_status",
+          "type": "string",
+          "enum": ["healthy", "degraded", "offline"],
+          "default": "unknown",
+          "indexed": true
+        },
+        {
+          "name": "last_heartbeat",
+          "type": "date",
+          "description": "Last health update"
+        },
+        {
+          "name": "api_key_id",
+          "type": "string",
+          "secret": true,
+          "description": "Hub API key for this node"
+        }
+      ]
+    },
+    {
+      "slug": "intelligence_provider",
+      "name": "Intelligence Provider",
+      "icon": "brain",
+      "color": "purple",
+      "entityScope": "workspace",
+      "properties": [
+        {
+          "name": "provider_type",
+          "type": "string",
+          "enum": ["ollama", "openrouter", "anthropic", "openai", "custom"],
+          "required": true,
+          "description": "Type of intelligence provider"
+        },
+        {
+          "name": "endpoint_url",
+          "type": "string",
+          "description": "Provider endpoint URL (for local/custom)"
+        },
+          {
+          "name": "api_key_env",
+          "type": "string",
+          "description": "Environment variable name for API key (for cloud)"
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "description": "Default model"
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "enum": ["active", "inactive", "error"],
+          "default": "active"
+        },
+        {
+          "name": "capabilities",
+          "type": "array",
+          "itemType": "string",
+          "description": "Supported capabilities (chat, embeddings, etc.)"
+        },
+        {
+          "name": "config",
+          "type": "object",
+          "description": "Provider-specific configuration"
+        }
+      ]
+    },
+    {
+      "slug": "package_instance",
+      "name": "Package Instance",
+      "icon": "package",
+      "color": "blue",
+      "entityScope": "workspace",
+      "properties": [
+        {
+          "name": "package_name",
+          "type": "string",
+          "required": true,
+          "indexed": true
+        },
+        {
+          "name": "version",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "enum": ["installed", "running", "stopped", "error", "updating"],
+          "default": "installed"
+        },
+        {
+          "name": "hearth_node_id",
+          "type": "entity_id",
+          "targetProfile": "hearth_node",
+          "description": "Node where package is installed"
+        },
+        {
+          "name": "config",
+          "type": "object",
+          "description": "Package configuration"
+        },
+        {
+          "name": "endpoints",
+          "type": "object",
+          "description": "Exposed endpoints (http, websocket, etc.)"
+        },
+        {
+          "name": "health",
+          "type": "object",
+          "description": "Last health check result"
+        },
+        {
+          "name": "installed_at",
+          "type": "date"
+        },
+        {
+          "name": "last_updated",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "slug": "hearth_deployment",
+      "name": "Hearth Deployment",
+      "icon": "rocket",
+      "color": "green",
+      "entityScope": "workspace",
+      "properties": [
+        {
+          "name": "hearth_node_id",
+          "type": "entity_id",
+          "targetProfile": "hearth_node",
+          "required": true
+        },
+        {
+          "name": "deploy_path",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "artifact_type",
+          "type": "string",
+          "enum": ["static", "containerized"],
+          "required": true
+        },
+        {
+          "name": "source_type",
+          "type": "string",
+          "enum": ["git", "workspace", "upload"]
+        },
+        {
+          "name": "source_url",
+          "type": "string"
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "description": "Deployed URL"
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "enum": ["pending", "approved", "building", "deployed", "failed"],
+          "default": "pending"
+        },
+        {
+          "name": "build_log",
+          "type": "text"
+        },
+        {
+          "name": "commands_executed",
+          "type": "array",
+          "itemType": "string"
+        },
+        {
+          "name": "approvals",
+          "type": "array",
+          "itemType": "object"
+        },
+        {
+          "name": "approval_request_id",
+          "type": "string",
+          "description": "Reference to proposal/approval system"
+        },
+        {
+          "name": "started_at",
+          "type": "date"
+        },
+        {
+          "name": "completed_at",
+          "type": "date"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "name": "Hearth Status",
+      "type": "bento",
+      "icon": "layout-dashboard",
+      "blocks": [
+        { "cell": "hearth-health", "type": "stat-card" },
+        { "cell": "packages-status", "type": "entity-list" },
+        { "cell": "intelligence-status", "type": "stat-card" },
+        { "cell": "recent-deployments", "type": "feed" }
+      ]
+    },
+    {
+      "name": "Nodes",
+      "type": "table",
+      "profile": "hearth_node",
+      "columns": ["hostname", "role", "health_status", "last_heartbeat"],
+      "sort": [{ "field": "last_heartbeat", "direction": "desc" }]
+    },
+    {
+      "name": "Intelligence Providers",
+      "type": "table",
+      "profile": "intelligence_provider",
+      "columns": ["provider_type", "model", "status"]
+    },
+    {
+      "name": "Packages",
+      "type": "table",
+      "profile": "package_instance",
+      "columns": ["package_name", "version", "status", "last_updated"]
+    },
+    {
+      "name": "Deployments",
+      "type": "kanban",
+      "profile": "hearth_deployment",
+      "groupBy": "status",
+      "columns": ["pending", "approved", "building", "deployed", "failed"]
+    }
+  ],
+  "seedEntities": [
+    {
+      "profile": "intelligence_provider",
+      "title": "Local Ollama",
+      "properties": {
+        "provider_type": "ollama",
+        "endpoint_url": "http://localhost:11434",
+        "model": "llama3.1:8b",
+        "status": "active",
+        "capabilities": ["chat", "embeddings"]
+      }
+    },
+    {
+      "profile": "package_instance",
+      "title": "Core Package",
+      "properties": {
+        "package_name": "eve-core",
+        "version": "1.0.0",
+        "status": "running"
+      }
+    }
+  ]
+}
+```
+
+---
+
+## 3. Hub Protocol Endpoints
+
+### 3.1 Hearth Node Management
+
+#### POST `/api/hub/hearth/register`
+
+Register a new hearth node.
+
+**Request:**
+```json
+{
+  "hostname": "my-digital-hearth",
+  "role": "primary",
+  "install_mode": "script",
+  "intelligence_provider": {
+    "provider_type": "ollama",
+    "endpoint_url": "http://localhost:11434",
+    "model": "llama3.1:8b"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "hearth_node": {
+    "id": "uuid",
+    "entity_id": "uuid",
+    "hostname": "my-digital-hearth",
+    "role": "primary",
+    "health_status": "healthy",
+    "intelligence_provider_id": "uuid"
+  },
+  "api_key": {
+    "id": "uuid",
+    "key": "hub_xxxx",
+    "scopes": ["hub-protocol.read", "hub-protocol.write", "hearth.*"]
+  },
+  "intelligence_provider": {
+    "id": "uuid",
+    "entity_id": "uuid"
+  }
+}
+```
+
+**Implementation:**
+```typescript
+// 1. Create intelligence_provider entity
+const providerEntity = await entityService.create({
+  workspaceId,
+  profileSlug: 'intelligence_provider',
+  title: 'Local Ollama',
+  properties: request.intelligence_provider
+});
+
+// 2. Create hearth_node entity
+const nodeEntity = await entityService.create({
+  workspaceId,
+  profileSlug: 'hearth_node',
+  title: request.hostname,
+  properties: {
+    hostname: request.hostname,
+    role: request.role,
+    install_mode: request.install_mode,
+    intelligence_provider_id: providerEntity.id,
+    health_status: 'healthy',
+    packages: []
+  }
+});
+
+// 3. Generate API key with hearth.* scopes
+const apiKey = await hubApiKeyService.create({
+  workspaceId,
+  userId,
+  scopes: ['hub-protocol.read', 'hub-protocol.write', 'hearth.*'],
+  metadata: { hearth_node_id: nodeEntity.id }
+});
+
+// 4. Update entity with api_key_id (secret)
+await entityService.update(nodeEntity.id, {
+  properties: {
+    ...nodeEntity.properties,
+    api_key_id: apiKey.id
+  }
+});
+```
+
+#### POST `/api/hub/hearth/heartbeat`
+
+Receive heartbeat from hearth node.
+
+**Request:**
+```json
+{
+  "hearth_node_id": "uuid",
+  "packages": [
+    { "name": "eve-core", "version": "1.0.0", "status": "running" },
+    { "name": "openclaw", "version": "2026.3.12", "status": "running" },
+    { "name": "ollama", "version": "0.3.0", "status": "running" }
+  ],
+  "intelligence": {
+    "provider_type": "ollama",
+    "status": "healthy",
+    "model": "llama3.1:8b"
+  },
+  "health_status": "healthy"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "timestamp": "2026-04-12T10:00:00Z",
+  "acknowledged": true
+}
+```
+
+**Implementation:**
+```typescript
+// 1. Update hearth_node entity
+await entityService.update(hearthNodeId, {
+  properties: {
+    last_heartbeat: new Date(),
+    health_status: request.health_status,
+    packages: request.packages
+  }
+});
+
+// 2. Update package_instance entities
+for (const pkg of request.packages) {
+  await entityService.upsert({
+    profileSlug: 'package_instance',
+    filter: { 
+      package_name: pkg.name, 
+      hearth_node_id: hearthNodeId 
+    },
+    properties: {
+      package_name: pkg.name,
+      version: pkg.version,
+      status: pkg.status,
+      hearth_node_id: hearthNodeId,
+      last_updated: new Date()
+    }
+  });
+}
+```
+
+#### GET `/api/hub/hearth/status/:hearth_node_id`
+
+Get full status of a hearth node.
+
+**Response:**
+```json
+{
+  "hearth_node": {
+    "id": "uuid",
+    "hostname": "my-digital-hearth",
+    "role": "primary",
+    "health_status": "healthy",
+    "last_heartbeat": "2026-04-12T10:00:00Z",
+    "install_mode": "script"
+  },
+  "packages": [
+    { "name": "eve-core", "version": "1.0.0", "status": "running" },
+    { "name": "openclaw", "version": "2026.3.12", "status": "running" }
+  ],
+  "intelligence_provider": {
+    "provider_type": "ollama",
+    "endpoint_url": "http://localhost:11434",
+    "model": "llama3.1:8b",
+    "status": "active"
+  }
+}
+```
+
+### 3.2 Agnostic Intelligence Interface
+
+#### POST `/api/hub/intelligence/query`
+
+Unified interface to any intelligence provider.
+
+**Request:**
+```json
+{
+  "hearth_node_id": "uuid",
+  "messages": [
+    { "role": "system", "content": "You are helpful" },
+    { "role": "user", "content": "Hello" }
+  ],
+  "model": "llama3.1:8b",
+  "temperature": 0.7,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "deploy_artifact",
+        "description": "Deploy an artifact"
+      }
+    }
+  ],
+  "stream": false
+}
+```
+
+**Response (OpenAI-compatible):**
+```json
+{
+  "id": "chatcmpl-123",
+  "object": "chat.completion",
+  "created": 1712345678,
+  "model": "llama3.1:8b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello! How can I help you today?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 10,
+    "total_tokens": 30
+  }
+}
+```
+
+**Implementation:**
+```typescript
+// 1. Get hearth node and intelligence provider
+const hearthNode = await entityService.get(hearthNodeId);
+const providerId = hearthNode.properties.intelligence_provider_id;
+const provider = await entityService.get(providerId);
+
+// 2. Route to appropriate handler based on provider_type
+const handler = getIntelligenceHandler(provider.properties.provider_type);
+
+// 3. Call provider
+const response = await handler.query({
+  endpoint: provider.properties.endpoint_url,
+  apiKey: getApiKey(provider.properties.api_key_env),
+  model: request.model || provider.properties.model,
+  messages: request.messages,
+  tools: request.tools,
+  temperature: request.temperature
+});
+
+// 4. Return standardized response
+return c.json(response);
+```
+
+**Provider Handlers:**
+
+```typescript
+// Ollama handler
+const ollamaHandler = {
+  async query(config) {
+    const response = await fetch(`${config.endpoint}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: config.model,
+        messages: config.messages,
+        tools: config.tools,
+        options: { temperature: config.temperature }
+      })
+    });
+    
+    // Transform Ollama response to OpenAI format
+    return transformOllamaToOpenAI(await response.json());
+  }
+};
+
+// OpenRouter handler
+const openrouterHandler = {
+  async query(config) {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages: config.messages,
+        tools: config.tools,
+        temperature: config.temperature
+      })
+    });
+    
+    // Already OpenAI-compatible
+    return await response.json();
+  }
+};
+```
+
+### 3.3 Package Management
+
+#### POST `/api/hub/packages/register`
+
+Register an installed package.
+
+**Request:**
+```json
+{
+  "hearth_node_id": "uuid",
+  "package_name": "openclaw",
+  "version": "2026.3.12",
+  "status": "running",
+  "config": {
+    "channels": ["telegram", "discord"]
+  },
+  "endpoints": {
+    "http": "http://localhost:3000",
+    "websocket": "ws://localhost:3001"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "package_instance": {
+    "id": "uuid",
+    "entity_id": "uuid",
+    "package_name": "openclaw",
+    "version": "2026.3.12",
+    "status": "running",
+    "installed_at": "2026-04-12T10:00:00Z"
+  }
+}
+```
+
+**Implementation:**
+```typescript
+// Create package_instance entity
+const packageEntity = await entityService.create({
+  workspaceId,
+  profileSlug: 'package_instance',
+  title: request.package_name,
+  properties: {
+    package_name: request.package_name,
+    version: request.version,
+    status: request.status,
+    hearth_node_id: request.hearth_node_id,
+    config: request.config,
+    endpoints: request.endpoints,
+    installed_at: new Date()
+  }
+});
+```
+
+### 3.4 Deployment Management
+
+#### POST `/api/hub/hearth/deploy`
+
+Trigger deployment on a hearth node.
+
+**Request:**
+```json
+{
+  "hearth_node_id": "uuid",
+  "source_type": "git",
+  "source_url": "https://github.com/user/site",
+  "artifact_type": "static",
+  "build_config": {
+    "command": "npm run build",
+    "output_dir": "dist"
+  },
+  "requires_approval": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "deployment": {
+    "id": "uuid",
+    "entity_id": "uuid",
+    "status": "pending",
+    "requires_approval": true,
+    "approval_request_id": "uuid"
+  },
+  "message": "Deployment created. Approval required to proceed."
+}
+```
+
+**Implementation:**
+```typescript
+// 1. Create hearth_deployment entity
+const deployment = await entityService.create({
+  workspaceId,
+  profileSlug: 'hearth_deployment',
+  title: `Deploy ${request.source_url}`,
+  properties: {
+    hearth_node_id: request.hearth_node_id,
+    source_type: request.source_type,
+    source_url: request.source_url,
+    artifact_type: request.artifact_type,
+    status: request.requires_approval ? 'pending' : 'approved',
+    started_at: new Date()
+  }
+});
+
+// 2. If approval required, create proposal
+if (request.requires_approval) {
+  const approvalRequest = await proposalService.create({
+    type: 'hearth_deployment',
+    entityId: deployment.id,
+    description: `Deploy ${request.source_url} to ${request.hearth_node_id}`,
+    requester: userId,
+    actions: [
+      { type: 'execute_build', config: request.build_config }
+    ]
+  });
+  
+  await entityService.update(deployment.id, {
+    properties: {
+      ...deployment.properties,
+      approval_request_id: approvalRequest.id
+    }
+  });
+}
+
+// 3. Queue build job (via jobs system)
+await jobQueue.add('hearth.build', {
+  deploymentId: deployment.id,
+  hearthNodeId: request.hearth_node_id,
+  buildConfig: request.build_config
+});
+```
+
+---
+
+## 4. API Key Scopes
+
+Add new scopes for Hearth operations:
+
+```typescript
+export const HubProtocolScopes = {
+  // Existing
+  READ: 'hub-protocol.read',
+  WRITE: 'hub-protocol.write',
+  MCP_READ: 'mcp.read',
+  MCP_WRITE: 'mcp.write',
+  
+  // NEW: Hearth scopes
+  HEARTH_READ: 'hearth.read',
+  HEARTH_WRITE: 'hearth.write',
+  HEARTH_DEPLOY: 'hearth.deploy',
+  INTELLIGENCE_QUERY: 'intelligence.query',
+  PACKAGE_MANAGE: 'package.manage'
+} as const;
+```
+
+**Default scopes for Hearth API keys:**
+- `hub-protocol.read`
+- `hub-protocol.write`
+- `hearth.read`
+- `hearth.write`
+- `hearth.deploy`
+- `intelligence.query`
+- `package.manage`
+
+---
+
+## 5. Files to Create/Modify
+
+### New Files
+
+1. **`templates/eve-os.json`**
+   - Workspace template with 4 profiles
+   - 5 views (bento, tables, kanban)
+
+2. **`/packages/api/src/routers/hub-protocol/hearth.ts`**
+   - Hearth node endpoints
+   - Package management endpoints
+
+3. **`/packages/api/src/routers/hub-protocol/intelligence.ts`**
+   - `/intelligence/query` endpoint
+   - Provider handlers (ollama, openrouter, etc.)
+
+### Modified Files
+
+1. **`/packages/api/src/routers/hub-protocol-rest.ts`**
+   ```typescript
+   import hearthRouter from './hub-protocol/hearth';
+   import intelligenceRouter from './hub-protocol/intelligence';
+   
+   // ... existing routes ...
+   
+   app.route('/hearth', hearthRouter);
+   app.route('/intelligence', intelligenceRouter);
+   ```
+
+2. **`/packages/api/src/utils/api-keys.ts`**
+   - Add HEARTH_* scopes
+
+---
+
+## 6. No Database Schema Changes
+
+Following the entity-first approach, **no new tables are needed**.
+
+All eve concepts map to existing entities:
+
+| Concept | Implementation |
+|---------|----------------|
+| Hearth Node | Entity with `hearth_node` profile |
+| Package Instance | Entity with `package_instance` profile |
+| Intelligence Provider | Entity with `intelligence_provider` profile |
+| Deployment | Entity with `hearth_deployment` profile |
+
+**Benefits:**
+- Temporal queries work automatically
+- Relations work via existing relation system
+- Proposals/approvals work via existing proposal system
+- Search works via existing search system
+
+---
+
+## 7. Job Workers (pg-boss)
+
+### hearth.build
+
+**File:** `/packages/jobs/src/workers/hearth/build.ts`
+
+```typescript
+export const hearthBuildJob = job(
+  'hearth.build',
+  async (data: {
+    deploymentId: string;
+    hearthNodeId: string;
+    buildConfig: any;
+  }) => {
+    // 1. Get hearth node endpoint from entity
+    const node = await entityService.get(data.hearthNodeId);
+    const apiKey = await getApiKey(node.properties.api_key_id);
+    
+    // 2. Call hearth node to execute build
+    const result = await fetch(`${node.properties.endpoint}/build`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(data.buildConfig)
+    });
+    
+    // 3. Update deployment entity with result
+    await entityService.update(data.deploymentId, {
+      properties: {
+        status: result.success ? 'deployed' : 'failed',
+        url: result.url,
+        build_log: result.logs,
+        completed_at: new Date()
+      }
+    });
+  }
+);
+```
+
+### hearth.health-check
+
+**Cron job:** Every 5 minutes
+
+```typescript
+export const hearthHealthCheck = cron(
+  'hearth.health-check',
+  '*/5 * * * *',
+  async () => {
+    // Find hearth nodes with stale heartbeats
+    const staleNodes = await entityService.query({
+      profileSlug: 'hearth_node',
+      filter: {
+        last_heartbeat: { $lt: new Date(Date.now() - 10 * 60 * 1000) },
+        health_status: 'healthy'
+      }
+    });
+    
+    for (const node of staleNodes) {
+      await entityService.update(node.id, {
+        properties: { health_status: 'offline' }
+      });
+      
+      await notificationService.create({
+        type: 'hearth_offline',
+        entityId: node.id,
+        message: `Hearth ${node.title} appears offline`
+      });
+    }
+  }
+);
+```
+
+---
+
+## Summary
+
+**Backend changes needed:**
+
+1. ✅ Create `templates/eve-os.json` (workspace template)
+2. ✅ Create `/packages/api/src/routers/hub-protocol/hearth.ts` (endpoints)
+3. ✅ Create `/packages/api/src/routers/hub-protocol/intelligence.ts` (agnostic IS)
+4. ✅ Add HEARTH_* scopes to API key system
+5. ✅ Mount new routers in hub-protocol-rest.ts
+6. ✅ Create job workers for build and health check
+
+**No database migrations required** — pure entity system approach.
+
+**Result:** Clean, minimal backend integration that maintains architectural consistency.

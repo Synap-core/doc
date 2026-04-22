@@ -1,0 +1,103 @@
+# DOC-02 — System Architecture & Data Flow
+
+## Document control
+| Field | Value |
+|---|---|
+| Doc ID | DOC-02 |
+| Title | System Architecture & Data Flow |
+| Status | Draft |
+| Version | 0.2 |
+| Date | 2026-04-12 |
+
+## 1) Component map (logical)
+* OpenClaw (Gateway + Channels + Sessions)
+* Orchestrator (Policy + Routing + Audit)
+* Synap Backend (Temporal Knowledge + Memory)
+* Brain endpoint (Local or Remote inference)
+* OpenClaude (Builder + Execution)
+* Reverse proxy (TLS + routing, optional)
+* Storage (volumes + backups)
+* Logs (audit + service logs)
+
+## 2) Deployment topologies
+
+### Topology A: Single-node (all-in-one)
+```text
+[Channels] -> OpenClaw -> Orchestrator -> Synap
+                             |   |
+                             |   +-> Brain (local)
+                             |
+                             +-> OpenClaude (local)
+```
+
+### Topology B: Split-brain (recommended)
+```text
+Control-plane node:
+    OpenClaw + Orchestrator + Synap + OpenClaude + Proxy
+
+GPU node:
+    Brain endpoint (Ollama or compatible)
+
+Control-plane -> (LAN/VPN) -> GPU node
+```
+
+## 3) Data flows
+
+### Flow 1: Chat + memory (Phase 2)
+1. Channel message arrives at OpenClaw.
+2. OpenClaw normalizes message + session identity.
+3. OpenClaw forwards canonical event to Orchestrator.
+4. Orchestrator retrieves relevant context from Synap (optionally time-scoped).
+5. Orchestrator sends prompt to Brain endpoint (local or remote).
+6. Orchestrator writes memory/event to Synap (input, output, metadata).
+7. Orchestrator returns response to OpenClaw for posting back to channel.
+
+### Flow 2: Build artifact (Phase 3)
+1. Steps 1–4 above.
+2. Orchestrator decides intent = build (rules or model classification).
+3. Orchestrator creates workspace (bounded directory) and submits job to OpenClaude.
+4. OpenClaude generates files, runs allowed commands, and produces a deployment plan.
+5. Orchestrator applies deployment plan (or requests approval for risky steps).
+6. Reverse proxy serves artifact; Orchestrator returns URL to user.
+7. Synap stores artifact metadata, build log, diffs, and URL.
+
+## 4) Trust boundaries and security zones
+* Public internet: channel providers only (Telegram/Discord/etc.).
+* Inbound boundary: OpenClaw (tokens, rate limits, session mapping).
+* Policy boundary: Orchestrator (approvals, allowlists).
+* Persistence boundary: Synap (auth, audit correlation).
+* Execution boundary: OpenClaude (workspace-only access by default).
+* Brain endpoint boundary:
+    * Local brain: treat as internal service.
+    * Remote brain: treat as network dependency with strict timeouts and no public exposure.
+
+## 5) Configuration: split-brain as first-class
+* The system uses `/etc/synap-stack/config.yaml` to point to:
+    * local brain (install on same host), or
+    * remote brain (URL + optional API key).
+* All UIs and gateways must reference the configured brain via the orchestrator config, not by hardcoding localhost assumptions.
+
+## 6) Ports and exposure policy (defaults)
+| Service | Default binding | Exposure |
+|---|---|---|
+| OpenClaw dashboard | localhost | local admin only (or VPN) |
+| OpenClaw channel adapters | outbound to providers | no inbound internet ports required |
+| Orchestrator API | localhost/LAN | LAN/VPN only |
+| Synap API | localhost/LAN | LAN/VPN only |
+| Brain endpoint | localhost on GPU node | LAN/VPN only |
+| OpenClaude | localhost/LAN | LAN/VPN only |
+| Reverse proxy | :80/:443 | optional public |
+
+## 7) Persistent storage and backups (baseline)
+* Synap data volume(s) must be persistent and backed up.
+* Orchestrator audit logs must be retained (JSONL) and optionally mirrored into Synap as artifacts.
+* OpenClaude workspaces:
+    * persistent per-project (recommended), or
+    * ephemeral with export to Synap artifacts.
+
+## References
+* OpenClaw getting started: https://docs.openclaw.ai/start/getting-started
+* OpenClaw channels: https://docs.openclaw.ai/channels
+* Synap Backend: https://github.com/Synap-core/backend
+* OpenClaude: https://github.com/Gitlawb/openclaude
+* Cloud-init first boot semantics: https://cloudinit.readthedocs.io/en/latest/explanation/first_boot.html

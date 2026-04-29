@@ -1,0 +1,220 @@
+---
+title: Pod ↔ Control Plane Trust Architecture
+description: How the CP and pod establish a cryptographically verified trust relationship using ES256 JWTs, JWKS, and a pod-local trusted_issuers registry.
+---
+
+# Pod ↔ Control Plane Trust Architecture
+
+## Overview
+
+Every CP→Pod HTTP call is authenticated with an **ES256 JWT** signed by the Control Plane's ECDSA P-256 private key. Pods never store a shared secret — they verify JWTs against the CP's published JWKS endpoint. This document describes the complete trust chain from pod birth to steady-state operation.
+
+---
+
+## Actors
+
+| Actor | Role |
+|---|---|
+| **Control Plane (CP)** | `api.synap.live` — manages pod lifecycle, signs all JWTs |
+| **Data Pod** | User's server running Synap backend. Verifies CP JWTs via JWKS. |
+| **pod-agent** | Minimal Node.js sidecar (port 4002, internal Docker network only). Handles update/restore/exec commands from CP. |
+
+---
+
+## Key Material
+
+| Key | Where | Purpose |
+|---|---|---|
+| **CP ECDSA P-256 private key** | CP server env (`SIGNING_KEY` / `SIGNING_KEY_FILE`) | Signs all outbound CP JWTs |
+| **CP public key (JWKS)** | `https://api.synap.live/.well-known/jwks.json` | Pod verification endpoint |
+| **`CONTROL_PLANE_URL`** | Pod `.env` (written by `install.sh`) | Pins the JWKS URL — `${CONTROL_PLANE_URL}/.well-known/jwks.json` |
+| **`PROVISIONING_TOKEN`** | Pod `.env` | Used **only** for OpenClaw/`setup-openclaw.sh`. NOT used in CP trust chain. |
+
+The CP private key never leaves the CP server. The pod only ever holds the public JWKS URL pointer (`CONTROL_PLANE_URL`), not any secret.
+
+---
+
+## Trust Bootstrap (Provisioning Flow)
+
+```
+CP provisions pod
+  └── cloud-init writes .env:
+        CONTROL_PLANE_URL=https://api.synap.live   ← pinned at birth
+        PUBLIC_URL=https://wide-core-xxxx.synap.live
+  └── install.sh reads .env, starts Docker stack
+
+After services are healthy:
+  └── CP calls POST /api/provision/seed-trust
+        Authorization: Bearer <ES256 JWT>
+          { type: "seed-trust", iss: cpUrl, aud: podPublicUrl, jti, exp }
+        Body: { issuerUrl: "https://api.synap.live" }
+
+  └── Pod verifies JWT against CONTROL_PLANE_URL JWKS (pinned — no discovery)
+  └── Pod checks issuerUrl === CONTROL_PLANE_URL (prevents rogue issuer injection)
+  └── Pod inserts trusted_issuers row: { issuerUrl, status: "approved", isBuiltIn: true }
+  └── Pod seeds workspace.settings.controlPlane.url = issuerUrl
+  └── Response: { success: true, issuerUrl }
+
+  └── CP calls POST /api/provision/connect  (full credentials)
+  └── CP calls POST /api/provision/seed-admin  (admin identity)
+  └── IS calls POST /api/provision/register-intelligence  (IS self-registers)
+```
+
+**Why CONTROL_PLANE_URL is in `.env`:**
+The DB doesn't exist when the pod first boots. The env var is the only trust anchor available before migrations run. It's written at VM creation time via cloud-init user-data — an attacker who can tamper with cloud-init user-data already owns the server. After `seed-trust` runs, the CP URL is additionally stored in `workspace.settings.controlPlane.url` (DB), so post-bootstrap routes read from there.
+
+---
+
+## Steady-State Verification (`verifyCpJwtWithTrust`)
+
+All CP→Pod endpoints except `seed-trust` use `verifyCpJwtWithTrust`:
+
+```
+Incoming JWT
+  1. verifyCpJwt(token, pinnedIssuer?, audience)
+       ├── Resolve issuer: pinnedIssuer ?? CONTROL_PLANE_URL env ?? iss claim
+       ├── Fetch JWKS from {issuer}/.well-known/jwks.json (cached 24h, LKG 48h)
+       ├── Verify ES256 signature + issuer claim + expiry + audience
+       └── Check jti against replay cache (15-min LRU, 500-entry cap)
+  2. Look up payload.iss in trusted_issuers table
+  3. Reject if entry missing or status !== "approved"
+  4. Return payload
+```
+
+The `trusted_issuers` table is the authoritative allowlist. A valid JWT signature alone is not enough — the issuer must be registered and approved.
+
+---
+
+## pod-agent JWT Verification
+
+pod-agent (the update/restore sidecar) applies the same model but without a DB:
+
+```js
+const CP_JWKS_URL = process.env.CONTROL_PLANE_URL
+  ? `${process.env.CONTROL_PLANE_URL}/.well-known/jwks.json`
+  : "";
+
+// X-JWKS-URL header is completely ignored — JWKS URL is always derived from env
+```
+
+If `CONTROL_PLANE_URL` is not set, pod-agent returns 503 for any command. pod-agent is not exposed publicly — it runs on the internal Docker network, proxied by Caddy at `/api/pod-agent/*`.
+
+---
+
+## Self-Hosted Pods (No Managed CP)
+
+Users running Synap on their own infrastructure without the Synap Cloud CP:
+
+- `CONTROL_PLANE_URL` is **not set** in `.env`
+- `seed-trust` falls back to OIDC-style discovery: reads `iss` from the JWT's unverified header and fetches JWKS from `{iss}/.well-known/jwks.json`
+- The `issuerUrl !== CONTROL_PLANE_URL` check is skipped (no pinned URL to compare against)
+- A warning is logged: `"CONTROL_PLANE_URL not set — using OIDC-style issuer discovery (self-hosted mode)"`
+
+This lets any HTTPS domain that serves a valid ES256 JWKS become a trusted CP. This is acceptable for self-hosted pods because:
+1. The pod owner controls the server
+2. The pod owner also controls their CP (or runs no CP at all)
+3. There is no external CP to impersonate
+
+To harden a self-hosted pod to a specific CP, set `CONTROL_PLANE_URL` in `/opt/synap/deploy/.env`.
+
+---
+
+## Re-establishing Trust (`reseed-trust`)
+
+Called from the CP dashboard or CP code when trust is broken (pod migration, trust corruption, key rotation):
+
+```typescript
+// CP generates a fresh seed-trust JWT (5-min TTL)
+const seedJwt = signCpJwt({ type: "seed-trust", podId, aud: podUrl }, "5m");
+
+// 3-attempt retry loop
+POST /api/provision/seed-trust
+  Authorization: Bearer ${seedJwt}
+  Body: { issuerUrl: cpIssuerUrl }
+```
+
+`seedBuiltIn` is idempotent — safe to call multiple times. The `trusted_issuers` row is upserted, not duplicated.
+
+---
+
+## JTI Replay Prevention
+
+Every JWT the CP issues includes a `jti` (JWT ID) claim. Pods maintain an in-memory LRU map:
+
+| Parameter | Value |
+|---|---|
+| TTL | 15 minutes (covers typical 10-min token lifetime) |
+| Max entries | 500 |
+| Sweep interval | Every 5 minutes |
+
+A token with a `jti` that has been seen before is rejected immediately, even if the signature is valid. Tokens without `jti` are accepted with a warning (backward compatibility for older CP versions).
+
+---
+
+## Audience Pinning
+
+All CP→Pod JWTs carry `aud: podPublicUrl`. The pod's `PUBLIC_URL` env var is used for the audience check. A provisioning JWT minted for `pod-A.synap.live` cannot be replayed against `pod-B.synap.live`.
+
+If `PUBLIC_URL` is not set, all mutating provision endpoints return 500 — there is no way to skip the audience check.
+
+---
+
+## Token Types
+
+| Type | Issued by | Used for |
+|---|---|---|
+| `seed-trust` | CP | Bootstrap — establishes trust registry |
+| `provision` | CP | Full provisioning, credential delivery, IS reset, addon activate/deactivate, disconnect |
+| `tier_update` | CP | Tier push only — cannot reset IS or disconnect |
+| `seed-admin` | CP | Admin user seeding |
+| `admin-recovery` | CP | Kratos recovery link generation |
+| `addon_activate` | CP | Create OpenClaw agent user + Hub key |
+| `addon_deactivate` | CP | Remove OpenClaw memberships + revoke Hub keys |
+| `addon_status` | CP | Check addon registration state |
+| `pod_callback` | CP | Embedded in trigger JWTs — forwarded to callback URL by pod-agent |
+
+Token lifetimes: `seed-trust` = 5min, `provision` = 10min, callbacks = 30min.
+
+---
+
+## JWKS Caching Strategy
+
+| Layer | TTL |
+|---|---|
+| Primary cache | 24 hours |
+| Last-known-good fallback | 48 hours |
+| Retry delays on fetch failure | 1s → 5s → 30s |
+
+The LKG fallback means pods remain operational for up to 48h even if the CP's JWKS endpoint is temporarily unreachable. The cache is per-CP-URL and keyed by issuer.
+
+---
+
+## Security Properties
+
+| Property | Mechanism |
+|---|---|
+| No shared secret on pod | JWT-only, keys never transmitted |
+| CP impersonation prevented | JWKS pinned via `CONTROL_PLANE_URL` (managed pods) |
+| Rogue issuer injection | `issuerUrl === CONTROL_PLANE_URL` check in seed-trust |
+| Cross-pod JWT replay | `aud: podPublicUrl` claim checked on every route |
+| Same-pod replay | `jti` consumed on first use (15-min LRU) |
+| Post-bootstrap allowlist | `trusted_issuers` registry gates all post-seed-trust routes |
+| Lightweight type escalation | Token `type` checked on every route — `tier_update` cannot reset IS |
+| pod-agent JWKS injection | `X-JWKS-URL` header ignored; JWKS always derived from env |
+
+---
+
+## Files
+
+| File | Role |
+|---|---|
+| `synap-backend/packages/api/src/utils/jwks-client.ts` | `verifyCpJwt`, `verifyCpJwtWithTrust`, JWKS cache, JTI replay cache |
+| `synap-backend/apps/api/src/routers/provision.ts` | All CP→Pod provision endpoints |
+| `synap-backend/deploy/pod-agent/server.js` | Update/restore sidecar JWT verification |
+| `synap-backend/deploy/docker-compose.yml` | pod-agent service (internal network only) |
+| `synap-backend/install.sh` | Writes `CONTROL_PLANE_URL` to `.env` from `--control-plane-url` flag |
+| `synap-control-plane-api/src/lib/signing-key.ts` | `signCpJwt` — CP JWT signer |
+| `synap-control-plane-api/src/jobs/provision-pod.ts` | `generateCloudInit` — passes `--control-plane-url` to install.sh |
+| `synap-control-plane-api/src/jobs/restore-pod.ts` | `generateMinimalCloudInit` — writes `CONTROL_PLANE_URL` to cloud-init .env |
+| `synap-control-plane-api/src/routes/admin.ts` | `POST /pods/:id/reseed-trust` |
+| `synap-backend/packages/database/src/services/trusted-issuer-service.ts` | `TrustedIssuerService.getByUrl`, `seedBuiltIn` |

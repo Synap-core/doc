@@ -477,6 +477,19 @@ Phase 3 (cutover):
 - CP→Pod server auth: ES256 JWT in `Authorization: Bearer` header (unchanged — handshake JWTs stay for agent provisioning even after pod migration)
 - OIDC: standard `Authorization: Bearer <access-token>` from CP token endpoint
 
+### 4.x Per-user sub-tokens (shared OWUI / family-pod, opt-in)
+
+**Problem.** A single OpenWebUI install (or any sidecar that fronts multiple humans behind one Synap parent agent key) used to cram every user's notes, threads, and memory under the same Synap user. Wrong shape for shared homes, families, and small teams.
+
+**Solution.** `api_key_external_users` maps `(parent_api_key_id, external_user_id)` to a Synap user, with optional `child_api_key_id` for callers that prefer real child tokens. Two modes:
+
+- **Mode 1 — Header remap.** Pipeline keeps the parent bearer key and sends `X-External-User-Id: <opaque>` per request. Hub Protocol auth middleware looks up the mapping (or auto-creates the Synap user + mapping inside one transaction) and swaps `c.userId` to the resolved user before any handler runs.
+- **Mode 2 — Real child API key.** `POST /api/hub/setup/external-user { mintSubToken: true }` returns a child key carrying `api_keys.parent_key_id`. Revoking the parent cascades. Scope inheritance with subset enforcement — children cannot widen.
+
+Gated by `HUB_PROTOCOL_SUB_TOKENS=true`. Default off → byte-identical legacy single-key behavior. `HUB_PROTOCOL_EXTERNAL_USER_WORKSPACE_STRATEGY` (`first` | `all` | `none`, default `first`) controls auto-grant scope when provisioning new users — only the chronologically-first workspace by default for least-privilege.
+
+Migration `0018_per_user_sub_tokens.sql` adds the schema; the auth middleware path lives in `synap-backend/packages/api/src/services/external-user-mapping.ts`.
+
 ---
 
 ## 5. Implementation Roadmap

@@ -6,7 +6,7 @@ description: >-
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-03'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -59,6 +59,23 @@ OpenClaw should install Synap skill so it can call Hub endpoints coherently:
 
 - skill definition: [`skills/synap/SKILL.md`](https://github.com/Synap-core/backend/blob/main/skills/synap/SKILL.md)
 - skill notes: [`skills/synap/README.md`](https://github.com/Synap-core/backend/blob/main/skills/synap/README.md)
+
+## Hub Protocol features for agent integrations
+
+Recent additions you should leverage:
+
+**Idempotency-Key.** Every write (`POST | PUT | PATCH | DELETE`) on `/api/hub/*` accepts an optional `Idempotency-Key` header. Same `(userId, key, body)` returns the cached 2xx response for 24h with `X-Idempotent-Replay: true`. Use it for any retry path — pipelines, schedulers, anything with at-least-once delivery semantics. 4xx and 5xx are never cached; secret-bearing responses are also never cached.
+
+**OpenAPI 3.1 spec.** `GET /api/hub/openapi.json` always available. Dev pods also expose Swagger UI at `/api/hub/docs`. 27 high-traffic routes (entities, threads, memory, knowledge) validate request bodies at runtime against the schema; 65 more routes have full documentation.
+
+**Sub-tokens for shared deployments.** When OpenClaw or any sidecar fronts multiple humans behind one parent agent key, opt into per-user sub-tokens to keep each human's notes/memory under a separate Synap user. Two modes:
+- Header remap: send `X-External-User-Id: <opaque>` with the parent bearer key — auth middleware resolves the mapping (auto-creating the Synap user on first sight).
+- Real child API keys: `POST /api/hub/setup/external-user { mintSubToken: true }` returns a child token bound to the parent (cascade revocation).
+- Pod must enable `HUB_PROTOCOL_SUB_TOKENS=true`. Default is single-user behavior.
+
+**Live event stream.** `GET /api/hub/events/stream` (SSE) replaces polling. `?since=<iso>` for catch-up on reconnect. `event: heartbeat` every 30s.
+
+**Thread upserts.** `POST /api/hub/threads` deduplicates on `(externalSource, externalId)` — pipelines no longer need an in-process cache that resets on container restart. `POST /api/hub/threads/:id/messages.batch` for replaying historical conversations.
 
 ## Continue
 

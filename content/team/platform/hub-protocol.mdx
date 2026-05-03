@@ -1,10 +1,10 @@
 ---
 title: 'Hub Protocol'
-description: 'Hub Protocol package: 76+ REST endpoints for IS↔Backend.'
+description: 'Hub Protocol package: 95 REST endpoints + Zod schemas for IS, agents, sidecars, CLI.'
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-03'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -123,6 +123,70 @@ Contains textual analysis to display to the user.
 - `recommendations`: Array of strings (optional)
 - `sources`: Array of Source objects (optional)
 - `tags`: Array of strings (optional)
+
+## REST Surface
+
+The 95 routes that make up the Hub Protocol REST surface live under `/api/hub/*` on every pod. The router is split into 33 per-resource files at `synap-backend/packages/api/src/routers/hub-protocol/rest/` for code-review ergonomics; mount order in `hub-protocol-rest.ts` preserves Hono first-match semantics.
+
+### OpenAPI 3.1 spec
+
+```
+GET /api/hub/openapi.json     # machine-readable spec, always on
+GET /api/hub/docs             # Swagger UI, dev-only (NODE_ENV !== "production")
+```
+
+92 routes are documented; 27 of those (entities, threads, memory, knowledge — the highest-traffic ones) use `app.openapi(routeDef, handler)` from `@hono/zod-openapi` for **runtime Zod validation** of request bodies, params, and queries. Malformed requests get a flattened `{ error: "<path>: <msg>, …" }` envelope before the handler runs.
+
+### Idempotency-Key
+
+Every write (`POST | PUT | PATCH | DELETE`) accepts an optional `Idempotency-Key` header.
+
+- Cache key is `(userId, key, sha256(body))`. Same logical request → cached 2xx response (`X-Idempotent-Replay: true`).
+- 24h TTL. Read-only methods + missing header pass through.
+- 4xx and 5xx are never cached. 2xx responses whose body matches a secret-name regex (`hubApiKey`, `subToken`, `apiKey`, `provisioningToken`, `sessionToken`, `secret`, `privateKey`, `kratosSecret`) are also never cached.
+- Skips: `/setup/agent` and `/entity-share/deliver` (these endpoints either issue secrets or use out-of-band auth where the cache key would be ambiguous).
+- Storage: in-memory LRU + GC sweep. Multi-pod deployments degrade to per-instance idempotency; swap to Redis when a shared client lands.
+
+### Per-user sub-tokens (shared OWUI / family-pod)
+
+Two operating modes, both gated by `HUB_PROTOCOL_SUB_TOKENS=true`. Default off → byte-identical legacy behavior.
+
+**Mode 1 — Header remap (recommended)**: send `X-External-User-Id: <opaque>` alongside the parent agent bearer key. Auth middleware looks up `(parent_api_key_id, external_user_id)` in `api_key_external_users`, swaps `c.userId` to the mapped Synap user, auto-provisioning the user + mapping on first sight.
+
+**Mode 2 — Real child API keys**: caller mints a child via `POST /setup/external-user { mintSubToken: true }`. Child carries `api_keys.parent_key_id`; revoking the parent cascades. Scope inheritance with subset enforcement (children cannot widen).
+
+`HUB_PROTOCOL_EXTERNAL_USER_WORKSPACE_STRATEGY` (`first` | `all` | `none`, default `first`) controls auto-grant scope when provisioning new users — only the parent owner's chronologically-first workspace by default.
+
+### Threads upsert + batch messages
+
+- `POST /api/hub/threads` accepts `externalSource` + `externalId`. When both are set, partial-unique-index `channels_external_source_id_unique` deduplicates across pipeline-container restarts. Insert race recovers via Postgres 23505 violation lookup. Returns `{ id, title, reused: true }` on dedup hit.
+- `POST /api/hub/threads/:id/messages.batch` inserts 1..100 messages in a single Drizzle transaction. `autoRespond: true` fires for at most one message — the LAST user message — so a 50-msg replay does not spawn 50 IS jobs.
+
+### Live event stream
+
+```
+GET /api/hub/events/stream?entityType=&workspaceId=&since=
+```
+
+Server-Sent Events over a long-lived connection. Replaces polling for OpenClaw mirror, OpenWebUI integrations, and any consumer that previously hit `GET /events` on a timer.
+
+- `event: event` frames carry the event JSON in `data:` and the event id in `id:` for reconnect resume via `?since=<timestamp>`.
+- `event: heartbeat` every 30 seconds — required to keep nginx/Cloudflare proxies from killing the connection.
+- Subscribe-first-buffer pattern: handler subscribes to `eventStreamManager` BEFORE draining catch-up, then drains the buffer, then switches to direct write-through. Eliminates the catch-up race window. Consumers must dedupe by event id; the same event MAY be delivered twice across the buffer/catch-up boundary.
+- Buffer cap: 1000 events; overflow events stay durable in the event log and are recoverable via `?since=` on reconnect.
+- Single-instance only (in-memory `eventStreamManager`); multi-pod fanout requires Postgres LISTEN/NOTIFY or Redis pubsub when pod replicas land.
+
+### Provenance: configurable `source`
+
+`POST /api/hub/entities` accepts `source` from an enum: `intelligence | agent | openwebui-pipeline | openclaw | extension | cli | n8n | raycast`. Defaults to `agent` when `agentUserId` is set, otherwise `intelligence` (legacy behavior). Audit trails finally distinguish IS, OpenClaw, OWUI pipelines, and extension capture.
+
+The response also echoes `effectiveWorkspaceId` so callers can verify the resolved scope without a follow-up GET.
+
+### See also
+
+- Source: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` (orchestrator, 341 lines), `routers/hub-protocol/rest/*` (33 per-resource files), `_codecs/*` (request/response Zod schemas).
+- Migrations: `0017_channels_external_id.sql` (externalSource/externalId on channels), `0018_per_user_sub_tokens.sql` (api_key_external_users + api_keys.parent_key_id).
+- Auth: see [Auth Architecture](./auth-architecture.mdx) for the sub-token resolution path inside the bearer-key middleware.
 
 ## Documentation
 

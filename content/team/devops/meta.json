@@ -27,6 +27,7 @@
     "infrastructure-architecture",
     "operations-runbook",
     "docker-architecture",
+    "eve-cli-transports",
     "backlink-strategy"
   ]
 }

@@ -1,0 +1,863 @@
+---
+title: 'Eve Channels — Design Spec'
+description: >-
+  Complete design specification for the Eve dashboard channels page (`/channels`)
+  — the live, n8n-style node-based visualization of the Agentic Triangle with
+  side-panel configuration and channel onboarding.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve Channels — Design Spec
+
+**Date:** 2026-05-05
+**Status:** Design specification. Implementation pending Phase 3 of [Eve OS Vision](./eve-os-vision.mdx).
+
+This document is concrete enough that a developer can implement the channels page end-to-end after one read. Sister doc to [Eve OS Home — Design Spec](./eve-os-home-design.mdx); shares its visual language and tokens.
+
+---
+
+## 1. Design intent
+
+The channels page exists to make **the Agentic Triangle self-documenting**. The operator should glance at this page and immediately understand, without explanation:
+
+> "WhatsApp messages arrive at OpenClaw, become Synap channel messages, become Hermes tasks, get executed, results flow back."
+
+Three feelings to deliver:
+
+1. **Aliveness** — the system is breathing. Edges pulse with real traffic. The OS feels awake.
+2. **Legibility** — topology is clear at a glance. Nothing hidden, nothing ambiguous.
+3. **Configurability without complexity** — clicking a node opens its panel. No dropdown trees, no settings labyrinth.
+
+What it is NOT: a workflow editor. The topology is **fixed by the architecture**. Users observe and configure; they do not redraw the triangle.
+
+---
+
+## 2. Visual hierarchy
+
+The page is dominated by the **canvas** — almost everything else is supporting chrome.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  [search──filter──]    Channels                          [⚙] [👤]       │  ← TopBar (64px)
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ┌─────────┐                                            ┌─────────┐    │
+│  │Telegram │─┐                                          │ Hermes  │    │
+│  │  ●      │ │      ┌──────────┐    ┌──────────────┐    │  ●      │    │
+│  └─────────┘ │      │ OpenClaw │    │   Synap      │    └────┬────┘    │
+│  ┌─────────┐ ├─────►│   ●      │═══►│  Channels    │═══►     │         │
+│  │WhatsApp │ │      │   ▲      │    │   ●●●        │         │         │
+│  │  ●      │ │      └──────────┘    └──────┬───────┘    ┌────▼────┐    │
+│  └─────────┘ │           ▲                 │            │ Tasks   │    │
+│  ┌─────────┐ │           │                 │            │  ●      │    │
+│  │Discord  │ │           └─────reply ──────┘            └─────────┘    │
+│  │  ○      │─┘                                                          │
+│  └─────────┘                                                            │
+│  ┌─────────┐                                                            │
+│  │ + Add   │                                                            │
+│  └─────────┘                                                            │
+│                                                                        │
+│   [⊕] [⊖] [⊡]  ← Zoom cluster bottom-right                              │
+│                                                                        │
+├────────────────────────────────────────────────────────────────────────┤
+│  ⏱ 2s  📱 Telegram → "build a login page"   →   🧠 Synap personal      │  ← ActivityTape (48px)
+│  ⏱ 4s  🧠 Synap → task created   →   ⚡ Hermes queue                   │     (sticky bottom)
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+The **canvas** is the hero. Read-only graph topology, animated edges, configurable nodes. ActivityTape provides plain-language narration.
+
+---
+
+## 3. Topology (fixed by architecture)
+
+The graph is FIXED. Five conceptual zones, left to right:
+
+| Zone | Contents | Type |
+|---|---|---|
+| **External** | Telegram, WhatsApp, Discord, Signal, Matrix, Slack, Voice | One node per connected channel + one `+ Add` placeholder |
+| **OpenClaw** | Single node | Always present |
+| **Synap Channels** | Personal channel + active branches | One node per channel (cluster if many) |
+| **Hermes** | Single node | Always present |
+| **Tasks** | Task queue (aggregate node) | Always present, shows queue depth |
+
+Edges are also fixed:
+
+- `External ↔ OpenClaw` — one per external channel
+- `OpenClaw ↔ Synap` — single edge to channel cluster
+- `Synap → Hermes` — task pickup
+- `Hermes → Tasks` — execution + writeback to Synap (curves back to Synap)
+
+User cannot add or remove edges. They can:
+- Add new external channels (creates a new node + edge)
+- Remove disconnected external channels
+- Click any node to configure or inspect
+
+---
+
+## 4. Component breakdown
+
+### 4.1 `TopBar` (`/app/(channels)/components/top-bar.tsx`)
+
+Same height (64px) and structure as the OS Home TopBar, with one addition: a **filter chip row** below the search box.
+
+Filter chips: `All` (default), `External`, `Synap`, `Hermes`, `AI Events`. Clicking a chip dims unrelated edges + nodes (opacity 0.3) so the user can focus.
+
+### 4.2 `FlowCanvas` (`/app/(channels)/components/flow-canvas.tsx`)
+
+Wraps `ReactFlow` from the `reactflow` package. Configuration:
+
+```tsx
+<ReactFlow
+  nodes={nodes}
+  edges={edges}
+  nodeTypes={nodeTypes}
+  edgeTypes={edgeTypes}
+  fitView
+  fitViewOptions={{ padding: 0.2 }}
+  panOnDrag
+  zoomOnScroll
+  zoomOnPinch
+  selectionOnDrag={false}
+  nodesDraggable={false}        /* topology is fixed */
+  nodesConnectable={false}       /* no manual edges */
+  edgesUpdatable={false}
+  elementsSelectable={true}
+  minZoom={0.5}
+  maxZoom={1.5}
+  proOptions={{ hideAttribution: true }}
+>
+  <Background variant="dots" gap={24} size={1} color="rgba(255,255,255,0.04)" />
+  <Controls position="bottom-right" showInteractive={false} />
+</ReactFlow>
+```
+
+The canvas fills the viewport between TopBar and ActivityTape. Background uses a dotted grid at 4% opacity (whisper, not loud) — gives spatial reference without competing with content.
+
+### 4.3 Node types
+
+All nodes share a common shell + type-specific content. Defined as React Flow node types in `node-types.ts`:
+
+```typescript
+const nodeTypes = {
+  external: ExternalChannelNode,
+  openclaw: OpenClawNode,
+  synapChannel: SynapChannelNode,
+  hermes: HermesNode,
+  tasks: TasksNode,
+};
+```
+
+#### 4.3.1 Common node shell
+
+```css
+/* Base node */
+min-width: 144px;
+padding: 16px 20px;
+border-radius: 16px;
+background: var(--neutral-100); /* dark: --slate-800 */
+border: 1px solid rgba(255, 255, 255, 0.06);
+transition: transform 200ms, border-color 200ms, background 200ms;
+
+/* Hover */
+:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Selected (panel open) */
+&.selected {
+  border-color: var(--primary-300);
+  background: var(--neutral-50); /* dark: --slate-700 */
+}
+
+/* Disconnected (external channels only) */
+&.disconnected {
+  border: 1.5px dashed var(--neutral-400);
+  background: transparent;
+  opacity: 0.65;
+}
+```
+
+Each node has:
+- **Icon** (24px, top-center)
+- **Label** (15px, font-weight 500, centered)
+- **Status dot** (6px, top-right corner, color matches OS Home spec)
+- **Type-specific tint** on the background (subtle gradient)
+
+#### 4.3.2 Type-specific tints
+
+```css
+/* External channels (Telegram, WhatsApp, etc.) */
+.node--external {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.05) 0%, transparent 100%);
+}
+
+/* OpenClaw — subtle indigo */
+.node--openclaw {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, transparent 100%);
+  border-color: rgba(99, 102, 241, 0.12);
+}
+
+/* Synap — emerald (the brain, AI-tinted) */
+.node--synap {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%);
+  border-color: rgba(16, 185, 129, 0.14);
+}
+
+/* Hermes — subtle amber */
+.node--hermes {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, transparent 100%);
+  border-color: rgba(245, 158, 11, 0.12);
+}
+
+/* Tasks — neutral, no tint */
+.node--tasks { /* default base shell */ }
+```
+
+#### 4.3.3 ExternalChannelNode
+
+| Element | Detail |
+|---|---|
+| Icon | Lucide icon mapped per channel (`MessageCircle` for Telegram, `Phone` for WhatsApp, `Mic` for Voice, etc.) |
+| Label | Channel name |
+| Subtle metadata | `~12 msgs/day` (last-7-day average, small, neutral-500 below label) |
+| Status dot | Green if connected and recent activity, amber if connected but quiet, grey if disconnected |
+| Disconnected style | Dashed border, "Click to connect" hint on hover |
+
+Click behavior:
+- **Connected** → opens `SidePanel` with config + recent activity
+- **Disconnected** → opens `ChannelOnboardingModal` (see §4.6)
+
+#### 4.3.4 OpenClawNode
+
+Single instance. Always present.
+
+| Element | Detail |
+|---|---|
+| Icon | `Antenna` (Lucide) |
+| Label | "OpenClaw" |
+| Sublabel | "{N} skills · {M} channels" (e.g., "12 skills · 4 channels") |
+| Status dot | Green if container running, amber if degraded, grey if offline |
+
+Click → opens `SidePanel`: status, MCP skills installed, persona settings, route map.
+
+#### 4.3.5 SynapChannelNode
+
+Initially renders as an **aggregate node** showing the user's personal channel. If multiple Synap channels are active (branches, agent collab), they cluster as smaller nodes around the main one.
+
+| Element | Detail |
+|---|---|
+| Icon | `Brain` (Lucide) — emerald-tinted |
+| Label | "Personal Channel" (or active channel name) |
+| Sublabel | Message count last hour: "23 messages · 1h" |
+| Status dot | Always green (Synap is the brain — if it's offline, the page itself wouldn't load) |
+| Cluster indicator | If branches are active, a small `+3` badge bottom-right |
+
+Click → opens `SidePanel`: recent message preview, channel type, "Open in Synap" deep link.
+
+If user clicks the `+3` badge, the cluster expands inline (other channels animate out from the main node, becoming clickable).
+
+#### 4.3.6 HermesNode
+
+Single instance.
+
+| Element | Detail |
+|---|---|
+| Icon | `Cpu` or `Bot` (Lucide) — amber-tinted |
+| Label | "Hermes" |
+| Sublabel | "{queued} queued · {running} running" |
+| Status dot | Green if daemon polling, amber if queued > 10 (backed up), grey if offline |
+
+Click → opens `SidePanel`: queue depth, in-progress tasks, last 10 completed, codegen engine setting.
+
+#### 4.3.7 TasksNode
+
+Aggregate. Represents the task queue + recent executions.
+
+| Element | Detail |
+|---|---|
+| Icon | `ListChecks` (Lucide) |
+| Label | "Tasks" |
+| Sublabel | "{completed today} done · {failed today} failed" |
+| Status dot | Green by default; turns amber if failure rate > 10% in last hour |
+
+Click → opens `SidePanel`: today's task log, link to full task queue in Synap.
+
+### 4.4 Edge types
+
+```typescript
+const edgeTypes = {
+  pulseEdge: PulseEdge,
+};
+```
+
+#### `PulseEdge` (`/app/(channels)/components/pulse-edge.tsx`)
+
+Custom React Flow edge. Two visual layers:
+
+1. **Static rail** — thin (1.5px), neutral-700 in dark mode / neutral-200 in light mode. The "track" the pulse travels on.
+2. **Pulse layer** — when an event arrives, a small dot of light (4px diameter, AI-emerald gradient) is appended to the edge and animated from source to target over 1200ms with ease-out, fading to 0 at the end. Uses CSS animations (GPU-accelerated transforms only).
+
+Multiple pulses can coexist on the same edge (busy traffic). Cap at 5 simultaneous pulses per edge to avoid visual overload — older pulses fade earlier when limit reached.
+
+```css
+@keyframes pulse-travel {
+  0%   { offset-distance: 0%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+.pulse-dot {
+  offset-path: path('<the SVG path of the edge>');
+  animation: pulse-travel 1200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #6EE7B7 0%, #34D399 50%, transparent 100%);
+  box-shadow: 0 0 6px rgba(110, 231, 183, 0.6);  /* glow only on pulses, not nodes */
+}
+```
+
+Note: this is the only place we use `box-shadow` in the entire OS — for the traveling-light glow effect. Static depth is still done with borders.
+
+### 4.5 `SidePanel` (`/app/(channels)/components/side-panel.tsx`)
+
+Slide-over from the right. Closes on backdrop click, Escape, or X button.
+
+| Property | Desktop | Tablet | Mobile |
+|---|---|---|---|
+| Width | 40% (min 480px, max 640px) | 60% | 100% |
+| Animation | translateX 280ms ease-out | same | bottom sheet pattern (translateY) |
+| Backdrop | rgba(0,0,0,0.4) | same | same |
+
+Header (sticky, 56px):
+- Node icon (left, 20px)
+- Node title (center-left, 17px, font-weight 500)
+- Close button (right, X icon)
+
+Body (scrollable):
+- **Status section** — colored status dot + uptime + "Connected since {date}"
+- **Config section** — type-specific form (see §4.5.1–4.5.4)
+- **Recent activity section** — last 10 events involving this node, plain language
+- **Footer actions** — type-specific buttons (Disconnect, Open in Synap, etc.)
+
+#### 4.5.1 ExternalChannelNode panel
+
+```
+┌──────────────────────────────────┐
+│ 📱  Telegram             [X]      │
+├──────────────────────────────────┤
+│ ● Connected · 12 days · stable    │
+│                                  │
+│ Bot Token                        │
+│ [hidden ************** Reveal]   │
+│                                  │
+│ Default Synap channel            │
+│ [Personal Channel ▼]              │
+│                                  │
+│ Recent activity (last 10)        │
+│ • 2s ago   "build a login page"  │
+│ • 14m ago  "remind me at 3pm"    │
+│ • 1h ago   image attachment       │
+│                                  │
+│ [Disconnect]  [View docs →]       │
+└──────────────────────────────────┘
+```
+
+#### 4.5.2 OpenClawNode panel
+
+Tabs: **Status** | **Skills** | **Routing** | **Persona**
+
+- **Status**: container health, uptime, current AI provider, model, last-error log
+- **Skills**: list of MCP servers installed, each with toggle (enable/disable) and "Add MCP server" button
+- **Routing**: which external channels route to which Synap channels (table view)
+- **Persona**: name, system prompt, voice settings (if voice channel connected)
+
+Footer: `[Restart container]` `[Open logs →]`
+
+#### 4.5.3 SynapChannelNode panel
+
+```
+┌──────────────────────────────────┐
+│ 🧠  Personal Channel    [X]       │
+├──────────────────────────────────┤
+│ ● 23 messages · last 1h          │
+│ Type: personal · Workspace: Eve  │
+│                                  │
+│ Recent messages                  │
+│ ┌────────────────────────────┐   │
+│ │ user · 2s ago               │  │
+│ │ build a login page          │  │
+│ ├────────────────────────────┤   │
+│ │ assistant · 1s ago          │  │
+│ │ Got it. Queued task #42…    │  │
+│ ├────────────────────────────┤   │
+│ │ … 21 more                   │  │
+│ └────────────────────────────┘   │
+│                                  │
+│ [Open in Synap →]                 │
+└──────────────────────────────────┘
+```
+
+Read-only preview. Replying happens in Synap (the link opens Synap chat to this channel).
+
+#### 4.5.4 HermesNode panel
+
+Tabs: **Queue** | **Recent** | **Config**
+
+- **Queue**: live task list, ordered by priority. Each item: title, age, "Cancel" button
+- **Recent**: last 10 completed tasks with duration + status
+- **Config**: codegen engine select (`opencode | opencoder | claude-code`), poll interval (read-only), max parallel sub-agents (defaults to 1 in Phase 1, raised in Phase 2.5 fast-follow)
+
+Footer: `[Pause daemon]` `[View full queue →]`
+
+### 4.6 `ChannelOnboardingModal` (`/app/(channels)/components/onboarding-modal.tsx`)
+
+Triggered by:
+- Clicking a disconnected external channel node
+- Clicking the `+ Add` placeholder in the External zone
+
+3-step wizard. Modal centered, max-width 480px, mobile = full-screen.
+
+#### Step 1 — Choose channel type
+
+Grid of channel cards, 3 cols desktop, 2 cols mobile. Each card:
+
+```
+┌────────────────┐
+│   📱            │
+│  Telegram      │
+│  via OpenClaw  │
+└────────────────┘
+```
+
+Cards: Telegram, Signal, Matrix, Discord, Slack, WhatsApp, Voice, +Custom (last). Each card click → Step 2 with that type pre-selected. Cards for channels that require manual server setup (iMessage via BlueBubbles, WhatsApp via QR session) show a small "Requires setup" badge.
+
+#### Step 2 — Authenticate
+
+Type-specific:
+
+| Channel | Auth method |
+|---|---|
+| Telegram | Bot token form (with "Get token from @BotFather →" link) |
+| Discord | OAuth redirect → Discord consent → callback |
+| Signal | QR code displayed inline (signal-cli pairing) |
+| Matrix | Homeserver URL + username + password OR QR for cross-signing |
+| WhatsApp | QR code displayed inline (Baileys pairing) |
+| Slack | OAuth redirect |
+| Voice | Provider select (Twilio / Signal / SelfHosted) → provider-specific creds |
+
+Each form has clear inline help, "Where do I find this?" links, and back/next buttons.
+
+#### Step 3 — Choose default Synap channel
+
+Single dropdown, defaulted to user's personal channel. Hint text: "Incoming messages from this source will route here. You can change this later."
+
+```
+Default destination
+[Personal Channel ▼]
+
+  Personal Channel
+  Branch: build-tasks
+  Branch: research
+  + Create new channel
+```
+
+Footer: `[Back]` `[Connect →]`
+
+On `Connect`:
+1. Backend (Eve API) writes config to OpenClaw via `recreate` action (per memory: env-bound configs need recreate, not restart)
+2. Modal shows progress: "Configuring OpenClaw...", "Waiting for first message..."
+3. On first inbound message OR 30s timeout, modal closes and the new node appears in the canvas with a fade-in + edge animation
+
+If config fails, modal stays open with error + retry.
+
+### 4.7 `ActivityTape` (`/app/(channels)/components/activity-tape.tsx`)
+
+48px sticky bottom bar. Last 10 events. Newest on the left.
+
+Each item (max 280px wide, ellipsized):
+
+```
+⏱ 2s   📱 Telegram → "build a login page" → 🧠 Synap personal
+```
+
+- `⏱ 2s` — time-ago, refreshes every second
+- `📱 Telegram` — source icon + name
+- `→ "..."` — message excerpt (max 30 chars)
+- `→ 🧠 Synap personal` — destination icon + name
+
+Hover an item → highlights the corresponding edge in the canvas (1px → 3px width, glow brightens) for 2 seconds.
+
+When new events arrive, existing items shift right with a 200ms ease-out, new items fade in from the left.
+
+### 4.8 Empty state
+
+Shown when no external channels are configured AND there's no activity yet:
+
+```
+            ┌──────────────────────┐
+            │                      │
+            │   [illustration]     │
+            │                      │
+            └──────────────────────┘
+
+         Your channels are quiet
+
+   Connect a messaging channel — Telegram, WhatsApp, Discord, voice —
+   and watch the OS come alive.
+
+              [+ Connect a channel]
+```
+
+Canvas still renders, but with only the OpenClaw + Synap + Hermes + Tasks nodes (no external channels yet). The empty CTA hovers over the External zone.
+
+---
+
+## 5. Data model
+
+### 5.1 Page state
+
+```typescript
+type ChannelNodeType =
+  | 'external' | 'openclaw' | 'synapChannel' | 'hermes' | 'tasks';
+
+type ChannelNode = {
+  id: string;
+  type: ChannelNodeType;
+  label: string;
+  position: { x: number; y: number };  // computed by layout, not user-editable
+  data: ExternalNodeData | OpenClawNodeData | SynapNodeData | HermesNodeData | TasksNodeData;
+};
+
+type Edge = {
+  id: string;
+  source: string;
+  target: string;
+  type: 'pulseEdge';
+  data: { active: boolean };
+};
+
+type FlowEvent = {
+  id: string;            // unique per event
+  timestamp: number;
+  type: 'openclaw:message:received'
+      | 'channel:message:created'
+      | 'hermes:task:picked'
+      | 'hermes:task:completed'
+      | 'channel:reply:sent';
+  source: string;        // node id
+  target: string;        // node id
+  excerpt?: string;      // for activity tape
+  payload?: Record<string, unknown>;
+};
+
+type PageState = {
+  nodes: ChannelNode[];
+  edges: Edge[];
+  recentEvents: FlowEvent[];     // capped at 100, last 10 in tape
+  selectedNodeId: string | null;
+  filterChip: 'all' | 'external' | 'synap' | 'hermes' | 'ai';
+  isOnboarding: boolean;
+  socketStatus: 'connected' | 'disconnected' | 'connecting';
+};
+```
+
+### 5.2 Real-time event flow
+
+```
+Synap Realtime (Socket.IO /presence)
+        │
+        ▼
+useChannelSocket() hook
+        │
+        ▼
+events stream → reducer
+        │
+        ├── append to recentEvents (slice 100)
+        ├── derive node statuses (was the sender online recently?)
+        └── trigger edge pulse animation (push pulse to edge.data.activePulses[])
+        │
+        ▼
+ReactFlow re-renders nodes/edges
+ActivityTape re-renders top-10
+```
+
+Per the substrate audit, two events need to be added to Synap before this works:
+
+| Event | Where to emit | Status |
+|---|---|---|
+| `openclaw:message:received` | `synap-backend/packages/api/src/routers/hub-protocol/rest/channels.ts` after POST | Phase 3B |
+| `hermes:task:status` | `background-tasks-service` on status transition | Phase 3B |
+
+The other events (`chat:stream`, `route_to_channel`, `ai:proposal`) already fire today.
+
+### 5.3 Layout algorithm
+
+Topology is fixed → positions can be deterministic. Don't use auto-layout (`dagre`, `elkjs`) — they introduce visual instability when nodes are added/removed. Use a simple **manual zone layout**:
+
+```typescript
+function computeLayout(nodes: ChannelNode[]): ChannelNode[] {
+  const ZONE_X = {
+    external: 80,
+    openclaw: 360,
+    synap: 640,
+    hermes: 920,
+    tasks: 1180,
+  };
+  const NODE_GAP_Y = 96;
+
+  return nodes.map((node, i) => {
+    const zoneNodes = nodes.filter(n => n.zone === node.zone);
+    const indexInZone = zoneNodes.indexOf(node);
+    const totalInZone = zoneNodes.length;
+    const startY = -(totalInZone - 1) * NODE_GAP_Y / 2;
+
+    return {
+      ...node,
+      position: {
+        x: ZONE_X[node.zone],
+        y: startY + indexInZone * NODE_GAP_Y,
+      },
+    };
+  });
+}
+```
+
+Adding a new external channel just appends to its zone — vertical positions auto-recompute, smooth animation via React Flow's built-in transitions.
+
+---
+
+## 6. Interaction flows
+
+### 6.1 First load
+
+1. Page mounts → fetch initial state in parallel:
+   - `GET /api/channels/topology` (Eve dashboard API) → list of connected external channels + Synap workspace channels
+   - Open Socket.IO connection to Synap with API key (Phase 3A prerequisite)
+2. Render canvas with initial nodes + edges (positions computed by `computeLayout`)
+3. Wire socket event handlers
+4. ActivityTape shows "Listening for events..." until first event arrives
+
+### 6.2 Event arrives
+
+1. Socket receives event (e.g., `openclaw:message:received`)
+2. Reducer:
+   - Pushes pulse to relevant edge's `activePulses[]` (with id + timestamp)
+   - Prepends event to `recentEvents`
+3. Edge re-renders with new pulse → CSS animation kicks off → 1200ms travel + fade
+4. ActivityTape prepends new item → existing items shift right
+5. After pulse animation completes, removes itself from `activePulses[]` (cleanup)
+
+### 6.3 Click node
+
+1. User clicks node → `setSelectedNodeId(id)`
+2. Node renders with `.selected` style (border-color shifts to primary)
+3. SidePanel slides in from right (280ms)
+4. Panel renders type-specific content
+
+### 6.4 Add a channel
+
+1. User clicks `+ Add` placeholder OR a disconnected external channel node
+2. `ChannelOnboardingModal` opens, Step 1
+3. User flows through 3 steps
+4. On `Connect`, modal shows progress
+5. Eve API:
+   - Updates OpenClaw config in `secrets.json`
+   - Triggers `recreate` lifecycle action on OpenClaw component
+   - Waits for OpenClaw to come back up (health check polling)
+6. New external channel node appears in canvas with fade-in (200ms)
+7. Modal closes
+8. First inbound message lights up the edge
+
+### 6.5 Filter chips
+
+1. User clicks filter chip (e.g., "AI Events")
+2. State updates `filterChip`
+3. Edges + nodes that don't match dim to opacity 0.3 (220ms transition)
+4. ActivityTape filters its list
+5. Click `All` to reset
+
+### 6.6 Activity tape interaction
+
+1. User hovers an item in tape
+2. The item's `source` and `target` node IDs map to the corresponding edge
+3. Edge highlights: width 1.5px → 3px, brightness +20%, for 2 seconds
+4. Hovering off ends the highlight
+
+---
+
+## 7. Visual tokens
+
+Reuses everything from [OS Home design](./eve-os-home-design.mdx) §6. Adds:
+
+```ts
+// tailwind.config.ts (additions)
+theme: {
+  extend: {
+    colors: {
+      // Type-specific tints for nodes (subtle backgrounds)
+      tint: {
+        external: 'rgba(148, 163, 184, 0.05)',   // slate
+        openclaw: 'rgba(99, 102, 241, 0.06)',    // indigo
+        synap:    'rgba(16, 185, 129, 0.06)',    // emerald
+        hermes:   'rgba(245, 158, 11, 0.06)',    // amber
+      },
+      // Tint borders (slightly stronger than backgrounds)
+      tintBorder: {
+        external: 'rgba(148, 163, 184, 0.10)',
+        openclaw: 'rgba(99, 102, 241, 0.12)',
+        synap:    'rgba(16, 185, 129, 0.14)',
+        hermes:   'rgba(245, 158, 11, 0.12)',
+      },
+    },
+    keyframes: {
+      'pulse-travel': {
+        '0%':   { offsetDistance: '0%',   opacity: '0' },
+        '10%':  { opacity: '1' },
+        '90%':  { opacity: '1' },
+        '100%': { offsetDistance: '100%', opacity: '0' },
+      },
+    },
+    animation: {
+      'pulse-travel': 'pulse-travel 1200ms cubic-bezier(0.4, 0, 0.2, 1) forwards',
+    },
+  },
+},
+```
+
+---
+
+## 8. File layout
+
+```
+hestia-cli/packages/eve-dashboard/app/
+├── (channels)/
+│   ├── page.tsx                       ← Top-level page
+│   ├── components/
+│   │   ├── top-bar.tsx
+│   │   ├── filter-chips.tsx
+│   │   ├── flow-canvas.tsx            ← ReactFlow wrapper
+│   │   ├── pulse-edge.tsx             ← Custom edge with traveling-light
+│   │   ├── nodes/
+│   │   │   ├── external-channel-node.tsx
+│   │   │   ├── openclaw-node.tsx
+│   │   │   ├── synap-channel-node.tsx
+│   │   │   ├── hermes-node.tsx
+│   │   │   └── tasks-node.tsx
+│   │   ├── side-panel.tsx
+│   │   ├── panels/
+│   │   │   ├── external-panel.tsx
+│   │   │   ├── openclaw-panel.tsx
+│   │   │   ├── synap-channel-panel.tsx
+│   │   │   ├── hermes-panel.tsx
+│   │   │   └── tasks-panel.tsx
+│   │   ├── onboarding-modal.tsx       ← 3-step wizard
+│   │   ├── onboarding-steps/
+│   │   │   ├── pick-channel-step.tsx
+│   │   │   ├── auth-step.tsx
+│   │   │   └── destination-step.tsx
+│   │   ├── activity-tape.tsx
+│   │   └── empty-state.tsx
+│   ├── hooks/
+│   │   ├── use-channel-topology.ts    ← initial fetch
+│   │   ├── use-channel-socket.ts      ← Socket.IO event stream
+│   │   └── use-flow-state.ts          ← reducer + node/edge derivation
+│   └── lib/
+│       ├── compute-layout.ts          ← deterministic zone positioning
+│       ├── event-to-pulse.ts          ← maps event → edge animation
+│       └── socket-client.ts           ← Synap Socket.IO client w/ API key
+└── api/
+    └── channels/
+        ├── topology/route.ts           ← GET — initial node list
+        └── onboard/route.ts            ← POST — adds a channel via OpenClaw recreate
+```
+
+---
+
+## 9. Performance considerations
+
+The page is event-heavy. Things to get right:
+
+1. **Don't re-render the canvas on every event.** Pulses live in edge `data.activePulses[]` — the edge component subscribes to its own data, doesn't ripple up to ReactFlow root.
+2. **Cap activity tape at 100 events** — older drop. The DOM only renders the visible 10.
+3. **Memoize node and edge components** — `React.memo` everywhere with explicit equality checks.
+4. **Throttle socket bursts** — if 50 events arrive in one tick (rare but possible during a sync storm), batch into a single state update via `requestAnimationFrame`.
+5. **Reduce motion mode** — `prefers-reduced-motion: reduce` disables pulse animations entirely; events appear as a brief border flash on the edge instead.
+6. **Pause animations when tab is backgrounded** — listen for `document.visibilitychange`, freeze pulses until visible again. Also pauses the activity tape time-ago tickers.
+
+---
+
+## 10. Accessibility
+
+- All nodes are keyboard-focusable. Tab cycles in zone order (external → openclaw → synap → hermes → tasks). Enter opens panel, Escape closes.
+- Pulse animations are decorative — `aria-hidden`. The activity tape is the screen-reader narration of events: a live region (`aria-live="polite"`) that announces new events textually.
+- Filter chips: arrow keys navigate, Enter toggles.
+- Side panel: focus trap when open, Escape closes, focus returns to triggering node.
+- Color is never the only signal: status dots also have hover labels ("connected", "offline"), edges have widths that change with activity.
+- Onboarding modal: form fields properly labeled, error messages associated with inputs via `aria-describedby`.
+
+---
+
+## 11. Phase 3 implementation checklist
+
+In suggested order (matching Phase 3A → 3B → 3C in the [Eve OS Vision](./eve-os-vision.mdx)):
+
+### Phase 3A — Auth (1 week, blocker)
+- [ ] Add API-key handshake path to Synap Socket.IO server (`synap-backend/packages/realtime/src/server.ts:86`)
+- [ ] Create "Eve observer" service account with `marketplace:read` + `realtime:observe` scopes
+- [ ] Wire Eve dashboard `socket-client.ts` with API key
+- [ ] Smoke test: connect, receive `chat:stream` event, log
+
+### Phase 3B — Event coverage (1–1.5 weeks)
+- [ ] Emit `openclaw:message:received` after POST in `hub-protocol/rest/channels.ts`
+- [ ] Emit `hermes:task:status` from `background-tasks-service` on status transition
+- [ ] Verify all 5 event types fire correctly under load
+- [ ] Add `source` field to bridge emit payload (`'openclaw' | 'hermes' | 'synap' | 'external'`)
+
+### Phase 3C — Viz rendering (1–1.5 weeks)
+- [ ] Install `reactflow` package in eve-dashboard
+- [ ] Build `(channels)/page.tsx` route with empty FlowCanvas
+- [ ] Build all 5 node types
+- [ ] Build PulseEdge with traveling-light animation
+- [ ] Build SidePanel + 5 panel types
+- [ ] Build ActivityTape
+- [ ] Build ChannelOnboardingModal (3 steps)
+- [ ] Wire `useChannelSocket` to push events into reducer
+- [ ] Light/dark mode polish
+- [ ] Performance audit (event burst handling, animation pauses)
+- [ ] Accessibility audit (keyboard nav, screen reader, contrast, reduced motion)
+
+Estimated effort: **3–4 weeks** total.
+
+---
+
+## 12. Open design questions (deferrals)
+
+1. **Multi-workspace support.** v1 shows one workspace's channels. If user has multiple workspaces, defer multi-workspace selector to v2.
+2. **Aggregating busy edges.** If 100 events fire on one edge in a second, do we show 100 pulses (visual chaos) or aggregate to a thicker pulsing edge? v1: cap at 5 simultaneous, drop overflow. Revisit if it looks bad in prod.
+3. **Historical replay.** "Show me what happened in the last hour" — scrub bar at bottom that replays events visually. Cool but not v1.
+4. **Per-channel routing rules.** Currently any external channel routes to a single Synap default. Future: rule-based routing ("messages with #urgent go to branch X"). Out of scope.
+5. **Voice channel visualization.** Voice has more dimensions (audio quality, transcription latency). v1 treats it like any other channel; richer visualization later.
+6. **Cross-workspace edges.** If branches span workspaces (rare), how do we show that? Defer.
+
+---
+
+## 13. Reference: what this is NOT
+
+- ❌ Not a workflow editor (topology fixed)
+- ❌ Not a message reader (panels show recent activity, full reading happens in Synap)
+- ❌ Not a settings labyrinth (config lives in panels, not buried in tabs)
+- ❌ Not a debugging tool (it's the operator's window into their OS, not a developer log viewer — Doctor page is for that)
+- ❌ Not a chat UI (that's OpenWebUI, accessed from the OS Home)
+
+The channels page does ONE thing: make the agentic triangle visible and configurable. Anything else is in `/settings`.

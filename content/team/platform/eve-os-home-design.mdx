@@ -1,0 +1,582 @@
+---
+title: 'Eve OS Home — Design Spec'
+description: >-
+  Complete design specification for the Eve dashboard home page (`/`) — the
+  UmbrelOS-style app launcher driven by the CP marketplace. Wireframes,
+  component breakdown, data model, interaction flows, visual tokens.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve OS Home — Design Spec
+
+**Date:** 2026-05-05
+**Status:** Design specification. Implementation pending Phase 2 of [Eve OS Vision](./eve-os-vision.mdx).
+
+This document is concrete enough that a developer can implement the OS home page end-to-end after one read.
+
+---
+
+## 1. Design intent
+
+The home is what the operator sees the moment they open Eve. It must communicate, in under one second:
+
+> "This is **my** OS. These are **my** apps. Everything I need is here."
+
+Three feelings to deliver:
+
+1. **Calm** — generous whitespace, no busywork, low chroma
+2. **Sovereignty** — minimal Eve branding, the operator's apps are the heroes
+3. **Intelligence-aware** — AI surfaces (OpenWebUI primarily) have a subtle emerald accent, distinguishing them from regular apps without screaming
+
+What it is NOT: a SaaS dashboard with KPIs and charts. There are no metrics on this page. Metrics live in `/settings`. The home is *only* the launcher.
+
+---
+
+## 2. Visual hierarchy
+
+Top to bottom:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  [search──────────────────────────────]   [⚙]  [👤]              │  ← TopBar (64px)
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│           Good evening, Antoine                                  │  ← Greeting (optional)
+│           Tuesday · 14:32                                        │
+│                                                                  │
+│   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │
+│   │  💬     │  │  🧠     │  │  📋     │  │  📊     │            │  ← AppGrid
+│   │  Chat   │  │  Synap  │  │  CRM    │  │ DevPlane│              (6 cols desktop)
+│   │   ●     │  │   ●     │  │   ●     │  │   ●     │            │
+│   └─────────┘  └─────────┘  └─────────┘  └─────────┘            │
+│                                                                  │
+│   ┌─────────┐  ┌─────────┐  ┌─────────┐                         │
+│   │  📜     │  │  🌐     │  │   +     │                         │
+│   │The Arch │  │OpenWebUI│  │  Add    │                         │
+│   │   ●     │  │   ●     │  │         │                         │
+│   └─────────┘  └─────────┘  └─────────┘                         │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│  Channels:  ●Telegram  ●WhatsApp  ○Discord  ●Voice    →          │  ← ChannelBar (sticky, 48px)
+└──────────────────────────────────────────────────────────────────┘
+```
+
+The **AppGrid** is the visual hero. Everything else is supporting chrome.
+
+---
+
+## 3. Component breakdown
+
+### 3.1 `TopBar` (`/app/(home)/components/top-bar.tsx`)
+
+Single horizontal row. 64px tall. Sticky.
+
+| Element | Position | Behavior |
+|---|---|---|
+| `SearchBar` | Center | Filters app grid in real time. Cmd+K opens it from anywhere. |
+| `SettingsButton` (gear icon) | Right | Links to `/settings` (where current dashboard pages live) |
+| `UserAvatar` | Far right | Click → menu: profile, sign out, switch pod |
+
+Search behavior:
+- Empty state: placeholder text "Search apps, settings, or commands…"
+- Typing: filters tiles in grid live (debounced 80ms)
+- No results: shows inline "No apps match. [Browse marketplace →]"
+- Cmd+K from anywhere on the page brings focus
+
+### 3.2 `Greeting` (`/app/(home)/components/greeting.tsx`) — optional
+
+Just below TopBar. 32–48px of vertical breathing room above and below.
+
+- **Line 1:** "Good morning/afternoon/evening, {firstName}" — fontSize 24px, fontWeight 300 (light)
+- **Line 2:** Date + time — fontSize 14px, neutral-500
+
+Hide on screens narrower than 768px (mobile gets straight to apps).
+
+### 3.3 `AppGrid` (`/app/(home)/components/app-grid.tsx`)
+
+The core. Responsive grid of `AppTile` components plus one `AddAppTile` at the end.
+
+Grid sizing:
+
+| Breakpoint | Columns | Tile size | Gap |
+|---|---|---|---|
+| Mobile (`<640px`) | 3 | 96px | 12px |
+| Tablet (`640px–1024px`) | 4 | 112px | 16px |
+| Desktop (`>1024px`) | 6 | 128px | 20px |
+| Wide (`>1440px`) | 8 | 128px | 24px |
+
+Tiles are square. Drag-and-drop reordering enabled (uses `dnd-kit`). Reorder updates `pinnedAppIds` order in user preferences via `POST /api/preferences`.
+
+### 3.4 `AppTile` (`/app/(home)/components/app-tile.tsx`)
+
+The unit. Each tile is one app.
+
+```
+┌─────────────┐
+│             │
+│    [icon]   │  ← 48px icon, centered, top 24px from edge
+│             │
+│             │
+│     ●       │  ← Status dot, 6px diameter, bottom-right area
+│   App name  │  ← 13px text, font-weight 500, centered, bottom 14px
+└─────────────┘
+   128 × 128
+```
+
+Visual specs:
+
+```css
+/* Default state */
+background: var(--neutral-100);          /* Light: #F5F4F1, Dark: #1E293B */
+border: 1px solid rgba(0, 0, 0, 0.04);   /* Whisper border */
+border-radius: 20px;                      /* $radius5 — friendlier than 12-16px for tiles */
+padding: 24px 12px 14px;
+transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+            background 200ms ease;
+
+/* Hover state */
+:hover {
+  transform: translateY(-2px);
+  background: var(--neutral-50);          /* Subtle lift, lighter background */
+}
+
+/* Active/pressed */
+:active {
+  transform: translateY(0);
+  opacity: 0.92;
+}
+
+/* AI accent (OpenWebUI, Synap-Chat, future native chat) */
+.app-tile--ai {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+}
+.app-tile--ai:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.10) 0%, rgba(52, 211, 153, 0.02) 100%);
+  border-color: rgba(16, 185, 129, 0.20);
+}
+```
+
+Status dot:
+
+| State | Color | Source |
+|---|---|---|
+| `online` | `#34D399` (emerald-400) | App responds to health check |
+| `degraded` | `#FBBF24` (amber-400) | Slow / partial response |
+| `offline` | `#94A3B8` (slate-400) | No response or known offline |
+| `unknown` | transparent | Health check not applicable (e.g. external URL with no health endpoint) |
+
+Click behavior:
+- **External URL** (CP marketplace app): open in new tab via `window.open(app.url, '_blank')`
+- **Local Eve component** (Synap, OpenWebUI): open in new tab to `webUrl`
+- **Workspace pack** (CP marketplace pack): doesn't appear here — packs install into Synap, not Eve
+
+Right-click / long-press: contextual menu with `Pin`, `Unpin`, `Open in new window`, `Uninstall` (for marketplace apps), `Settings` (if app has a settings page).
+
+### 3.5 `AddAppTile` (`/app/(home)/components/add-app-tile.tsx`)
+
+Always last. Subtle dashed border, large `+` icon.
+
+```css
+background: transparent;
+border: 1.5px dashed var(--neutral-300);
+border-radius: 20px;
+color: var(--neutral-500);
+transition: border-color 200ms, color 200ms;
+
+:hover {
+  border-color: var(--neutral-400);
+  color: var(--neutral-700);
+  background: var(--neutral-50);
+}
+```
+
+Click → opens marketplace browse page (in same window). For Phase 2 v1, this could open `https://cp.synap.sh/marketplace` in a new tab; for v2, embed in a slide-over drawer.
+
+### 3.6 `ChannelBar` (`/app/(home)/components/channel-bar.tsx`)
+
+Sticky bottom bar. 48px tall. Subtle gradient fade-in from page background — no hard border.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Channels:  ●Telegram  ●WhatsApp  ○Discord  ●Voice          →  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Each channel = one dot + label. Dot color matches status spec above. Right-side `→` chevron link routes to `/channels`.
+
+If no channels are connected: "Connect a channel →" link instead. Routes to `/channels`.
+
+### 3.7 `EmptyState` (`/app/(home)/components/empty-state.tsx`)
+
+Shown only when the user has zero apps installed AND no auto-discovered local components (rare — OpenWebUI auto-pins by default).
+
+```
+                  ┌──────────────────┐
+                  │                  │
+                  │   [illustration] │
+                  │                  │
+                  └──────────────────┘
+
+                Your OS is a blank canvas
+
+         Install your first app from the marketplace.
+
+                  [Browse marketplace →]
+```
+
+- Illustration: subtle, monochrome line art (commission later — placeholder Lucide `LayoutGrid` icon at 64px, neutral-300)
+- Headline: 28px, font-weight 300 (light)
+- Body: 16px, neutral-500, max-width 400px, centered
+- CTA: primary button, opens marketplace
+
+### 3.8 Skeleton state
+
+While the marketplace API is loading (and we already know which apps the user has cached locally), render skeleton tiles at the same dimensions:
+
+```css
+background: var(--neutral-100);
+animation: pulse 1.6s ease-in-out infinite;
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+```
+
+Render N skeleton tiles equal to last known app count, plus a skeleton `AddAppTile`. Real tiles fade in as they load (200ms opacity transition).
+
+---
+
+## 4. Data model
+
+### 4.1 Page state
+
+```typescript
+type AppSource = 'cp_marketplace' | 'local_component' | 'pinned_default';
+
+type App = {
+  id: string;                    // stable across sources
+  source: AppSource;
+  name: string;
+  description?: string;
+  iconUrl?: string;              // remote URL (preferred)
+  iconLucide?: string;           // fallback Lucide icon name
+  url: string;                   // where clicking opens
+  category: 'ai' | 'productivity' | 'communication' | 'dev' | 'other';
+  status: 'online' | 'degraded' | 'offline' | 'unknown';
+  isAI?: boolean;                // triggers emerald-accent variant
+  isEntitled: boolean;           // false = locked, show "Upgrade" tile variant
+  installCount?: number;         // for sort
+};
+
+type ChannelStatus = {
+  id: 'telegram' | 'whatsapp' | 'signal' | 'matrix' | 'discord' | 'slack' | 'voice';
+  name: string;
+  status: 'online' | 'offline' | 'degraded';
+  configured: boolean;           // false = greyed out, "Connect" hint
+};
+
+type HomeState = {
+  apps: App[];
+  pinnedAppIds: string[];        // user's chosen order; unpinned apps appear at end
+  searchQuery: string;
+  channels: ChannelStatus[];
+  isLoadingMarketplace: boolean;
+  marketplaceError?: string;
+};
+```
+
+### 4.2 Data sources merged
+
+The marketplace is the **unified catalog**. Four `app_type` shapes feed the home:
+
+- `url` — external website link. Tile opens in a new tab.
+- `eve_component` — surfaces an Eve-managed local component (OpenWebUI, Dev Agent). `metadata.componentId` binds it to a component in the Eve registry. Local component status (online/offline) hydrates the tile's status dot. **OpenWebUI** is pinned as "Chat" by default; **Dev Agent** carries `metadata.engineOptions: ["openclaude","opencode","claude-code"]` so install can prompt for engine choice.
+- `workspace_pack` — installs into Synap pod. Typically does NOT appear on the OS home (lens inside Synap, not a launchable app); decide per-pack via metadata.
+- `bundle` — composite; resolves to constituent apps' tiles.
+
+```typescript
+async function loadHomeApps(): Promise<App[]> {
+  const [marketplaceApps, localComponents] = await Promise.allSettled([
+    fetchMarketplaceApps(cpUserToken),     // Phase 1 endpoint — entitled apps
+    fetchLocalComponents(),                // /api/components → live status hydration
+  ]);
+
+  // For eve_component apps: cross-reference componentId with localComponents
+  // to hydrate the live status dot. The marketplace is authoritative for
+  // catalog presence; local components are authoritative for runtime status.
+  return mergeAndHydrate(marketplaceApps, localComponents);
+}
+```
+
+Marketplace failure (network, auth expired) → fall back to local components only with a small banner: "Couldn't reach marketplace. Showing local apps. [Retry]". This keeps Eve usable when CP is unreachable.
+
+### 4.3 Pinning persistence
+
+User's pin order stored in `~/.eve/preferences.json` under `home.pinnedAppIds: string[]`. New apps go to end of list. Local components (Synap, OpenWebUI) are pinned by default at the front.
+
+API: `GET /api/preferences/home`, `PUT /api/preferences/home`. New endpoints in Eve dashboard's API routes.
+
+---
+
+## 5. Interaction flows
+
+### 5.1 First load (returning user)
+
+1. Page mounts → reads `~/.eve/preferences.json` for pin order (instant)
+2. Renders skeleton tiles in pin order (instant)
+3. Two parallel fetches:
+   - Local components via `/api/components` (~50ms)
+   - Marketplace via CP `/api/marketplace/apps` (~200ms)
+4. As each resolves, real tiles fade in (200ms)
+5. Channel statuses load via `/api/channels/status` (background, populates ChannelBar)
+
+### 5.2 First load (brand-new user, no apps)
+
+1. Page mounts → no prefs, no apps known
+2. Skeletons for ~1.5s while local components query
+3. If query returns empty AND marketplace returns empty entitlements → render `EmptyState`
+4. If anything returns non-empty → render normally with what we have
+
+### 5.3 Search
+
+1. User focuses search (or hits Cmd+K)
+2. Types → debounced 80ms
+3. Filter `apps` by `name` includes / `description` includes / `category` matches
+4. Grid reflows with filtered set
+5. ESC clears, returns to full grid
+
+### 5.4 Pin / unpin / reorder
+
+1. User long-presses or right-clicks a tile → contextual menu
+2. Selects "Pin" / "Unpin" → state updates, position changes
+3. Or: drags tile → drop into new position
+4. `PUT /api/preferences/home` fires (debounced 500ms in case of multiple rapid drags)
+
+### 5.5 Install from marketplace
+
+1. User clicks `AddAppTile`
+2. Routes to `/marketplace` (or opens external CP marketplace URL in new tab)
+3. User picks an app, completes install (entitlement granted in CP)
+4. User returns to home → grid auto-refetches → new app appears, animates in (scale 0.8 → 1.0, 240ms ease-out)
+
+### 5.6 OAuth handshake (first time only)
+
+1. User opens Eve dashboard for the first time
+2. No `cp.userToken` in `~/.eve/secrets.json`
+3. Marketplace fetch fails with 401 → trigger auth flow
+4. Redirect to `https://cp.synap.sh/oauth/eve?return=...`
+5. User authorizes in CP
+6. Returns to Eve with code, exchanged for token, stored
+7. Reload, marketplace works
+
+While token is missing, the home still renders local components. The marketplace section just doesn't populate. Banner: "Sign in to see your apps from the Synap marketplace. [Sign in]"
+
+---
+
+## 6. Visual tokens (Tailwind)
+
+Eve dashboard uses Tailwind. Define tokens in `tailwind.config.ts` to mirror Synap design system principles:
+
+```ts
+// tailwind.config.ts (excerpt)
+theme: {
+  extend: {
+    colors: {
+      // Neutral-first
+      neutral: {
+        50:  '#FAFAF9',  100: '#F5F4F1',  200: '#E7E5E1',
+        300: '#D6D3D0',  400: '#A8A29E',  500: '#78716C',
+        600: '#57534E',  700: '#44403C',  800: '#292524',
+        900: '#1C1917',  950: '#0C0A09',
+      },
+      // Dark mode neutrals
+      slate: {
+        50:  '#F8FAFC',  100: '#F1F5F9',  200: '#E2E8F0',
+        300: '#CBD5E1',  400: '#94A3B8',  500: '#64748B',
+        600: '#475569',  700: '#334155',  800: '#1E293B',
+        900: '#0F172A',  950: '#020617',
+      },
+      // AI signature
+      ai: {
+        from:  '#10B981',
+        via:   '#34D399',
+        to:    '#6EE7B7',
+      },
+      // Status
+      status: {
+        online:    '#34D399',
+        degraded:  '#FBBF24',
+        offline:   '#94A3B8',
+      },
+    },
+    spacing: {
+      // 6px base unit
+      '1': '6px',   '2': '12px',  '3': '18px',  '4': '24px',
+      '5': '30px',  '6': '36px',  '8': '48px',  '10': '60px',
+      '12': '72px', '16': '96px',
+    },
+    borderRadius: {
+      'sm': '4px',    'md': '8px',    'lg': '12px',
+      'xl': '16px',   '2xl': '20px',  '3xl': '24px',
+      'tile': '20px', // App tile default
+    },
+    fontSize: {
+      'xs':  ['13px', '20px'],
+      'sm':  ['14px', '22px'],
+      'base':['15px', '24px'],   // body default
+      'lg':  ['17px', '28px'],
+      'xl':  ['20px', '32px'],
+      '2xl': ['24px', '36px'],
+      '3xl': ['32px', '40px'],
+    },
+    boxShadow: {
+      // intentionally NONE — use borders for depth
+    },
+  },
+},
+```
+
+### 6.1 AI gradient utility
+
+```css
+/* globals.css */
+.ai-gradient {
+  background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #6EE7B7 100%);
+}
+
+.ai-tint {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%);
+  border-color: rgba(16, 185, 129, 0.12);
+}
+
+.ai-tint:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.10) 0%, rgba(52, 211, 153, 0.02) 100%);
+  border-color: rgba(16, 185, 129, 0.20);
+}
+```
+
+### 6.2 Light/dark mode
+
+Use Tailwind's `dark:` variant + system preference detection (already in Eve dashboard). Tokens above provide dark equivalents:
+
+```tsx
+<div className="bg-neutral-50 dark:bg-slate-950 text-neutral-900 dark:text-slate-50">
+```
+
+Dark mode is the *default* for Eve (per OS feel, per Umbrel). Light mode is supported but secondary.
+
+---
+
+## 7. File layout
+
+```
+hestia-cli/packages/eve-dashboard/app/
+├── (home)/
+│   ├── page.tsx                       ← The home page (replaces current /dashboard home)
+│   ├── components/
+│   │   ├── top-bar.tsx
+│   │   ├── search-bar.tsx
+│   │   ├── greeting.tsx
+│   │   ├── app-grid.tsx
+│   │   ├── app-tile.tsx
+│   │   ├── add-app-tile.tsx
+│   │   ├── channel-bar.tsx
+│   │   ├── empty-state.tsx
+│   │   └── skeleton-tile.tsx
+│   ├── hooks/
+│   │   ├── use-home-apps.ts           ← Merges local + marketplace
+│   │   ├── use-pinned-apps.ts
+│   │   └── use-channel-status.ts
+│   └── lib/
+│       ├── merge-apps.ts              ← Dedupe + sort
+│       └── cp-marketplace-client.ts   ← OAuth + fetch wrapper
+├── auth/
+│   └── callback/page.tsx              ← OAuth redirect target
+├── settings/                          ← Current dashboard pages move here
+│   ├── components/page.tsx
+│   ├── ai/page.tsx
+│   ├── networking/page.tsx
+│   ├── doctor/page.tsx
+│   ├── channels/page.tsx              ← Existing channels page (legacy config)
+│   └── layout.tsx                     ← Sidebar nav for settings
+└── api/
+    ├── preferences/home/route.ts      ← GET / PUT pinnedAppIds
+    └── components/route.ts             ← Already exists, returns local components
+```
+
+Routing migration:
+- Current `/dashboard/*` paths → 301 redirect to `/settings/*`
+- Current `/dashboard` (overview) → redirect to `/`
+- New `/` → home (this design)
+
+---
+
+## 8. Accessibility
+
+- All tiles are `<a>` elements with `href` (real navigation, not div onClick)
+- Keyboard: Tab cycles tiles, Enter activates, arrow keys navigate grid (custom handler with `dnd-kit` accessibility helpers)
+- Screen readers: each tile has `aria-label="Open {name}, status {status}"`
+- Search: `<input type="search">` with proper labels and `aria-controls` pointing at the grid
+- Status dots: `aria-hidden` (purely visual), screen readers get the textual status via `aria-label`
+- Color contrast: all text-on-background combinations verified ≥4.5:1 in both modes
+- `prefers-reduced-motion`: disables tile lift hover, fades become instant
+
+---
+
+## 9. Phase 2 implementation checklist
+
+In suggested order, each shippable independently:
+
+- [ ] Create `(home)/page.tsx` route, render basic grid using local components only (no marketplace)
+- [ ] Build `AppTile`, `AppGrid`, `TopBar`, `Greeting`, `EmptyState` components
+- [ ] Add `tailwind.config.ts` token extensions
+- [ ] Wire `dnd-kit` for drag-and-drop reordering
+- [ ] Add `pinnedAppIds` persistence (`/api/preferences/home`)
+- [ ] Move existing `/dashboard/*` pages under `/settings/*`, set up redirects
+- [ ] Build OAuth handshake (`/auth/callback`, secrets.json write)
+- [ ] Wire CP marketplace fetch (`useHomeApps` hook with merge logic)
+- [ ] Build `ChannelBar` with status polling
+- [ ] Build `AddAppTile` and `/marketplace` route (basic external link for v1)
+- [ ] Build `SkeletonTile` and full loading states
+- [ ] Light mode polish pass
+- [ ] Accessibility audit (keyboard nav, screen reader, contrast)
+- [ ] Empty state illustration commission
+
+Estimated effort: **2 weeks** for first three checkpoints (basic working home with local components only); **+1.5 weeks** for marketplace wire-up; **+0.5 week** for polish.
+
+---
+
+## 10. Open design questions (deferrals)
+
+These can be answered later without blocking implementation:
+
+1. **Greeting line wording.** "Good evening" vs. system message ("3 unread proposals waiting") vs. user-customizable. Default to neutral greeting; revisit when proactive AI surfaces here.
+2. **Search depth.** v1: name + description matching only. v2: search across settings, marketplace catalog, even Synap entities ("find my notes about X")? Defer to Phase 4.
+3. **Tile sizes.** All tiles are uniform 128px. Future: 2x1 widget tiles for at-a-glance info (next event, task count). Defer.
+4. **Notifications.** A `notifications` indicator on the user avatar? Not in v1. Notifications surface in Synap, not Eve.
+5. **Wallpapers / theming.** Umbrel has wallpapers. Out of scope for v1; revisit if Eve becomes user-skin-able.
+6. **App categories / sections.** v1 is one flat grid. Future: collapsible sections by category? Probably not — pin order is the user's organization tool.
+
+---
+
+## 11. Reference: what this is NOT
+
+To prevent scope creep during implementation:
+
+- ❌ Not a workflow editor (that's `/channels`)
+- ❌ Not a metrics dashboard (that's `/settings/components`)
+- ❌ Not a chat UI (that's OpenWebUI, accessed via the Chat tile)
+- ❌ Not a marketplace browser (that opens in `/marketplace`, separate route, possibly external)
+- ❌ Not a settings panel (that's `/settings`, gear icon top-right)
+- ❌ Not a notification center (notifications live in Synap)
+
+The home page does ONE thing: launch apps. Everything else is one click away.

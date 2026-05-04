@@ -1,0 +1,393 @@
+---
+title: 'Eve as a Personal AI OS'
+description: >-
+  North star for turning the Eve dashboard into a personal AI operating system —
+  marketplace-driven app launcher, n8n-style channels visualization, and the
+  Synap-centric agentic triangle that connects them.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve as a Personal AI OS
+
+**Date:** 2026-05-05
+**Status:** Vision / north star. Phase 1 not yet started.
+
+---
+
+## Related
+
+- [Eve — Vision & principles](../eve-cli/vision.mdx) — Eve v2.0 architectural principles (Synap as exclusive memory, agent separation)
+- [Builder Workspace](./builder-workspace.mdx) — Canonical dev workspace seeded by Eve
+- [OpenClaw Integration](./openclaw-integration.mdx) — Messaging bridge layer
+- [OpenClaw — Agent Channels](./openclaw-channels.mdx) — How agent channels route through OpenClaw
+- [Hub Protocol](./hub-protocol.mdx) — REST surface that all agents share
+- [Channels](./channels.mdx) — Synap channel system (the substrate the viz renders)
+- [Proposals](./proposals.mdx) — Universal consent layer for AI actions
+
+---
+
+## 1. The Vision
+
+Eve turns a bare server into a **personal AI operating system**: a beautiful, marketplace-driven launcher for everything the operator runs — proprietary apps, automation packs, messaging bridges, agents — with the Synap pod as the single source of truth underneath.
+
+This document is the north star. It defines:
+
+- The **agentic triangle** invariant (Synap = brain, OpenClaw = ingress, Hermes = execution)
+- The **OS surface map** (what lives at each Eve route)
+- The **marketplace model** (apps + packs + entitlements)
+- The **channels visualization** (live flow, n8n-style, with config side-panel)
+- The **auth handshake** between Eve and the Control Plane
+- A **phased build plan** with explicit "not shipping yet" per phase
+
+What it does NOT do: prescribe pixels. UI design happens after this doc is merged, in the Frontend Design Skill.
+
+---
+
+## 2. The Agentic Triangle (calibrated reality)
+
+The architecture is unchanged from `eve-cli/vision.mdx`: three agents around one brain, communicating exclusively through Synap REST. **No agent talks to another directly. Ever.** This is the load-bearing invariant.
+
+```
+            ┌─────────────────┐
+            │     SYNAP       │  ← brain, queue, knowledge graph,
+            │  (the brain)    │     proposals, channels, history
+            └────────┬────────┘
+                    │ REST
+        ┌───────────┴───────────┐
+        │                       │
+   ┌────▼─────┐           ┌─────▼────┐
+   │ OPENCLAW │           │  HERMES  │
+   │ (ingress)│           │ (exec)   │
+   └──────────┘           └──────────┘
+   WhatsApp / iMessage    Codegen / cron tasks /
+   Telegram / Signal       deploy hooks /
+   Voice memos             background work
+```
+
+### What each agent actually does *today* in our deployment
+
+| Agent | Upstream capability | Our integration today | Gap |
+|---|---|---|---|
+| **OpenClaw (`@eve/arms`)** | MCP standard support → access any MCP server in the ecosystem; native adapters for WhatsApp (Baileys), iMessage (BlueBubbles), Telegram, Signal, Matrix, voice | Telegram + Signal + Matrix + voice configured; WhatsApp/iMessage adapters exist upstream but not wired in our env (BlueBubbles needs a Mac, Baileys needs QR session) | Setup work, not code work |
+| **Hermes (`@eve/builder`)** | `ThreadPoolExecutor` for parallel sub-agents (up to 3), periodic SOP-nudge learning loop, native cron | Polling daemon over Synap task queue. Sequential. Cron disabled deliberately (Synap owns state). Sub-agent delegation + SOP loop **disabled accidentally** by integrating Hermes as a thin API caller. | Re-enable sub-agent delegation + SOP loop while keeping Synap as task source — fast-follow for Phase 2/3, see §10 |
+| **Synap (`@eve/brain`)** | Hub Protocol (76+ REST endpoints), entity graph, proposals, channels, A2AI routing, semantic + full-text search | All shipped and working | None |
+
+### The invariants (do not violate)
+
+1. **Synap owns state.** No agent maintains long-term memory in its own DB. OpenClaw's SQLite, Hermes' internal task DB — both stripped.
+2. **REST-only inter-agent.** Every cross-agent action is a Synap entity write or read. No direct WebSocket, no shared queue outside Synap.
+3. **Proposals gate everything consequential.** Anything that mutates state outside Synap (sending an external message, deploying code, triggering a webhook) goes through `checkPermissionOrPropose()` unless the action is on the `DEFAULT_AUTO_APPROVE` whitelist.
+4. **OpenClaw and Hermes never overlap.** OpenClaw never executes code. Hermes never reads a WhatsApp message. If you find code that crosses this line, it's a bug.
+
+---
+
+## 3. The OS Surface Map
+
+Eve's dashboard becomes the **personal AI OS** with a clear three-route layout:
+
+| Route | Purpose | Today | After Phase 1 |
+|---|---|---|---|
+| `/` | **Apps launcher.** Marketplace-driven grid showing the user's installed apps + pinned defaults. Beautiful, minimal, clickable. | Stack pulse / 5 organs overview | UmbrelOS-style app grid (default home) |
+| `/channels` | **Live interconnection viz** — n8n/Make.com-style flow showing messages traveling through OpenClaw → Synap → Hermes in real time. Click a node → side-panel config. | Toggles for Telegram/Signal/Matrix/voice | Live node-flow + slide-out config + onboarding flow for adding bridges |
+| `/settings` | **Admin surface** — what the dashboard is today: components, AI providers, networking, doctor, advanced channel config. | Multiple top-level pages | Consolidated under `/settings` |
+
+Everything that's currently top-level (`/dashboard/components`, `/dashboard/ai`, `/dashboard/networking`, `/dashboard/doctor`) moves under `/settings`. The current `/dashboard` home becomes the new `/`.
+
+The `/apps` page that exists today (basic launcher for installed components) is **superseded** by the new `/`. Its logic — auto-discovery of components with `webUrl` — gets folded into the new home as one of two app sources (the other being the CP marketplace).
+
+---
+
+## 4. The Marketplace as Proprietary Centerpiece
+
+This is the architectural unlock. Today the Synap CP marketplace is schema-only and only models automation packs. We extend it to model **everything proprietary**:
+
+### What the marketplace catalogs
+
+| `app_type` | Example | Install effect |
+|---|---|---|
+| `url` | The Arch, CRM, DevPlane, custom dashboards | Eve registers a tile. Click → opens external URL. App is hosted however you want (Coolify, Vercel, anywhere). |
+| `eve_component` | OpenWebUI, Dev Agent | Surfaces an Eve-managed local component as an app. Install triggers Eve's install lifecycle for the component identified by `metadata.componentId`. Lets the marketplace become the unified catalog of *everything proprietary* — including components Eve already manages. |
+| `workspace_pack` | "CRM workspace template", "Builder workspace" | Installs into the user's Synap pod via `POST /api/hub/workspaces/from-definition`. Pre-existing logic, no change. |
+| `bundle` | "The Arch + its companion automation pack" | Composite — installs the children. |
+
+**`metadata` JSONB column** carries type-specific config:
+
+- `eve_component` → `{ componentId: string, engineOptions?: string[], defaultEngine?: string }`. The Dev Agent uses `engineOptions: ["openclaude", "opencode", "claude-code"]` so the install flow can prompt for engine choice and write it to `secrets.builder.codeEngine`.
+- `workspace_pack` → `{ templateSlug }`
+- `bundle` → `{ childAppSlugs: string[] }`
+- `url` → typically null
+
+We do NOT model in Phase 1:
+
+- ❌ **Coolify provisioning.** Marketplace does not deploy infra. Apps are pre-hosted, marketplace just serves the link. Re-evaluate in Phase 3.
+- ❌ **Per-tenant containers.** Same reason.
+
+### Entitlements (per-user gating)
+
+The CP issues entitlements that determine what each user sees:
+
+```sql
+CREATE TABLE entitlements (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  app_id UUID NOT NULL,             -- references marketplace_apps
+  granted_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ,           -- nullable — for trials/subscriptions
+  source TEXT NOT NULL,             -- 'manual' | 'stripe' | 'beta' | 'free'
+  stripe_subscription_id TEXT,      -- nullable — ties to billing
+  status TEXT NOT NULL DEFAULT 'active'  -- 'active' | 'revoked' | 'expired'
+);
+```
+
+Eve's marketplace query:
+
+```
+GET /api/marketplace/apps?for_user=me
+Authorization: Bearer <cp.userToken>
+
+→ CP joins entitlements + public catalog
+→ Returns:
+  - Free apps (always visible)
+  - Paid apps user is entitled to (full install enabled)
+  - Paid apps user is NOT entitled to (visible as "Buy" CTA)
+```
+
+The Arch becomes invisible to users without an active entitlement. CRM might be visible-but-locked with a "Subscribe" CTA. Free open-source apps are always visible.
+
+### Where the code lives
+
+| Layer | Location | Purpose |
+|---|---|---|
+| **Shared types + UI components** | `synap-app/packages/core/marketplace/` (new package `@synap/marketplace`) | App card, install button, pricing display, entitlement state UI |
+| **Admin curation** | `synap-control-plane-dashboard/src/pages/marketplace/` | Founder-facing: create/edit apps, set pricing, grant manual entitlements, see install metrics |
+| **User-facing browse** | `synap-app/packages/apps/marketplace/` (or extend existing browser MarketplaceApp) | Customer-facing browse + install |
+| **CP API** | `synap-control-plane-api/src/routes/marketplace.ts` | List apps with entitlement join, install endpoint, entitlement CRUD |
+| **Eve consumer** | `hestia-cli/packages/eve-dashboard/app/page.tsx` | Reads marketplace via `cp.userToken`, renders app grid |
+
+---
+
+## 5. The Channels Visualization
+
+A beautiful, live, node-based view of how messages flow through the agentic triangle. Inspired by n8n / Make.com, but read-only by default with config side-panels.
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Channels                                          [+ Add]  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   ┌──────────┐      ┌──────────┐      ┌──────────┐        │
+│   │ WhatsApp │─────▶│ OpenClaw │─────▶│  Synap   │        │
+│   └──────────┘      └──────────┘      │ Channel  │        │
+│   ┌──────────┐         │              │   ●●●    │        │
+│   │ Telegram │─────────┘              └─────┬────┘        │
+│   └──────────┘                              │              │
+│   ┌──────────┐                              ▼              │
+│   │  Voice   │                         ┌──────────┐        │
+│   └──────────┘                         │  Hermes  │        │
+│                                        │  (task)  │        │
+│                                        └──────────┘        │
+│                                                             │
+│   Recent: WhatsApp → "build a login page" — 2s ago          │
+│           Hermes picked up task #42 — 1s ago                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Behaviors
+
+- **Live by default.** Real-time activity flows along edges as messages arrive. Subtle pulse animation on the edge for each event.
+- **Click a node → side-panel.** Clicking "WhatsApp" opens config for the WhatsApp bridge (API keys, session QR). Clicking "OpenClaw" opens its skill list and persona settings. Clicking "Synap Channel" shows recent messages in that channel. Clicking "Hermes" shows the task queue.
+- **Connect/disconnect via the panel.** No separate forms. Disconnected nodes are greyed out; clicking offers an inline onboarding flow ("Connect WhatsApp" → 3 steps → done).
+- **Recent activity tape** at the bottom. Last 10 events, plain language: "WhatsApp → 'build a login page' — 2s ago".
+
+### Onboarding for external channels
+
+A user adding (say) Discord to their Eve should see a single guided flow:
+
+1. Click `+ Add` → channel picker (Discord / Slack / WhatsApp / Telegram / Signal / Matrix)
+2. Auth (OAuth or QR) → handled by OpenClaw
+3. Choose default Synap channel to route incoming messages into (defaults to user's personal channel)
+4. Done. Edge appears in the flow, lights up on first message.
+
+After this onboarding, the user should never need to touch it again. The flow visualizes itself thereafter.
+
+### What this is NOT
+
+- **Not a workflow editor.** Users do not draw edges. The topology is fixed by the agentic triangle invariant — we visualize what's there, we don't let users redraw it.
+- **Not a chat UI.** That's OpenWebUI's job (and eventually a native Synap chat). The channels page shows traffic; reading/replying to messages happens elsewhere.
+
+---
+
+## 6. Auth Handshake (Eve ↔ CP)
+
+Eve queries the CP marketplace as the user, not as a service. This means Eve needs a user-scoped JWT.
+
+### The flow
+
+1. User opens Eve dashboard for the first time after install
+2. Dashboard sees no `cp.userToken` in `~/.eve/secrets.json`
+3. Dashboard redirects to `https://cp.synap.sh/oauth/eve?return=http://localhost:3000/auth/callback`
+4. CP authenticates user (existing Better Auth session) and shows consent screen: "Allow Eve to read your installed apps and entitlements?"
+5. User approves → CP redirects to `http://localhost:3000/auth/callback?code=...`
+6. Dashboard exchanges code for JWT via `POST /oauth/token`
+7. Dashboard writes `cp.userToken` to `~/.eve/secrets.json` (under existing secrets management)
+8. Dashboard reloads, queries marketplace with bearer token, renders app grid
+
+### Token scope
+
+The JWT is **strictly scoped to marketplace read access**. Specifically:
+
+- `marketplace:read` — list apps, list entitlements
+- `marketplace:install` — record local installation (for tracking)
+
+It does NOT grant:
+
+- ❌ Pod admin access (the user already has pod access via their pod-local credentials)
+- ❌ Billing access (Stripe Customer Portal handled by CP, not Eve)
+- ❌ Cross-user data
+
+Token rotation: 30-day expiry, refresh handled by CP refresh token flow (standard OAuth).
+
+---
+
+## 7. OpenWebUI's Place in the OS
+
+OpenWebUI is **a prominent tile in the app grid, pinned by default** as "Chat" (or whatever name the operator prefers).
+
+Until Synap has a native chat surface (out of scope for the Eve OS work), OpenWebUI is how the user actually talks to their sovereign data + agents. Hiding it in settings would be a UX failure.
+
+The grid renders OpenWebUI as a first-class app:
+
+- Tile labeled "Chat" with appropriate icon
+- Pinned position (top-left or similar prominent slot)
+- Click → opens OpenWebUI in a new tab/window
+- Status indicator if OpenWebUI is offline
+
+OpenWebUI's existing pipelines (already shipped — Tracks A and B per `openwebui-integration-strategy.md`) handle Synap memory injection and channel sync. The user sees one OpenAI-compat backend (Synap IS); providers are abstracted.
+
+---
+
+## 8. What We're NOT Building
+
+Explicit list to prevent scope creep:
+
+- ❌ **Paperclip integration.** Synap is the better version of Paperclip's coordination layer (proposals + entity graph). Revisit only if/when Synap's automation engine cannot model what Paperclip does.
+- ❌ **Custom Eve chat UI.** OpenWebUI fills this slot. A native Synap chat is out of scope for this work.
+- ❌ **Direct OpenClaw ↔ Hermes communication.** Violates the agentic triangle invariant.
+- ❌ **Coolify component in Eve.** Coolify stays a dumb hosting provider. Apps in the marketplace are pre-hosted; we serve the link.
+- ❌ **A workflow editor on the channels page.** The topology is fixed by the architecture. We visualize, we don't let users redraw.
+- ❌ **Multi-tenant Eve.** One Eve install = one operator. Multi-user marketplaces are a CP concern, not an Eve concern.
+
+---
+
+## 9. Phased Build Plan
+
+Each phase is independently shippable. No phase blocks another from starting in parallel if resourcing allows, but the listed order is the sensible default.
+
+### Phase 0 — Protect the Brain (PREREQUISITE)
+
+**Goal:** Synap PostgreSQL is durable, backed up, and recoverable before anything else ships on top of it.
+
+Audit (2026-05-05) rated current protection at **1.5/5** — manual dashboard backups only, named Docker volume, no scheduled backups, no documented restore for self-hosted Eve, retention policy absent.
+
+- **Bind-mount Postgres volume** to `${EVE_HOME}/data/postgres` instead of named Docker volume (one-time migration tooling required for existing installs)
+- **Nightly `pg_dump` → S3** automated backup script in pod-agent (`synap-backend/scripts/backup-postgres.sh`) wired to a cron job
+- **Retention policy** — keep last 30 days local, last 12 months in S3 (cold tier)
+- **Restore procedure documented** in `hestia-cli/README.md` and dashboard Doctor page
+- **Monthly restore test** in CI — spin up test Postgres, take backup, wipe, restore, verify
+- **`recreate` safety assertion** — explicit guard preventing `recreate` on Synap component without confirmation
+
+**Not shipping:** off-site replication / hot-standby (Phase 4+), volume encryption at rest (operator-specific deployments only).
+
+### Phase 1 — Marketplace API + Entitlements (CP)
+
+**Goal:** CP can serve a list of apps gated by user entitlements.
+
+- Schema: `marketplace_apps` (id, name, description, icon_url, category, app_type, app_url, pricing, status), `entitlements` (above)
+- API: `GET /api/marketplace/apps`, `POST /api/marketplace/install`, `GET /api/entitlements`, `POST /api/entitlements` (admin)
+- Admin UI: `synap-control-plane-dashboard/src/pages/marketplace/` — create/edit apps, manual entitlement grant
+- Auth: extend OAuth to issue user-scoped JWT for Eve consumption
+- **Not shipping yet:** user-facing browse, Stripe wiring, automated provisioning
+
+### Phase 2 — Eve OS Home (`/`)
+
+**Goal:** Eve dashboard home is a beautiful app grid pulling from CP marketplace + local Eve components.
+
+- New `@synap/marketplace` package (shared UI components)
+- New Eve dashboard route `/` → app grid
+- OAuth handshake to obtain `cp.userToken`
+- Auto-discovery of Eve components with `webUrl` (current `/apps` page logic, ported)
+- Move existing dashboard pages under `/settings`
+- OpenWebUI tile pinned by default
+- **Fast-follow:** Hermes un-neutering — re-enable sub-agent delegation + SOP loop while keeping Synap as the task queue source. (Phase 2.5 once OS home ships.)
+
+### Phase 3 — Channels Visualization (`/channels`)
+
+**Goal:** Beautiful live node-flow showing message traffic, with side-panel config. Estimated 3–4 weeks.
+
+Substrate audit (2026-05-05) confirmed Socket.IO `/presence`, HTTP bridge, and SSE fallback already exist. Three sub-phases:
+
+- **3A — Eve auth into Synap real-time (1 week).** Extend Socket.IO handshake at `synap-backend/packages/realtime/src/server.ts:86` to accept API-key alongside `userId`. Provision an "Eve observer" service account with read-scoped key. This is the load-bearing prerequisite — without it, Eve cannot subscribe.
+- **3B — Event coverage (1–1.5 weeks).** Add two missing event emits: `openclaw:message:received` after `synap-backend/packages/api/src/routers/hub-protocol/rest/channels.ts` POST, and `hermes:task:status` from background-tasks-service on status transitions. `chat:stream`, `ai:step`, `route_to_channel`, `ai:proposal` already fire.
+- **3C — Viz rendering (1–1.5 weeks).** React Flow under the hood; subscribe to `workspace:${id}` room; animate edges on each event with 2s fade. Side-panel config per node type. Onboarding flow for adding bridges (Discord, Slack first).
+
+**Not shipping yet:** Coolify integration, automated provisioning, custom workflow editing, multi-workspace fanout.
+
+### Phase 4 — Synap CP Marketplace User-Facing UI
+
+**Goal:** Customers (not just founders) can browse and purchase apps.
+
+- User-facing browse in `synap-app/packages/apps/marketplace/`
+- Stripe Connect wiring for paid apps
+- Subscription management UI
+- Trial flows
+- **Re-evaluate:** automated Coolify provisioning, per-tenant containers
+
+---
+
+## 10. Known Gaps & Fast-Follows
+
+Tracked here so we don't lose them:
+
+| Gap | Where | Fast-follow |
+|---|---|---|
+| Hermes parallelism | `@eve/builder` | Re-enable Hermes' `ThreadPoolExecutor` for sub-agents while keeping Synap as task queue source. Synap dispatches macro-tasks; Hermes spawns micro-parallel sub-agents under each. Phase 2.5. |
+| Hermes SOP loop | `@eve/builder` | Re-enable periodic nudge mechanism so Hermes writes learned skills back to Synap as `agentskills.io`-format docs. Phase 3. |
+| OpenClaw iMessage | `@eve/arms` | Requires Mac running BlueBubbles. Setup work, not code. Phase 4 or on-demand. |
+| OpenClaw WhatsApp | `@eve/arms` | Requires Baileys QR session. Setup work, not code. Phase 4 or on-demand. |
+| Synap native chat | `synap-app` | OpenWebUI fills the gap. Native chat is a separate roadmap item, not blocking the OS vision. |
+| Coolify deploy bridge | new component? | Deferred to Phase 3+ re-evaluation. For now: pre-host apps externally, marketplace just serves the link. |
+| Off-site DR replication | `@eve/brain` | Phase 0 ships local + S3 backups. Hot-standby via cross-pod-sync is Phase 4+. |
+| Eve Socket.IO auth | `synap-backend/packages/realtime` | Phase 3A prerequisite. API-key path next to existing userId handshake. |
+
+---
+
+## 11. Decision Log
+
+Decisions locked in for this north star (do not re-litigate without explicit revisit):
+
+1. **Marketplace location: BOTH** — admin in CP dashboard, user-facing in `synap-app`, shared package `@synap/marketplace`.
+2. **Install model: (A) + (C)** — pure registry for apps, workspace seed for automation packs. NO Coolify provisioning in Phase 1.
+3. **Auth: user-scoped JWT** — OAuth handshake from Eve to CP. Marketplace-read scope only.
+4. **Channels viz: live flow + side-panel config** — n8n-style live, click-to-configure. Not a workflow editor.
+5. **OpenWebUI: pinned tile in app grid** — first-class default, not hidden in settings.
+6. **Hermes management: Synap macro-queue + Hermes micro-parallelism** — Synap owns state; Hermes' internal sub-agent delegation re-enabled per task. Cron stays disabled (Synap-as-state golden rule).
+7. **Paperclip: not integrated** — Synap is the better Paperclip.
+
+---
+
+## 12. Glossary
+
+- **Agentic triangle** — The invariant relationship between Synap, OpenClaw, and Hermes: Synap owns state, the other two communicate only through it.
+- **Entitlement** — A CP record granting a specific user access to a specific marketplace app. The basis for per-customer gating.
+- **OS surface** — The user-facing routes of the Eve dashboard: `/`, `/channels`, `/settings`. Distinct from the underlying agent infrastructure.
+- **App tile** — A clickable card in the Eve home representing one installed app (proprietary, open-source, or auto-discovered Eve component).
+- **Live node flow** — The channels page main view, rendering message traffic as animated edges between agent nodes in real time.

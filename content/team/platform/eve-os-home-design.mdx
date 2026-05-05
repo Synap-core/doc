@@ -1,12 +1,12 @@
 ---
 title: 'Eve OS Home — Design Spec'
 description: >-
-  Complete design specification for the Eve dashboard home page (`/`) — the
-  UmbrelOS-style app launcher driven by the CP marketplace. Wireframes,
-  component breakdown, data model, interaction flows, visual tokens.
+  Complete design specification for the Home app rendered inside the Eve OS
+  shell — UmbrelOS-style greeting, translucent stat cards, vivid colorful app
+  icons, and a sticky search. The launcher every operator opens to.
 section: general
 audience: users
-version: 1.0+
+version: 2.0+
 last_updated: '2026-05-05'
 tags: []
 sidebar_position: null
@@ -17,247 +17,447 @@ toc: true
 # Eve OS Home — Design Spec
 
 **Date:** 2026-05-05
-**Status:** Design specification. Implementation pending Phase 2 of [Eve OS Vision](./eve-os-vision.mdx).
+**Status:** Design specification (v2 — UmbrelOS aesthetic). Implementation pending Phase 2 of [Eve OS Vision](./eve-os-vision.mdx). Replaces the v1 sidebar/tile design entirely.
 
-This document is concrete enough that a developer can implement the OS home page end-to-end after one read.
+This document is concrete enough that a developer can implement the Home app end-to-end after one read. It describes only what renders **inside the pane** provided by the shell. Wallpaper, dock, and pane chrome are documented in [Eve OS Shell](./eve-os-shell.mdx) — read that first.
+
+---
+
+## Related
+
+- [Eve OS Shell](./eve-os-shell.mdx) — the foundational shell this app lives inside (wallpaper, pane, dock)
+- [Eve OS Vision](./eve-os-vision.mdx) — north star this implements
+- [Eve Agents — Design Spec](./eve-agents-design.mdx) — sibling app rendered in the same pane
 
 ---
 
 ## 1. Design intent
 
-The home is what the operator sees the moment they open Eve. It must communicate, in under one second:
+The Home is what the operator sees the moment they open Eve. It must communicate, in under one second:
 
 > "This is **my** OS. These are **my** apps. Everything I need is here."
 
-Three feelings to deliver:
+Three feelings to deliver, in order of priority:
 
-1. **Calm** — generous whitespace, no busywork, low chroma
-2. **Sovereignty** — minimal Eve branding, the operator's apps are the heroes
-3. **Intelligence-aware** — AI surfaces (OpenWebUI primarily) have a subtle emerald accent, distinguishing them from regular apps without screaming
+1. **Premium calm.** The pane is already frosted glass over a slow gradient — the Home leans into that. Generous whitespace, light typography, no busywork.
+2. **Sovereignty.** The operator's apps are the heroes. Eve branding is reduced to a single small mark beside the greeting. The colorful app grid is the surface that does the talking.
+3. **Glanceable intelligence.** Three stat cards above the grid surface live system facts (agents running, events today, updates available). They hint at what the OS is doing without becoming a dashboard.
 
-What it is NOT: a SaaS dashboard with KPIs and charts. There are no metrics on this page. Metrics live in `/settings`. The home is *only* the launcher.
+What it explicitly is NOT:
 
----
-
-## 2. Visual hierarchy
-
-Top to bottom:
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  [search──────────────────────────────]   [⚙]  [👤]              │  ← TopBar (64px)
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│           Good evening, Antoine                                  │  ← Greeting (optional)
-│           Tuesday · 14:32                                        │
-│                                                                  │
-│   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │
-│   │  💬     │  │  🧠     │  │  📋     │  │  📊     │            │  ← AppGrid
-│   │  Chat   │  │  Synap  │  │  CRM    │  │ DevPlane│              (6 cols desktop)
-│   │   ●     │  │   ●     │  │   ●     │  │   ●     │            │
-│   └─────────┘  └─────────┘  └─────────┘  └─────────┘            │
-│                                                                  │
-│   ┌─────────┐  ┌─────────┐  ┌─────────┐                         │
-│   │  📜     │  │  🌐     │  │   +     │                         │
-│   │The Arch │  │OpenWebUI│  │  Add    │                         │
-│   │   ●     │  │   ●     │  │         │                         │
-│   └─────────┘  └─────────┘  └─────────┘                         │
-│                                                                  │
-├──────────────────────────────────────────────────────────────────┤
-│  Channels:  ●Telegram  ●WhatsApp  ○Discord  ●Voice    →          │  ← ChannelBar (sticky, 48px)
-└──────────────────────────────────────────────────────────────────┘
-```
-
-The **AppGrid** is the visual hero. Everything else is supporting chrome.
+- Not a SaaS dashboard with KPIs and charts. Three glanceable cards is the ceiling.
+- Not a workflow editor (that's the Agents app).
+- Not a chat UI (that's OpenWebUI / a future native Synap chat).
+- Not a marketplace browser (the `+ Add` icon launches that as a separate app).
+- Not a settings panel (gear icon top-right of the pane header → `/settings`).
 
 ---
 
-## 3. Component breakdown
+## 2. Pane composition
 
-### 3.1 `TopBar` (`/app/(home)/components/top-bar.tsx`)
+The Home renders inside the standard shell pane (see [Eve OS Shell §4](./eve-os-shell.mdx#4-layer-2--app-pane-the-rounded-popup)). The shell provides the rounded popup, the frosted background, and a 56px pane header. The Home owns only the body.
 
-Single horizontal row. 64px tall. Sticky.
+### 2.1 Pane header (provided by shell)
 
-| Element | Position | Behavior |
-|---|---|---|
-| `SearchBar` | Center | Filters app grid in real time. Cmd+K opens it from anywhere. |
-| `SettingsButton` (gear icon) | Right | Links to `/settings` (where current dashboard pages live) |
-| `UserAvatar` | Far right | Click → menu: profile, sign out, switch pod |
+| Slot | Content |
+|---|---|
+| `back` | none — Home is the root |
+| `title` | empty — the greeting carries identity, the title bar stays wordless |
+| `actions` | a single `Settings` (Lucide gear) icon, navigates to `/settings` |
 
-Search behavior:
-- Empty state: placeholder text "Search apps, settings, or commands…"
-- Typing: filters tiles in grid live (debounced 80ms)
-- No results: shows inline "No apps match. [Browse marketplace →]"
-- Cmd+K from anywhere on the page brings focus
+The wordless header is intentional. The greeting block immediately below makes "this is your OS" the first piece of information the eye lands on.
 
-### 3.2 `Greeting` (`/app/(home)/components/greeting.tsx`) — optional
+### 2.2 Pane body — four vertical zones
 
-Just below TopBar. 32–48px of vertical breathing room above and below.
+```
+┌───────────────────────────────────────────────────────────────┐  ← shell pane, 56px header
+│                                          [⚙]                  │     (gear → /settings)
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  [optional CpAuthBanner — only when token missing/expired]    │
+│                                                               │
+│                  ✦  Good evening, Antoine                     │  ← Zone A: Greeting (auto)
+│                       Tuesday · May 5                         │
+│                                                               │
+│   ┌──────────────┐ ┌──────────────┐ ┌──────────────┐         │  ← Zone B: Stat cards
+│   │ AGENTS       │ │ TODAY        │ │ UPDATES      │         │     (auto-height)
+│   │ 3 running    │ │ 127 events   │ │ All up to date│        │
+│   └──────────────┘ └──────────────┘ └──────────────┘         │
+│                                                               │
+│   ┌────┐  ┌────┐  ┌────┐  ┌────┐  ┌────┐  ┌────┐             │
+│   │    │  │    │  │    │  │    │  │    │  │    │             │
+│   │ ai │  │ S  │  │ A  │  │ C  │  │ D  │  │ DA │   …          │  ← Zone C: App grid
+│   └────┘  └────┘  └────┘  └────┘  └────┘  └────┘             │     (flex-1, scrolls)
+│   Chat   Synap  Arch    CRM   DevPlane  DevAgent              │
+│                                                               │
+│                                                               │
+│         ┌───────────────────────────────────────┐             │  ← Zone D: Search
+│         │ 🔍  Search apps, agents, or anywhere…│             │     (sticky-ish bottom)
+│         └───────────────────────────────────────┘             │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+```
 
-- **Line 1:** "Good morning/afternoon/evening, {firstName}" — fontSize 24px, fontWeight 300 (light)
-- **Line 2:** Date + time — fontSize 14px, neutral-500
+The four zones, from top to bottom: an optional auth banner, a greeting block, a stat-cards strip, the app grid, and a search input. The grid takes whatever vertical space the others don't claim.
 
-Hide on screens narrower than 768px (mobile gets straight to apps).
+---
 
-### 3.3 `AppGrid` (`/app/(home)/components/app-grid.tsx`)
+## 3. Zone A — Greeting block
 
-The core. Responsive grid of `AppTile` components plus one `AddAppTile` at the end.
+Auto-height. Top padding 48px from the pane body's top edge, bottom padding 32px to the stat cards. Centered horizontally.
 
-Grid sizing:
+```
+                ✦  Good evening, Antoine
+                      Tuesday · May 5
+```
 
-| Breakpoint | Columns | Tile size | Gap |
+| Element | Treatment |
+|---|---|
+| Brand glyph | Small mark to the left of (or above on mobile) the greeting line. Default: Lucide `Sparkles` at 24px, color `brand.agents` (emerald `#34D399`). When a logo SVG is dropped in, replaces the Lucide icon with the same bounding box. |
+| Greeting line | "Good {morning|afternoon|evening}, {firstName}" — `~32px`, `font-weight: 300` (light), letter-spacing `-0.01em`. Filled with the AI-to-violet gradient as a `background-clip: text` effect: `linear-gradient(135deg, #34D399 0%, #A78BFA 100%)`. The gradient is subtle — the text reads as a soft luminous tone, not a rainbow. |
+| Date subtitle | One line below, `13px`, `neutral-400`, `font-weight: 400`. Format "Weekday · Month D" (e.g. "Tuesday · May 5"). |
+
+### Time-of-day logic
+
+- 05:00–11:59 → "Good morning"
+- 12:00–17:59 → "Good afternoon"
+- 18:00–04:59 → "Good evening"
+
+`firstName` resolves from the CP user profile. If unavailable (no `cp.userToken`), fall back to "Welcome back" with no name.
+
+### Mobile
+
+Below 640px width, the brand glyph stacks above the greeting line and the whole block centers. Greeting size shrinks to `26px`. Date subtitle unchanged.
+
+---
+
+## 4. Zone B — Stat cards strip
+
+Auto-height. Three translucent cards in a horizontal row, equal width, `12px` gap. Total horizontal padding 24px from the pane body edges. Below the greeting, above the app grid, with `24px` margin to each.
+
+### 4.1 Card visual
+
+```
+┌──────────────────────┐
+│  AGENTS              │  ← 12px label, neutral-400, tracking +0.05em, uppercase
+│                      │
+│  3 running           │  ← 24px value, font-weight 300
+│                      │
+│  Hermes idle         │  ← 12px sublabel, neutral-500 (optional)
+└──────────────────────┘
+        110px tall
+```
+
+```css
+height: 110px;
+padding: 16px;
+border-radius: 16px;
+background: rgba(255, 255, 255, 0.08);
+backdrop-filter: blur(20px);
+border: 1px solid rgba(255, 255, 255, 0.08);
+transition: background 200ms ease, box-shadow 200ms ease;
+cursor: pointer;
+```
+
+On hover, the card gains a soft inner glow ring matched to its accent color:
+
+```css
+:hover {
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px var(--card-accent),
+              0 0 24px -8px var(--card-accent);
+}
+```
+
+`--card-accent` is supplied per card (emerald for Agents, indigo for Today, amber for Updates) at 35% opacity. There is no `translateY` on hover — only background/glow.
+
+Light mode flips the surface to `rgba(255, 255, 255, 0.55)` over a `rgba(0,0,0,0.04)` border, glow opacity halves.
+
+### 4.2 The three default cards
+
+| Card | Label | Value source | Sublabel | Click target |
+|---|---|---|---|---|
+| **Agents** | "AGENTS" | `useStats().agentsRunning` (count of agents emitting heartbeats in last 60s) | one of: "Hermes idle" / "OpenClaw routing" / "All quiet" | `/agents` |
+| **Today** | "TODAY" | `useStats().eventsToday` (count of `events.since(startOfDay)` from Hub Protocol) | "across all channels" or "in your personal channel" | `/agents?view=timeline` |
+| **Updates** | "UPDATES" | `useStats().updatesAvailable` (count of marketplace apps with newer version than installed) | "All up to date" when 0, otherwise "Tap to review" | marketplace (Phase 4: `/marketplace`; Phase 2: external CP URL) |
+
+Cards are real `<a>` elements with `href` for keyboard nav. Sublabel is omitted (not just empty) when no useful value is available — preserves the visual rhythm.
+
+### 4.3 Loading & empty
+
+While stats resolve, render skeleton cards (same surface, value replaced by a 1.6s shimmer pulse on a 60% opacity bar). When all three values are zero/uneventful, cards still render with truthful values — Eve never hides the strip on quiet days, calm is the point.
+
+### 4.4 Configurability (deferred)
+
+Cards are hard-coded in v1. v2 may let the operator pick three from a wider set (storage, network, sync status…). Not in Phase 2 scope.
+
+---
+
+## 5. Zone C — App grid
+
+The visual hero. Flex-1, takes whatever remaining vertical space the body has. Internally scrollable (the pane body itself does not scroll past Zone D).
+
+### 5.1 Icons, not tiles
+
+This is the largest deviation from the v1 doc. Apps render as **vivid colorful icons** in the UmbrelOS style, not gray tiles:
+
+```
+       ┌──────┐
+       │      │  ← 80×80px colored rounded square
+       │  ✦   │     (brand-color background, Lucide glyph centered in white/95)
+       │      │
+       └──────┘
+        Synap     ← 14px, neutral-200, font-weight 500
+        running   ← optional 12px, neutral-500
+```
+
+- Icon block: `80×80px` desktop, `64×64px` mobile, `border-radius: 18px`
+- Background: brand color or gradient from `brand-colors.ts` registry (per-app)
+- Glyph: Lucide icon at `40px` desktop / `32px` mobile, color `rgba(255,255,255,0.95)`, centered. For marketplace apps with `iconUrl`, the remote SVG/PNG renders in the same bounding box (still on the brand-color background — the registry supplies the color, even when the glyph is remote).
+- Label below: app name, `14px`, `neutral-200`, `font-weight: 500`, single line, ellipsis if it overflows
+- Optional second line: status or context — `12px`, `neutral-500`. Examples: `running` / `offline` / `degraded` / `12 unread`. Rendered only when the value is meaningful (omit, don't render an empty line).
+
+### 5.2 Grid layout
+
+```css
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));   /* desktop */
+gap: 24px;
+padding: 8px 24px 32px;       /* the 32px bottom keeps clear of Zone D */
+align-items: start;
+```
+
+Mobile (<640px): `minmax(96px, 1fr)`, gap `16px`. The auto-fill keeps the grid responsive at any pane width. Typical desktop pane fits 6–8 columns; mobile fits 3–4.
+
+The grid does not enforce a row cap — it scrolls vertically when the user has many apps. The scrollbar is the pane body's, hidden until the user scrolls (standard `overflow-y: auto` on the pane body).
+
+### 5.3 Per-app brand colors
+
+Each app's icon background is sourced from a brand-color registry — see §11 for the schema. Examples:
+
+| App | Background | Glyph | Accent (dock indicator + hover ring) |
 |---|---|---|---|
-| Mobile (`<640px`) | 3 | 96px | 12px |
-| Tablet (`640px–1024px`) | 4 | 112px | 16px |
-| Desktop (`>1024px`) | 6 | 128px | 20px |
-| Wide (`>1440px`) | 8 | 128px | 24px |
+| OpenWebUI ("Chat") | `linear-gradient(135deg, #10B981, #34D399)` | `MessageSquare` | `#10B981` |
+| Synap | `#34D399` (solid emerald) | `Brain` (or remote SVG) | `#34D399` |
+| The Arch | `#5B21B6` (deep violet) | remote `iconUrl` | `#7C3AED` |
+| CRM | `#E11D48` (rose) | `Users` | `#F43F5E` |
+| DevPlane | `#F59E0B` (amber) | `LayoutGrid` | `#FBBF24` |
+| Dev Agent | `linear-gradient(135deg, #4F46E5, #7C3AED)` | `Code2` | `#6366F1` |
 
-Tiles are square. Drag-and-drop reordering enabled (uses `dnd-kit`). Reorder updates `pinnedAppIds` order in user preferences via `POST /api/preferences`.
+The registry is opinionated — ten or so curated palettes mapped to known apps. Marketplace apps without a registry entry fall back to a deterministic palette derived from a hash of their slug (hue-rotated emerald), so new apps still feel intentional on first install.
 
-### 3.4 `AppTile` (`/app/(home)/components/app-tile.tsx`)
+### 5.4 Interaction states
 
-The unit. Each tile is one app.
-
-```
-┌─────────────┐
-│             │
-│    [icon]   │  ← 48px icon, centered, top 24px from edge
-│             │
-│             │
-│     ●       │  ← Status dot, 6px diameter, bottom-right area
-│   App name  │  ← 13px text, font-weight 500, centered, bottom 14px
-└─────────────┘
-   128 × 128
-```
-
-Visual specs:
-
-```css
-/* Default state */
-background: var(--neutral-100);          /* Light: #F5F4F1, Dark: #1E293B */
-border: 1px solid rgba(0, 0, 0, 0.04);   /* Whisper border */
-border-radius: 20px;                      /* $radius5 — friendlier than 12-16px for tiles */
-padding: 24px 12px 14px;
-transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
-            background 200ms ease;
-
-/* Hover state */
-:hover {
-  transform: translateY(-2px);
-  background: var(--neutral-50);          /* Subtle lift, lighter background */
-}
-
-/* Active/pressed */
-:active {
-  transform: translateY(0);
-  opacity: 0.92;
-}
-
-/* AI accent (OpenWebUI, Synap-Chat, future native chat) */
-.app-tile--ai {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%);
-  border: 1px solid rgba(16, 185, 129, 0.12);
-}
-.app-tile--ai:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.10) 0%, rgba(52, 211, 153, 0.02) 100%);
-  border-color: rgba(16, 185, 129, 0.20);
-}
-```
-
-Status dot:
-
-| State | Color | Source |
+| State | Visual | Timing |
 |---|---|---|
-| `online` | `#34D399` (emerald-400) | App responds to health check |
-| `degraded` | `#FBBF24` (amber-400) | Slow / partial response |
-| `offline` | `#94A3B8` (slate-400) | No response or known offline |
-| `unknown` | transparent | Health check not applicable (e.g. external URL with no health endpoint) |
+| Default | Vivid icon, label `neutral-200` | — |
+| Hover | `transform: scale(1.04)` + outer glow ring (`box-shadow: 0 0 24px -4px <accent-35%>`) + label brightens to `neutral-100` | 200ms ease-out |
+| Pressed | `transform: scale(0.96)` | 80ms ease-in |
+| Active (this app's route is current) | Identical to default — the dock owns the active indicator. The grid does not double-mark. | — |
+| Loading (mid-install pulse) | Subtle `opacity` pulse on the icon, 1.6s | — |
 
-Click behavior:
-- **External URL** (CP marketplace app): open in new tab via `window.open(app.url, '_blank')`
-- **Local Eve component** (Synap, OpenWebUI): open in new tab to `webUrl`
-- **Workspace pack** (CP marketplace pack): doesn't appear here — packs install into Synap, not Eve
+**Explicitly forbidden:** `translateY` lift hover. The v1 doc had it; v2 does not. Hover is scale + glow only. The lift made tiles feel like cards — we want them to feel like icons, which press into the surface, not float above it.
 
-Right-click / long-press: contextual menu with `Pin`, `Unpin`, `Open in new window`, `Uninstall` (for marketplace apps), `Settings` (if app has a settings page).
+### 5.5 Accessibility & semantics
 
-### 3.5 `AddAppTile` (`/app/(home)/components/add-app-tile.tsx`)
+Each icon is an `<a href={app.url}>` with `aria-label="Open {name}, status {status}"`. Tab cycles icons in DOM order (which matches pin order). Enter or Space activates. `prefers-reduced-motion` disables the scale + glow on hover; the icon brightens its label instead.
 
-Always last. Subtle dashed border, large `+` icon.
+### 5.6 The `+ Add` icon
+
+Always last in the grid. Same `80×80` bounding box. Dashed `1.5px` border in `neutral-500`, transparent fill, centered Lucide `Plus` glyph in `neutral-400`. Hover: border brightens to `neutral-300`, glyph to `neutral-100`. Click: opens marketplace (Phase 2: external CP URL in new tab; Phase 4: routes to in-OS `/marketplace`).
+
+### 5.7 Click behavior per app source
+
+Identical to v1 logic — only the visual changed:
+
+- **External URL** (CP marketplace `app_type: 'url'`): `window.open(app.url, '_blank')`.
+- **Eve component** (`app_type: 'eve_component'`): opens `webUrl` in new tab. Status dot reflects local component health.
+- **Workspace pack** (`app_type: 'workspace_pack'`): does not appear on the OS Home — packs install into Synap.
+- **Bundle** (`app_type: 'bundle'`): unwraps to constituent app icons (the bundle itself doesn't render).
+
+### 5.8 Right-click / long-press
+
+Contextual menu: `Pin`, `Unpin`, `Open in new window`, `Uninstall` (marketplace only), `Settings` (if app exposes one). Menu styled as a frosted floating popover matching the pane aesthetic — never a native browser menu.
+
+---
+
+## 6. Zone D — Search
+
+A capsule-shaped input near the bottom of the pane body, centered, max-width `480px`, height `56px`. Bottom margin `32px` from the pane body's bottom edge (which is itself 24px above the dock, by the shell's contract — so the search has visible breathing room above the dock pill).
 
 ```css
-background: transparent;
-border: 1.5px dashed var(--neutral-300);
-border-radius: 20px;
-color: var(--neutral-500);
-transition: border-color 200ms, color 200ms;
+height: 56px;
+border-radius: 28px;       /* full pill */
+padding: 0 24px 0 56px;    /* left padding leaves room for the search icon */
+background: rgba(255, 255, 255, 0.06);
+backdrop-filter: blur(20px);
+border: 1px solid rgba(255, 255, 255, 0.08);
+font-size: 15px;
+color: var(--neutral-100);
+transition: border-color 200ms ease, background 200ms ease,
+            box-shadow 200ms ease;
 
-:hover {
-  border-color: var(--neutral-400);
-  color: var(--neutral-700);
-  background: var(--neutral-50);
+::placeholder {
+  color: var(--neutral-500);
+}
+
+:focus {
+  outline: none;
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.10);
 }
 ```
 
-Click → opens marketplace browse page (in same window). For Phase 2 v1, this could open `https://cp.synap.sh/marketplace` in a new tab; for v2, embed in a slide-over drawer.
+A Lucide `Search` icon sits inside on the left at `20px`, color `neutral-400`. Placeholder: `Search apps, agents, or anywhere…`.
 
-### 3.6 `ChannelBar` (`/app/(home)/components/channel-bar.tsx`)
+### 6.1 Behavior
 
-Sticky bottom bar. 48px tall. Subtle gradient fade-in from page background — no hard border.
+- `Cmd+K` (or `Ctrl+K` on Linux) focuses the input from anywhere in the Home — global keyboard listener registered on mount, removed on unmount.
+- Typing filters the app grid live, debounced 80ms. Filter logic: `name`, `description`, `category` substring match (case-insensitive).
+- Empty input: full grid. Non-empty input: only matching icons; `+ Add` icon stays in place. If the result set is empty, the grid hides and a single line of helper text appears in its place: `No apps match. [Browse marketplace →]`.
+- `Esc` clears the input and re-focuses it.
+- Autocomplete OFF; `type="search"`; `aria-controls="home-app-grid"`; the grid carries the matching `id`.
+
+### 6.2 Sticky-ish positioning
+
+The search is the last element of the pane body's flex column. The grid above it is `flex-1` with `overflow-y: auto`, so the search effectively pins to the bottom of the visible body while the grid scrolls. We do **not** use `position: sticky` — the simpler flex layout produces the same effect without the z-index choreography.
+
+---
+
+## 7. CpAuthBanner placement
+
+When `cp.userToken` is missing or expired (the marketplace fetch returns 401), render the existing `CpAuthBanner` component **inside the pane body, above Zone A**. The banner is restyled to match the pane surface:
+
+```css
+margin: 16px 24px 0;
+padding: 14px 18px;
+border-radius: 14px;
+background: rgba(251, 191, 36, 0.08);     /* amber tint — attention without alarm */
+border: 1px solid rgba(251, 191, 36, 0.20);
+backdrop-filter: blur(12px);
+```
+
+Banner content (unchanged copy): "Sign in to see your apps from the Synap marketplace." with a `Sign in` button that triggers the OAuth flow (see [Eve OS Vision §6](./eve-os-vision.mdx#6-auth-handshake-eve--cp)). The Home keeps rendering — Zone B and Zone C populate from local components, marketplace contributions just don't show.
+
+---
+
+## 8. Empty state
+
+When the user has zero apps installed AND no auto-discovered local components — rare in practice (Eve seeds OpenWebUI + Synap by default), but we handle it cleanly.
+
+Replace Zones B and C with a centered hero:
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  Channels:  ●Telegram  ●WhatsApp  ○Discord  ●Voice          →  │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-Each channel = one dot + label. Dot color matches status spec above. Right-side `→` chevron link routes to `/channels`.
-
-If no channels are connected: "Connect a channel →" link instead. Routes to `/channels`.
-
-### 3.7 `EmptyState` (`/app/(home)/components/empty-state.tsx`)
-
-Shown only when the user has zero apps installed AND no auto-discovered local components (rare — OpenWebUI auto-pins by default).
-
-```
-                  ┌──────────────────┐
-                  │                  │
-                  │   [illustration] │
-                  │                  │
-                  └──────────────────┘
+                       ┌──────────┐
+                       │  ▣▣▣▣▣  │     ← Lucide LayoutGrid, 64px, neutral-400
+                       │  ▣▣▣▣▣  │
+                       └──────────┘
 
                 Your OS is a blank canvas
 
          Install your first app from the marketplace.
 
-                  [Browse marketplace →]
+                  [ Browse marketplace ]      ← pill button, emerald gradient
 ```
 
-- Illustration: subtle, monochrome line art (commission later — placeholder Lucide `LayoutGrid` icon at 64px, neutral-300)
-- Headline: 28px, font-weight 300 (light)
-- Body: 16px, neutral-500, max-width 400px, centered
-- CTA: primary button, opens marketplace
+| Element | Spec |
+|---|---|
+| Icon | Lucide `LayoutGrid`, `64px`, `neutral-400`, no background |
+| Headline | `24px`, `font-weight: 300`, `neutral-100`, top margin `24px` |
+| Body | `15px`, `neutral-400`, max-width `360px`, centered, top margin `12px` |
+| CTA | Pill button, height `44px`, padding `0 24px`, background `linear-gradient(135deg, #10B981, #34D399)`, white text, no shadow. Hover: brightness `1.05`. Press: `scale(0.98)`. |
 
-### 3.8 Skeleton state
-
-While the marketplace API is loading (and we already know which apps the user has cached locally), render skeleton tiles at the same dimensions:
-
-```css
-background: var(--neutral-100);
-animation: pulse 1.6s ease-in-out infinite;
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-```
-
-Render N skeleton tiles equal to last known app count, plus a skeleton `AddAppTile`. Real tiles fade in as they load (200ms opacity transition).
+Zone A (greeting) and Zone D (search) **remain visible** — the operator can still search the marketplace via Cmd+K (in Phase 4), and the greeting keeps the surface from feeling broken. The `+ Add` icon does not render here; the CTA replaces it.
 
 ---
 
-## 4. Data model
+## 9. Loading states
 
-### 4.1 Page state
+The Home is built to feel instant even on a cold cache. Different zones use different strategies:
+
+| Zone | Strategy |
+|---|---|
+| **Greeting (A)** | Renders immediately, no skeleton. `firstName` defaults to "" (line collapses to "Good evening,") if profile hasn't resolved — this is fine for ~150ms and avoids a jarring name-pop. |
+| **Stat cards (B)** | Three skeleton cards at full final dimensions. Value bar shimmers (1.6s `opacity` pulse, 60% to 100%). Sublabel hidden during skeleton. Real values fade in over 140ms as resolved. |
+| **App grid (C)** | Render N skeleton icons matching the count cached from last visit (stored in `localStorage` as `home.iconCount`). Each skeleton is the icon's bounding box with the same shimmer pulse — no glyph, no label. As real apps resolve, fade them in (140ms opacity). |
+| **Search (D)** | Renders immediately, fully interactive even before grid loads. Empty filter just shows skeletons. |
+
+If the cached icon count is missing (genuine first load), render 6 skeletons — a sensible default for Eve's seeded apps.
+
+---
+
+## 10. Animation grammar
+
+All animations match the [shell's animation grammar](./eve-os-shell.mdx#9-animation-grammar-locked). Home-specific entries:
+
+| Surface | Property | Duration | Easing |
+|---|---|---|---|
+| Stat card hover | `background` + `box-shadow` (inner glow) | 200ms | `ease-out` |
+| App icon hover | `transform: scale(1.04)` + `box-shadow` (outer glow) | 200ms | `ease-out` |
+| App icon press | `transform: scale(0.96)` | 80ms | `ease-in` |
+| Search input focus | `border-color` + `box-shadow` (focus ring) | 200ms | `ease-out` |
+| Skeleton shimmer | `opacity` pulse 60%↔100% | 1.6s loop | `ease-in-out` |
+| New icon resolved | `opacity` 0→1 | 140ms | `ease-out` |
+| Newly installed icon (post-install return) | `transform: scale(0.85)→1` + `opacity` 0→1 | 240ms | `cubic-bezier(0.16, 1, 0.3, 1)` (overshoot pop) |
+
+`prefers-reduced-motion: reduce` disables the scale animations on icons and cards (they swap to a 1px border-color brighten instead). Skeleton shimmer slows to 3s but doesn't disappear — the user still needs to see "this is loading."
+
+No `translateY` anywhere. No drop shadows on icons or cards (depth comes from glow rings and borders). No layout-property animations.
+
+---
+
+## 11. Brand color registry
+
+A new file: `app/(os)/lib/brand-colors.ts`. The shell's dock also reads this (so dock and grid stay synchronized when an app is added).
+
+```typescript
+// app/(os)/lib/brand-colors.ts
+
+export type BrandColor = {
+  /** CSS background — solid color or gradient string */
+  bg: string;
+  /** Lucide icon name. null means use remote iconUrl. */
+  glyph: string | null;
+  /** Solid color for dock active indicator + hover ring */
+  accent: string;
+};
+
+export const BRAND_COLORS: Record<string, BrandColor> = {
+  // Core / pinned
+  home:      { bg: 'linear-gradient(135deg, #A78BFA, #818CF8)', glyph: 'Home',          accent: '#A78BFA' },
+  agents:    { bg: '#34D399',                                    glyph: 'Sparkles',      accent: '#34D399' },
+  settings:  { bg: '#475569',                                    glyph: 'Settings',      accent: '#94A3B8' },
+
+  // Eve components
+  openwebui: { bg: 'linear-gradient(135deg, #10B981, #34D399)', glyph: 'MessageSquare', accent: '#10B981' },
+  synap:     { bg: '#34D399',                                    glyph: 'Brain',         accent: '#34D399' },
+  'dev-agent':{ bg: 'linear-gradient(135deg, #4F46E5, #7C3AED)',glyph: 'Code2',         accent: '#6366F1' },
+
+  // Marketplace classics
+  'the-arch':{ bg: '#5B21B6',                                    glyph: null,            accent: '#7C3AED' },
+  crm:       { bg: '#E11D48',                                    glyph: 'Users',         accent: '#F43F5E' },
+  devplane:  { bg: '#F59E0B',                                    glyph: 'LayoutGrid',    accent: '#FBBF24' },
+};
+
+/** Deterministic fallback for unregistered apps. Hue-rotates emerald by slug hash. */
+export function fallbackBrandColor(slug: string): BrandColor {
+  const hue = hashToHue(slug);  // 0–359
+  return {
+    bg: `hsl(${hue}, 65%, 50%)`,
+    glyph: null,                  // remote iconUrl will render
+    accent: `hsl(${hue}, 65%, 60%)`,
+  };
+}
+```
+
+The shell's `app/(os)/components/dock-icon.tsx` and the Home's `app/(os)/components/app-icon.tsx` both read from this registry, so adding an entry instantly skins both surfaces.
+
+---
+
+## 12. Data model
+
+The state shape is largely unchanged from v1 — only `ChannelStatus` is removed (the dock and the Agents app cover that surface area).
 
 ```typescript
 type AppSource = 'cp_marketplace' | 'local_component' | 'pinned_default';
@@ -265,318 +465,217 @@ type AppSource = 'cp_marketplace' | 'local_component' | 'pinned_default';
 type App = {
   id: string;                    // stable across sources
   source: AppSource;
+  slug: string;                  // brand-colors.ts registry key
   name: string;
   description?: string;
-  iconUrl?: string;              // remote URL (preferred)
-  iconLucide?: string;           // fallback Lucide icon name
+  iconUrl?: string;              // remote URL, used when registry glyph is null
   url: string;                   // where clicking opens
   category: 'ai' | 'productivity' | 'communication' | 'dev' | 'other';
   status: 'online' | 'degraded' | 'offline' | 'unknown';
-  isAI?: boolean;                // triggers emerald-accent variant
-  isEntitled: boolean;           // false = locked, show "Upgrade" tile variant
+  isEntitled: boolean;           // false → render as "Buy" CTA variant
   installCount?: number;         // for sort
 };
 
-type ChannelStatus = {
-  id: 'telegram' | 'whatsapp' | 'signal' | 'matrix' | 'discord' | 'slack' | 'voice';
-  name: string;
-  status: 'online' | 'offline' | 'degraded';
-  configured: boolean;           // false = greyed out, "Connect" hint
+type StatCardData = {
+  agentsRunning: number;         // count active agents
+  agentsSubLabel?: string;
+  eventsToday: number;           // events.since(startOfDay)
+  eventsSubLabel?: string;
+  updatesAvailable: number;      // marketplace apps with newer version
+  updatesSubLabel?: string;
 };
 
 type HomeState = {
   apps: App[];
-  pinnedAppIds: string[];        // user's chosen order; unpinned apps appear at end
+  pinnedAppIds: string[];
   searchQuery: string;
-  channels: ChannelStatus[];
+  stats: StatCardData;
   isLoadingMarketplace: boolean;
+  isLoadingStats: boolean;
   marketplaceError?: string;
+  cpAuthRequired: boolean;       // drives CpAuthBanner visibility
 };
 ```
 
-### 4.2 Data sources merged
+### 12.1 Data sources merged
 
-The marketplace is the **unified catalog**. Four `app_type` shapes feed the home:
+Identical to v1 — keep this logic intact during the rebuild:
 
-- `url` — external website link. Tile opens in a new tab.
-- `eve_component` — surfaces an Eve-managed local component (OpenWebUI, Dev Agent). `metadata.componentId` binds it to a component in the Eve registry. Local component status (online/offline) hydrates the tile's status dot. **OpenWebUI** is pinned as "Chat" by default; **Dev Agent** carries `metadata.engineOptions: ["openclaude","opencode","claude-code"]` so install can prompt for engine choice.
-- `workspace_pack` — installs into Synap pod. Typically does NOT appear on the OS home (lens inside Synap, not a launchable app); decide per-pack via metadata.
-- `bundle` — composite; resolves to constituent apps' tiles.
+- **`fetchMarketplaceApps(cpUserToken)`** — CP `GET /api/marketplace/apps?for_user=me`, returns entitled apps.
+- **`fetchLocalComponents()`** — Eve dashboard `GET /api/components`, returns auto-discovered components with `webUrl`. Hydrates per-app live status onto matching `eve_component` entries by `metadata.componentId`.
+- **`fetchStats()`** — three parallel calls: agent registry, `events.since(startOfDay)` via Hub Protocol, marketplace `?has_update=true` count.
 
 ```typescript
 async function loadHomeApps(): Promise<App[]> {
   const [marketplaceApps, localComponents] = await Promise.allSettled([
-    fetchMarketplaceApps(cpUserToken),     // Phase 1 endpoint — entitled apps
-    fetchLocalComponents(),                // /api/components → live status hydration
+    fetchMarketplaceApps(cpUserToken),
+    fetchLocalComponents(),
   ]);
-
-  // For eve_component apps: cross-reference componentId with localComponents
-  // to hydrate the live status dot. The marketplace is authoritative for
-  // catalog presence; local components are authoritative for runtime status.
   return mergeAndHydrate(marketplaceApps, localComponents);
 }
 ```
 
-Marketplace failure (network, auth expired) → fall back to local components only with a small banner: "Couldn't reach marketplace. Showing local apps. [Retry]". This keeps Eve usable when CP is unreachable.
+Marketplace failure (network or 401) → fall back to local components, set `cpAuthRequired: true`, banner appears. The OS stays usable.
 
-### 4.3 Pinning persistence
+### 12.2 Pinning persistence
 
-User's pin order stored in `~/.eve/preferences.json` under `home.pinnedAppIds: string[]`. New apps go to end of list. Local components (Synap, OpenWebUI) are pinned by default at the front.
+Unchanged from v1. Pin order in `~/.eve/preferences.json` under `home.pinnedAppIds: string[]`. New apps go to the end; pinned defaults (Synap, OpenWebUI) appear first on first launch.
 
-API: `GET /api/preferences/home`, `PUT /api/preferences/home`. New endpoints in Eve dashboard's API routes.
-
----
-
-## 5. Interaction flows
-
-### 5.1 First load (returning user)
-
-1. Page mounts → reads `~/.eve/preferences.json` for pin order (instant)
-2. Renders skeleton tiles in pin order (instant)
-3. Two parallel fetches:
-   - Local components via `/api/components` (~50ms)
-   - Marketplace via CP `/api/marketplace/apps` (~200ms)
-4. As each resolves, real tiles fade in (200ms)
-5. Channel statuses load via `/api/channels/status` (background, populates ChannelBar)
-
-### 5.2 First load (brand-new user, no apps)
-
-1. Page mounts → no prefs, no apps known
-2. Skeletons for ~1.5s while local components query
-3. If query returns empty AND marketplace returns empty entitlements → render `EmptyState`
-4. If anything returns non-empty → render normally with what we have
-
-### 5.3 Search
-
-1. User focuses search (or hits Cmd+K)
-2. Types → debounced 80ms
-3. Filter `apps` by `name` includes / `description` includes / `category` matches
-4. Grid reflows with filtered set
-5. ESC clears, returns to full grid
-
-### 5.4 Pin / unpin / reorder
-
-1. User long-presses or right-clicks a tile → contextual menu
-2. Selects "Pin" / "Unpin" → state updates, position changes
-3. Or: drags tile → drop into new position
-4. `PUT /api/preferences/home` fires (debounced 500ms in case of multiple rapid drags)
-
-### 5.5 Install from marketplace
-
-1. User clicks `AddAppTile`
-2. Routes to `/marketplace` (or opens external CP marketplace URL in new tab)
-3. User picks an app, completes install (entitlement granted in CP)
-4. User returns to home → grid auto-refetches → new app appears, animates in (scale 0.8 → 1.0, 240ms ease-out)
-
-### 5.6 OAuth handshake (first time only)
-
-1. User opens Eve dashboard for the first time
-2. No `cp.userToken` in `~/.eve/secrets.json`
-3. Marketplace fetch fails with 401 → trigger auth flow
-4. Redirect to `https://cp.synap.sh/oauth/eve?return=...`
-5. User authorizes in CP
-6. Returns to Eve with code, exchanged for token, stored
-7. Reload, marketplace works
-
-While token is missing, the home still renders local components. The marketplace section just doesn't populate. Banner: "Sign in to see your apps from the Synap marketplace. [Sign in]"
+API: `GET /api/preferences/home`, `PUT /api/preferences/home`. New endpoints in the Eve dashboard's Next.js API routes.
 
 ---
 
-## 6. Visual tokens (Tailwind)
+## 13. Interaction flows
 
-Eve dashboard uses Tailwind. Define tokens in `tailwind.config.ts` to mirror Synap design system principles:
+### 13.1 First load (returning user)
 
-```ts
-// tailwind.config.ts (excerpt)
-theme: {
-  extend: {
-    colors: {
-      // Neutral-first
-      neutral: {
-        50:  '#FAFAF9',  100: '#F5F4F1',  200: '#E7E5E1',
-        300: '#D6D3D0',  400: '#A8A29E',  500: '#78716C',
-        600: '#57534E',  700: '#44403C',  800: '#292524',
-        900: '#1C1917',  950: '#0C0A09',
-      },
-      // Dark mode neutrals
-      slate: {
-        50:  '#F8FAFC',  100: '#F1F5F9',  200: '#E2E8F0',
-        300: '#CBD5E1',  400: '#94A3B8',  500: '#64748B',
-        600: '#475569',  700: '#334155',  800: '#1E293B',
-        900: '#0F172A',  950: '#020617',
-      },
-      // AI signature
-      ai: {
-        from:  '#10B981',
-        via:   '#34D399',
-        to:    '#6EE7B7',
-      },
-      // Status
-      status: {
-        online:    '#34D399',
-        degraded:  '#FBBF24',
-        offline:   '#94A3B8',
-      },
-    },
-    spacing: {
-      // 6px base unit
-      '1': '6px',   '2': '12px',  '3': '18px',  '4': '24px',
-      '5': '30px',  '6': '36px',  '8': '48px',  '10': '60px',
-      '12': '72px', '16': '96px',
-    },
-    borderRadius: {
-      'sm': '4px',    'md': '8px',    'lg': '12px',
-      'xl': '16px',   '2xl': '20px',  '3xl': '24px',
-      'tile': '20px', // App tile default
-    },
-    fontSize: {
-      'xs':  ['13px', '20px'],
-      'sm':  ['14px', '22px'],
-      'base':['15px', '24px'],   // body default
-      'lg':  ['17px', '28px'],
-      'xl':  ['20px', '32px'],
-      '2xl': ['24px', '36px'],
-      '3xl': ['32px', '40px'],
-    },
-    boxShadow: {
-      // intentionally NONE — use borders for depth
-    },
-  },
-},
-```
+1. Pane mounts → reads `~/.eve/preferences.json` (instant).
+2. Greeting renders immediately. Skeleton stat cards and N skeleton icons paint within the same tick.
+3. Three parallel fetches in the background:
+   - Local components (`~50ms`)
+   - Marketplace (`~200ms` cached, `~600ms` cold)
+   - Stats (`~100ms`)
+4. Real cards and icons fade in (140ms opacity) as each resolves.
+5. Search is interactive throughout.
 
-### 6.1 AI gradient utility
+### 13.2 First load (brand-new user)
 
-```css
-/* globals.css */
-.ai-gradient {
-  background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #6EE7B7 100%);
-}
+1. Pane mounts. No prefs, no token.
+2. CpAuthBanner appears above Zone A.
+3. Greeting renders; stat cards render with zeroes; grid renders with the seeded local components only (Synap + OpenWebUI by default).
+4. User clicks "Sign in" → OAuth handshake → token stored → marketplace re-fetches → entitled apps fade in.
 
-.ai-tint {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%);
-  border-color: rgba(16, 185, 129, 0.12);
-}
+### 13.3 Search
 
-.ai-tint:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.10) 0%, rgba(52, 211, 153, 0.02) 100%);
-  border-color: rgba(16, 185, 129, 0.20);
-}
-```
+1. User focuses the input or hits `Cmd+K`.
+2. Types → 80ms debounce → grid filters.
+3. `Esc` clears the input. Grid restores.
 
-### 6.2 Light/dark mode
+### 13.4 Pin / unpin / reorder (drag-and-drop deferred)
 
-Use Tailwind's `dark:` variant + system preference detection (already in Eve dashboard). Tokens above provide dark equivalents:
+v2 ships **without** drag-and-drop. Pinning toggles via the right-click contextual menu only. Reorder support returns in a follow-up — the icon-grid aesthetic makes drag handles harder to design well, so we defer until we have a clean solution. `pinnedAppIds` persistence still flushes via `PUT /api/preferences/home` on each pin/unpin.
 
-```tsx
-<div className="bg-neutral-50 dark:bg-slate-950 text-neutral-900 dark:text-slate-50">
-```
+### 13.5 Install from marketplace
 
-Dark mode is the *default* for Eve (per OS feel, per Umbrel). Light mode is supported but secondary.
+1. User clicks the `+ Add` icon at the end of the grid.
+2. Phase 2: opens external CP marketplace URL in new tab. Phase 4: routes to in-OS `/marketplace` (Channels-style sub-app).
+3. After install, user returns to Home → `useHomeApps` re-fetches → new icon scale-pops in (240ms ease-out, see §10).
+
+### 13.6 OAuth handshake
+
+Identical to v1 §5.6. Code is owned by the OAuth client utility — referenced here only because the banner triggers it. See [Eve OS Vision §6](./eve-os-vision.mdx#6-auth-handshake-eve--cp).
 
 ---
 
-## 7. File layout
+## 14. File layout
 
 ```
-hestia-cli/packages/eve-dashboard/app/
-├── (home)/
-│   ├── page.tsx                       ← The home page (replaces current /dashboard home)
-│   ├── components/
-│   │   ├── top-bar.tsx
-│   │   ├── search-bar.tsx
-│   │   ├── greeting.tsx
-│   │   ├── app-grid.tsx
-│   │   ├── app-tile.tsx
-│   │   ├── add-app-tile.tsx
-│   │   ├── channel-bar.tsx
-│   │   ├── empty-state.tsx
-│   │   └── skeleton-tile.tsx
-│   ├── hooks/
-│   │   ├── use-home-apps.ts           ← Merges local + marketplace
-│   │   ├── use-pinned-apps.ts
-│   │   └── use-channel-status.ts
-│   └── lib/
-│       ├── merge-apps.ts              ← Dedupe + sort
-│       └── cp-marketplace-client.ts   ← OAuth + fetch wrapper
-├── auth/
-│   └── callback/page.tsx              ← OAuth redirect target
-├── settings/                          ← Current dashboard pages move here
-│   ├── components/page.tsx
-│   ├── ai/page.tsx
-│   ├── networking/page.tsx
-│   ├── doctor/page.tsx
-│   ├── channels/page.tsx              ← Existing channels page (legacy config)
-│   └── layout.tsx                     ← Sidebar nav for settings
-└── api/
-    ├── preferences/home/route.ts      ← GET / PUT pinnedAppIds
-    └── components/route.ts             ← Already exists, returns local components
+app/(os)/
+├── page.tsx                       ← Home root (route: /)
+├── components/
+│   ├── greeting.tsx               ← Zone A
+│   ├── stat-cards.tsx             ← Zone B container
+│   ├── stat-card.tsx              ← single card
+│   ├── app-grid.tsx               ← Zone C container
+│   ├── app-icon.tsx               ← vivid colored icon
+│   ├── add-app-icon.tsx           ← dashed "+" terminator
+│   ├── search-bar.tsx             ← Zone D
+│   ├── empty-state.tsx
+│   ├── skeleton-icon.tsx
+│   └── cp-auth-banner.tsx         ← restyled, kept from v1
+├── hooks/
+│   ├── use-home-apps.ts           ← MIGRATED from existing dashboard
+│   ├── use-greeting.ts            ← time-of-day + firstName resolver
+│   └── use-stats.ts               ← parallel fetch + memoization
+└── lib/
+    ├── brand-colors.ts            ← per-app palette registry (shared with dock)
+    ├── merge-apps.ts              ← MIGRATED — dedupe + sort
+    └── marketplace-client.ts      ← MIGRATED — bearer fetch + 401 re-auth
 ```
 
-Routing migration:
-- Current `/dashboard/*` paths → 301 redirect to `/settings/*`
-- Current `/dashboard` (overview) → redirect to `/`
-- New `/` → home (this design)
+The shell owns `wallpaper.tsx`, `pane.tsx`, `dock.tsx`, `add-app-button.tsx` (the dock's `+`) — all in `app/(os)/components/`. The Home's components are siblings; do not nest them under a `home/` folder.
+
+### 14.1 Files deleted
+
+The v1 design's components are replaced wholesale:
+
+- `app/(home)/components/top-bar.tsx` — deleted (shell pane header replaces it)
+- `app/(home)/components/app-tile.tsx` — deleted (replaced by `app-icon.tsx`)
+- `app/(home)/components/add-app-tile.tsx` — deleted (replaced by `add-app-icon.tsx`)
+- `app/(home)/components/channel-bar.tsx` — deleted (dock + Agents app replace it)
+- `app/(home)/` directory — deleted entirely after migration
+
+### 14.2 Routing migration
+
+- `/dashboard/*` → `/settings/*` (308 redirects, configured in middleware)
+- `/dashboard` → `/` (308 redirect)
+- New `/` → Home (this design)
+
+The old `app/(home)/page.tsx` is replaced by `app/(os)/page.tsx`. Next.js will not pick up both at the same path; the deletion in §14.1 is required, not optional.
 
 ---
 
-## 8. Accessibility
+## 15. Accessibility
 
-- All tiles are `<a>` elements with `href` (real navigation, not div onClick)
-- Keyboard: Tab cycles tiles, Enter activates, arrow keys navigate grid (custom handler with `dnd-kit` accessibility helpers)
-- Screen readers: each tile has `aria-label="Open {name}, status {status}"`
-- Search: `<input type="search">` with proper labels and `aria-controls` pointing at the grid
-- Status dots: `aria-hidden` (purely visual), screen readers get the textual status via `aria-label`
-- Color contrast: all text-on-background combinations verified ≥4.5:1 in both modes
-- `prefers-reduced-motion`: disables tile lift hover, fades become instant
-
----
-
-## 9. Phase 2 implementation checklist
-
-In suggested order, each shippable independently:
-
-- [ ] Create `(home)/page.tsx` route, render basic grid using local components only (no marketplace)
-- [ ] Build `AppTile`, `AppGrid`, `TopBar`, `Greeting`, `EmptyState` components
-- [ ] Add `tailwind.config.ts` token extensions
-- [ ] Wire `dnd-kit` for drag-and-drop reordering
-- [ ] Add `pinnedAppIds` persistence (`/api/preferences/home`)
-- [ ] Move existing `/dashboard/*` pages under `/settings/*`, set up redirects
-- [ ] Build OAuth handshake (`/auth/callback`, secrets.json write)
-- [ ] Wire CP marketplace fetch (`useHomeApps` hook with merge logic)
-- [ ] Build `ChannelBar` with status polling
-- [ ] Build `AddAppTile` and `/marketplace` route (basic external link for v1)
-- [ ] Build `SkeletonTile` and full loading states
-- [ ] Light mode polish pass
-- [ ] Accessibility audit (keyboard nav, screen reader, contrast)
-- [ ] Empty state illustration commission
-
-Estimated effort: **2 weeks** for first three checkpoints (basic working home with local components only); **+1.5 weeks** for marketplace wire-up; **+0.5 week** for polish.
+- Each app icon is a real `<a>` with `href` (no div+onClick).
+- Tab order matches DOM order (which matches pin order). Enter / Space activates.
+- Search input is `<input type="search">` with `aria-controls="home-app-grid"`.
+- Stat cards are `<a>` elements with `aria-label`s describing the metric and target.
+- Status text under icons reads at 14px `neutral-200` against the pane glass — verified ≥4.5:1 contrast in both modes.
+- The brand-color background of an icon is decorative; the glyph and label carry the meaning.
+- `prefers-reduced-motion: reduce` disables scale + glow animations. Hover state instead applies a 1px border-color brighten. Skeleton shimmer slows to 3s.
+- Focus rings: search input gets a 4px emerald-tinted ring; icons and cards get a 2px solid `brand.agents` outline (no glow when focused-via-keyboard, distinct from hover glow).
 
 ---
 
-## 10. Open design questions (deferrals)
+## 16. Phase 2A → 2B implementation checklist
+
+Order of work, each item shippable once its predecessors land:
+
+- [ ] Build `app/(os)/page.tsx` rendering the four zones in a vertical flex column.
+- [ ] Build `Greeting` component (`use-greeting` hook, gradient text fill).
+- [ ] Build `StatCard` + `StatCards` components (skeleton + hover glow).
+- [ ] Build `AppIcon` component reading from `brand-colors.ts`.
+- [ ] Build `AppGrid` (CSS grid, `auto-fill minmax`).
+- [ ] Build `AddAppIcon` and wire to marketplace URL (Phase 2 external link).
+- [ ] Build `SearchBar` with `Cmd+K` handler and 80ms debounce.
+- [ ] Migrate `useHomeApps`, `marketplaceClient`, `mergeApps` from current implementation.
+- [ ] Implement `useStats` with three parallel fetches.
+- [ ] Define `brand-colors.ts` registry with at least the eight curated entries plus the deterministic fallback.
+- [ ] Wire `CpAuthBanner` placement above Zone A; trigger on 401.
+- [ ] Skeleton states for cards and grid (cached icon count from `localStorage`).
+- [ ] Empty state component.
+- [ ] Migrate existing `/dashboard/*` pages under `/settings/*` and configure 308 redirects.
+- [ ] Delete `app/(home)/` directory.
+- [ ] Light mode polish pass.
+- [ ] Accessibility audit (keyboard, screen reader, contrast, reduced-motion).
+
+Estimated effort: **~1.5 weeks** for the Home rebuild after the shell is built. Marketplace wire-up is already done from v1 and survives.
+
+---
+
+## 17. Open questions (deferrals)
 
 These can be answered later without blocking implementation:
 
-1. **Greeting line wording.** "Good evening" vs. system message ("3 unread proposals waiting") vs. user-customizable. Default to neutral greeting; revisit when proactive AI surfaces here.
-2. **Search depth.** v1: name + description matching only. v2: search across settings, marketplace catalog, even Synap entities ("find my notes about X")? Defer to Phase 4.
-3. **Tile sizes.** All tiles are uniform 128px. Future: 2x1 widget tiles for at-a-glance info (next event, task count). Defer.
-4. **Notifications.** A `notifications` indicator on the user avatar? Not in v1. Notifications surface in Synap, not Eve.
-5. **Wallpapers / theming.** Umbrel has wallpapers. Out of scope for v1; revisit if Eve becomes user-skin-able.
-6. **App categories / sections.** v1 is one flat grid. Future: collapsible sections by category? Probably not — pin order is the user's organization tool.
+1. **Stat card configurability.** v1 hard-codes Agents / Today / Updates. v2 may let the operator pick three from a wider set (storage, sync status, queue depth). Defer to Phase 4.
+2. **Drag-and-drop reordering.** Removed from v2 first ship; right-click pin/unpin only. Re-add when we have an icon-grid drag UX we like.
+3. **Search depth.** v1: app name + description only. v2: search across settings, marketplace catalog, even Synap entities? Defer to Phase 4.
+4. **Notifications surface on Home.** Not in v1. Notifications live in Synap; the OS shell does not host a tray. The Updates stat card is the closest thing.
+5. **Wallpapers / theming.** Wallpaper is the shell's responsibility and is currently the mesh gradient only. Out of scope here.
 
 ---
 
-## 11. Reference: what this is NOT
+## 18. Reference: what this is NOT
 
 To prevent scope creep during implementation:
 
-- ❌ Not a workflow editor (that's `/channels`)
-- ❌ Not a metrics dashboard (that's `/settings/components`)
-- ❌ Not a chat UI (that's OpenWebUI, accessed via the Chat tile)
-- ❌ Not a marketplace browser (that opens in `/marketplace`, separate route, possibly external)
-- ❌ Not a settings panel (that's `/settings`, gear icon top-right)
-- ❌ Not a notification center (notifications live in Synap)
+- Not a workflow editor — that's the Agents app.
+- Not a metrics dashboard — three stat cards is the ceiling, no charts.
+- Not a chat UI — that's OpenWebUI / a future native Synap chat, accessed via the Chat icon.
+- Not a marketplace browser — `+ Add` opens the marketplace as a separate surface.
+- Not a settings panel — the gear icon in the shell pane header navigates to `/settings`.
+- Not a notification center.
+- Not a sidebar layout — sidebars exist only inside the Settings app, owned by that app.
 
-The home page does ONE thing: launch apps. Everything else is one click away.
+The Home does ONE thing: launch apps and surface three glanceable facts about the OS. Everything else is one click away — through the dock, through the gear, or through search.

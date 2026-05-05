@@ -42,7 +42,7 @@ This document is the north star. It defines:
 - The **agentic triangle** invariant (Synap = brain, OpenClaw = ingress, Hermes = execution)
 - The **OS surface map** (what lives at each Eve route)
 - The **marketplace model** (apps + packs + entitlements)
-- The **channels visualization** (live flow, n8n-style, with config side-panel)
+- The **Agents app** (live flow + chronological timeline; see [Eve Agents design](./eve-agents-design.mdx))
 - The **auth handshake** between Eve and the Control Plane
 - A **phased build plan** with explicit "not shipping yet" per phase
 
@@ -100,7 +100,7 @@ Eve's dashboard becomes the **personal AI OS** with a clear three-route layout:
 | Route | Purpose | Today | After Phase 1 |
 |---|---|---|---|
 | `/` | **Apps launcher.** Marketplace-driven grid showing the user's installed apps + pinned defaults. Beautiful, minimal, clickable. | Stack pulse / 5 organs overview | UmbrelOS-style app grid (default home) |
-| `/channels` | **Live interconnection viz** — n8n/Make.com-style flow showing messages traveling through OpenClaw → Synap → Hermes in real time. Click a node → side-panel config. | Toggles for Telegram/Signal/Matrix/voice | Live node-flow + slide-out config + onboarding flow for adding bridges |
+| `/agents` | **Agents app** — operator's window into the agentic triangle. Toggle between Flow (live n8n-style node graph) and Timeline (chronological event stream). Click a node → side-panel config. See [Eve Agents design](./eve-agents-design.mdx). | Toggles for Telegram/Signal/Matrix/voice | Flow + Timeline views, slide-out config, onboarding flow for adding bridges |
 | `/settings` | **Admin surface** — what the dashboard is today: components, AI providers, networking, doctor, advanced channel config. | Multiple top-level pages | Consolidated under `/settings` |
 
 Everything that's currently top-level (`/dashboard/components`, `/dashboard/ai`, `/dashboard/networking`, `/dashboard/doctor`) moves under `/settings`. The current `/dashboard` home becomes the new `/`.
@@ -178,9 +178,9 @@ The Arch becomes invisible to users without an active entitlement. CRM might be 
 
 ---
 
-## 5. The Channels Visualization
+## 5. The Agents App
 
-A beautiful, live, node-based view of how messages flow through the agentic triangle. Inspired by n8n / Make.com, but read-only by default with config side-panels.
+A beautiful, live view of what the operator's AI staff is doing — the agentic triangle made visible. Two toggleable views over the same event stream: a **Flow** canvas (n8n / Make.com-style node graph, default) and a **Timeline** stream (vertical chronological list). Read-only by default with config side-panels. Full design spec in [Eve Agents design](./eve-agents-design.mdx).
 
 ### Layout
 
@@ -334,7 +334,7 @@ Audit (2026-05-05) rated current protection at **1.5/5** — manual dashboard ba
 - OpenWebUI tile pinned by default
 - **Fast-follow:** Hermes un-neutering — re-enable sub-agent delegation + SOP loop while keeping Synap as the task queue source. (Phase 2.5 once OS home ships.)
 
-### Phase 3 — Channels Visualization (`/channels`)
+### Phase 3 — Agents App (`/agents`)
 
 **Goal:** Beautiful live node-flow showing message traffic, with side-panel config. Estimated 3–4 weeks.
 
@@ -382,7 +382,7 @@ Decisions locked in for this north star (do not re-litigate without explicit rev
 1. **Marketplace location: BOTH** — admin in CP dashboard, user-facing in `synap-app`, shared package `@synap/marketplace`.
 2. **Install model: (A) + (C)** — pure registry for apps, workspace seed for automation packs. NO Coolify provisioning in Phase 1.
 3. **Auth: user-scoped JWT** — OAuth handshake from Eve to CP. Marketplace-read scope only.
-4. **Channels viz: live flow + side-panel config** — n8n-style live, click-to-configure. Not a workflow editor.
+4. **Agents app: Flow + Timeline** — n8n-style live node graph plus chronological event stream over the same data, click-to-configure. Not a workflow editor.
 5. **OpenWebUI: pinned tile in app grid** — first-class default, not hidden in settings.
 6. **Hermes management: Synap macro-queue + Hermes micro-parallelism** — Synap owns state; Hermes' internal sub-agent delegation re-enabled per task. Cron stays disabled (Synap-as-state golden rule).
 7. **Paperclip: not integrated** — Synap is the better Paperclip.
@@ -393,6 +393,6 @@ Decisions locked in for this north star (do not re-litigate without explicit rev
 
 - **Agentic triangle** — The invariant relationship between Synap, OpenClaw, and Hermes: Synap owns state, the other two communicate only through it.
 - **Entitlement** — A CP record granting a specific user access to a specific marketplace app. The basis for per-customer gating.
-- **OS surface** — The user-facing routes of the Eve dashboard: `/`, `/channels`, `/settings`. Distinct from the underlying agent infrastructure.
+- **OS surface** — The user-facing routes of the Eve dashboard: `/`, `/agents`, `/settings`. Distinct from the underlying agent infrastructure.
 - **App tile** — A clickable card in the Eve home representing one installed app (proprietary, open-source, or auto-discovered Eve component).
-- **Live node flow** — The channels page main view, rendering message traffic as animated edges between agent nodes in real time.
+- **Live node flow** — The Agents app's Flow view, rendering message traffic as animated edges between agent nodes in real time. Sister view: the Timeline (chronological event stream).

@@ -1,0 +1,848 @@
+---
+title: 'Eve Agents — Design Spec'
+description: >-
+  Complete design specification for the Eve OS Agents app (`/agents`) — the
+  operator's window into the agentic triangle, with a live n8n-style Flow
+  view and a chronological Timeline view sharing the same event stream.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve Agents — Design Spec
+
+**Date:** 2026-05-05
+**Status:** Design specification. Implementation pending Phase 3 of [Eve OS Vision](./eve-os-vision.mdx). Replaces the older "channels visualization" framing — same substrate, sharper mental model.
+
+This document is concrete enough that a developer can implement the Agents app end-to-end after one read. Sister doc to [Eve OS Home — Design Spec](./eve-os-home-design.mdx); inherits chrome from the [Eve OS Shell](./eve-os-shell.mdx). Get the shell doc in your head first — wallpaper, dock, and the popup pane container belong to it. The Agents app renders **inside** the shell's pane and owns nothing else.
+
+---
+
+## 1. Why "Agents" (and not "Channels")
+
+The earlier framing called this surface a "channels visualization." That was correct architecturally — the topology renders messaging channels — but wrong cognitively. The operator does not think "I want to inspect my channels." The operator thinks:
+
+> "What is my AI staff doing right now?"
+
+The agentic triangle (Synap, OpenClaw, Hermes) is staff. External messaging endpoints are inboxes those staff watch. The task queue is what the staff are working on. Renaming this surface to **Agents** snaps the page to the operator's mental model: this is where you see your staff, prod them, and onboard new ones.
+
+The substrate is unchanged. The framing, the icon (a brain, an antenna, a bot), and the title are.
+
+---
+
+## 2. Design intent
+
+Three feelings to deliver, in order of priority:
+
+1. **Aliveness.** The system is breathing. Edges pulse with real traffic, status dots throb, the event stream scrolls. Walking past the screen tells you "something is working" without reading a single word.
+2. **Legibility.** The agentic triangle is self-documenting. A new operator should glance at this page and immediately understand: *external messages arrive at OpenClaw, become Synap channel messages, become Hermes tasks, get executed, results flow back.* Nothing is hidden, nothing is ambiguous.
+3. **Configurability without complexity.** Click a node — its panel opens. Click a row in the timeline — its payload expands. No dropdown trees, no settings labyrinth, no separate config screens.
+
+What the page is NOT:
+
+- ❌ A workflow editor. The topology is **fixed by the architecture**. Operators observe and configure; they do not redraw the triangle.
+- ❌ A chat UI. Reading and replying to messages happens in Synap chat (or OpenWebUI). Agents shows traffic and lets you act on agents themselves.
+- ❌ A debugging console. Doctor handles deep introspection; this page is the operator-facing pulse, not the developer-facing log.
+- ❌ A multi-window canvas. Single popup at a time, per the shell contract.
+
+---
+
+## 3. The two views
+
+The same event stream powers two complementary views. The operator toggles between them via icon buttons in the pane header's actions slot.
+
+| View | Lucide icon | What it answers | Spatial model |
+|---|---|---|---|
+| **Flow** (default) | `Workflow` | "How is traffic moving right now?" | Zones laid out left-to-right; pulses travel along edges |
+| **Timeline** | `History` | "What happened, when, and in what order?" | Vertical chronological list, newest at top |
+
+The toggle is sticky per session (zustand local state). On first load, Flow is selected. The active toggle is rendered with a subtle pill behind the icon — same active treatment the shell pane header uses for any active action.
+
+Filter chips, the Reveal-excerpts toggle, and event subscriptions are **shared across both views**. A user filtering "AI Events" in Flow will see the same chip selected when they switch to Timeline. Switching views is a presentational change, not a context change.
+
+---
+
+## 4. Pane structure (lives inside the shell pane)
+
+The shell provides the wallpaper, the rounded popup pane container, the pane header (56px, with title + actions slots), and the dock. The Agents app fills the **pane body** only. Header chrome and pane chrome are not ours.
+
+```
+┌─ shell pane (rounded, frosted, 24px radius) ────────────────┐
+│  [back]    Agents              [Flow] [Timeline]            │ ← shell pane header (56px)
+├─────────────────────────────────────────────────────────────┤
+│  All  External  Synap  Hermes  AI Events    [eye] reveal    │ ← filter chips strip (40px)
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│                                                             │
+│           Flow canvas  ──or──  Timeline stream              │ ← pane body
+│                                                             │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  2s  Telegram → "build a login page"  →  Synap personal     │ ← activity tape (Flow only, 48px)
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 4.1 Pane header (provided by the shell)
+
+The Agents app passes three slot props to the shell `Pane` component:
+
+```tsx
+<Pane
+  title="Agents"
+  back={null}                              // root app, no back button
+  actions={<ViewToggle />}                 // Flow / Timeline icon buttons
+>
+  <AgentsBody />
+</Pane>
+```
+
+`ViewToggle` is two icon buttons rendered horizontally: `Workflow` (Flow) and `History` (Timeline). The active one shows the standard pane-header active pill (a 28px-tall rounded background using the shell's `paneHeaderActive` token). No labels in the header — labels appear as tooltips on hover. Total width fits within the actions slot.
+
+### 4.2 Filter chips strip (40px sub-header, shared across views)
+
+Just below the pane header sits a thin chips bar that applies to both views. Five chips:
+
+| Chip | Filters |
+|---|---|
+| `All` (default) | Shows everything |
+| `External` | Events touching external channel nodes (Telegram, Discord, etc.) |
+| `Synap` | Events on Synap nodes (channel messages, replies routed) |
+| `Hermes` | Events on Hermes nodes (queued, started, completed, failed) |
+| `AI Events` | `chat:stream` and AI proposal events specifically |
+
+Chips are pill-shaped, 28px tall, padding `px-3`. Active chip has a filled background using the shell's `brand.agents` emerald with 12% alpha; inactive chips use a 1px border on `os.paneBorder` with no fill. Click toggles. Only one chip active at a time (radio behavior). A small **Reveal excerpts** eye-icon button sits on the far right of the chips strip — tapping it flips a per-session boolean that controls excerpt visibility in the activity tape and the timeline rows. Default: **off** (excerpts hidden).
+
+### 4.3 Pane body
+
+The body is the canvas (Flow) or the scrolling list (Timeline). Switching views cross-fades the body content for 140ms (`opacity` + 4px `translateY`) — same animation grammar as the shell's pane content swap. The chips strip and pane header are untouched during the transition.
+
+---
+
+## 5. Flow view
+
+Flow is the default. The operator opens Agents and sees the triangle alive. Most of the design carries over from the older channels-viz spec; what follows is the locked version.
+
+### 5.1 Topology (fixed by architecture)
+
+Five conceptual zones, left to right. The layout is deterministic — never auto-laid-out.
+
+| Zone | Contents | Type |
+|---|---|---|
+| **External** | Telegram, Discord (v1) — WhatsApp, Signal, Matrix, Slack, Voice rendered as dashed/disabled "Coming soon" placeholders | One node per connected channel + one `+ Add` placeholder |
+| **OpenClaw** | Single node, always present | The ingress agent |
+| **Synap Channels** | Personal channel + active branches | Aggregate node, expands to cluster if branches active |
+| **Hermes** | Single node, always present | The execution agent |
+| **Tasks** | Aggregate node showing queue depth + completion stats | Always present |
+
+Edges are also fixed:
+
+- `External ↔ OpenClaw` — one per connected external channel
+- `OpenClaw ↔ Synap` — single edge to the channel cluster
+- `Synap → Hermes` — task pickup
+- `Hermes → Tasks` — execution + writeback (the result curves back toward Synap visually)
+
+Operators cannot add or remove edges. They can: add new external channels (creates a new node + edge), remove disconnected external channels, click any node to inspect or configure.
+
+### 5.2 React Flow canvas
+
+The Flow view wraps `ReactFlow` from the `reactflow` package. Configured for read-only topology:
+
+```tsx
+<ReactFlow
+  nodes={nodes}
+  edges={edges}
+  nodeTypes={nodeTypes}
+  edgeTypes={edgeTypes}
+  fitView
+  fitViewOptions={{ padding: 0.2 }}
+  panOnDrag
+  zoomOnScroll
+  zoomOnPinch
+  selectionOnDrag={false}
+  nodesDraggable={false}
+  nodesConnectable={false}
+  edgesUpdatable={false}
+  elementsSelectable
+  minZoom={0.5}
+  maxZoom={1.5}
+  proOptions={{ hideAttribution: true }}
+>
+  <Background variant="dots" gap={24} size={1} color="rgba(255,255,255,0.04)" />
+  <Controls position="bottom-right" showInteractive={false} />
+</ReactFlow>
+```
+
+Background is a 4%-opacity dotted grid — whisper, not loud. Gives spatial reference without competing with the nodes.
+
+### 5.3 Node types
+
+Five React Flow node types, all sharing a base shell:
+
+```typescript
+const nodeTypes = {
+  external:     ExternalChannelNode,
+  openclaw:     OpenClawNode,
+  synapChannel: SynapChannelNode,
+  hermes:       HermesNode,
+  tasks:        TasksNode,
+};
+```
+
+#### 5.3.1 Common node shell
+
+```css
+/* Base node */
+min-width: 144px;
+padding: 16px 20px;
+border-radius: 16px;
+background: var(--os-paneBg);                  /* matches shell's frosted feel */
+border: 1px solid rgba(255, 255, 255, 0.06);
+transition: border-color 200ms ease-out, background 200ms ease-out;
+
+/* Hover — no translateY, per shell animation grammar */
+&:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Selected (panel open) */
+&.selected {
+  border-color: var(--brand-agents);           /* emerald */
+  background: rgba(52, 211, 153, 0.04);
+}
+
+/* Disconnected (external channels only, plus future-channel placeholders) */
+&.disconnected {
+  border: 1.5px dashed var(--os-paneBorder);
+  background: transparent;
+  opacity: 0.65;
+}
+```
+
+Each node renders:
+
+- **Lucide icon** (24px, top-center, color matches the zone tint)
+- **Label** (15px, font-weight 500, centered)
+- **Status dot** (6px, top-right corner)
+- **Type-specific tint** as a subtle gradient on the background
+
+No emoji is used in any node. Icons come exclusively from Lucide.
+
+#### 5.3.2 Type-specific tints
+
+The tints stay coordinated with the shell's brand-color pool. `brand.agents` (emerald) is the headline color; OpenClaw's indigo, Hermes' amber, External's slate are zone-specific accents.
+
+```css
+.node--external {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.05) 0%, transparent 100%);
+}
+.node--openclaw {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, transparent 100%);
+  border-color: rgba(99, 102, 241, 0.12);
+}
+.node--synap {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%);
+  border-color: rgba(16, 185, 129, 0.14);
+}
+.node--hermes {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, transparent 100%);
+  border-color: rgba(245, 158, 11, 0.12);
+}
+.node--tasks { /* default base shell, no tint */ }
+```
+
+#### 5.3.3 ExternalChannelNode
+
+| Element | Detail |
+|---|---|
+| Icon | Lucide per channel: `Send` (Telegram), `MessageSquare` (Discord), `Phone` (WhatsApp future), `Mic` (voice future) |
+| Label | Channel name |
+| Sublabel | `~12 msgs/day` (last-7-day average, neutral-500, optional) |
+| Status dot | Green (connected, active), amber (connected, quiet), grey (disconnected) |
+| Disconnected style | Dashed border, "Click to connect" tooltip |
+| v1.5 placeholder style | Dashed border + 0.4 opacity, "Coming soon" tooltip — applies to WhatsApp/Signal/Matrix/Slack/Voice |
+
+Click behavior:
+- **Connected** → opens `SidePanel` with config + recent activity
+- **Disconnected (v1)** → opens `OnboardingModal` (§7)
+- **v1.5 placeholder** → no-op except tooltip
+
+#### 5.3.4 OpenClawNode
+
+| Element | Detail |
+|---|---|
+| Icon | `Antenna` (Lucide) |
+| Label | "OpenClaw" |
+| Sublabel | `{N} skills · {M} channels` (e.g. `12 skills · 4 channels`) |
+| Status dot | Green (container running), amber (degraded), grey (offline) |
+
+Click → `SidePanel` with tabs: **Status** | **Skills** | **Routing** | **Persona**. Footer actions: `[Restart container]` `[Open logs]`.
+
+#### 5.3.5 SynapChannelNode
+
+Aggregate. Renders the personal channel by default; clusters branches around it when active.
+
+| Element | Detail |
+|---|---|
+| Icon | `Brain` (Lucide), emerald-tinted |
+| Label | "Personal Channel" or active channel name |
+| Sublabel | `23 messages · 1h` |
+| Status dot | Always green — Synap being offline means the page itself wouldn't load |
+| Cluster indicator | `+3` badge bottom-right when branches active. Click expands the cluster inline (branch nodes animate out from the parent). |
+
+Click → `SidePanel` with read-only message preview + `[Open in Synap]` deep link. Replying happens in Synap, not here.
+
+#### 5.3.6 HermesNode
+
+| Element | Detail |
+|---|---|
+| Icon | `Bot` (Lucide), amber-tinted |
+| Label | "Hermes" |
+| Sublabel | `{queued} queued · {running} running` |
+| Status dot | Green (polling), amber (queue > 10), grey (offline) |
+
+Click → `SidePanel` with tabs: **Queue** | **Recent** | **Config**. Footer: `[Pause daemon]` `[View full queue]`.
+
+#### 5.3.7 TasksNode
+
+Aggregate. Represents the task queue + recent executions.
+
+| Element | Detail |
+|---|---|
+| Icon | `ListChecks` (Lucide) |
+| Label | "Tasks" |
+| Sublabel | `{completed today} done · {failed today} failed` |
+| Status dot | Green by default, amber if failure rate > 10% in last hour |
+
+Click → `SidePanel` showing today's task log + link to the full task queue in Synap.
+
+### 5.4 PulseEdge — the only place we glow
+
+```typescript
+const edgeTypes = { pulseEdge: PulseEdge };
+```
+
+The PulseEdge has two visual layers:
+
+1. **Static rail** — 1.5px, neutral-700 dark / neutral-200 light. The "track."
+2. **Pulse layer** — a 4px dot of light traveling source→target in 1200ms with ease-out, fading to 0 at the end. AI-emerald gradient (`#6EE7B7` → `#34D399` → transparent). Hermes-failure pulses use a red gradient (`#FCA5A5` → `#EF4444`) instead.
+
+```css
+@keyframes pulse-travel {
+  0%   { offset-distance: 0%;   opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+.pulse-dot {
+  offset-path: path('<edge SVG path>');
+  animation: pulse-travel 1200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #6EE7B7 0%, #34D399 50%, transparent 100%);
+  box-shadow: 0 0 6px rgba(110, 231, 183, 0.6);
+}
+```
+
+This is the **only place we use `box-shadow` in the entire OS** outside of the shell's pane lift. The shell's animation grammar treats glow as exceptional — pulses earn it because they carry semantic meaning ("traffic just happened here"). Static depth is still done with borders.
+
+`prefers-reduced-motion: reduce` disables the travel animation. Reduced-motion users see a brief 200ms border-color flash on the edge instead — same information, no movement.
+
+Cap: 5 simultaneous pulses per edge. Older pulses fade earlier when the limit is reached.
+
+### 5.5 SidePanel
+
+Slide-over from the right edge of the pane body. Closes on backdrop click, Escape, or X button.
+
+| Property | Desktop | Tablet | Mobile |
+|---|---|---|---|
+| Width | 40% (min 480px, max 640px) | 60% | 100% |
+| Animation | translateX 280ms ease-out | same | bottom sheet (translateY) |
+| Backdrop | rgba(0, 0, 0, 0.4) | same | same |
+
+Header (sticky, 56px): node icon (left, 20px) — node title (center-left, 17px, font-weight 500) — close button (right, X icon).
+
+Body sections:
+
+- **Status** — colored status dot + uptime + "Connected since {date}"
+- **Config** — type-specific form (per-node tabs as listed above)
+- **Recent activity** — last 10 events involving this node, plain language
+- **Footer actions** — type-specific buttons
+
+Side-panel content is entirely owned by the panel components; the slide-over chrome is shared.
+
+### 5.6 ActivityTape (Flow only)
+
+48px sticky bottom strip inside the Flow pane body. Shows the last 10 events, newest on the left, narrated in plain language.
+
+```
+2s   Telegram → "build a login page"   →   Synap personal
+4s   Synap → task created               →   Hermes queue
+```
+
+Each item:
+- `2s` — time-ago in mono numeric, neutral-400, refreshes every second
+- Source label (icon name + label, no emoji)
+- `→ "..."` — message excerpt, max 30 chars, **gated by the Reveal-excerpts toggle**
+- `→` destination label
+
+When the Reveal toggle is off (default), excerpts render as `→ Message hidden` in neutral-500. When on, the actual excerpt shows. The toggle state lives in component-local React state (per-session), is not persisted, and is shared with Timeline rows.
+
+Hover an item → highlights the corresponding edge in the canvas (1.5px → 3px width, brightness +20%) for 2 seconds.
+
+New items fade in from the left (200ms); existing items shift right.
+
+The activity tape is **Flow-only**. Timeline does not need it because Timeline IS the chronological narration, in larger format.
+
+---
+
+## 6. Timeline view
+
+A vertical chronological list of every event the page is subscribed to. Newest at top. Optimized for "what just happened" and "what happened in the last hour" — operators who want narration, not topology.
+
+### 6.1 Header (shared with Flow's chips strip)
+
+The chips strip described in §4.2 is shared. Timeline adds one extra control to the right side of the chips bar: a **scope selector** dropdown:
+
+| Scope | Behavior |
+|---|---|
+| `Last hour` | Live + scrolls back 1h then stops |
+| `Today` (default) | Live + scrolls back to 00:00 local time |
+| `All` | Live + paginates indefinitely backward |
+
+Scope selection is per-session. Switching scopes triggers a refetch with a 140ms cross-fade on the stream.
+
+### 6.2 Stream
+
+Vertical scrolling list. Each row:
+
+```
+┌────────────────────────────────────────────────────┐
+│ ┃   2s ago    openclaw:message:received             │
+│ ┃            "build a login page"   [eye]           │
+│ ┃            from Telegram → personal channel       │
+└────────────────────────────────────────────────────┘
+```
+
+Spec:
+
+- **Vertical accent bar** on the left, 3px wide, full row height. Color-coded by actor:
+  - `openclaw` → indigo (`#6366F1`)
+  - `synap` → emerald (`#34D399`)
+  - `hermes` → amber (`#F59E0B`)
+  - `user` → slate (`#94A3B8`)
+  - `system` → neutral (`#64748B`)
+- **Vertical padding** 12px top + bottom; horizontal padding 16px left of accent, 16px right
+- **Hover background** `rgba(255, 255, 255, 0.04)` dark / `rgba(0, 0, 0, 0.03)` light
+- **Time-ago** small caps neutral-400 (`2s ago`, `14m ago`, `1h ago`, `yesterday 14:32`); refreshes every second within the live window
+- **Event verb** rendered as `{actor}:{entity}:{action}` in monospace font (`var(--font-mono)`), neutral-300, 12px — visibly smaller than the body text. This anchors the operator in the typed registry vocabulary from [Event Chain → Realtime event naming](./event-chain.mdx#realtime-event-naming--actorentityaction).
+- **Plain-language summary** 15px, neutral-100. One line. Authored from a small `eventToSummary()` helper, not derived raw.
+- **Excerpt** (when applicable, e.g. message body): hidden by default behind the same Reveal-excerpts toggle as the activity tape; truncated to 80 chars + `…` when revealed. Shown inline alongside `[eye]` icon for quick reveal of just this row.
+- **Source/destination footer** small, neutral-500, e.g. `from Telegram → personal channel`
+
+### 6.3 Progressive disclosure
+
+Hover (or tap on touch) a row → the row expands inline to reveal the full event payload as a compact key-value list in monospace, animated 200ms ease-out (height transition only, no translateY). Click anywhere outside the row or on the row again to collapse.
+
+The expanded payload is the raw `EventPayloadFor<E>` object — what `emitTyped` sent. This is the operator's escape hatch when they need detail; default state stays clean.
+
+### 6.4 Live updates
+
+New events fade in at the top of the stream with a 140ms slide-from-above animation (translateY 8px → 0, opacity 0 → 1). Existing rows shift down. Reduced motion: animations disabled, but new events still appear instantly at the top with no animation.
+
+If the operator has scrolled away from the top (more than 1 row down), live insertion still happens at the logical top, but a small floating pill appears: `↑ 3 new` — clicking it scrolls back to top. This prevents the feed jumping under their reading position.
+
+### 6.5 Infinite scroll backwards
+
+When scope is `All` (or the operator hits the bottom of `Today`), pagination kicks in: a `GET /api/hub/events` query (paginated by `cursor` + `limit=50`) loads older events. While loading, a single skeleton row renders at the bottom. This depends on the backend's `events.since` query being extended to support cursor-based historical pagination — flag this as a backend dependency for 3C-4.
+
+If the historical query isn't available yet at ship time, Timeline falls back to live-only mode with `Last hour` and `Today` scopes only; `All` is hidden and an inline note explains.
+
+### 6.6 What Timeline does NOT do
+
+- ❌ No grouping or threading — strict chronological. Grouping by event type or by channel is a v2 idea worth deferring.
+- ❌ No replies / actions on events. The Timeline is observation; configuration happens in Flow's side panels.
+- ❌ No search box. v1 relies on filter chips. A search input is v2 if needed.
+- ❌ No CSV export. v2.
+
+---
+
+## 7. Onboarding flow for new external channels
+
+Triggered by clicking a disconnected external channel node OR the `+ Add` placeholder in the External zone of Flow. (Timeline does not host onboarding — it's a presentational view.)
+
+3-step modal. Centered, max-width 480px, mobile = full-screen.
+
+### Step 1 — Choose channel type
+
+Grid of channel cards: `Telegram`, `Discord` (v1 supported, both have clean APIs), then dashed/disabled `WhatsApp`, `Signal`, `Matrix`, `Slack`, `Voice` (v1.5+, with "Coming soon" tooltip per the operator's earlier locked decision). Each card is 144×120px with a Lucide icon, channel name, and sub-line "via OpenClaw."
+
+```
+┌─────────────────┐
+│   Send icon     │
+│  Telegram       │
+│  via OpenClaw   │
+└─────────────────┘
+```
+
+### Step 2 — Authenticate
+
+Type-specific:
+
+| Channel | Auth method (v1) |
+|---|---|
+| Telegram | Bot token form + "Get token from @BotFather" link |
+| Discord | OAuth redirect → Discord consent → callback |
+
+Each form has clear inline help, a "Where do I find this?" link, and back/next buttons. Errors render inline with `aria-describedby`.
+
+### Step 3 — Choose default Synap channel
+
+Single dropdown, defaulted to user's personal channel. Hint text: "Incoming messages from this source will route here. You can change this later."
+
+```
+Default destination
+[Personal Channel ▼]
+
+  Personal Channel
+  Branch: build-tasks
+  Branch: research
+  + Create new channel
+```
+
+Footer: `[Back]` `[Connect →]`.
+
+### On Connect
+
+1. Backend (Eve API) writes config to OpenClaw via `recreate` action (env-bound configs need recreate, not restart)
+2. Modal shows progress: "Configuring OpenClaw...", "Waiting for first message..."
+3. On first inbound message OR 30s timeout, the modal closes; the new node appears in the canvas with a fade-in (200ms); its edge animates on next message.
+
+If config fails, the modal stays open with an error + retry button.
+
+---
+
+## 8. Real-time event subscription
+
+The Agents app subscribes to Synap's `/presence` Socket.IO with the Eve agent API key. Phase 3A landed `realtime:observe` scope and the API-key handshake; Phase 3B emitted the events below as part of the typed `EventNames` registry. This page is the first consumer.
+
+The events the app listens for, all in `{actor}:{entity}:{action}` format ([canonical reference](./event-chain.mdx#realtime-event-naming--actorentityaction)):
+
+| Event | Visual effect |
+|---|---|
+| `openclaw:message:received` | Pulse from External → OpenClaw edge; row in Timeline |
+| `synap:reply:routed` | Pulse from Synap → OpenClaw (reply path); row in Timeline |
+| `hermes:task:queued` | Pulse from Synap → Hermes edge; row in Timeline |
+| `hermes:task:started` | Hermes node light-up (status dot pulse); row in Timeline |
+| `hermes:task:completed` | Pulse from Hermes back to Tasks (success-color glow); row in Timeline |
+| `hermes:task:failed` | Pulse with red tint; row in Timeline with red accent bar |
+| `chat:stream` (legacy 2-segment) | Synap channel pulse during AI response |
+
+Subscription targets are workspace-scoped: the socket joins `workspace:${workspaceId}` and filters on actor/entity prefixes. The hook (`useAgentsSocket`) reconnects with exponential backoff on disconnect; `socketStatus` (`connected | disconnected | connecting`) is exposed to render a small status indicator in the chips strip when offline.
+
+---
+
+## 9. Data model
+
+### 9.1 Page state
+
+```typescript
+type AgentsView = 'flow' | 'timeline';
+
+type AgentsScope = 'last_hour' | 'today' | 'all';
+
+type AgentsFilter = 'all' | 'external' | 'synap' | 'hermes' | 'ai';
+
+type FlowEvent = {
+  id: string;
+  timestamp: number;
+  type: EventName;             // canonical typed registry
+  actor: 'openclaw' | 'synap' | 'hermes' | 'user' | 'system';
+  source?: string;             // node id (Flow)
+  target?: string;             // node id (Flow)
+  excerpt?: string;
+  payload?: Record<string, unknown>;
+};
+
+type PageState = {
+  view: AgentsView;
+  scope: AgentsScope;
+  filter: AgentsFilter;
+  revealExcerpts: boolean;     // per-session, not persisted
+
+  // Flow-specific
+  nodes: AgentNode[];
+  edges: Edge[];
+  selectedNodeId: string | null;
+  isOnboarding: boolean;
+
+  // Shared
+  recentEvents: FlowEvent[];   // capped at 100 in memory; tape shows top 10, timeline shows visible window
+  socketStatus: 'connected' | 'disconnected' | 'connecting';
+};
+```
+
+### 9.2 Reducers
+
+Two thin reducers, not one global:
+
+- `useFlowState` — derives `nodes`, `edges`, `selectedNodeId`, `isOnboarding`. Pulses live on edge `data.activePulses[]`; the edge component subscribes to its own data and never ripples up to the ReactFlow root.
+- `useTimelineState` — derives the visible event window, handles cursor-based pagination, manages "↑ N new" pill state.
+
+Both consume the same event stream from `useAgentsSocket`. View-specific concerns stay isolated; switching views does not unmount the stream.
+
+### 9.3 Layout algorithm (Flow only)
+
+Topology is fixed → positions are deterministic. No `dagre`, no `elkjs` (auto-layout libraries introduce visual instability when nodes are added/removed).
+
+```typescript
+function computeLayout(nodes: AgentNode[]): AgentNode[] {
+  const ZONE_X = {
+    external: 80,
+    openclaw: 360,
+    synap:    640,
+    hermes:   920,
+    tasks:    1180,
+  };
+  const NODE_GAP_Y = 96;
+
+  return nodes.map((node) => {
+    const zoneNodes = nodes.filter((n) => n.zone === node.zone);
+    const indexInZone = zoneNodes.indexOf(node);
+    const totalInZone = zoneNodes.length;
+    const startY = -((totalInZone - 1) * NODE_GAP_Y) / 2;
+
+    return {
+      ...node,
+      position: {
+        x: ZONE_X[node.zone],
+        y: startY + indexInZone * NODE_GAP_Y,
+      },
+    };
+  });
+}
+```
+
+Adding a new external channel appends to its zone — vertical positions auto-recompute, smooth animation via React Flow's built-in transitions.
+
+---
+
+## 10. Privacy toggle (locked)
+
+The Reveal-excerpts behavior is identical across activity tape and Timeline rows:
+
+- **Default** → excerpts hidden. Activity tape shows `→ Message hidden`. Timeline shows the row without the excerpt line; an `[eye]` icon hint appears where the excerpt would be.
+- **Toggle on** → all excerpts visible. The chips strip's eye-icon button switches state; individual `[eye]` icons in Timeline rows are also tap-targets that flip the global state (not per-row — keeping it simple).
+- **Persistence** → none. State lives in component-local React state, scoped to the Agents app instance. Reload = back to hidden. This is intentional: privacy defaults should always re-assert.
+
+This decision is locked per the operator's earlier spec. We do not persist this preference because we want a privacy-by-default reset every session.
+
+---
+
+## 11. Empty state (Flow)
+
+Shown when no external channels are configured AND there's no activity yet:
+
+```
+            ┌──────────────────────┐
+            │   illustration       │
+            └──────────────────────┘
+
+         Your staff is quiet
+
+   Connect a messaging channel — Telegram, Discord —
+   and watch the OS come alive.
+
+              [+ Connect a channel]
+```
+
+The canvas still renders OpenClaw + Synap + Hermes + Tasks nodes (with no External zone). The empty CTA hovers over where the External zone would be. Timeline's empty state is simpler: a single row "No events yet — your staff is waiting" with a thin emerald accent bar and animated breathing dot.
+
+---
+
+## 12. File layout (under the new shell route group)
+
+The Agents app lives inside the OS route group so it inherits wallpaper, dock, and pane container automatically.
+
+```
+app/(os)/agents/
+├── page.tsx                       ← Agents root with view toggle
+├── components/
+│   ├── flow-view.tsx              ← React Flow canvas
+│   ├── timeline-view.tsx          ← chronological list
+│   ├── view-toggle.tsx            ← Flow/Timeline switcher (rendered into pane header actions)
+│   ├── filter-chips.tsx           ← shared chips strip (with reveal toggle)
+│   ├── pulse-edge.tsx             ← traveling-light edge (Flow)
+│   ├── nodes/
+│   │   ├── external-channel-node.tsx
+│   │   ├── openclaw-node.tsx
+│   │   ├── synap-channel-node.tsx
+│   │   ├── hermes-node.tsx
+│   │   └── tasks-node.tsx
+│   ├── side-panel.tsx             ← slide-over chrome (Flow)
+│   ├── panels/
+│   │   ├── external-panel.tsx
+│   │   ├── openclaw-panel.tsx
+│   │   ├── synap-channel-panel.tsx
+│   │   ├── hermes-panel.tsx
+│   │   └── tasks-panel.tsx
+│   ├── timeline-row.tsx           ← single event row (Timeline)
+│   ├── activity-tape.tsx          ← bottom narration (Flow only)
+│   ├── reveal-toggle.tsx          ← eye icon for excerpt privacy
+│   ├── onboarding-modal.tsx       ← 3-step wizard
+│   ├── onboarding-steps/
+│   │   ├── pick-channel-step.tsx
+│   │   ├── auth-step.tsx
+│   │   └── destination-step.tsx
+│   └── empty-state.tsx
+├── hooks/
+│   ├── use-agents-topology.ts     ← initial fetch (Flow node list)
+│   ├── use-agents-socket.ts       ← Socket.IO event stream (shared)
+│   ├── use-flow-state.ts          ← Flow view reducer
+│   └── use-timeline-state.ts      ← Timeline view reducer
+└── lib/
+    ├── compute-layout.ts          ← Flow zone positions
+    ├── event-to-pulse.ts          ← maps event → edge animation
+    ├── event-to-summary.ts        ← maps event → plain-language one-liner
+    └── socket-client.ts           ← Synap Socket.IO client w/ API key
+```
+
+The corresponding API routes stay where they were:
+
+```
+app/api/agents/
+├── topology/route.ts              ← GET — initial node list
+└── onboard/route.ts               ← POST — adds a channel via OpenClaw recreate
+```
+
+(Renamed from `/api/channels/*` for consistency with the new app name. The implementation is unchanged — only the URL shifts.)
+
+---
+
+## 13. Visual tokens
+
+Reuses everything from the [Eve OS Shell](./eve-os-shell.mdx) §7 — `os.*`, `brand.agents`, `backdropBlur.pane`, animation grammar. Adds Agents-specific tints:
+
+```ts
+// tailwind.config.ts (additions)
+theme: {
+  extend: {
+    colors: {
+      tint: {
+        external: 'rgba(148, 163, 184, 0.05)',
+        openclaw: 'rgba(99, 102, 241, 0.06)',
+        synap:    'rgba(16, 185, 129, 0.06)',
+        hermes:   'rgba(245, 158, 11, 0.06)',
+      },
+      tintBorder: {
+        external: 'rgba(148, 163, 184, 0.10)',
+        openclaw: 'rgba(99, 102, 241, 0.12)',
+        synap:    'rgba(16, 185, 129, 0.14)',
+        hermes:   'rgba(245, 158, 11, 0.12)',
+      },
+      timelineAccent: {
+        openclaw: '#6366F1',
+        synap:    '#34D399',
+        hermes:   '#F59E0B',
+        user:     '#94A3B8',
+        system:   '#64748B',
+      },
+    },
+    keyframes: {
+      'pulse-travel': {
+        '0%':   { offsetDistance: '0%',   opacity: '0' },
+        '10%':  { opacity: '1' },
+        '90%':  { opacity: '1' },
+        '100%': { offsetDistance: '100%', opacity: '0' },
+      },
+      'timeline-row-in': {
+        '0%':   { opacity: '0', transform: 'translateY(-8px)' },
+        '100%': { opacity: '1', transform: 'translateY(0)' },
+      },
+    },
+    animation: {
+      'pulse-travel':     'pulse-travel 1200ms cubic-bezier(0.4, 0, 0.2, 1) forwards',
+      'timeline-row-in':  'timeline-row-in 140ms ease-out',
+    },
+  },
+},
+```
+
+The `pulse-travel` duration is locked at 1200ms — it sits between the shell's 200ms hover and 1.6s status-dot pulse, reading as "travel" rather than "tick" or "breathe."
+
+---
+
+## 14. Performance considerations
+
+The page is event-heavy. Things to get right:
+
+1. **Don't re-render the canvas on every event.** Pulses live on edge `data.activePulses[]`; edge components subscribe to their own data and never ripple up.
+2. **Cap event memory at 100.** Older events drop. Timeline pagination fetches from the backend; the in-memory live window stays bounded.
+3. **Memoize node + row components.** `React.memo` everywhere with explicit equality.
+4. **Throttle socket bursts.** If 50 events arrive in one tick, batch into a single state update via `requestAnimationFrame`.
+5. **Reduced motion mode.** `prefers-reduced-motion: reduce` disables pulse and row-in animations entirely. New events still appear; they just don't animate.
+6. **Pause when tab is hidden.** Listen for `document.visibilitychange` — freeze pulse animations and pause time-ago tickers. The shell already pauses wallpaper drift; we follow the same pattern.
+7. **Timeline virtualization** — at scope `All`, virtualize the row list (`@tanstack/react-virtual` or similar) once it exceeds 200 rows. v1 may ship without virtualization if `Today` scope keeps row counts modest.
+
+---
+
+## 15. Accessibility
+
+- All Flow nodes are keyboard-focusable. Tab cycles in zone order (external → openclaw → synap → hermes → tasks). Enter opens the side panel, Escape closes it.
+- All Timeline rows are keyboard-focusable. Enter expands the payload, Escape collapses, arrow keys navigate row to row.
+- Pulse animations are decorative — `aria-hidden`. Both the activity tape and the Timeline are screen-reader live regions (`aria-live="polite"`) that announce new events textually.
+- Filter chips: arrow keys navigate, Enter toggles. The Reveal-excerpts toggle is a labeled `button` with `aria-pressed`.
+- Side panel: focus trap when open, Escape closes, focus returns to triggering node.
+- Color is never the only signal. Status dots have hover/focus labels ("connected", "offline"). Edges have widths that change with activity. Timeline accent bars are accompanied by the actor name in the event verb.
+- Onboarding modal: form fields properly labeled; error messages associated via `aria-describedby`.
+
+---
+
+## 16. Phased implementation
+
+Phase 3A and 3B already shipped per [Eve OS Vision §9](./eve-os-vision.mdx#9-phased-build-plan). This doc unblocks 3C.
+
+- **3A — Eve Socket.IO API-key auth.** Shipped. `realtime:observe` scope in place. ✓
+- **3B — Six events emitted with typed registry.** Shipped. ✓
+- **3C — Agents UI build.** This doc.
+  - **3C-1: Flow view** — React Flow + 5 node types + PulseEdge + ActivityTape with eye toggle. Empty state.
+  - **3C-2: Side panels** — per-node-type forms, recent activity, footer actions.
+  - **3C-3: Channel onboarding modal** — Telegram + Discord (v1). Disabled placeholders for v1.5.
+  - **3C-4: Timeline view** — vertical scrolling list with progressive disclosure, scope selector, "↑ N new" pill, infinite-scroll backwards (depends on backend `events.since` cursor pagination — coordinate with backend before shipping).
+  - **3C-5: Filter chips wired across both views** — shared state, shared reveal toggle, view-toggle pill in pane header.
+
+Estimated effort: **~3–4 weeks total** for 3C.
+
+---
+
+## 17. What we are NOT building
+
+- ❌ Workflow editor (topology fixed by architecture)
+- ❌ Multi-workspace selector (deferred to v2)
+- ❌ Historical replay scrubber (deferred to v2)
+- ❌ WhatsApp / Signal / Matrix / Slack / Voice channel onboarding (v1.5+)
+- ❌ Per-message detail / reply (lives in Synap chat or OpenWebUI)
+- ❌ Per-channel routing rules ("messages with #urgent → branch X" — v2)
+- ❌ Search box on Timeline (v2 if needed)
+- ❌ CSV / JSON export of Timeline events (v2)
+- ❌ Cross-workspace edges in Flow (rare — defer)
+
+---
+
+## 18. Reference: what this is NOT
+
+The Agents app does ONE thing: **make the agentic triangle visible, narratable, and configurable from a single popup.** Anything outside that is in `/settings`, in Synap chat, or in Doctor.
+
+- ❌ Not a workflow editor (topology is fixed)
+- ❌ Not a message reader (panels show recent activity; full reading happens in Synap)
+- ❌ Not a settings labyrinth (config lives in panels, not buried in tabs)
+- ❌ Not a debugging tool (Doctor is for that)
+- ❌ Not a chat UI (OpenWebUI fills that gap; native Synap chat will eventually)
+
+The framing — "what your AI staff is doing right now" — is the operator's mental model. Every design decision in this doc traces back to it.

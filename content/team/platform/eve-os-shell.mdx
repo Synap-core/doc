@@ -1,0 +1,451 @@
+---
+title: 'Eve OS Shell — Architecture & Design'
+description: >-
+  The foundational UmbrelOS-style shell every Eve app renders inside —
+  wallpaper layer, floating popup pane, persistent dock. Defines the
+  premium aesthetic, animation grammar, and component contracts every
+  app relies on.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve OS Shell — Architecture & Design
+
+**Date:** 2026-05-05
+**Status:** Foundational design spec. Replaces the sidebar-based AppShell for all top-level user surfaces. Settings continues to use the legacy AppShell internally as one of its tabs (recontextualized, not deprecated).
+
+This is the document every Eve app refers back to. The shell defines what's on screen *before* any app loads — wallpaper, the popup pane that holds the active app, and the dock that lets the operator switch between apps. Get this right and every subsequent app inherits the premium feel for free.
+
+---
+
+## Related
+
+- [Eve OS Vision](./eve-os-vision.mdx) — north star this implements
+- [Eve OS Home — Design Spec](./eve-os-home-design.mdx) — the Home app rendered inside the shell
+- [Eve Agents — Design Spec](./eve-agents-design.mdx) — the Agents app (replaces the older "channels" framing)
+
+---
+
+## 1. Design intent
+
+Three feelings the shell delivers, in order of priority:
+
+1. **Premium calm.** A vibrant but muted dark background with subtle motion. Soft frosted-glass surfaces. Generous whitespace. Eve feels like a high-end OS, not a Docker dashboard.
+2. **Spatial clarity.** One thing in focus at a time — the active app fills the popup pane. The dock is the only persistent navigation. No competing chrome.
+3. **Continuity.** Switching apps is a content swap inside the same pane, not a page navigation. The wallpaper and dock never refresh. The operator experiences the OS, not the website.
+
+What it explicitly is NOT:
+
+- A traditional sidebar layout (the old AppShell stays only as Settings' internal lens)
+- A multi-window OS (single popup at a time in v1; window management is v2+)
+- A page that scrolls the wallpaper (wallpaper is fixed; only pane content scrolls)
+
+---
+
+## 2. The three layers
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│   [animated mesh-gradient wallpaper, fixed, full-screen] │  ← Layer 1: Wallpaper
+│                                                          │
+│      ┌──────────────────────────────────────────┐        │
+│      │                                          │        │
+│      │                                          │        │
+│      │           Popup app pane                 │        │  ← Layer 2: App pane
+│      │   (rounded, frosted, scrollable inside)  │        │
+│      │                                          │        │
+│      │                                          │        │
+│      └──────────────────────────────────────────┘        │
+│                                                          │
+│              ┌─────────────────────────┐                 │
+│              │  ▓ ▓ ▓ ▓ ▓ ▓ ▓ +        │                 │  ← Layer 3: Dock
+│              └─────────────────────────┘                 │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+Z-index: wallpaper (`0`) → app pane (`10`) → dock (`20`) → modals/sheets (`30+`).
+
+Every Eve route inside the `(os)` route group automatically gets all three layers. Routes outside (login, OAuth callback) do not.
+
+---
+
+## 3. Layer 1 — Wallpaper (mesh gradient, animated)
+
+### Visual target
+
+Deep, moody, premium. Think Apple Intelligence / Siri AI glow — multi-color gradient blobs slowly drifting over a dark base. Always visible. Zero asset weight.
+
+### Implementation
+
+A single component at `app/(os)/components/wallpaper.tsx`. Three stacked layers:
+
+- **Base** — solid color near-black with the slightest tint (dark mode: `#0A0A14`; light mode: `#F5F4FA`).
+- **Two animated radial gradient blobs** — different colors, different sizes, different drift paths. CSS `radial-gradient` painted on absolutely-positioned divs, animated via `transform: translate3d(...)` over 60–90 second cycles. GPU-accelerated.
+- **Subtle grain** — SVG noise filter overlay at 3% opacity. Adds texture without weight.
+
+Recommended palette (dark mode):
+
+| Blob | Color | Size | Cycle |
+|---|---|---|---|
+| Blob A | `rgba(99, 102, 241, 0.40)` (indigo) | 120vw | 72s, eased drift |
+| Blob B | `rgba(16, 185, 129, 0.28)` (emerald) | 100vw | 90s, opposing drift |
+| Optional Blob C | `rgba(244, 114, 182, 0.18)` (rose) | 80vw | 60s, slow rotation |
+
+Light mode uses the same hues at higher opacity over a near-white base.
+
+### Animation grammar
+
+- All blobs use `transform` + `opacity` only. No layout properties.
+- Easing: `cubic-bezier(0.4, 0, 0.6, 1)` (smooth inhale-exhale).
+- `prefers-reduced-motion`: animations stop, blobs hold a calm static position. The wallpaper still looks intentional.
+- `document.visibilitychange`: pause animations when the tab is hidden (battery friendly).
+
+### Component shape
+
+```tsx
+// app/(os)/components/wallpaper.tsx
+export function Wallpaper() {
+  return (
+    <div className="fixed inset-0 -z-10 overflow-hidden bg-os-base">
+      <div className="blob blob-a" />
+      <div className="blob blob-b" />
+      <div className="blob blob-c" />
+      <div className="grain" />
+    </div>
+  );
+}
+```
+
+The wallpaper component renders ONCE in the OS layout and never unmounts during navigation.
+
+---
+
+## 4. Layer 2 — App pane (the rounded popup)
+
+### Sizing
+
+| Viewport | Pane width | Pane height | Margin |
+|---|---|---|---|
+| Mobile (<640px) | full-width minus 16px gutter | full-height minus dock + 16px | 8px sides, dock-height + 16px bottom |
+| Tablet (640–1024px) | 90vw, max 800px | 88vh | centered |
+| Desktop (>1024px) | 80vw, min 1024px, max 1440px | 84vh, min 600px, max 920px | centered |
+| Wide (>1600px) | 1440px | 920px | centered |
+
+Pane is always at least 16px clear of every viewport edge AND at least dock-height + 16px clear of the bottom (so the dock has breathing room beneath the pane).
+
+### Visual
+
+```css
+border-radius: 24px;
+background: rgba(20, 20, 28, 0.55);     /* dark mode */
+backdrop-filter: blur(40px) saturate(140%);
+border: 1px solid rgba(255, 255, 255, 0.08);
+box-shadow:
+  0 24px 64px -12px rgba(0, 0, 0, 0.5),
+  0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+```
+
+This is the **only place we use a drop shadow** in the OS — for the pane lift over the wallpaper. Inside the pane, components use borders for depth as before.
+
+Light mode:
+```css
+background: rgba(255, 255, 255, 0.65);
+border: 1px solid rgba(0, 0, 0, 0.06);
+box-shadow:
+  0 24px 64px -12px rgba(0, 0, 0, 0.15),
+  0 0 0 1px rgba(0, 0, 0, 0.02) inset;
+```
+
+### Internal layout
+
+The pane is a 2-row vertical flex:
+
+1. **Pane header** (sticky, 56px) — back/forward arrows (where applicable), pane title centered, contextual actions on the right. Header has a subtle bottom border that fades in only when content scrolls.
+2. **Pane body** (scrollable) — fills remaining height. Each app's content lives here.
+
+Apps own their pane body content entirely. The header is provided by the shell with slot props (`title`, `actions`, `back`).
+
+### Content swap (navigation)
+
+When the user clicks a different dock app, the URL changes (Next.js App Router push). The pane body cross-fades the new content in (140ms ease-in-out, opacity + 4px translateY). The pane container itself does not reanimate. The wallpaper and dock are untouched.
+
+For dramatic moments (first launch, app install) we may want a scale-pop animation on the pane itself — out of scope for v1 but easy to add later by toggling a class on the pane.
+
+### Component shape
+
+```tsx
+// app/(os)/components/pane.tsx
+export function Pane({ title, back, actions, children }: PaneProps) {
+  return (
+    <div className="pane">
+      <header className="pane-header">
+        {back && <BackButton />}
+        <h1 className="pane-title">{title}</h1>
+        <div className="pane-actions">{actions}</div>
+      </header>
+      <div className="pane-body">{children}</div>
+    </div>
+  );
+}
+```
+
+---
+
+## 5. Layer 3 — Dock (persistent app launcher)
+
+### Sizing & position
+
+- Centered horizontally at the viewport bottom
+- 16px above the viewport bottom edge
+- Height 64px (icon size 48px + 8px padding top/bottom)
+- Width: hugs content (rounded pill), max 80vw
+- Horizontal scroll if too many apps to fit (rare — most operators have <10 pinned)
+
+### Visual
+
+```css
+border-radius: 32px;     /* full pill */
+padding: 8px 12px;
+background: rgba(20, 20, 28, 0.50);
+backdrop-filter: blur(48px) saturate(180%);
+border: 1px solid rgba(255, 255, 255, 0.08);
+gap: 6px;                /* between icons */
+```
+
+### Icons
+
+Each dock icon is 48×48px, 12px border-radius, vivid color (NOT the desaturated tile style). Icons come from three sources:
+
+1. **Core apps** (locked, always present): Home, Agents, Settings — hand-tuned Lucide icons over a brand-color rounded square background.
+2. **Eve components** with `webUrl` (Synap, OpenWebUI): Lucide + brand color.
+3. **Marketplace apps** with `iconUrl`: render the remote icon.
+
+Pinning order: core apps first (Home, Agents, Settings), then user-pinned in user order, then a `+` button to add more (opens marketplace).
+
+### States
+
+| State | Visual |
+|---|---|
+| Default | Vivid icon, no extras |
+| Hover | Scale 1.08 (200ms ease-out), subtle outer glow ring (8px, color-matched, 20% opacity) |
+| Active (current app) | A 4px-tall pill underneath the icon, color-matched to the app's brand color, 12px wide, centered |
+| Pressed | Scale 0.95 (80ms) |
+| Loading (e.g. a marketplace install in progress) | Subtle pulse on the icon at 1.6s cycle |
+
+**No emoji is used anywhere in the dock.** Icons are SVG (Lucide for Eve apps, remote `iconUrl` for marketplace).
+
+### Component shape
+
+```tsx
+// app/(os)/components/dock.tsx
+export function Dock() {
+  const apps = useDockApps();   // core + pinned + marketplace
+  return (
+    <nav className="dock" aria-label="Application dock">
+      {apps.map(app => (
+        <DockIcon key={app.id} app={app} active={pathname.startsWith(app.path)} />
+      ))}
+      <AddAppButton />
+    </nav>
+  );
+}
+```
+
+---
+
+## 6. Layout composition
+
+### Route structure
+
+```
+app/
+├── (os)/                    ← shell route group
+│   ├── layout.tsx           ← wallpaper + pane container + dock
+│   ├── page.tsx             ← Home (route: /)
+│   ├── agents/
+│   │   └── page.tsx         ← Agents (route: /agents)
+│   ├── settings/
+│   │   ├── layout.tsx       ← Settings sub-shell (tabs)
+│   │   ├── page.tsx         ← Settings overview (route: /settings)
+│   │   ├── components/
+│   │   ├── ai/
+│   │   ├── networking/
+│   │   ├── doctor/
+│   │   ├── channels/        ← legacy channel-config toggle page
+│   │   └── stack-pulse/     ← the old /dashboard contents, recontextualized
+│   └── components/
+│       ├── wallpaper.tsx
+│       ├── dock.tsx
+│       ├── pane.tsx
+│       └── add-app-button.tsx
+├── auth/                    ← outside the shell
+│   └── callback/page.tsx
+├── login/                   ← outside the shell
+│   └── page.tsx
+└── api/                     ← unchanged
+```
+
+### `(os)/layout.tsx` skeleton
+
+```tsx
+export default function OSLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <Wallpaper />
+      <main className="pane-container">
+        <Pane>{children}</Pane>
+      </main>
+      <Dock />
+    </>
+  );
+}
+```
+
+That's the whole shell. Three components, fixed roles, every route gets the same chrome.
+
+### Settings as a popup app
+
+Settings doesn't get a sidebar. The settings popup contains a tab strip at the top of its pane body — Components, AI, Networking, Doctor, Channels, Stack Pulse (the legacy `/dashboard` content moves here as one tab). Inside each tab, the existing legacy AppShell pages render with minor restyle to match the new dark/translucent surfaces. This recontextualizes the existing work as Settings' internals rather than deprecating it.
+
+---
+
+## 7. Tokens (Tailwind extensions)
+
+```ts
+// tailwind.config.ts (additions to existing tokens)
+theme: {
+  extend: {
+    colors: {
+      os: {
+        base: '#0A0A14',           // dark base
+        baseLight: '#F5F4FA',      // light base
+        paneBg: 'rgba(20, 20, 28, 0.55)',
+        paneBgLight: 'rgba(255, 255, 255, 0.65)',
+        paneBorder: 'rgba(255, 255, 255, 0.08)',
+        paneBorderLight: 'rgba(0, 0, 0, 0.06)',
+        dockBg: 'rgba(20, 20, 28, 0.50)',
+      },
+      brand: {
+        // Per-app brand color pool — used by dock icons + active indicators
+        home:     '#A78BFA',  // soft violet
+        agents:   '#34D399',  // emerald (consistent with Synap brain accent)
+        settings: '#94A3B8',  // slate
+        chat:     '#10B981',  // OpenWebUI / Chat (AI accent)
+        synap:    '#34D399',  // Synap pod
+      },
+    },
+    backdropBlur: {
+      pane: '40px',
+      dock: '48px',
+    },
+    borderRadius: {
+      pane: '24px',
+      dock: '32px',
+      icon: '12px',
+    },
+    keyframes: {
+      'wallpaper-drift-a': { /* slow drift on translate3d */ },
+      'wallpaper-drift-b': { /* opposing drift */ },
+      'pane-content-in': { /* opacity 0→1 + translateY 4px→0 */ },
+    },
+    animation: {
+      'wallpaper-drift-a': 'wallpaper-drift-a 72s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      'wallpaper-drift-b': 'wallpaper-drift-b 90s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      'pane-content-in': 'pane-content-in 140ms ease-out',
+    },
+  },
+},
+```
+
+---
+
+## 8. Light mode
+
+Both modes ship from day 1. Tokens above include light-mode equivalents. The wallpaper, pane, and dock all have `dark:` Tailwind variants.
+
+In light mode the aesthetic shifts from "premium dark glow" to "soft frosted glass on a pastel mesh" — same architecture, different palette. The `prefers-color-scheme` media query is the default; an explicit toggle lives in Settings (Phase 4 polish item, but the underlying token system supports it now).
+
+---
+
+## 9. Animation grammar (locked)
+
+| Surface | Property | Duration | Easing |
+|---|---|---|---|
+| Wallpaper blobs | `transform` | 60–90s loop | `cubic-bezier(0.4, 0, 0.6, 1)` |
+| Pane content swap | `opacity` + `translateY` | 140ms | `ease-out` |
+| Dock icon hover | `transform: scale` | 200ms | `ease-out` |
+| Dock icon press | `transform: scale` | 80ms | `ease-in` |
+| Modal / sheet open | `opacity` + `scale 0.96→1` | 220ms | `cubic-bezier(0.16, 1, 0.3, 1)` (overshoot pop) |
+| Status dot pulse | `opacity` | 1.6s loop | `ease-in-out` |
+
+All animations are `transform` and `opacity` only. No layout properties. All respect `prefers-reduced-motion: reduce` (animations stop or shorten, never disappear entirely so positions still feel intentional).
+
+---
+
+## 10. Component file structure
+
+```
+app/(os)/
+├── layout.tsx               # composes the three layers
+├── components/
+│   ├── wallpaper.tsx        # animated mesh gradient
+│   ├── wallpaper.module.css # blob keyframes (or globals.css)
+│   ├── pane.tsx             # popup container
+│   ├── pane-header.tsx      # title + actions strip
+│   ├── dock.tsx             # bottom dock
+│   ├── dock-icon.tsx        # single icon with state
+│   ├── add-app-button.tsx   # "+" → marketplace
+│   └── use-dock-apps.ts     # hook merging core + pinned + marketplace
+└── lib/
+    ├── brand-colors.ts      # core app brand-color map
+    └── icon-registry.ts     # app icon resolver (Lucide vs remote)
+```
+
+---
+
+## 11. Migration of existing code
+
+The current `app/(home)/` and `app/settings/` directories are **kept** but recontextualized:
+
+| Existing | New role |
+|---|---|
+| `app/(home)/page.tsx` + components | **Replaced.** New Home rebuilt in `app/(os)/page.tsx` per `eve-os-home-design.mdx` |
+| `app/settings/*` | **Migrated.** Existing pages move to `app/(os)/settings/*` and render as tabs inside the Settings popup. Internal logic preserved. |
+| `app/dashboard/page.tsx` (stack-pulse) | **Migrated.** Moves to `app/(os)/settings/stack-pulse/page.tsx` as one of the Settings tabs. The `/dashboard` URL 308-redirects to `/settings/stack-pulse`. |
+| Sidebar AppShell | **Internal-only.** Stays in `Settings` as the tab navigator within that popup. Not used anywhere else. |
+| `cp-auth-banner.tsx` | **Restyle, keep.** Rendered at the top of the Home pane body. |
+| `useHomeApps`, `marketplace-client`, OAuth flow | **Keep.** Logic layer untouched. |
+
+**Nothing gets deleted.** The legacy work becomes the Settings app's internals.
+
+---
+
+## 12. What we are NOT building (scope guard)
+
+- ❌ Multi-window — single popup at a time. Click another dock icon, content swaps.
+- ❌ Drag-to-reposition the pane.
+- ❌ Resize the pane (sizing is responsive but not user-controlled).
+- ❌ Minimize / close buttons on the pane.
+- ❌ Custom user wallpapers (deferred to v2; the mesh gradient is the only wallpaper).
+- ❌ Dock customization beyond pinning order.
+- ❌ Spotlight-style global search (the home has search; system-wide search is v2+).
+- ❌ Notification center (notifications live in Synap; OS shell does not host a tray).
+
+---
+
+## 13. Why this is the right shell
+
+- **Premium signal.** The wallpaper + frosted glass aesthetic reads as "high-end OS" before the user has even understood the product.
+- **Architectural discipline.** Every app gets the same chrome for free. New apps cost less to design.
+- **Single focus.** One popup at a time forces clear thinking about what each app actually does.
+- **Brand consistency.** The dock + wallpaper are persistent — even when an app feels different, the OS feels the same.
+- **Performance.** Wallpaper is CSS-only. Backdrop-blur is GPU-accelerated. No image assets.
+- **Accessibility.** Reduced-motion respected. Keyboard nav through dock + pane works (focus-trap inside the active app).

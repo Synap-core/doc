@@ -4,7 +4,7 @@ description: 'Typed event registry, delivery router, automation trigger system.'
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-05'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -13,7 +13,7 @@ toc: true
 
 # Event Chain & Signal Routing
 
-> Last updated: 2026-04-10 — P1-P4 complete
+> Last updated: 2026-05-05 — added realtime event naming convention (`{actor}:{entity}:{action}`)
 
 ## Related
 
@@ -184,6 +184,142 @@ type SignalSurface = "feed" | "chat" | "notification" | "suppress";
 | Proactive cron posts        | ✓             | ✓                      | ✓ (routeProactiveMessage) |
 | IS proactive posts          | ✓             | ✓                      | ✓ (routeSignal)           |
 | Notifications               | ✓             | —                      | —                         |
+
+## Realtime event naming — `{actor}:{entity}:{action}`
+
+Locked in 2026-05-05. The realtime layer (Socket.IO `/presence` + `/bridge/emit`) carries
+events whose names are governed by a typed registry. Operational events emitted into
+pg-boss (the [`OperationalEventTypes`](#event-type-registry) table above) are unrelated —
+this section only covers the realtime channel from backend → connected clients.
+
+### The convention
+
+Three lowercase segments, colon-delimited: **`{actor}:{entity}:{action}`**.
+
+- `actor` — who or what initiated the event
+- `entity` — the noun the event is about
+- `action` — what happened to it (past tense)
+
+Examples: `openclaw:message:received`, `hermes:task:queued`, `synap:reply:routed`.
+
+### Actor vocabulary
+
+| Actor      | Meaning                                                                              |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `user`     | Direct human action (clicked a button, sent a message via UI)                        |
+| `agent`    | A Synap agent (orchestrator, persona) acting via Hub Protocol                        |
+| `openclaw` | Messaging ingress — translates external chat (Telegram, WhatsApp, voice) → Synap     |
+| `hermes`   | Execution daemon — runs background tasks                                             |
+| `synap`    | The brain itself (system events: notifications, channel routing, AI streaming)       |
+| `system`   | Infra / cron / lifecycle (rare)                                                      |
+
+### Why three segments
+
+- **Pattern subscriptions become trivial.** `hermes:*:*` gives you every Hermes event,
+  `*:task:*` every task event, `openclaw:*:received` every inbound from external chat.
+  Two-segment names collapse two of these dimensions into one and lose that.
+- **DDD alignment.** Actor + entity + action is the same triple any service mesh, audit
+  log, or behavioural analytics product expects.
+- **Forces articulation.** Adding an event requires explicitly naming the originating
+  agent, the noun, and the verb — surfaces design decisions early.
+
+### The registry
+
+Single source of truth: `synap-backend/packages/types/src/events/index.ts` exports
+`EventNames` (the canonical record) and `EventName` (its string-union type). Every new
+realtime event MUST land in `EventNames`.
+
+The same file also exports `DomainEventNames`, the legacy 2-segment registry. It is
+marked `@deprecated since 2026-05-05` and kept exported only because external consumers
+(browser hooks, SDK clients) still import from it. **Do not add new entries to
+`DomainEventNames`.**
+
+### Schemas + runtime validation
+
+`synap-backend/packages/events/src/realtime-schemas.ts` exports `EventSchemas` —
+a `Partial<Record<EventName, z.ZodType>>` keyed by event name.
+
+- Every `{actor}:{entity}:{action}` event MUST have a Zod schema. Without one
+  `emitTyped` rejects the call and the bridge logs a 400.
+- A handful of high-volume legacy events (`entity:created`, `entity:updated`,
+  `entity:deleted`, `chat:stream`, `ai:proposal`) have schemas locked down.
+- Other legacy events (`document:updated`, `document:version`, `ai:proposal:status`,
+  `chat:message`, `notification:new`, `branch:decision`, `route_to_channel` …) fall
+  through unchanged — `getSchemaForEvent()` returns `undefined` and the bridge passes
+  the payload as-is. This keeps backwards-compat mandatory.
+
+The realtime bridge (`synap-backend/packages/realtime/src/bridge.ts`) calls
+`validateEmitPayload(event, data)` on every inbound `/bridge/emit` POST. Schema
+violations return HTTP 400 with the Zod issue list; legacy events without a schema
+emit through unchanged.
+
+### The emit path
+
+Use `emitTyped` from `synap-backend/packages/api/src/utils/event-emit.ts`. It infers
+the payload shape from the event name via `EventPayloadFor<E>`, so a typo in either
+the name or the payload is a TypeScript error at the call site.
+
+```typescript
+import { emitTyped } from "../utils/event-emit.js";
+
+await emitTyped(
+  "openclaw:message:received",
+  { channelId, messageId, platform: "telegram", excerpt, receivedAt: new Date().toISOString() },
+  { channelId },
+);
+```
+
+Targets are logical-OR: pass any combination of `workspaceId`, `viewId`, `userId`,
+`channelId`. At least one is required — the helper throws otherwise.
+
+### Deprecation policy
+
+- Existing 2-segment events keep working. **Don't migrate them** — the cost is paid by
+  every client and SDK consumer that currently subscribes.
+- **Don't add new 2-segment events.** New emits go through `EventNames` and follow
+  `{actor}:{entity}:{action}`.
+- When you touch a code path that emits a deprecated event, prefer adding a new
+  3-segment event alongside it (don't break existing consumers).
+
+### Cataloged events (2026-05-05)
+
+The six events below shipped with the registry. Payload columns reference the Zod
+schema in `realtime-schemas.ts` and the TypeScript type in `events/index.ts`.
+
+| Event                        | Payload                                                                       | When it fires                                            | Where emitted                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `openclaw:message:received`  | `{ channelId, messageId, platform, excerpt, receivedAt }`                     | OpenClaw bridges an inbound external-platform message    | Planned: `synap-backend/packages/api/src/routers/hub-protocol/rest/channels.ts` after inbound POST |
+| `synap:reply:routed`         | `{ channelId, messageId, targetPlatform, excerpt, routedAt }`                 | Synap hands an outbound assistant reply to egress        | TBD — wires in alongside the egress connector                                  |
+| `hermes:task:queued`         | `{ taskId, kind, source, queuedAt }`                                          | A background task is enqueued                            | TBD — `background-tasks-service` on insert                                     |
+| `hermes:task:started`        | `{ taskId, kind, startedAt }`                                                 | Worker picks up a task                                   | TBD — `background-tasks-service` on status transition                          |
+| `hermes:task:completed`      | `{ taskId, durationMs, completedAt }`                                         | Task finishes successfully                               | TBD — `background-tasks-service` on status transition                          |
+| `hermes:task:failed`         | `{ taskId, error, failedAt }`                                                 | Task errors out                                          | TBD — `background-tasks-service` on status transition                          |
+
+`platform` is constrained to: `"telegram" | "whatsapp" | "signal" | "matrix" | "discord" | "voice"`.
+`source` on `hermes:task:queued` is a free-form tag describing what triggered the task —
+e.g. `"user"`, `"agent:orchestrator"`, `"automation"`, `"cron"`. `taskId` matches the
+`background_tasks` row id. `durationMs` is wall-clock from queued → completed.
+
+> The "Where emitted" column for the Hermes/Synap events is TBD because the registry,
+> schemas, and helper landed first; the call-site wires follow per the
+> [Eve channels design §5.2](./eve-channels-design.mdx#52-real-time-event-flow).
+
+### Adding a new event — checklist
+
+1. **Decide actor / entity / action.** Pick from the actor vocabulary above. If your
+   event doesn't fit one of the six actors, push back on the feature shape before
+   inventing a new actor.
+2. **Add to `EventNames`.** New constant + string in
+   `synap-backend/packages/types/src/events/index.ts`. Add the matching payload
+   `interface` in the same file and a typed entry in `DomainServerToClientEvents`.
+3. **Add a Zod schema.** New `z.object({...})` in
+   `synap-backend/packages/events/src/realtime-schemas.ts` and register it in
+   `EventSchemas`. Strict — no `passthroughSchema` for new events.
+4. **Verify the type chain.** `EventPayloadFor<"your:new:event">` must resolve to your
+   payload interface. If it resolves to `never`, you forgot the
+   `DomainServerToClientEvents` entry.
+5. **Emit via `emitTyped`.** From the call site, never construct the bridge POST by
+   hand. The helper validates at runtime and constrains at compile time.
 
 ## Gaps (future work)
 

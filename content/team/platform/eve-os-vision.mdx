@@ -86,6 +86,11 @@ The architecture is unchanged from `eve-cli/vision.mdx`: three agents around one
 3. **Proposals gate everything consequential.** Anything that mutates state outside Synap (sending an external message, deploying code, triggering a webhook) goes through `checkPermissionOrPropose()` unless the action is on the `DEFAULT_AUTO_APPROVE` whitelist.
 4. **OpenClaw and Hermes never overlap.** OpenClaw never executes code. Hermes never reads a WhatsApp message. If you find code that crosses this line, it's a bug.
 
+> Realtime visibility into this triangle relies on the typed event registry — see
+> [Event Chain → Realtime event naming](./event-chain.mdx#realtime-event-naming--actorentityaction).
+> Every cross-agent action emits an `{actor}:{entity}:{action}` event so Synap (the brain)
+> stays the canonical witness of what the other organs are doing.
+
 ---
 
 ## 3. The OS Surface Map

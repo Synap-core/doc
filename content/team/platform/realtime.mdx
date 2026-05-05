@@ -4,7 +4,7 @@ description: 'Socket.IO, Yjs CRDTs, collaboration architecture.'
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-05'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -23,6 +23,7 @@ Covers: **Documents** (TipTap/ProseMirror) and **Whiteboards** (Tldraw).
 
 - [Channels](./channels.mdx) — Channel messages delivered through realtime subscriptions
 - [Event Chain](./event-chain.mdx) — Events broadcast via Socket.IO domain events
+- [Event Chain → Realtime event naming](./event-chain.mdx#realtime-event-naming--actorentityaction) — `{actor}:{entity}:{action}` convention, registry, and deprecation policy
 
 ```
 Frontend App
@@ -505,22 +506,44 @@ await trpc.whiteboards.restoreVersion.mutate({
 
 ## 8. Socket.IO Bridge Events (Server → Client)
 
-The backend pushes notifications to connected clients via Socket.IO bridge. Listen on the **presence** namespace:
+The backend pushes domain events to connected clients via the Socket.IO `/bridge/emit`
+endpoint. Listen on the **presence** namespace.
+
+### Naming convention (canonical)
+
+All new events follow **`{actor}:{entity}:{action}`** — three lowercase segments.
+The full convention, actor vocabulary, deprecation policy, and "adding a new event"
+checklist live in [Event Chain → Realtime event naming](./event-chain.mdx#realtime-event-naming--actorentityaction).
+
+### Source of truth
+
+The canonical event-name registry is `EventNames` in
+`synap-backend/packages/types/src/events/index.ts` (with payload shapes typed via
+`DomainServerToClientEvents` in the same file). Runtime payload validation lives in
+`synap-backend/packages/events/src/realtime-schemas.ts` (`EventSchemas`). Don't
+hand-maintain a parallel list here — read the registry.
+
+To emit, use the `emitTyped` helper at
+`synap-backend/packages/api/src/utils/event-emit.ts`. It infers the payload shape from
+the event name and validates at runtime via the schema registry.
+
+### Legacy reference
+
+The events below predate the convention and ship with 2-segment names. They are
+`@deprecated` in `DomainEventNames` but still active — existing consumers depend on
+them. **Don't add new 2-segment events.**
 
 ```typescript
-// Version saved notification
+// Document lifecycle (legacy)
 presenceSocket.on("document.snapshot.saved", (data) => {
   // { documentId, versionId, version, message }
   showToast(`Version ${data.version} saved`);
 });
-
-// Document restored notification
 presenceSocket.on("document.restored", (data) => {
   // { documentId, restoredFromVersion, currentVersion }
-  // Reload the document content
 });
 
-// Chat events (AI responses, entity extraction, etc.)
+// Chat / AI (legacy)
 presenceSocket.on("chat_response", (data) => {
   /* ... */
 });

@@ -1,0 +1,123 @@
+---
+title: 'ADR — Realtime event naming convention'
+description: 'Adopt {actor}:{entity}:{action} for all new Socket.IO bridge events; back it with a typed registry + Zod validation.'
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: [adr, events, realtime, architecture]
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# ADR — Realtime event naming convention
+
+## Metadata
+
+- ADR ID: ADR-0002
+- Title: Realtime event naming — `{actor}:{entity}:{action}` + typed registry
+- Date: 2026-05-05
+- Status: Accepted
+- Owner: Platform
+
+## Context
+
+Realtime events on the Socket.IO bridge had grown organically over ~50 names with no
+shared discipline:
+
+- Mix of 2-segment (`entity:created`, `chat:stream`) and ad-hoc snake_case
+  (`chat_response`, `ai_step`, `route_to_channel`) names.
+- No registry — events were stringly-typed at every emit site, typos were silent.
+- No schema — payload shape varied by emitter and drifted across versions.
+- No vocabulary — unclear when to invent a new prefix vs. reuse one. New cross-agent
+  events (OpenClaw inbound, Hermes task lifecycle, Synap egress) had no obvious slot.
+
+Eve OS makes this a hot path: the Channels visualization (`/channels`) needs to
+subscribe to inter-agent events with predictable wildcard patterns
+(`hermes:*:*`, `openclaw:*:received`). The current naming makes that painful.
+
+## Decision
+
+1. **Adopt `{actor}:{entity}:{action}`** — three lowercase segments, colon-delimited —
+   for every NEW realtime event.
+2. **Lock in the actor vocabulary**: `user`, `agent`, `openclaw`, `hermes`, `synap`,
+   `system`. Adding a new actor requires an ADR amendment.
+3. **Single source of truth**: `EventNames` in
+   `synap-backend/packages/types/src/events/index.ts`. Every event lands there with a
+   typed payload interface and a matching entry in `DomainServerToClientEvents`.
+4. **Runtime validation**: `EventSchemas` in
+   `synap-backend/packages/events/src/realtime-schemas.ts`. New events require a Zod
+   schema; the bridge rejects payloads that don't validate.
+5. **Type-safe emit**: `emitTyped<E>()` in
+   `synap-backend/packages/api/src/utils/event-emit.ts` infers the payload from the
+   event name. Wrong shape or typo'd name = TypeScript error at the call site.
+6. **Backwards-compat**: existing 2-segment events keep working. They're marked
+   `@deprecated since 2026-05-05` in `DomainEventNames`. We do not migrate them.
+   We do not extend them.
+
+Six events shipped with the registry: `openclaw:message:received`,
+`synap:reply:routed`, `hermes:task:queued` / `:started` / `:completed` / `:failed`.
+
+## Alternatives considered
+
+1. **Status quo (free-form strings).** Cheapest, but the friction was visible in
+   every cross-agent feature (Eve channels viz, audit panels, third-party SDKs).
+2. **Two-segment `{domain}:{action}`** (e.g. extend the existing pattern). Misses the
+   actor dimension — wildcard subscribes can't separate "all task events" from
+   "all events from Hermes". Same problem we already had.
+3. **CloudEvents spec** (`type` URI + structured envelope). Heavier than we need;
+   Socket.IO event names are already strings, the envelope is the payload object.
+   Considered overkill for an internal bridge.
+4. **Per-domain enums (no convention)**. Would have given us types but not naming
+   guidance for new emitters. Rejected — we wanted both.
+
+## Trade-offs
+
+- **Benefits**: pattern subscriptions become trivial; DDD alignment forces explicit
+  actor / entity / action articulation; typed registry makes typos impossible at
+  emit sites; runtime validation surfaces producer bugs loud.
+- **Costs**: every new event is a 5-step recipe (registry → payload type → server-map
+  → schema → emit) instead of a free-form string. Worth it.
+- **Risks**: registry grows unbounded if not curated. Mitigation: ADR amendment for
+  new actors; PRs that add events touch a small set of well-known files.
+
+## Impact
+
+- **Services/repos affected**: `synap-backend` (`packages/types/events`,
+  `packages/events`, `packages/realtime`, `packages/api/src/utils`). Frontend
+  consumers (`synap-app`, `browser`, SDK clients) are unaffected — legacy events
+  keep working.
+- **User impact**: none directly. Indirect upside: faster shipping of Eve
+  visualizations, audit views, behavioural dashboards.
+- **Operational impact**: the bridge now returns HTTP 400 on schema violations
+  instead of fanning out malformed payloads. Producer bugs fail loud.
+
+## Rollout plan
+
+1. Land registry + schemas + `emitTyped` (DONE 2026-05-05).
+2. Wire the six new events into call sites (`hub-protocol/rest/channels.ts`,
+   `background-tasks-service`) — follows in next sprint.
+3. Update any new feature work to use the convention. Reviewers reject 2-segment
+   additions in PR.
+4. Periodically audit `EventSchemas` for legacy events promoted to schema-locked
+   status (currently `entity:*`, `chat:stream`, `ai:proposal`).
+
+## Validation
+
+- **Success metrics**: zero new 2-segment events in subsequent PRs; Eve channels viz
+  ships on the new events without bridge changes; Zod validation catches at least
+  one producer bug in the first 30 days.
+- **Review date**: 2026-08-05 (3 months).
+
+## References
+
+- Related docs:
+  - [Event Chain → Realtime event naming](../platform/event-chain.mdx#realtime-event-naming--actorentityaction)
+  - [Realtime Integration §8](../platform/realtime.mdx#8-socketio-bridge-events-server--client)
+  - [Eve channels design §5.2](../platform/eve-channels-design.mdx)
+- Related code:
+  - `synap-backend/packages/types/src/events/index.ts`
+  - `synap-backend/packages/events/src/realtime-schemas.ts`
+  - `synap-backend/packages/api/src/utils/event-emit.ts`
+  - `synap-backend/packages/realtime/src/bridge.ts`

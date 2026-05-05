@@ -596,8 +596,12 @@ Per the substrate audit, two events need to be added to Synap before this works:
 
 | Event | Where to emit | Status |
 |---|---|---|
-| `openclaw:message:received` | `synap-backend/packages/api/src/routers/hub-protocol/rest/channels.ts` after POST | Phase 3B |
-| `hermes:task:status` | `background-tasks-service` on status transition | Phase 3B |
+| `openclaw:message:received` | `synap-backend/packages/api/src/routers/hub-protocol/rest/channels.ts` after POST | Registry + schema landed 2026-05-05; emit-site wires next |
+| `hermes:task:queued` / `:started` / `:completed` / `:failed` | `background-tasks-service` on status transition | Registry + schemas landed 2026-05-05; emit-site wires next |
+
+Both follow the canonical `{actor}:{entity}:{action}` realtime naming convention —
+see [Event Chain → Realtime event naming](./event-chain.mdx#realtime-event-naming--actorentityaction)
+for the registry, schema policy, and `emitTyped` usage.
 
 The other events (`chat:stream`, `route_to_channel`, `ai:proposal`) already fire today.
 

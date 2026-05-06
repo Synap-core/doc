@@ -13,13 +13,35 @@ hide_title: false
 toc: true
 ---
 
-## The three paths (`eve setup`)
+## Install presets (`eve install`)
 
-Eve organizes installation around **three product paths** (CLI profiles):
+Eve's composable installer offers six presets. Users can adjust any preset via `multiselect` before confirming.
 
-1. **Inference only** (`inference_only`) — Local **Ollama** + **Traefik**-secured gateway. No Synap Data Pod. For operators who want a local LLM endpoint without running the full Synap stack.
-2. **Synap only** (`data_pod`) — **Data Pod** via official **`synap install`; Eve can add **other organs** later without bundling Ollama in this profile.
-3. **Both** (`full`) — Data Pod **first**, then Ollama on **`eve-network`** + same gateway pattern (no host publish on **11434** for Ollama in the documented layout).
+| Preset | Components | Use case |
+|--------|-----------|----------|
+| `personal` | traefik, synap | Synap Data Pod only |
+| `full` | traefik, synap, ollama, openclaw | Data Pod + local AI + agent layer |
+| `chat` | traefik, synap, openwebui | Data Pod + chat UI (Synap IS as AI backend) |
+| `builder` | traefik, synap, openclaw, hermes | Data Pod + agent + headless dev orchestrator |
+| `minimal` | traefik | Routing only — add components later |
+| `custom` | (pick individually) | Manual selection |
+
+```bash
+# Interactive wizard
+eve install
+
+# Non-interactive examples
+eve install --components traefik,synap,openwebui
+eve install --components traefik,synap,ollama,openclaw,hermes
+```
+
+## The three legacy paths (`eve setup`)
+
+Still supported for backward compatibility:
+
+1. **Inference only** (`inference_only`) — Local **Ollama** + **Traefik**-secured gateway. No Synap Data Pod.
+2. **Synap only** (`data_pod`) — **Data Pod** via official **`synap install`**; Eve can add other organs later.
+3. **Both** (`full`) — Data Pod first, then Ollama on **`eve-network`**.
 
 ---
 
@@ -90,6 +112,37 @@ This is the full journey from user input to code output in v2.0:
 - Step 8-18 only happens for coding requests. For conversational messages, the flow stops after step 7.
 - At no point does OpenClaw call Hermes or the codegen tool directly. Hermes discovers tasks only through Synap.
 - The codegen tool produces no side effects beyond stdout/stderr and local filesystem writes (if Dokploy is disabled).
+
+---
+
+## Chat UI flow (Open WebUI)
+
+When Open WebUI is installed, user interactions route through Synap IS rather than directly to an LLM:
+
+```
+User types message in Open WebUI
+  │
+  ▼
+Open WebUI → POST /v1/chat/completions (Synap IS)
+  │           Authorization: Bearer ${SYNAP_API_KEY}
+  │           Model: synap/auto (or balanced / advanced / complex / free)
+  │
+  ▼
+Synap IS → selects model, applies routing policy, calls underlying provider
+  │
+  ▼
+Response streamed back → Open WebUI displays reply
+```
+
+For tool calls (memory, entities, skills), Open WebUI contacts the Synap Hub MCP server directly:
+
+```
+Open WebUI → POST /mcp (Synap Hub)
+  │           JSON-RPC 2.0, Bearer ${SYNAP_API_KEY}
+  └─ tools: search_entities, create_note, get_channel_messages, …
+```
+
+Ollama is available as a local/offline fallback — Open WebUI auto-discovers it via `OLLAMA_BASE_URL`.
 
 ---
 

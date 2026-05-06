@@ -24,6 +24,7 @@ toc: true
 ## Related
 
 - [Eve — Vision & principles](../eve-cli/vision.mdx) — Eve v2.0 architectural principles (Synap as exclusive memory, agent separation)
+- [Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx) — How Eve authenticates to its pod and the CP (canonical reference)
 - [Builder Workspace](./builder-workspace.mdx) — Canonical dev workspace seeded by Eve
 - [OpenClaw Integration](./openclaw-integration.mdx) — Messaging bridge layer
 - [OpenClaw — Agent Channels](./openclaw-channels.mdx) — How agent channels route through OpenClaw
@@ -232,6 +233,8 @@ After this onboarding, the user should never need to touch it again. The flow vi
 ---
 
 ## 6. Auth Handshake (Eve ↔ CP)
+
+> Canonical reference for credential mechanics (two-channel rule, three-credential model, JWT-Bearer exchange flow, bootstrap path) is **[Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx)**. This section sketches the CP side only.
 
 Eve queries the CP marketplace as the user, not as a service. This means Eve needs a user-scoped JWT.
 

@@ -1,0 +1,287 @@
+---
+title: Hermes × Synap — S-Tier Wiring Plan
+description: Full gap analysis, skill/MCP architecture decisions, phased implementation plan, and final target structure for a seamlessly integrated agentic stack.
+---
+
+# Hermes × Synap — S-Tier Wiring Plan
+
+This is the canonical reference for completing the integration. It covers:
+
+1. **Skills — what exists, what belongs where, what Hermes should and shouldn't use**
+2. **MCP — who serves, who connects, and why**
+3. **All remaining gaps** with precise file-level fix paths
+4. **Phased implementation plan** (Phase 0 → 5)
+5. **Final architecture** — the structure all phases converge to
+
+---
+
+## Part 1 — Skills: Two Systems, One Decision
+
+### The two skill systems
+
+There are two completely separate skill systems in Synap. They have nothing in common except the word "skill."
+
+#### System A — IS Internal Skills (proprietary, never expose externally)
+
+**Location:** `synap-intelligence-service/apps/intelligence-hub/src/skills/`
+
+These are markdown instruction files injected into the OrchestratorAgent / PersonaAgent system prompt at runtime. They're loaded by `skill-loader.ts` based on which tools the agent has access to (`SKILL_TRIGGERS` map).
+
+| File | Loaded when |
+|------|-------------|
+| `hub-protocol.md` | Any agent with `search_unified` |
+| `entity-management.md` | Agent has `create_entity` |
+| `document-management.md` | Agent has `create_document` |
+| `entity-schema.md` | Agent has `create_profile` |
+| `workspace-views.md` | Agent has `create_view` |
+| `automations.md` | Agent has `create_automation` |
+| `inline-references.md` | Any tool available |
+| `cli-execution.md` | Agent has `run_command` |
+| `native-widget.md` | Agent has `create_native_widget` |
+| `view-types/*.md` (4) | Batch-loaded with `create_view` |
+
+**Decision: Hermes does NOT use these.** They teach tool call patterns for tools that only exist inside the IS (`create_entity`, `search_unified`, etc.). Hermes has an entirely different tool registry and calling convention.
+
+#### System B — Hub Protocol Skills (user-created, DB-stored, externally callable)
+
+**Location:** `synap-backend/packages/api/src/routers/skills.ts`
+
+Skills stored in the DB with `kind: "instruction" | "code"`, scoped to pod/user/workspace. Listed via `GET /api/hub/skills/getSkills`, executed via `POST /api/hub/skills/:id/execute` → IS `/api/skills/execute`.
+
+**Decision: Hermes CAN and SHOULD call these** — they're exactly what external agents need. ✅ `POST /api/hub/skills/:id/execute` now exists.
+
+#### System C — OpenClaw/Eve Skills (SKILL.md files, distribution format)
+
+**Location:** `synap-backend/skills/` (three packages: synap, synap-schema, synap-ui) and `~/.eve/skills/synap/SKILL.md`
+
+These are markdown documents in the Anthropic Agent Skills spec format. They document the Hub Protocol REST API surface. The `synap/SKILL.md` at `~/.eve/skills/synap/` is exactly what Hermes needs as its primary skill.
+
+**Decision: Volume-mount into Hermes container.** ✅ Done — one `-v ~/.eve/skills:/opt/data/skills:ro` flag in `installHermes()`.
+
+### Summary decision table
+
+| Skill type | Should Hermes use? | How | Status |
+|---|---|---|---|
+| IS internal skills (hub-protocol.md, entity-management.md, …) | **No** | N/A | N/A |
+| DB user-created skills | **Yes** | `POST /api/hub/skills/:id/execute` | ✅ shipped |
+| `~/.eve/skills/synap/SKILL.md` | **Yes** | Volume mount | ✅ shipped |
+
+---
+
+## Part 2 — MCP: Who Serves, Who Connects, Why
+
+### What already exists
+
+The MCP infrastructure is more built than it appears:
+
+- **`mcp-servers` DB table** — workspace-level registry
+- **`mcp-client-manager.ts`** in IS — manages connection lifecycle
+- **`request-mcp-tool.ts`** — IS tool for requesting MCP tool access (requires user approval)
+- **`intelligence-services.mcpEndpoint` + `mcpApproved`** — IS can register itself as MCP server
+- **Eve Dashboard OpenClaw config panel** — already has MCP preset install/remove UI (`openclaw-config.tsx`)
+- **Hermes MCP server** — `:9120`, `MCP_SERVER_ENABLED=true` in docker run ✅
+- **Claude Code wiring** — `.claude/mcp-servers/hermes.json` auto-written by `writeBuilderProjectEnv()` ✅
+
+### The three MCP roles
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  MCP Servers (provide tools)                                 │
+│                                                              │
+│  Hermes :9120 ✅           Synap IS :3001                    │
+│  hermes mcp serve          /api/mcp/tools, /api/mcp/ping    │
+│  → exposes Hermes          → exposes entity/view/memory     │
+│    messaging tools           tools to any MCP client        │
+└──────┬───────────────────────┬───────────────────────────────┘
+       │ connects               │ connects
+       ▼                        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  MCP Clients (consume tools)                                 │
+│                                                              │
+│  Claude Code ✅            Cursor           Other local      │
+│  .claude/mcp-servers/      settings.json    any MCP client  │
+│  hermes.json (auto-written)                                  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Part 3 — Complete Gap Table
+
+Every remaining gap, ranked by impact, with the exact fix location.
+
+### Critical path (blocks S-tier) — updated status
+
+| # | Gap | Status | Fix location |
+|---|---|---|---|
+| G1 | Skills volume not auto-mounted | ✅ shipped | `installHermes()` — `-v ~/.eve/skills:/opt/data/skills:ro` |
+| G2 | `POST /api/hub/skills/:id/execute` missing | ✅ shipped | `hub-protocol/rest/skills.ts` |
+| G3 | Hermes MCP server not started | ✅ shipped | `MCP_SERVER_ENABLED=true` + `-p 9120:9120` in docker run |
+| G4 | No MCP config written for Claude Code | ✅ shipped | `builder-hub-wiring.ts` → `.claude/mcp-servers/hermes.json` |
+| G5 | Agent identity not linked (hermes agent ≠ human user) | ⚠ partially done | `linked_user_id` column + middleware + dual-write shipped; lifecycle auto-provisioning not yet done |
+
+### High value (polish → S-tier) — updated status
+
+| # | Gap | Status | Fix location |
+|---|---|---|---|
+| G6 | Channel add flow requires editing `secrets.json` manually | ❌ open | `settings/channels/page.tsx` |
+| G7 | No Hermes health card on Components page | ✅ shipped | `app/api/components/hermes/status/route.ts` + `hermes-config.tsx` |
+| G8 | No `POST /api/hub/webhooks` | ✅ routes shipped; delivery not wired | Hub REST CRUD + migration `0022` done; event chain dispatch missing |
+| G9 | MCP management in Eve only for OpenClaw | ❌ open | Extend `hermes-config.tsx` |
+| G10 | No skill management UI in Eve | ✅ Skills tab shipped | `settings/intelligence/page.tsx` |
+| G11 | `hermes-dispatch` pipeline not implemented | ❌ open | `assets/pipelines/synap_hermes_dispatch.py` |
+| G12 | `hermes-dispatch` not wired into OpenWebUI install | ❌ open | `wireOpenwebui()` in `wire-ai.ts` |
+| G13 | 6 platforms in `buildChannelRouting()`, 21 supported | ❌ ongoing | Incremental per-platform additions |
+| G14 | No skills execution log in Eve | ❌ open | New `/settings/intelligence/logs/` page |
+
+### Nice to have (unchanged)
+
+| # | Gap | Fix |
+|---|---|---|
+| G15 | Hermes model name in OpenWebUI not meaningful | Override `/v1/models` in Hermes config |
+| G16 | IS token usage not tracked for Hermes conversations | Add usage fields to knowledge_facts |
+| G17 | No memory inspection UI | ✅ Memory tab shipped in Intelligence settings |
+| G18 | External MCP servers not injectable via Eve UI | Extend hermes-config.tsx MCP section |
+
+---
+
+## Part 4 — Phased Implementation Plan
+
+### Phase 0 — Foundation ✅ (done)
+
+- Memory plugin uses real Hub REST endpoints (`GET /memory`, `POST /memory`)
+- `POST /memory` accepts Bearer-only auth (no userId required in body)
+- `GET /channels` Hub REST endpoint added
+- `eve add hermes` fully implemented
+
+---
+
+### Phase 1 — Skills + Local MCP ✅ (done)
+
+- Skills volume auto-mounted in container (`-v ~/.eve/skills:/opt/data/skills:ro`)
+- `GET /api/hub/skills/system` — lists all three skill packages
+- `POST /api/hub/skills/:id/execute` — execute user-created DB skills
+- Hermes MCP server at `:9120` (`MCP_SERVER_ENABLED=true`)
+- `.claude/mcp-servers/hermes.json` auto-written on install
+
+---
+
+### Phase 2 — Identity Linking ✅ (done, lifecycle gap remains)
+
+- Migration `0021_api_keys_linked_user.sql` — `linked_user_id TEXT` on `api_keys`
+- `api-key-repository.ts` — `CreateApiKeyInput.linkedUserId` stored on create
+- `POST /setup/agent` accepts `linkedUserId` in body
+- `HubVariables.linkedUserId?: string` in `_shared.ts`
+- Hub middleware sets `c.set("linkedUserId", keyRecord.linkedUserId)` when present
+- `rest/memory.ts` dual-write: after agent fact write, writes same fact for linked human (non-fatal)
+
+**Remaining:** lifecycle `installHermes()` doesn't yet fetch pod owner userId and pass it as `linkedUserId` on key provisioning.
+
+---
+
+### Phase 3 — Observability ✅ (done)
+
+- `app/api/components/hermes/status/route.ts` — health proxy to Hermes `:9119`
+- Hub Protocol proxy routes: `app/api/intelligence/{memory,skills,system-skills}/`
+- `app/(os)/settings/intelligence/page.tsx` — Memory / Skills / System Skills tabs
+- `hermes-config.tsx` — `HermesHealthCard` showing gateway/model/MCP status
+- `settings-tabs.tsx` — "Intelligence" nav tab added
+
+---
+
+### Phase 4 — UI Consolidation ✅ (done)
+
+Intelligence Settings page ships with three tabs (Memory, Skills, System Skills). See Phase 3 — both phases landed together.
+
+Remaining from original Phase 4 scope:
+- Channel add GUI (G6) — still open
+- External MCP injection for Hermes (G18) — still open
+- Standalone `settings/ai/page.tsx` not yet retired / merged into Providers tab
+
+---
+
+### Phase 5 — Webhooks + Extensibility ✅ (routes done; delivery not wired)
+
+- Migration `0022_webhook_subscriptions.sql` — drops old draft table, recreates with Hub Protocol schema
+- Drizzle schema: `schema/webhook_subscriptions.ts`
+- `schema-coherence.ts` — tripwire entries for `api_keys.linked_user_id` and `webhook_subscriptions.subscriber_id/events`
+- Hub REST CRUD: `rest/webhooks.ts` — `POST/GET /webhooks`, `DELETE/PATCH /webhooks/:id`
+  - `webhook:manage` scope required; owner-scoped by `subscriberId = apiKeyId`; admin override via `hub-protocol.admin`
+- tRPC `routers/webhooks.ts` updated to new schema
+
+**Remaining:** Event chain delivery — after socket fanout, dispatch to matching webhook URLs with HMAC signing. The delivery worker is not yet wired into `event-emit.ts`.
+
+---
+
+## Phase Delivery Summary — Current State
+
+| Phase | What ships | Status | Remaining gaps |
+|---|---|---|---|
+| **0** | Memory plugin, `GET /channels`, `eve add hermes` | ✅ done | — |
+| **1** | Skills mount, `POST /skills/:id/execute`, Hermes MCP server, Claude Code wiring | ✅ done | — |
+| **2** | Identity linking column + middleware + dual-write | ✅ done | Lifecycle auto-sets `linkedUserId` on provisioning |
+| **3** | Hermes health card, memory inspector, skills UI | ✅ done | Skills execution log |
+| **4** | Intelligence Settings tabs (Memory/Skills/System Skills) | ✅ done | Channel add GUI, external MCP injection UI |
+| **5** | Webhook CRUD routes + schema | ✅ routes done | Event chain delivery (HMAC dispatch) |
+
+**Remaining to true S-tier:** ~3–4 developer days (event chain webhook delivery, lifecycle linkedUserId, pipeline upload, channel GUI).
+
+---
+
+## Part 5 — Final Target Architecture
+
+```
+                    ╔══════════════════════════════════╗
+                    ║      Eve Dashboard (port 14000)  ║
+                    ║  Providers │ Agents │ Skills ✅   ║
+                    ║  MCP       │ Memory ✅│ Channels   ║
+                    ╚══════════╤═══════════════════════╝
+                               │ Eve transport (127.0.0.1:14000)
+                               ▼
+         ╔═════════════════════════════════════════════════╗
+         ║              Synap Data Pod :4000               ║
+         ║                                                 ║
+         ║  Hub Protocol REST /api/hub/*                   ║
+         ║  ├─ /memory         read/write knowledge facts  ║
+         ║  ├─ /entities       create/search/update        ║
+         ║  ├─ /channels       list/personal/by-context    ║
+         ║  ├─ /skills         list/get/execute ✅          ║
+         ║  ├─ /webhooks       sub/unsub ✅ (delivery ⚠)   ║
+         ║  └─ /v1/chat/completions  OpenAI-compat (IS)    ║
+         ║                                                 ║
+         ║  IS :3001 — OrchestratorAgent + PersonaAgent    ║
+         ║  (internal skills, tool calls, proposals)       ║
+         ╚══════╤═══════════════════════════════╤══════════╝
+                │ Hub Protocol Bearer           │ Hub Protocol Bearer
+       ┌────────┴─────────┐           ┌─────────┴──────────┐
+       │     Hermes       │           │    Open WebUI       │
+       │  :8642 API gw    │◄──/v1────►│  :3011             │
+       │  :9119 dashboard │           │  model picker:      │
+       │  :9120 MCP srv ✅│           │  synap/* + hermes   │
+       └────────┬─────────┘           └────────────────────┘
+                │
+    ┌───────────┼───────────┐
+    │           │           │
+ Telegram   Discord      Slack / Matrix / Signal / WhatsApp
+
+                │ :9120 MCP ✅
+       ┌────────┴──────┐
+       │  Claude Code  │  ← auto-configured by Eve
+       │  Cursor       │  ← .claude/mcp-servers/hermes.json
+       │  any MCP cli  │
+       └───────────────┘
+```
+
+---
+
+## Decisions recorded
+
+| Question | Decision | Reason |
+|---|---|---|
+| Use IS internal skills in Hermes? | No | They reference IS-specific tool names that don't exist in Hermes |
+| Expose user-created skills to Hermes? | Yes, via new Hub REST execute endpoint | Skills are the user's automation surface — agents should all reach them |
+| Which MCP server does Hermes run? | `hermes mcp serve` on :9120, wired by Eve | Hermes native, zero custom code |
+| Where do external MCPs get added? | Eve Dashboard → Intelligence → MCP tab per agent | Centralised, no file editing |
+| Memory ownership after identity linking? | Fact stored with both `agentUserId` and `linkedUserId` | Queryable by Hermes (agent) and the Synap UI (human) |
+| Channel credentials: per-agent vs centralised? | Centralised in `secrets.channels`, routing in `secrets.channelRouting` | Already done — just needs GUI in Phase 4 |
+| Webhook schema: draft vs Hub Protocol canonical? | Dropped old draft, recreated with Hub schema | `subscriber_id` = apiKeyId ties subscriptions to key identity |

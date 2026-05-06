@@ -1,0 +1,299 @@
+---
+title: Eve × Hermes Architecture
+description: How Hermes Agent serves as Eve's primary AI agent runtime — memory plugin, channel routing, OpenWebUI wiring, and the sovereign agentic stack.
+---
+
+# Eve × Hermes Architecture
+
+## Why Hermes
+
+Eve's agent provider is **Hermes** ([NousResearch/hermes-agent](https://hermes-agent.nousresearch.com)), an MIT-licensed headless AI agent. We evaluated Hermes against OpenClaw and chose Hermes as the default Eve agent runtime for three reasons:
+
+| Criterion | Hermes | OpenClaw |
+|-----------|--------|---------|
+| Security record | Zero CVEs | 138 CVEs in 5 months (CVSS 9.9 RCE) |
+| Memory architecture | Plugin contract — 100% of syncs go to one provider | Scattered storage, no clean intercept |
+| Platform coverage | 21 platforms native | 24+ platforms, BYOD-style |
+| Licensing | MIT | AGPL-3.0 |
+| Language | Python (auditable) | TypeScript + 1,400+ npm deps |
+
+OpenClaw is kept as a **distribution funnel** via `synap-backend/skills/synap/SKILL.md` — external OpenClaw users install the Synap skill and get Hub Protocol access. It is not Eve-deployed by default.
+
+Full decision record: `hestia-cli/docs/openclaw-vs-hermes.md`
+
+---
+
+## The Agentic Triangle
+
+```
+            ┌─────────────────────────────┐
+            │      Synap Data Pod          │
+            │  (eve-brain-synap :4000)     │
+            │  Hub Protocol · IS · Memory  │
+            └──────────┬──────────────────┘
+                       │  Hub Protocol (Bearer)
+           ┌───────────┴──────────┐
+           │                      │
+    ┌──────┴──────┐        ┌──────┴──────────┐
+    │   Hermes    │        │  Open WebUI      │
+    │  :8642 API  │◄───────│  :3011 chat UI   │
+    │  :9119 dash │  /v1   └─────────────────┘
+    │  :9120 MCP  │
+    └─────────────┘
+           │
+    channels (Telegram, Discord, ...)
+```
+
+- **Synap pod** is the brain: entities, memory, Hub Protocol REST, `/v1/chat/completions`
+- **Hermes** is the agent runtime: autonomous execution, tool use, conversation memory synced to Synap
+- **Open WebUI** is the chat UI: connects to both Synap IS (port 4000) and Hermes gateway (port 8642) as separate model sources
+- **Hermes MCP server** (`:9120`) exposes Hermes tools to Claude Code, Cursor, and any MCP client
+
+---
+
+## Hermes Docker Setup
+
+```yaml
+# service: eve-builder-hermes
+image: nousresearch/hermes-agent:latest
+ports:
+  - "8642:8642"   # OpenAI-compat API gateway
+  - "9119:9119"   # Admin dashboard
+  - "9120:9120"   # MCP server (MCP_SERVER_ENABLED=true)
+volumes:
+  - ~/.eve/hermes:/opt/data  # HERMES_HOME — config, plugins, sessions
+  - ~/.eve/skills:/opt/data/skills:ro  # Synap Hub skill reference
+environment:
+  HERMES_HOME: /opt/data
+  API_SERVER_ENABLED: "true"
+  API_SERVER_PORT: "8642"
+  MCP_SERVER_ENABLED: "true"
+env_file:
+  - ~/.eve/hermes.env
+```
+
+Key files on host (all inside `~/.eve/hermes/`):
+
+| File | Purpose |
+|------|---------|
+| `config.yaml` | Memory provider, model, MCP server config, API server key |
+| `hermes.env` | Hub credentials, channel tokens, AI wiring |
+| `plugins/memory/synap/__init__.py` | Synap MemoryProvider plugin |
+| `plugins/memory/synap/plugin.yaml` | Plugin manifest |
+
+---
+
+## Synap Memory Provider Plugin
+
+Hermes enforces **one external memory provider at a time**. Eve generates a Python plugin that implements the `MemoryProvider` contract and forwards all memory operations to the Synap Data Pod via Hub Protocol.
+
+**Why this gives us 100% memory capture:**
+
+Hermes calls the active provider at:
+1. Session start — `prefetch(query)` injects relevant memories into system prompt
+2. After each turn — `sync_turn(user, assistant)` persists conversation
+3. Session end — `on_session_end(messages)` stores full transcript + triggers extraction
+4. Explicit writes — `on_memory_write(action, target, content)` mirrors built-in memory edits
+
+The plugin lives at `~/.eve/hermes/plugins/memory/synap/` and is generated (or regenerated) by:
+- `eve install hermes` — first install
+- `eve ai apply` — any AI provider change triggers regeneration
+- `eve update hermes` — post-update reconciliation
+
+**Plugin generation is in `@eve/dna/src/builder-hub-wiring.ts`:**
+- `generateSynapPlugin()` — writes `__init__.py` + `plugin.yaml` (pure stdlib, zero external deps)
+- `writeHermesConfigYaml()` — writes `config.yaml` with `memory.provider: synap`
+
+**Hub Protocol endpoints used by the plugin (all live):**
+
+| Hook | Endpoint | Notes |
+|------|----------|-------|
+| `prefetch` | `GET /memory?query=X&limit=10` | Text search, auth-fallback userId |
+| `sync_turn` | `POST /memory` (×2) | `[session:ID][user/assistant]` tagged facts |
+| `on_session_end` | `POST /memory` | Compact summary fact, confidence=0.9 |
+| `on_memory_write` | `POST /memory` | add/update/replace → fact write; forget skipped |
+
+---
+
+## Identity Linking (Phase 2 — shipped)
+
+Memory written by the Hermes agent key is dual-attributed to both the agent identity and the linked human user.
+
+**`api_keys.linked_user_id`** — migration `0021_api_keys_linked_user.sql` adds `linked_user_id TEXT` to `api_keys`. `CreateApiKeyInput.linkedUserId` wired through `api-key-repository.ts` and `POST /setup/agent`.
+
+**Hub middleware** — when a key with `linkedUserId` authenticates, `c.set("linkedUserId", keyRecord.linkedUserId)` is set on the Hono context (`_shared.ts`: `HubVariables.linkedUserId?: string`).
+
+**`rest/memory.ts` dual-write** — after saving a fact under the agent identity, if `linkedUserId ≠ userId`, the same fact is written again for the linked human (non-fatal; silently dropped on error).
+
+**Remaining gap:** The lifecycle does not yet automatically resolve the pod owner's userId and pass it as `linkedUserId` when provisioning the Hermes agent key. The endpoint accepts it; the caller doesn't supply it yet.
+
+---
+
+## Channel Routing — Agent-Agnostic Design
+
+Channel credentials are stored once in `secrets.channels.*`. Any agent reads from this single source. Switching agent providers never requires re-entering bot tokens.
+
+```json
+// secrets.json shape (simplified)
+{
+  "channels": {
+    "telegram": { "enabled": true, "botToken": "1234:ABC...", "webhookSecret": "..." },
+    "discord":  { "enabled": false, "botToken": "..." }
+  },
+  "channelRouting": {
+    "telegram": "hermes",
+    "discord":  "openclaw"   // fallback for users who prefer OpenClaw for Discord
+  }
+}
+```
+
+`writeHermesEnvFile()` reads both objects and injects only the channels routed to `hermes` as env vars (`TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, etc.). Changing the routing and rerunning re-wires without touching the tokens.
+
+**Dashboard:** Settings → Channels
+
+---
+
+## OpenWebUI Integration
+
+Open WebUI sees Hermes as a second model source alongside Synap IS:
+
+```
+# /opt/openwebui/.env (managed by `eve ai apply`)
+OPENAI_API_BASE_URLS=http://eve-brain-synap:4000/v1;http://eve-builder-hermes:8642/v1
+OPENAI_API_KEYS=<synap-hub-key>;<hermes-api-server-key>
+```
+
+The Hermes API server key (`API_SERVER_KEY`) is:
+1. Generated once at `eve install hermes`
+2. Stored in `secrets.builder.hermes.apiServerKey`
+3. Written to both `hermes.env` (Hermes reads it to accept calls) and OpenWebUI's `.env` (OpenWebUI sends it as Bearer)
+
+The `wireOpenwebui()` function in `@eve/dna/src/wire-ai.ts` handles this automatically when `eve ai apply` runs.
+
+**Result in the model picker:** Users see `synap/auto`, `synap/balanced`, etc. (Synap IS tier aliases) alongside whatever models Hermes exposes — typically the model configured in `config.yaml`.
+
+**Remaining gap:** `wireOpenwebui()` does not yet upload `synap_hermes_dispatch.py` to OpenWebUI pipelines. The pipeline file exists at `assets/pipelines/synap_hermes_dispatch.py`; the upload call is not yet wired.
+
+---
+
+## AI Wiring Flow
+
+```
+eve ai apply
+    ↓
+wireAllInstalledComponents(secrets, installedComponents)
+    ↓
+wireSynapIs()     → /opt/synap-backend/deploy/.env (OPENAI/ANTHROPIC/OPENROUTER keys)
+wireHermes()      → ~/.eve/hermes.env (AI_BASE_URL, AI_API_KEY, AI_DEFAULT_MODEL)
+                    + writeHermesConfigYaml() → ~/.eve/hermes/config.yaml (+ MCP block)
+                    + generateSynapPlugin()   → ~/.eve/hermes/plugins/memory/synap/
+                    + docker restart eve-builder-hermes
+wireOpenwebui()   → /opt/openwebui/.env (OPENAI_API_BASE_URLS with both IS + Hermes)
+                    + docker compose up -d (re-reads .env)
+                    ⚠ pipeline upload not yet wired
+wireOpenclaw()    → docker exec (for users who keep OpenClaw installed; deprecated flow)
+```
+
+All wire functions are in `@eve/dna/src/wire-ai.ts`. They are synchronous, idempotent, and return `WireAiResult`.
+
+---
+
+## Skills Integration
+
+Three skill systems, one decision per system:
+
+| System | Should Hermes use? | How |
+|---|---|---|
+| IS internal skills (`hub-protocol.md`, `entity-management.md`, …) | **No** — IS-private tool patterns | N/A |
+| DB user-created skills | **Yes** — via `POST /api/hub/skills/:id/execute` | Hub REST (shipped Phase 1) |
+| `~/.eve/skills/synap/SKILL.md` | **Yes** — Hub Protocol reference | Volume-mounted into container |
+
+The skills dir (`~/.eve/skills/`) is mounted read-only at `/opt/data/skills` in the container. Hermes reads SKILL.md files as slash-command references, giving it access to Hub Protocol endpoints without any custom code.
+
+`GET /api/hub/skills/system` lists all three skill packages (synap, synap-schema, synap-ui). `POST /api/hub/skills/:id/execute` triggers user-created DB skills via the IS.
+
+---
+
+## MCP Server
+
+Hermes exposes itself as an MCP server at `:9120` (`MCP_SERVER_ENABLED=true`). Claude Code gets the config auto-written to `.claude/mcp-servers/hermes.json` by `writeBuilderProjectEnv()` / `writeClaudeCodeSettings()` in `builder-hub-wiring.ts`.
+
+```json
+// .claude/mcp-servers/hermes.json
+{
+  "type": "http",
+  "url": "http://localhost:9120",
+  "name": "hermes",
+  "description": "Hermes agent — memory, channels, skills via Synap"
+}
+```
+
+Written only when `secrets?.builder?.hermes?.apiServerKey` exists (i.e., Hermes is installed).
+
+---
+
+## Webhook Subscriptions (Phase 5 — shipped)
+
+Hermes and external agents can register push subscriptions. The Hub REST layer now has full CRUD:
+
+```
+POST   /api/hub/webhooks          — register subscription
+GET    /api/hub/webhooks          — list (own subscriptions)
+DELETE /api/hub/webhooks/:id      — unregister
+PATCH  /api/hub/webhooks/:id      — update url/events/active
+```
+
+Backed by `webhook_subscriptions` table (migration `0022_webhook_subscriptions.sql`). Subscriptions are owner-scoped by `subscriberId = apiKeyId`. Admin override via `hub-protocol.admin` scope. Requires `webhook:manage` API key scope.
+
+Drizzle schema: `synap-backend/packages/database/src/schema/webhook_subscriptions.ts`.
+
+**Remaining gap:** The event chain delivery step is not yet wired. Routes exist and subscriptions are stored, but the event router (`event-emit.ts`) does not yet dispatch to matching webhook URLs with HMAC signing after socket fanout.
+
+---
+
+## Eve Dashboard — Intelligence Settings (Phase 3/4 — shipped)
+
+Settings → Intelligence is now a three-tab page:
+
+| Tab | Route | Data source |
+|-----|-------|-------------|
+| Memory | `/settings/intelligence/memory` | Hub Protocol proxy `GET /api/hub/memory` |
+| Skills | `/settings/intelligence/skills` | Hub Protocol proxy `GET /api/hub/skills` |
+| System Skills | `/settings/intelligence/system-skills` | Hub Protocol proxy `GET /api/hub/skills/system` |
+
+**Hermes health card** in Settings → Components: proxies `GET http://eve-builder-hermes:9119/api/status` through `app/api/components/hermes/status/route.ts`, shows gateway/model/MCP status.
+
+**`settings-tabs.tsx`** includes the new "Intelligence" nav tab.
+
+---
+
+## Lifecycle
+
+```bash
+eve add hermes       # installHermes() in @eve/lifecycle
+                     #   1. writeHermesEnvFile() — generates API_SERVER_KEY, writes .env
+                     #   2. writeHermesConfigYaml() — memory.provider: synap + MCP server block
+                     #   3. generateSynapPlugin() — Python plugin
+                     #   4. docker pull nousresearch/hermes-agent:latest
+                     #   5. docker run -p 8642:8642 -p 9119:9119 -p 9120:9120 \
+                     #              -v ~/.eve/hermes:/opt/data \
+                     #              -v ~/.eve/skills:/opt/data/skills:ro \
+                     #              --env-file ~/.eve/hermes.env
+
+eve update hermes    # UPDATE_PLAN.hermes → docker pull + postUpdateReconcileHermes()
+                     #   regenerates config + plugin so new image boots with current wiring
+
+eve ai apply         # wireHermes() — re-writes env + config + plugin, restarts container
+```
+
+---
+
+## What's Still Remaining
+
+| Gap | Detail |
+|-----|--------|
+| Event chain → webhook delivery | Routes exist, subscriptions persist; event router doesn't yet dispatch to matching URLs with HMAC signing |
+| Lifecycle sets `linkedUserId` automatically | `POST /setup/agent` accepts it; lifecycle doesn't fetch pod owner userId yet |
+| `wireOpenwebui()` pipeline upload | `synap_hermes_dispatch.py` exists; upload call not yet added to `wireOpenwebui()` |
+| Channel add flow GUI | Editing `secrets.json` manually required; Eve Dashboard Channels page is still read-only |
+| `skill_execution_log` / Skills log page | No execution history surface yet |

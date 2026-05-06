@@ -1,0 +1,239 @@
+---
+title: Architecture
+description: Technical architecture of DevPlane — provider tree, data flow, startup state machine, WebSocket endpoints
+section: products
+audience: team
+last_updated: '2026-04-29'
+---
+
+## Data flow
+
+```
+React component
+  → lib/devplane/hooks.ts         (useDevplaneEntities, useCreateDevplaneEntity…)
+      → @synap-core/client        (tRPC + TanStack Query)
+          → Next.js /trpc proxy
+              → Synap backend pod :4000/trpc
+                  → Drizzle ORM → PostgreSQL
+```
+
+Components never call tRPC directly — always through a hook in `lib/devplane/hooks.ts`. This is the three-layer rule.
+
+## Provider tree
+
+Split into two tiers. The first tier (in `app/providers.tsx`) is always active. The second tier (in `app/(app)/layout.tsx`) only mounts after workspace readiness is confirmed.
+
+```
+providers.tsx (always active):
+  NextThemesProvider
+    HeroUIProvider
+      SynapProvider              ← auth context
+        AppStoresSync            ← Zustand hydration
+          AppTRPCProvider        ← tRPC client
+            RegistryBoot
+              CellRuntimeWrapper
+                CommandPaletteProvider
+                  {children}
+
+app/(app)/layout.tsx (gated — only when state === "ready"):
+  AppSocketProvider              ← Socket.IO → pod
+    RealtimeBridge               ← cache invalidation via socket events
+      AppShell + page content
+```
+
+**Why Socket.IO is gated:** tRPC requests go through the Next.js `/trpc` proxy, but Socket.IO connects directly to the pod URL (e.g. `antoine-perso.synap.live`). Connecting before the workspace is confirmed ready produces cross-origin WebSocket errors with no benefit. The readiness gate ensures Socket.IO only connects once the app is fully operational.
+
+## Startup state machine
+
+`hooks/useWorkspaceReadiness.ts` runs inside `WorkspaceReadinessGate` before any app content renders.
+
+```
+idle
+  → no workspace in localStorage  → no_workspace → redirect /onboarding
+  → workspace found               → checking
+
+checking  (fetching profiles.list)
+  → all 13 profiles present       → ready ✓
+  → profiles missing, first time  → bootstrapping
+
+bootstrapping  (createFromDefinition with existing workspaceId)
+  → done                          → rechecking
+
+rechecking  (fetching profiles.list again)
+  → all 13 profiles present       → ready ✓
+  → still missing                 → waiting
+
+waiting  (scheduled retry every 3.5s)
+  → profiles appear               → ready ✓
+  → after 4 retries               → show "Check again" button
+  → manual retry                  → reset bootstrappedRef → checking
+```
+
+Key invariants:
+- `bootstrappedRef` prevents calling `createFromDefinition` more than once per mount
+- Manual retry resets `bootstrappedRef` so re-bootstrap is possible
+- `mountedRef` guards all state updates to prevent stale-closure updates after unmount
+- `createFromDefinition` is idempotent — safe to call with an existing `workspaceId`
+
+## WebSocket endpoints
+
+Both connect directly to the pod (not via the Next.js proxy). The session token is passed as a query param because cookies don't transfer on cross-origin WebSocket upgrades.
+
+### SSH Terminal — `/api/devplane/ssh`
+
+```
+?envId=<entity_id>&token=<kratos_session_token>
+
+1. Validate token via Kratos
+2. Fetch devplane_environment → envHost, sshUser, sshKeyVaultRef
+3. Resolve vault://uuid → plaintext SSH key (server-side only)
+4. ssh2.shell() → PTY proxy
+
+Client → Server:  binary (input) | JSON { type:"resize", cols, rows }
+Server → Client:  binary (output) | JSON { type:"ready"|"error"|"closed" }
+```
+
+### Recipe Runner — `/api/devplane/recipe-run`
+
+```
+?recipeId=<entity_id>&envId=<entity_id>&token=<kratos_session_token>
+
+1. Validate token
+2. Fetch recipe → parse recipeSteps JSON
+3. Fetch environment → resolve SSH credentials
+4. For each step: ssh2.exec() → stream stdout/stderr
+5. Save devplane_recipe_run entity
+
+Server → Client (JSON events):
+  { type: "step_start", index, name, command }
+  { type: "output", index, data }
+  { type: "step_done", index, exitCode, success }
+  { type: "recipe_done", success, duration }
+
+Client → Server:  { type: "cancel" }
+```
+
+## Profile inventory (13 profiles)
+
+| Slug | Display | Purpose | Key properties |
+|------|---------|---------|----------------|
+| `devplane_app` | App | Software application | appStatus, repoUrl, deployUrl, techStack, port, entityChannelId, npmTokenVaultRef, githubTokenVaultRef |
+| `devplane_feature` | Feature | Work item with AI session | featureStatus, priority, linkedApp, linkedPackages, estimatedDays, entityChannelId |
+| `devplane_service` | Service | Microservice / backend process | serviceStatus, serviceType, host, servicePort, healthUrl, linkedApp, linkedEnvironmentId |
+| `devplane_package` | Package | npm/pnpm package | packageName, packageVersion, dependsOn, consumedByApps, healthScore, healthGrade, staleStatus, uncommittedCount, entityChannelId |
+| `devplane_environment` | **Server** | SSH-accessible server node | envType, **host**, envUrl, isActive, sshUser, sshKeyVaultRef, linkedAppSlug, **kamalRole**, **serverProvider** |
+| `devplane_deployment` | Deployment | Deploy event / release record | deployStatus, version, commitSha, linkedApp, linkedEnvironment, deployedBy, deployedAt, logsUrl, recipeRunId |
+| `devplane_recipe` | Recipe | SSH command sequence | recipeTemplate (kamal/shell/custom), recipeSteps, linkedEnvironmentId, linkedAppSlug, onFailure, rollbackRecipeId |
+| `devplane_recipe_run` | Recipe Run | Single recipe execution | recipeId, runStatus, runSteps, runStartedAt, runFinishedAt, runDuration, triggeredBy |
+| `devplane_prompt_snippet` | Snippet | Reusable AI prompt template | snippetCategory, snippetBody, isExecutable, linkedApp |
+| `devplane_decision_record` | Decision Record | Technical decision with rationale | decisionContext, decisionChoice, alternatives, linkedApp, linkedPackages, madeBy, madeAt |
+| `devplane_incident` | Incident | Production incident | severity, incidentStatus, affectedApps, rootCause, resolvedAt, linkedEnvironment, recipeRunId |
+| `devplane_cron` | Cron Job | Scheduled task registry | cronExpression, cronStatus, linkedAppSlug, lastRunAt, lastRunStatus, nextRunAt |
+| `devplane_package_publish` | Package Publish | npm publish audit trail | publishedPackage, fromVersion, toVersion, bumpType, changelogEntry, publishStatus, consumersNotified |
+
+**Bold properties** were added in the April 2026 data model refinement. `devplane_environment` is named "Server" in the UI to reflect that it represents a physical/virtual server node, not just an abstract environment tier.
+
+## Entity relationship graph
+
+```
+App
+ ├── features      → Feature[]         (by feature.linkedApp)
+ ├── services      → Service[]         (by service.linkedApp)
+ ├── packages      → Package[]         (by package.consumedByApps)
+ ├── deployedOn    → Server[]          (by server.linkedAppSlug)
+ ├── deployments   → Deployment[]      (by deployment.linkedApp)
+ ├── incidents     → Incident[]        (by incident.affectedApps)
+ └── entityChannelId → AI channel
+
+Server (devplane_environment)
+ ├── envType       staging | production | local | development
+ ├── kamalRole     web | worker | db | cache | all
+ ├── host          IP address or hostname
+ ├── sshKeyVaultRef → Vault (plaintext key never stored)
+ └── linkedAppSlug → primary App
+
+Package
+ ├── dependsOn     → Package[] (comma-separated names — graph edges)
+ ├── consumedByApps → App[] (comma-separated app names)
+ └── health        healthScore (0–100), healthGrade (A–F), staleStatus
+```
+
+## Navigation structure
+
+Sidebar: 6 groups, 12 items.
+
+```
+Home
+── Work:          Apps · Features
+── Stack:         Packages · Services
+── Deploy:        Environments (Servers) · Deployments · Recipes
+── Monitor:       Incidents · Crons
+── Intelligence:  Knowledge (Decisions + Snippets) · Providers
+```
+
+Key pages:
+- `/features/[id]` — split-pane: left = details + edit, right = persistent AI channel
+- `/knowledge` — tabbed: Decisions | Snippets (URL: `?tab=decisions`)
+- `/packages` — grid with health grades, stale status, Publish + Impact actions
+
+## Infrastructure model
+
+Canonical deployment stack (provider-agnostic, SSH-based):
+
+```
+Local (dev)
+  └── pnpm dev — no SSH, no DevPlane management needed
+
+Staging (1 server)
+  └── Any SSH-accessible VPS (Hetzner CX21, DO Droplet, etc.)
+  └── Server entity: { envType: "staging", kamalRole: "all" }
+  └── Recipe: kamal template → kamal deploy --destination staging
+
+Production (fleet)
+  └── Multiple servers with explicit roles:
+      web ×N    → { kamalRole: "web" }
+      worker ×N → { kamalRole: "worker" }
+      db ×1     → { kamalRole: "db" }
+  └── DevPlane graph view visualizes topology + live status
+```
+
+Recipe templates: `kamal` (primary), `shell`, `custom`. Docker Compose and git-pull are custom recipes.
+
+## Intelligence module
+
+`lib/devplane/intelligence/` contains pure TypeScript utilities:
+
+| File | Function | Description |
+|------|----------|-------------|
+| `impact.ts` | `analyzeImpact()` | BFS traversal of package dependency graph — returns affected packages + apps with update strategy per bump type |
+| `context.ts` | `buildFeatureContextMessage()` | Builds markdown context summary for AI channel first message (app, packages, recent deployments, open incidents) |
+
+Health scoring (`scorePackage()` — populates `healthScore`, `healthGrade`, `staleStatus`) requires server-side filesystem + git access; implemented as a Next.js server action.
+
+## Key files
+
+| File | Purpose |
+|------|---------|
+| `lib/devplaneWorkspaceDefinition.ts` | 13-profile `WorkspaceProposal` — source of truth for all DevPlane profiles |
+| `hooks/useWorkspaceReadiness.ts` | Readiness state machine — verifies all 13 profiles, bootstraps missing ones |
+| `hooks/useDevplaneSetup.ts` | First-login flow — creates workspace, optional demo seed |
+| `lib/devplane/hooks.ts` | All tRPC hooks for DevPlane entities + channel hooks |
+| `lib/devplane/types.ts` | TypeScript types for all 13 entity profiles |
+| `lib/devplane/intelligence/` | Pure logic: impact BFS, context builder |
+| `lib/devplane/seed.ts` | `seedSynapStack()` — creates demo entities for the Synap stack |
+| `app/(app)/layout.tsx` | `WorkspaceReadinessGate` + `AppSocketProvider` gating |
+| `app/providers.tsx` | Root provider tree (no Socket.IO) |
+
+## Design decisions
+
+**Frontend owns profiles.** The pod/backend has no knowledge of DevPlane-specific profiles. `DEVPLANE_WORKSPACE_DEFINITION` is the source of truth. The old `ensureDevplaneProfiles()` in `synap-backend` is dead code — wrong scope (system vs workspace), never called.
+
+**Idempotent bootstrap.** `createFromDefinition` with an existing `workspaceId` adds missing profiles without touching existing ones. This means the readiness gate can repair workspaces created before new profiles were added to the definition — no manual migration needed.
+
+**Server ≠ Environment tier.** `devplane_environment` entities represent individual server nodes, not environment tiers. `envType` (staging/production) is a property, not the entity type. Multiple Server entities can share `envType: "production"` with different `kamalRole` values — this is how the Kamal fleet is modelled.
+
+**SSH over CI.** Many self-hosted setups don't have a CI runner. SSH is the lowest common denominator and Kamal specifically expects it.
+
+**Recipe steps as JSON string.** Synap property values are typed scalars. `JSON.stringify(steps)` keeps the data in the property system without schema changes.
+
+**Provider-agnostic servers.** `serverProvider` is metadata only — DevPlane connects via SSH regardless of provider. Hetzner, DO, AWS, bare metal — same SSH + vault pattern.

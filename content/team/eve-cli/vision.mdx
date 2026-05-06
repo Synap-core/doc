@@ -21,7 +21,7 @@ Eve turns a **bare server** into a **coherent self-hosted stack** centered on th
 
 ## Design principles
 
-1. **Synap as exclusive memory** — Every agent reads from and writes to Synap via REST API. No agent (OpenClaw, Hermes, opencode/OpenClaude) runs its own SQLite, Vector DB, or external state store. This is non-negotiable.
+1. **Synap as exclusive memory** — Every agent reads from and writes to Synap via REST API. No agent runs its own SQLite, Vector DB, or external state store. This is non-negotiable. Eve manages **5 agents**: `eve`, `openclaw`, `hermes`, `openwebui-pipelines`, `coder` — the last is unified across the three code-generation engines (engine choice is `secrets.builder.codeEngine`, not identity).
 
 2. **Sovereignty** — Operator controls the machine, data residency, and whether cloud models are used at all for local tooling. No mandatory cloud dependency beyond what the operator chooses.
 

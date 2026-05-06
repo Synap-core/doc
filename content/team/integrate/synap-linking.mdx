@@ -2,7 +2,11 @@
 
 Two mechanisms connect entities in Synap. This file covers when to use which, auto-sync behaviour, and relation conventions.
 
-## Auto-sync table (ENTITY_ID properties → relations)
+## Related
+
+- [CLI synap linking](./cli-synap-linking.mdx) — agent-facing version of this document
+- [Connections](../platform/connections.mdx) — entity connection system
+- [Entity profiles](../features/entity-profiles.mdx) — profiles that use linking
 
 When a profile property has `valueType: "entity_id"`, setting it on entity creation or update automatically writes a row in the `relations` table. No second call needed.
 

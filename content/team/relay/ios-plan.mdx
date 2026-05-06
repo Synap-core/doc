@@ -450,3 +450,16 @@ Integrate into the capture flow: add a "Scan" option to the CaptureModal input a
 | 6 | Vision / Live Text | `react-native-vision-camera` + custom | Yes | 2-4d | **P1** |
 
 **Total iOS effort: ~15-19 engineer-days for the full set.** Roughly half is Swift/SwiftUI in the target folders (not JS). The App Group + stable entity ID prerequisites each take half a day and unlock all six. Every capability reuses the same `AppEntity` + `AppIntent` declarations, so capability 1 is strictly foundational — ship it first.
+
+## Related
+
+- [Next-Gen Capabilities](./next-gen.mdx) — full platform capabilities audit
+- [Architecture](./architecture.mdx) — platform bridge and infrastructure mapping
+- [Android Plan](./android-plan.mdx) — Android implementation companion
+- [Ship Plan](./ship-plan.mdx) — action sequencing
+- [Future State & Vision](./future-state.mdx) — product direction
+- [Design](./design.mdx) — target users and positioning
+- [Native OS](./native-os.mdx) — platform bridge exposing device capabilities
+- [Native OS UX Plan](./native-os-ux.mdx) — UX plan for device features
+- [App Store](./app-store.mdx) — submission and release prep
+- [Implementation Plan](./implementation.mdx) — work breakdown reference

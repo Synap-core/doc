@@ -145,3 +145,10 @@ STRIPE_METER_COMPLEX=synap_tokens_complex
 | `routes/billing.ts`                     | CP      | `POST /billing/usage-event`, `GET /billing/usage` |
 | `routers/external/openai-compat.ts`     | Backend | Sets `X-Synap-Channel: api`                       |
 | `routers/channels.ts`                   | Backend | Sets `X-Synap-Channel: browser`                   |
+
+## Related
+
+- [Control Plane Architecture](../control-plane/architecture.mdx) — billing integration with CP
+- [Pod Management](../control-plane/pod-management) — subscription tiers and pod limits
+- [Agent SDK](./sdk-readme.mdx) — token usage from agent calls
+- [Operations](./operations.mdx) — usage monitoring and cost management

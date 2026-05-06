@@ -1,0 +1,15 @@
+{
+  "title": "DevPlane",
+  "description": "Developer intelligence layer — package graph, session continuity, automation, knowledge accumulation, multi-product oversight",
+  "icon": "server-cog",
+  "pages": [
+    "index",
+    "north-star",
+    "---Architecture---",
+    "architecture",
+    "startup-flow",
+    "---Reference---",
+    "profiles",
+    "hooks"
+  ]
+}

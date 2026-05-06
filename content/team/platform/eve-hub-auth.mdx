@@ -1,0 +1,308 @@
+---
+title: 'Eve <-> Hub Auth Convergence'
+description: >-
+  How @synap-core/auth became the public foundation for Eve, Hub, Studio,
+  Canvas, CRM, DevPlane and the-arch — single sign-in across .synap.live,
+  Synap-hosted and self-hosted modes, and the host secrets bridge that lets
+  the on-host CLI act as the operator without re-prompting.
+section: general
+audience: developers
+version: 1.0+
+last_updated: '2026-05-06'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve <-> Hub Auth Convergence
+
+**Date:** 2026-05-06
+**Status:** Canonical reference for cross-app SSO and the Synap-hosted vs self-hosted split. Companion to [Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx) — that doc covers what credentials Eve holds and which pod channel they belong on; this doc covers how those credentials are minted, shared across apps, and (for Eve only) mirrored to the host.
+
+---
+
+## Related
+
+- [Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx) — three-credential model, JWT-Bearer exchange, the agent vs user channel.
+- [Auth Architecture](./auth-architecture.mdx) — Better Auth on CP, Kratos on pod, handshake JWTs.
+- [Eve — Per-Agent Hub Keys](./eve-agent-keys.mdx) — per-agent Hub keys (the agent side of the same secrets file).
+- [Hub Protocol](./hub-protocol.mdx) — REST surface the agent API key fronts.
+
+Code references:
+
+- Shared session storage: [`synap-app/packages/core/auth/src/storage/shared-session.ts`](https://github.com/synap/synap-app/blob/main/packages/core/auth/src/storage/shared-session.ts)
+- Eve auth wrapper: [`hestia-cli/packages/eve-dashboard/lib/synap-auth.ts`](https://github.com/synap/hestia-cli/blob/main/packages/eve-dashboard/lib/synap-auth.ts)
+- Host-sync route: [`hestia-cli/packages/eve-dashboard/app/api/auth/sync/route.ts`](https://github.com/synap/hestia-cli/blob/main/packages/eve-dashboard/app/api/auth/sync/route.ts)
+- Pod claim route: [`hestia-cli/packages/eve-dashboard/app/api/pod/claim/route.ts`](https://github.com/synap/hestia-cli/blob/main/packages/eve-dashboard/app/api/pod/claim/route.ts)
+- Secrets contract: [`hestia-cli/packages/@eve/dna/src/secrets-contract.ts`](https://github.com/synap/hestia-cli/blob/main/packages/@eve/dna/src/secrets-contract.ts)
+
+---
+
+## 1. TL;DR
+
+`@synap-core/auth` is now a public, MIT-licensed npm package (`@synap-core/auth@1.0.0`). It is the single auth foundation for **every** Synap-compatible app — Hub, Studio, Canvas, CRM, DevPlane, the-arch, and Eve. Sign in once on any of them and:
+
+- A shared session is written to `localStorage["synap:session"]` plus a cross-subdomain cookie at `Domain=.synap.live`.
+- Every other app's `SynapProvider` boot effect reads that session via `getSharedSession()` and the user is signed-in there too — no second prompt, no postMessage handshake.
+- A `storage` event listener in each provider propagates sign-out across tabs.
+
+There are exactly **two valid auth modes**:
+
+- **Synap-hosted** (default) — sign in with a Synap CP account, then connect to a pod via the CP handshake. Marketplace, cross-pod sharing, and entitlements work.
+- **Self-hosted** — bypass the CP entirely, sign in with pod-local Kratos credentials. Apps that depend on the CP gracefully degrade.
+
+Eve is the same shape as the other apps with **one extra step**: after a successful CP sign-in it mirrors the session into `~/.eve/secrets.json` so the on-host CLI / daemon can act as the user without prompting again.
+
+---
+
+## 2. Architecture
+
+```
+                   ┌────────────────────────────────────────────────┐
+                   │             User's browser (one tab)           │
+                   │                                                │
+   sign in once ──►│ ┌─────┐  ┌────────┐  ┌─────┐  ┌─────┐  ┌─────┐ │
+                   │ │ Hub │  │ Studio │  │ CRM │  │ Eve │  │ ... │ │
+                   │ └──┬──┘  └───┬────┘  └──┬──┘  └──┬──┘  └──┬──┘ │
+                   │    └─────────┴──────────┴────────┴────────┘    │
+                   │                  @synap-core/auth              │
+                   │                                                │
+                   │  storeSharedSession()  /  getSharedSession()   │
+                   │                                                │
+                   │  ┌──────────────────────────────────────────┐  │
+                   │  │  localStorage["synap:session"]           │  │
+                   │  │  cookie "synap-session" Domain=.synap.live  │
+                   │  └──────────────────────────────────────────┘  │
+                   │                       │                        │
+                   │              storage event │  cross-tab clear  │
+                   └───────────────────────┼────────────────────────┘
+                                           │
+                                           ▼ (Eve only)
+                                ┌──────────────────────┐
+                                │ POST /api/auth/sync  │
+                                │ owner-only writer    │
+                                └──────────┬───────────┘
+                                           ▼
+                                ~/.eve/secrets.json
+                                  cp.userSession
+```
+
+A second user in a separate browser hits the same server and is rejected from the disk slot with `{ ok: true, skipped: "host-owner-already-set" }` — their browser session still works, the disk just stays bound to the first signed-in user. See §6.
+
+---
+
+## 3. Credential Layers
+
+There are three storage layers. Each answers a different question and they don't substitute for each other.
+
+| Layer | Storage | Per-user scope | Holds | Lifetime |
+|---|---|---|---|---|
+| Browser session | `localStorage["synap:session"]` + cookie `synap-session` at `.synap.live` | Per-browser (each operator's own browser has their own) | CP Bearer token, user identity, pod URL, active workspace | Until sign-out or token expiry |
+| Pod session | Kratos session minted on demand via [JWT-Bearer exchange](./eve-credentials.mdx#4-how-poduser-token-is-minted-rfc-7523-jwt-bearer-grant) | Per-user-per-pod | Pod auth token used on `/trpc/*` | Re-mintable silently from a valid CP session |
+| Host secrets | `~/.eve/secrets.json` (mode 0600) | **Owner only** — first signed-in user wins, others no-op | `cp.userSession`, `pod.userToken`, `agents.eve.hubApiKey`, Eve issuer keypair | Persistent on disk |
+
+The first two exist on every app that uses `@synap-core/auth`. The host layer is **Eve-only** because Eve is the only Synap surface running on the operator's box with on-host CLI/daemon clients that need to act without a browser tab.
+
+---
+
+## 4. Mode A — Synap-hosted (default)
+
+```
+operator                Eve UI / Hub          api.synap.live           pod.<domain>
+   │                        │                      │                        │
+   │ 1. email + password    │                      │                        │
+   ├───────────────────────►│  signInToCP() via    │                        │
+   │                        │  @synap-core/auth    │                        │
+   │                        ├─────────────────────►│                        │
+   │                        │ ◄── CPSession ───────┤                        │
+   │                        │                      │                        │
+   │                        │ storeSharedSession() │                        │
+   │                        │ writes localStorage  │                        │
+   │                        │ + .synap.live cookie │                        │
+   │                        │                      │                        │
+   │                        │ (Eve only)           │                        │
+   │                        │ POST /api/auth/sync  │                        │
+   │                        │ owner-gate → disk    │                        │
+   │                        │                      │                        │
+   │ 2. pick a pod          │                      │                        │
+   ├───────────────────────►│ POST /pods/handshake │                        │
+   │                        ├─────────────────────►│                        │
+   │                        │ ◄── ES256 JWT ───────┤                        │
+   │                        │                      │ POST /api/handshake    │
+   │                        ├──────────────────────────────────────────────►│
+   │                        │ ◄── PodSession ────────────────────────────────┤
+   │                        │                      │                        │
+   │                        │ storeSharedSession() │                        │
+   │                        │ now carries podUrl + workspaceId              │
+```
+
+This is the `apps/hub/lib/auth.ts` flow, mirrored verbatim by `apps/studio`, `apps/canvas`, `apps/crm`, `apps/devplane`, `apps/base`, `the-arch`, and `eve-dashboard`. The shared bits — `signInToControlPlane`, `signUpToControlPlane`, `verifyCPTotp`, `fetchUserPods`, `handshakeConnectToPod` — all live in `@synap-core/auth` and are wrapped by each app's `lib/auth.ts` for app-specific persistence (e.g. Hub's `synap-cp-session` cookie for the platform proxy).
+
+---
+
+## 5. Mode B — Self-hosted (CP bypass)
+
+For operators who don't want a Synap account at all. The Eve sign-in screen surfaces it as a top-level "Self-hosted" tab; the same flow is reachable from `PodConnectGate`'s "Claim this pod" CTA.
+
+```
+operator           Eve UI               pod.<domain>
+   │                  │                       │
+   │ pod URL +        │                       │
+   │ Kratos email/pw  │ POST /api/pod/        │
+   ├─────────────────►│ bootstrap-claim       │
+   │                  ├──────────────────────►│
+   │                  │ ◄── invite + Kratos ──┤
+   │                  │                       │
+   │                  │ storeSelfHostedSession(podUrl, email)
+   │                  │   writes synap:session with mode: "self-hosted"
+   │                  │   sessionToken = "" (no CP token to share)
+```
+
+The shared session is still written so other Synap surfaces on the same machine see "an operator is signed in," but the `mode: "self-hosted"` marker (narrowed via `isSelfHostedSession`) lets gates downgrade the experience:
+
+- Marketplace tabs render a "Requires a Synap account" hint instead of catalog data.
+- Cross-pod sharing UIs hide the share button.
+- Anything that only needs `pod.userToken` (data, agents, governance) works exactly the same.
+
+This is intentional: **self-hosted is not a CP-with-a-fake-token** — it is "no CP, period." Apps that want a CP-only feature must check `getSharedSession()?.sessionToken !== ""` before using it.
+
+---
+
+## 6. Multi-User Behaviour
+
+### Browser
+
+Browser sessions are **per-user-per-browser**. Two operators sharing one machine but using separate browsers (or separate browser profiles) each have their own `synap:session`. There is no global "current user" — the session is whatever localStorage holds for that browser context.
+
+### Pod
+
+The pod-signin route (`/api/auth/pod-signin`) mints a Kratos session for any user the JWT-Bearer exchange resolves. Non-owner users get the session **in the response body only** — it is not written to disk. This means:
+
+- Owner's browser → pod token is cached on disk for the on-host CLI.
+- Teammate's browser on the same Eve → pod token works for the duration of the tab, but the on-host CLI cannot impersonate them.
+
+This matches the file-permission model: `~/.eve/secrets.json` is `0600` and tied to the host owner uid. Persisting another user's token there would silently grant the owner access to that user's pod identity.
+
+### Host owner (Eve only)
+
+The "host owner" is whoever the disk slot is bound to. Defined operationally:
+
+> The first user to complete a CP sign-in through this Eve dashboard. Subsequent users sign in normally in their own browser; their session stays in their browser only. The disk slot does not rotate.
+
+The owner gate is enforced server-side in `app/api/auth/sync/route.ts`:
+
+```
+if (existing && existing.userId && existing.userId !== incoming.userId) {
+  return NextResponse.json({ ok: true, skipped: "host-owner-already-set" });
+}
+```
+
+This is intentionally a no-op (200 OK), not an error — the second user's browser flow still proceeds successfully; only the host mirror is skipped.
+
+---
+
+## 7. Cross-App SSO Mechanics
+
+### Storage layout
+
+```ts
+// localStorage
+"synap:session" -> JSON { podUrl, sessionToken, workspaceId, userId, userName, podId?, tier? }
+
+// cookie at .synap.live (production) / no domain (localhost)
+synap-session    -> same JSON, URL-encoded
+SYNAP_INSTANCE_URL -> podUrl only (used by server proxies that need to route)
+```
+
+The cookie domain is computed dynamically in `cookieDomainAttr()`:
+
+- `localhost` / `127.0.0.1` → no Domain attribute (browsers treat it as host-scoped but port-agnostic, so :3020 / :3002 / :3030 all share).
+- `*.synap.live` or `synap.live` → `Domain=.synap.live`.
+- Anything else (custom Eve domain, tunnel) → no Domain (host-only, the cookie still works for that single host).
+
+`Secure` is added when `location.protocol === "https:"`.
+
+### Read order
+
+`getSharedSession()` is fault-tolerant on purpose:
+
+1. Read `localStorage["synap:session"]`. Fast path; same app or already migrated.
+2. Read each legacy key in `LEGACY_KEYS` (`hub:session`, `studio:session`, `crm:session`, `devplane:session`, `base:session`). On hit, promote to `synap:session`, write the cookie, drop the legacy key. This is the migration path for users with pre-1.0 sessions.
+3. Read the cookie `synap-session`. This is the cross-app fallback — another Synap surface on the same domain wrote the cookie, our localStorage doesn't have it yet, we hydrate ours from the cookie.
+
+### Cross-tab sign-out
+
+Every `SynapProvider` registers a `storage` listener:
+
+```ts
+useEffect(() => {
+  function handler(e: StorageEvent) {
+    if (e.key !== "synap:session" || e.newValue !== null) return;
+    setSession(null);
+    setStage("sign-in");
+  }
+  window.addEventListener("storage", handler);
+  return () => window.removeEventListener("storage", handler);
+}, []);
+```
+
+Note the asymmetry: we only react to **clear** (newValue === null), not to writes. Sign-in propagation already happens via the `.synap.live` cookie and is picked up on the next provider mount in each tab. Reacting to writes would force every open tab to swap users mid-session, which breaks more than it fixes.
+
+---
+
+## 8. Token Entry Surfaces
+
+There are exactly **three** legitimate places the user types or sees a token. Anything else is a smell — file an issue.
+
+1. **Sign-in screen "Self-hosted" tab.** Pod URL + Kratos email/password. The only place where the user explicitly opts out of the CP path. Implemented by `EveSignInScreen` (Eve) and the equivalent self-host card on Hub/Studio.
+2. **Settings → Advanced → "Connect remote pod"** *(deferred)*. Pod URL + credentials/handshake. Lets an operator point an existing Eve at a pod they didn't bootstrap from this Eve. Currently not implemented; tracked under §10.
+3. **Settings → Pod → Agent API key viewer.** Read-only display of the `agents.eve.hubApiKey` slot, plus a "Rotate" button. For OpenClaw / external skills that need a Hub key. Never used to authenticate the dashboard itself.
+
+NOT legitimate:
+
+- Bootstrap email entry on a fresh Eve. The bootstrap flow goes through `/api/admin/bootstrap/claim` with the deploy-side `ADMIN_BOOTSTRAP_TOKEN` and a Kratos signup link — no token is ever pasted into the dashboard.
+- Pasting a pod token into normal flow. The JWT-Bearer exchange (see [eve-credentials.mdx §4](./eve-credentials.mdx#4-how-poduser-token-is-minted-rfc-7523-jwt-bearer-grant)) makes this unnecessary.
+- Manually editing `synap:session` or the `.synap.live` cookie. If you find yourself doing this in a debugger, the bug is in the auth client.
+
+---
+
+## 9. Files
+
+`@synap-core/auth` is the centre of gravity. Every other file is a small wrapper around it.
+
+| Repo / package | Path | Purpose |
+|---|---|---|
+| `synap-app` | `packages/core/auth/` | Source of truth — published as `@synap-core/auth@1.0.0` to npm (public, MIT). `storage/shared-session.ts` is the cross-app glue. |
+| `synap-app` | `apps/hub/lib/auth.ts` | Hub-specific wrapper — adds the `synap-cp-session` cookie for the `/api/platform/*` proxy. |
+| `synap-app` | `apps/studio/lib/auth.ts`, `apps/canvas/lib/auth.ts`, `apps/crm/lib/auth.ts`, `apps/devplane/lib/auth.ts`, `apps/base/lib/auth.ts` | Per-app wrappers — same shape as Hub minus the platform-proxy cookie. |
+| `synap-app` | `apps/{hub,studio,canvas,crm,devplane,base}/components/providers/SynapProvider.tsx` | Boot effect calls `getSharedSession()`; storage listener handles cross-tab sign-out. |
+| `the-arch` | `lib/auth.ts`, `components/providers/SynapProvider.tsx` | Same pattern, separate repo. |
+| `hestia-cli` | `packages/eve-dashboard/lib/synap-auth.ts` | Eve's wrapper — adds `syncSessionToHost` / `clearSessionFromHost` calls around every CP write. |
+| `hestia-cli` | `packages/eve-dashboard/app/(os)/components/auth/EveSignInScreen.tsx` | Top-level Synap-hosted vs Self-hosted tabs. |
+| `hestia-cli` | `packages/eve-dashboard/app/(os)/components/auth/EveAccountGate.tsx` | Gate that branches between authenticated, self-hosted, and signed-out paths. |
+| `hestia-cli` | `packages/eve-dashboard/app/(os)/components/auth/PodConnectGate.tsx` | Pod-connect screen with "Claim this pod" CTA into the self-hosted form. |
+| `hestia-cli` | `packages/eve-dashboard/app/api/auth/sync/route.ts` | Owner-gated host secrets writer (§6). |
+| `hestia-cli` | `packages/eve-dashboard/app/api/pod/claim/route.ts` | Triggers `/pods/handshake` on the user's behalf, mints a pod Kratos session, persists `pod.userToken`. |
+| `hestia-cli` | `packages/@eve/dna/src/secrets-contract.ts` | Defines the `cp.userSession` slot, helpers `readCpUserSession` / `writeCpUserSession` / `clearCpUserSession`. |
+
+---
+
+## 10. Open Follow-Ups
+
+Tracked but not shipped today:
+
+- **Settings → Advanced → "Connect remote pod"** UI (token-entry case 2). Today an operator who already has Eve installed cannot point it at a pod they didn't bootstrap through Eve; they have to re-run the sign-in flow.
+- **Hub's `synap-cp-session` cookie is still per-app** — it is kept because the Next API proxy at `/api/platform/[...path]` reads it server-side to forward the CP Bearer. Long-term, switch the proxy to read the CP token from the shared session server-side and drop this cookie. Low priority.
+- **The CP cookie is not shared across `.synap.live`.** Each app fetches a fresh CP session from the shared-session token if it needs one, so this is a non-issue in practice. Logged here so nobody re-discovers it as a bug.
+
+---
+
+## 11. Glossary
+
+- **`synap:session`** — The single localStorage key every Synap-compatible app reads on boot. Contains the shared session JSON. Legacy per-app keys (`hub:session`, `studio:session`, ...) are migrated transparently on first read.
+- **`synap-session` cookie** — Cross-subdomain mirror of the same JSON. `Domain=.synap.live` in production, no Domain on localhost (port-agnostic). Set by `writeCookie()` in `shared-session.ts`.
+- **Synap-hosted mode** — The user has a Synap CP account at `api.synap.live`. CP marketplace, entitlements, cross-pod sharing all work.
+- **Self-hosted mode** — The user has a pod but no CP account. Stored as `mode: "self-hosted"` on the shared session. CP-only features degrade gracefully.
+- **Host owner** — On Eve, the first user to complete CP sign-in through this dashboard. The only user whose CP session is mirrored to `~/.eve/secrets.json`. Subsequent users sign in normally; their session lives in their browser only.
+- **`cp.userSession`** — The slot in `~/.eve/secrets.json` (Eve only) that mirrors the host owner's CP session. Used by the on-host CLI / daemon to act as the user without re-prompting. Single-slot, owner-only, mode 0600.

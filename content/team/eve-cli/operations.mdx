@@ -53,6 +53,7 @@ If the backend tree was extracted from a **tarball** (no **`.git`**), **`synap i
 | Traefik (Legs) | `docker logs eve-legs-traefik` |
 | RSSHub (Eyes) | `docker logs eve-eyes-rsshub` |
 | Ollama (Brain) | `docker logs eve-brain-ollama` |
+| Open WebUI (Chat UI) | `docker logs hestia-openwebui` |
 
 ---
 
@@ -77,6 +78,20 @@ If the backend tree was extracted from a **tarball** (no **`.git`**), **`synap i
 - **Lifespan**: Short-lived. Spawns, executes task, exits. Does not persist between invocations.
 - **Statelessness**: Does not maintain its own database. All state comes from command-line arguments and environment variables.
 - **Output capture**: stdout/stderr are captured by the calling process (Hermes). No separate codegen tool log files.
+
+---
+
+## Dashboard sidecar
+
+The Eve dashboard (Next.js, port **7979**) ships with a small WebSocket sidecar process for terminal traffic, listening on port **3041**. Source: `hestia-cli/packages/eve-dashboard/server/terminal-sidecar.ts`.
+
+- **Auth:** JWT on `eve-session` cookie or `?token=<jwt>` query param. HS256, secret = `secrets.dashboard.secret` (shared with Next).
+- **Why a separate process:** Next.js App Router can't host WebSocket upgrades inside Route Handlers without a custom server. Splitting the WS surface keeps Next boring.
+- **Logs:** stdout/stderr — captured by whatever supervisor starts it (`pm2`, `systemd`, `docker logs <dashboard container>`).
+- **Dev:** `pnpm --filter eve-dashboard dev:sidecar` runs alongside `pnpm --filter eve-dashboard dev`.
+- **Bind:** `localhost` by default. Exposing requires explicit operator action (Traefik route, port-forward, etc.).
+
+See [Dashboard](./dashboard.mdx) for the full terminal-kind taxonomy (Subprocess REPL / Log Tail / Recipe Runner).
 
 ---
 

@@ -1,0 +1,135 @@
+---
+title: 'Background intents'
+description: >-
+  `eve intent …` — CLI surface that writes rows into the per-pod `background_tasks`
+  table. The Hermes daemon polls them and dispatches via subprocess (TaskExecutor).
+section: general
+audience: users
+version: 2.1+
+last_updated: '2026-05-04'
+tags: []
+hide_title: false
+toc: true
+---
+
+## Overview
+
+A **background intent** is a long-lived row in the pod's `background_tasks` table that says "do this action on a schedule (or on demand)." It's the Eve-facing surface for cron / interval / one-shot jobs.
+
+- **Storage:** `background_tasks` (per user, per workspace) — pod-side single source of truth.
+- **Producer:** the `eve intent …` CLI (and any Hub Protocol caller — `POST /api/hub/background-tasks`).
+- **Consumer:** the Hermes daemon's IntentPoller (`/api/hub/background-tasks?status=active`, default 60s interval). It materialises each due row into a synthetic Task and hands it to TaskExecutor.
+
+The daemon NEVER imports `synap-intelligence-service` — its only contact with Synap is Hub Protocol REST. Engine adapters (claudecode / opencode / openclaude / openclaw skill) run as subprocesses.
+
+## Commands
+
+```bash
+# Create
+eve intent add "<prompt>" --action <action-id> [--schedule <spec>] [--workspace <id>]
+
+# Read
+eve intent list                    # all of caller's intents on the active pod
+eve intent show <id>               # single row + run history
+
+# Lifecycle
+eve intent pause <id>              # status -> paused, daemon skips
+eve intent resume <id>             # status -> active (also unblocks an `error` row)
+eve intent remove <id>             # delete
+
+# One-shot
+eve intent run <id>                # bump nextRunAt -> now, daemon picks up immediately
+```
+
+### Realistic examples
+
+```bash
+# One-shot research, no schedule — runs once on the next poll cycle
+eve intent add "Research GraphRAG vs vector RAG, write a comparison note" \
+  --action coder.research
+
+# Daily 9am digest of yesterday's commits
+eve intent add "Summarize yesterday's git activity in the Builder workspace" \
+  --action hermes.digest \
+  --schedule "0 9 * * *"
+
+# Periodic refactor probe in a specific workspace
+eve intent add "Look for dead code in packages/api and propose cleanups" \
+  --action coder.refactor \
+  --schedule 6h \
+  --workspace 5e3b…
+
+# Free-form NL prompt via the escape hatch
+eve intent add "Triage open GitHub issues, label by impact" --action custom
+```
+
+`--workspace` is required when the action's `requiresWorkspace` flag is set (`coder.build`, `coder.review`, `coder.refactor`). Omitted otherwise — the pod resolves the calling user's default workspace.
+
+## Action registry
+
+Nine actions ship in v1. The `custom` slug is the escape hatch for arbitrary NL prompts.
+
+| Action id           | Description                                          | Requires workspace? | Requires entity? |
+| ------------------- | ---------------------------------------------------- | ------------------- | ---------------- |
+| `coder.research`    | Research a topic, write findings to a Note entity    | no                  | no               |
+| `coder.build`       | Build/scaffold code in a project workspace           | yes                 | no               |
+| `coder.review`      | Review code in a project                             | yes                 | no               |
+| `coder.refactor`    | Refactor code in a project                           | yes                 | no               |
+| `hermes.summarize`  | Summarize entities or conversations                  | no                  | no               |
+| `hermes.digest`     | Generate daily / weekly digest                       | no                  | no               |
+| `eve.healthcheck`   | Run periodic eve-doctor probes                       | no                  | no               |
+| `openclaw.skill`    | Invoke a named OpenClaw skill                        | no                  | no               |
+| `custom`            | Free-form NL prompt — escape hatch                   | no                  | no               |
+
+Hermes' assignee resolution maps each namespace to a synthetic agent slug:
+
+| Namespace    | Assignee   |
+| ------------ | ---------- |
+| `coder.*`    | `coder`    |
+| `hermes.*`   | `hermes`   |
+| `eve.*`      | `eve`      |
+| `openclaw.*` | `openclaw` |
+| `custom`     | `hermes`   |
+| (unknown)    | `hermes`   |
+
+## Scheduling
+
+Three flavours, all expressed via `--schedule`:
+
+| Form       | Example         | Meaning                                                              |
+| ---------- | --------------- | -------------------------------------------------------------------- |
+| Interval   | `1h`, `30m`, `6h` | Fire every N units after the previous run                          |
+| Cron       | `0 9 * * *`     | Standard 5-field cron — minute, hour, dom, month, dow                |
+| One-shot   | `--schedule` omitted | Runs once on the next poll cycle, then row stays as `completed` |
+
+Daemon poll interval is `pollIntervalMs` (default 60s) — that's the floor on how soon a "due now" intent actually fires.
+
+## Failure handling
+
+The IntentPoller tracks **consecutive failures** per intent in-memory. After **3 consecutive failures**, it PATCHes the row to `status=error` (single call to `/api/hub/background-tasks/:id`). The daemon stops polling that row.
+
+To recover:
+
+```bash
+eve intent resume <id>
+```
+
+This re-PATCHes `status: active`. The daemon picks it up on the next poll. If the underlying cause hasn't been fixed, the row trips back to `error` after another 3 failures — the threshold is a constant in `hestia-cli/packages/@eve/builder/src/lib/intent-poll.ts` ("consecutive" / "threshold"), not currently configurable.
+
+Successful runs reset the counter.
+
+## How to add a new action
+
+Two-line change. Backend is the source of truth — update it FIRST, ship it, then mirror.
+
+1. **Backend** — edit `synap-backend/packages/api/src/services/background-task-actions.ts`. Add an entry to `BACKGROUND_TASK_ACTIONS`. Set `requiresWorkspace` / `requiresEntity` flags if the dispatcher needs them.
+2. **Eve mirror** — edit `hestia-cli/packages/@eve/dna/src/background-task-actions.ts`. Add the matching row to `EVE_BACKGROUND_ACTIONS`.
+
+The mirror exists ONLY for fast CLI pre-flight (`eve intent add --action <id>` failing immediately on a bad slug). The backend's 400 response with the full registry remains the authoritative validator. Never add to the mirror without the backend entry.
+
+## Related
+
+- [Background Tasks](../platform/background-tasks.mdx) — Data model + Hub Protocol surface
+- [Hermes Agent](./hermes-agent.mdx) — Daemon that polls and dispatches
+- [Dashboard](./dashboard.mdx) — `/agents` UI showing active intents and run history
+- [Builder Workspace](../platform/builder-workspace.mdx) — Where `coder.*` intents land

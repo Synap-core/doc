@@ -1,0 +1,201 @@
+---
+title: 'Builder Workspace'
+description: Canonical dev workspace template seeded by Eve. Composes 13 DevPlane profiles with project/task/skill/provider for delegated agent work.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-04'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Builder Workspace
+
+**Date:** 2026-05-04
+**Status:** Shipped. Template lives in `synap-backend/templates/builder-workspace.json`. Seeded by `@eve/lifecycle` via `POST /api/hub/workspaces/from-definition`.
+
+---
+
+## Related
+
+- [Eve — Per-Agent Hub Keys](./eve-agent-keys.mdx) — How `eve` and `coder` get the Hub keys that authenticate seeding
+- [OpenClaw Integration](./openclaw-integration.mdx) — Notes on `agent-os.json` (kept) vs `builder-workspace.json` (canonical builder template)
+- [Background Tasks](./background-tasks.mdx) — Action registry the Hermes daemon dispatches inside the Builder workspace
+- [Hub Protocol](./hub-protocol.mdx) — REST surface used by the seeder
+- [Property def scoping](./property-def-scoping.mdx) — Why workspace-scoped property defs matter for templates
+
+---
+
+## Overview
+
+The **Builder Workspace** is the canonical dev workspace for Synap users who write code, ship apps, run agents, and delegate work. It's the lens DevPlane (and any other "builder" UI) opens onto a user's pod.
+
+- **Who seeds it:** Eve. On install (and on every `eve update`), `@eve/lifecycle/builder-workspace.ts` ensures the workspace exists by POSTing the bundled template to the user's pod.
+- **Who reads it:** any UI that wants the Builder lens — DevPlane (web SaaS at port 3032), Browser (sidebar Builder app), Relay, or a custom client. The pod row is the single source of truth; surfaces just render it.
+- **What it replaces:** the older `agent-os.json` template for builder use cases. `agent-os.json` itself is **not deprecated** — `setup-openclaw.sh` and other downstream consumers still depend on it. New builder-shaped seeders use `builder-workspace.json`.
+
+DevPlane is a recommended but optional UI lens. It's NOT installed by Eve. Users connect to DevPlane from anywhere, and DevPlane finds the Builder workspace on the pod (or falls back to seeding it itself if Eve hasn't run yet — see below).
+
+## Template
+
+**Source of truth:** `synap-backend/templates/builder-workspace.json`
+**Eve-bundled copy:** `hestia-cli/packages/@eve/lifecycle/assets/templates/builder-workspace.json` (synced at build time by `scripts/sync-builder-template.ts`)
+
+### Profiles (17)
+
+13 DevPlane profiles + 4 delegation primitives carried over from `agent-os.json`:
+
+| Slug                       | Purpose                                        |
+| -------------------------- | ---------------------------------------------- |
+| `devplane_app`             | A software application in the user's stack    |
+| `devplane_feature`         | Work item with a persistent AI session        |
+| `devplane_service`         | Backend service / microservice                |
+| `devplane_package`         | npm/pnpm package with health + graph edges   |
+| `devplane_environment`     | Server (dev / staging / prod / kamal)         |
+| `devplane_deployment`      | Deployment event (calendar-friendly)          |
+| `devplane_recipe`          | Reusable shell / deploy recipe                |
+| `devplane_recipe_run`      | One execution of a recipe                     |
+| `devplane_prompt_snippet`  | Saved AI prompt fragment                      |
+| `devplane_decision_record` | ADR-shaped decision log                       |
+| `devplane_incident`        | Incident with severity + status               |
+| `devplane_cron`            | Scheduled job + last-run health               |
+| `devplane_package_publish` | Publish event with bump type + status         |
+| `project`                  | Delegated project (carried from agent-os)     |
+| `task`                     | Delegated task (kanban-friendly)              |
+| `skill`                    | Reusable skill definition                     |
+| `provider`                 | External provider record                      |
+
+**No `agent` profile.** Agents are pod-level identities — see "Why no `agent` profile" below.
+
+### Views (6)
+
+| Name           | Type     | Scope                  | Notes                                        |
+| -------------- | -------- | ---------------------- | -------------------------------------------- |
+| Apps           | table    | `devplane_app`         | columns: title, status, stack, port, deploy  |
+| Task Board     | kanban   | `task`                 | grouped by `task-status`, **default view**   |
+| Deployments    | calendar | `devplane_deployment`  | dateField `deployedAt`, colorBy status       |
+| Packages       | table    | `devplane_package`     | health grade + stale status                  |
+| Incidents      | table    | `devplane_incident`    | severity / status / affected apps            |
+| Projects       | kanban   | `project`              | grouped by `project-status`                  |
+
+### Sidebar
+
+Five view shortcuts: Apps, Tasks, Deployments, Packages, Incidents.
+
+### Bento (Builder Home)
+
+- Section header (12 cols)
+- Three `entity-count` widgets: Apps, Tasks, Deployments (4 cols each)
+- One full-width view block: Task Board (12 cols × 6 rows)
+
+## Lifecycle
+
+### `eve install`
+
+`installOne(<component>)` → post-install hooks mint Hub keys → `ensureBuilderWorkspace()` calls `POST /api/hub/workspaces/from-definition` with the bundled template. The eve agent's Hub key authenticates the call. On success, `secrets.builder.workspaceId` is written for fast lookup.
+
+### `eve update`
+
+After every `eve update synap`, the lifecycle layer re-runs `ensureBuilderWorkspace()`. The pod returns the existing row (`created: false`) — no duplication. If the cached `secrets.builder.workspaceId` is stale, the pod's idempotency-by-`proposalId` resolves back to the right row.
+
+### `eve doctor`
+
+Probes the workspace exists and is readable through the eve agent's Hub key. A miss surfaces as a Doctor failure with a one-shot fix (`eve update synap`).
+
+### Idempotency
+
+The template carries:
+
+```json
+{ "proposalId": "builder-workspace-v1" }
+```
+
+The pod uses this as the dedupe key. Same `proposalId` + same calling user → same workspace row, every time. Bumping the version (`v2`, etc.) is the explicit way to seed a fresh row when the schema changes incompatibly.
+
+## Hub Protocol API
+
+### `POST /api/hub/workspaces/from-definition`
+
+Idempotently provisions a workspace from a `WorkspaceProposal`-shaped definition.
+
+**Auth gate:** restricted to agent users whose `agentType` is in `WORKSPACE_CREATE_AGENT_TYPE_ALLOWLIST`. Currently `["eve", "coder"]`. Human users and other agentTypes get **403**.
+
+**Required scope:** `hub-protocol.write`.
+
+**Request body** (Zod, `passthrough`):
+
+```jsonc
+{
+  "proposalId": "builder-workspace-v1",   // stable idempotency key
+  "workspaceName": "Builder",             // optional override
+  "templateId": "builder-workspace",      // audited, optional
+  "templateName": "Builder",              // audited, optional
+  "workspaceType": "project",             // optional
+  // ...all WorkspaceProposal fields (profiles, views, sidebarItems, bento) flow through
+}
+```
+
+**Response (200):**
+
+```json
+{ "workspaceId": "uuid", "created": true }
+```
+
+`created: false` means the pod resolved an existing workspace through `proposalId`.
+
+**Errors:**
+
+| Status | Cause                                                                  |
+| ------ | ---------------------------------------------------------------------- |
+| 400    | Invalid definition body (Zod validation, e.g. unknown profile shape)   |
+| 403    | Caller not in agentType allowlist OR missing `hub-protocol.write`      |
+| 500    | Internal — pod-side seeder threw                                       |
+
+**Code refs:**
+
+- Endpoint: `synap-backend/packages/api/src/routers/hub-protocol/rest/workspaces.ts`
+- Service: `synap-backend/packages/api/src/services/workspace-creation-service.ts` — `createWorkspaceFromDefinitionIdempotent`, `WORKSPACE_CREATE_AGENT_TYPE_ALLOWLIST`
+- Eve seeder: `hestia-cli/packages/@eve/lifecycle/src/builder-workspace.ts` — `ensureBuilderWorkspace()`
+
+## DevPlane integration
+
+DevPlane is a builder UI lens, not a pod component. To find the workspace:
+
+1. **Lookup by template id** — DevPlane queries the user's accessible workspaces and filters by `templateId === "builder-workspace"` (or the legacy proposalId match).
+2. **Fallback seed** — if no Builder workspace exists yet AND the calling identity has `agentType: "coder"` (or DevPlane is acting on behalf of a `coder`-keyed session), DevPlane can call `POST /api/hub/workspaces/from-definition` itself with the same `proposalId: "builder-workspace-v1"`. The pod treats it as idempotent — Eve seeding it later resolves to the same row.
+3. **Read-only fallback** — for non-allowlisted callers (e.g. a regular user session), DevPlane shows an empty state with "ask Eve to seed Builder" guidance. Direct `from-definition` calls fail 403.
+
+## Terminals
+
+The Eve dashboard's `/agents` page (Next.js, port 7979) covers terminal access to Builder agents:
+
+- **REPL** (interactive subprocess) for `eve`, `openclaw`, `coder`
+- **Log Tail** (read-only) for `hermes`, `openwebui-pipelines`
+- **Recipe Runner** (sequential step execution) for any agent
+
+Implementation note: the dashboard does NOT use a Next.js custom server. Terminal WebSocket traffic is offloaded to a small **WebSocket sidecar** on port `3041` (`hestia-cli/packages/eve-dashboard/server/terminal-sidecar.ts`), JWT-gated via the `eve-session` cookie or `?token=` query param. Browser UI uses xterm.js. The sidecar verifies the same HS256 secret the Next.js routes use (`secrets.dashboard.secret`).
+
+## Background intents
+
+Eve exposes `eve intent add | list | resume | …` — a CLI surface that writes rows into the existing `background_tasks` table. The Hermes daemon polls this table and executes via TaskExecutor (subprocess spawn, not IS).
+
+Action vocabulary is standardized — see [Background Tasks](./background-tasks.mdx) for the full registry and the "add a new action" flow.
+
+## Why no `agent` profile
+
+Earlier templates (including `agent-os.json`) tracked agents as a workspace entity profile. The Builder Workspace **drops this** because agents are pod-level identities, not workspace entities:
+
+- **Identity** — `users.userType = "agent"` + `users.agentMetadata.agentType` (slug)
+- **Lineage** — `users.parentAgentId` (JSONB pointer used by Hermes for personality discovery)
+- **Configuration** — `agent_configs` table, keyed by `(userId, workspaceId, agentType)`, hydrates per-personality `promptAppend` / `extraToolIds` / `disabledToolIds` / `maxStepsOverride` / `modelOverride`
+- **Discovery** — `GET /api/hub/agent-users?parentUserId=<self>` (Hermes), `GET /api/hub/agent-configs?userId=&workspaceId=&agentType=` (per-personality lookup)
+
+Putting agents in a workspace profile would force every workspace to either duplicate agent rows or share a single workspace as the agent registry. The pod-level model avoids both: one agent, many workspaces, one config row per (agent, workspace, type).
+
+## What's NOT in scope
+
+- **Hermes does NOT import `synap-intelligence-service`.** The daemon talks to the pod over Hub Protocol REST only (TaskPoller + IntentPoller). Subprocess spawn (claude / opencode / openclaude / openclaw skills) is the only execution path. This is a team norm — see the Hermes config doc for the boundary.
+- **`dispatch_agent` is IS-side only.** It's an Intelligence Service tool used inside an LLM loop; it's NOT exposed to Eve, Hermes, or any Hub Protocol caller. Eve cannot invoke it directly.
+- **Builder Workspace is not multi-tenant.** Each user's pod gets its own Builder workspace seeded under their identity.

@@ -4,7 +4,11 @@ Use the capture pipeline when the user pastes a block of unstructured text (emai
 
 Chaining manual `POST /entities` + `POST /relations` for this is wasteful — the pipeline extracts everything in one server-side LLM call and returns proposals you can review before committing.
 
-## Two-step flow
+## Related
+
+- [CLI synap schema](./cli-synap-schema.mdx) — referenced profiles and property types
+- [Capture pipeline](./synap-capture.mdx) — same pipeline, UI version
+- [CLI view types](./cli-view-types.mdx) — structured output can be fed into views
 
 ### 1. Structure the text
 

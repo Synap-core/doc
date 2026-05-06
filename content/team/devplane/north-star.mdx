@@ -1,0 +1,203 @@
+---
+title: DevPlane North Star
+description: Vision, pillars, and roadmap for DevPlane — the developer intelligence layer built on Synap
+section: products
+audience: team
+last_updated: '2026-04-29'
+---
+
+## The problem
+
+Multi-package product development has a compounding mental overhead problem. The more a codebase grows — more packages, more products consuming them, more staging environments, more CI pipelines, more developers — the more time is spent on _coordination work_ instead of building:
+
+- "Which version of `@synap/hooks` is deployed in Browser vs Relay vs DevPlane?"
+- "I was debugging that JWT issue last week — where did I leave off? Which terminal, which chat session?"
+- "If I publish `@synap-core/ui-system` v2.3, what breaks downstream and who needs to know?"
+- "When we added a new tRPC router last time, what did we have to do on the frontend side?"
+
+DevPlane's north star is to **eliminate this overhead entirely**. Not by adding documentation requirements or checklists — by making the system remember, connect, and act so the developer doesn't have to.
+
+## Vision statement
+
+> DevPlane is a developer intelligence layer built on top of a Synap data pod. Everything you build, every package you publish, every session you run, every decision you make — stored as connected entities. AI that knows your full stack. One-button automations for the flows you repeat. The mental overhead disappears because the system handles it.
+
+"Never lose context. Never repeat yourself. Never coordinate manually."
+
+---
+
+## The five pillars
+
+### 1. Package Graph Intelligence
+
+The package registry isn't a table — it's a graph. Every package entity knows:
+- Its current version and publish status
+- Every other package it depends on (edges in the graph)
+- Every _product_ (app) that consumes it, and at which version
+- The delta between "what I published" and "what each product is running"
+
+**What this unlocks:**
+- Version drift dashboard: see at a glance where consumers are behind
+- Impact analysis before publishing: "if I bump this, these 3 apps need updating"
+- AI can answer "should I update this?" with full context — not just the package, but every downstream consumer
+- Automated PR creation in consumer repos after a publish
+
+**Synap infrastructure used:** Entity relationships (package → package edges), views (graph view for dependency map, table with version matrix), agents (impact analysis tool calling), proposals (AI-suggested consumer updates).
+
+### 2. Session Intelligence
+
+Every feature, bug, or package work item is a first-class entity. When you start working on something, you open _it_ — not a terminal, not a chat window, not a file explorer. DevPlane opens the right context automatically:
+
+- The correct directory / repo for this feature or package
+- The AI channel for this work item (previous conversation, decisions made, snippets used)
+- The relevant terminal session if one is open
+- Links to related entities: the app this feature belongs to, the packages it touches, the environments where it will land
+
+**What this unlocks:**
+- Resume any work item from where you left off — the AI channel carries the full history
+- No more "where did I have that conversation about the auth bug?" — it's on the entity
+- AI agent has full stack context when you start a session: which app, which packages, which environment, what's deployed, recent incidents
+- Multiple parallel work items without context bleed — each has its own channel
+
+**Synap infrastructure used:** Channels (ai_thread per feature entity, full conversation history), entity context injection (agent gets entity data in system prompt), memory (session compaction, decisions persist), vault (credentials for the environment being debugged).
+
+### 3. Automation Layer
+
+The flows that every developer repeats should be buttons, not procedures. DevPlane makes them declarative:
+
+**Package lifecycle:**
+- `Publish to NPM` button on a package entity → bumps version → runs `pnpm publish` → updates version in entity → posts to package's channel → triggers "update consumers?" proposal for each downstream app
+- AI reviews the changelog and drafts release notes
+- Downstream apps can auto-accept patch bumps; minor/major bumps go to proposals
+
+**Deployment lifecycle:**
+- `Deploy to staging` button → runs the linked recipe → streams output → creates deployment record → pings the feature's channel → updates environment entity
+- Rollback button on any deployment record → runs rollback recipe → creates incident if needed
+
+**Development lifecycle:**
+- `Add feature` command → creates feature entity + opens AI channel pre-seeded with context (stack, relevant packages, recent patterns from knowledge base)
+- `Debug on env X` command → opens terminal to environment + injects incident/log context into AI channel
+
+**Synap infrastructure used:** Automations (trigger → step chain, vault-resolved credentials), proposals (`checkPermissionOrPropose` for AI-suggested actions), channels (broadcast to relevant parties), pg-boss workers (async publish/deploy jobs), recipes (SSH command sequences).
+
+### 4. Knowledge Accumulation
+
+Every time a developer solves a problem, makes a decision, or follows a pattern — DevPlane captures it. Not by asking them to document it, but by deriving it from what they do:
+
+**Pattern capture:**
+- AI detects repeated steps across feature channels ("every time you add a new tRPC router, you also update the client package and the type exports") → proposes a `workflow snippet`
+- When a deployment fails and gets fixed, the root cause + fix becomes a linked knowledge entity on the incident
+- Decision records ("why we chose Hono over Express") are entities linked to the relevant app/package
+
+**Knowledge types:**
+- `workflow_snippet` — step-by-step guide for a recurring task ("adding a new view type", "publishing a cross-platform package")
+- `decision_record` — why a technical choice was made, linked to the affected app/package
+- `pattern` — "when X, do Y" rules learned from repeated behavior
+- `incident_postmortem` — root cause + fix + prevention, linked to incident entity + affected packages
+
+**Knowledge retrieval:**
+- AI agent uses knowledge entities as context: before answering "how do I add a new widget type?", it retrieves the relevant workflow snippets
+- Command palette search across all knowledge entities
+- When creating a new feature, AI automatically surfaces relevant patterns and past decisions
+
+**Synap infrastructure used:** Memory (session-level + long-term across entities), knowledge graph (entity relationships between patterns/decisions and the artifacts they describe), AI channel context injection (agent retrieves relevant knowledge on session start), skills (workflow_snippets become executable agent skills).
+
+### 5. Multi-Product Oversight
+
+When managing multiple products (Browser, Relay, DevPlane, synap-backend, IS...), you need a single pane that cuts across all of them:
+
+- **Version matrix**: all packages × all products, show drift
+- **Deployment timeline**: across all apps and all environments, on one timeline
+- **Active incidents**: severity-ranked, cross-product, linked to affected packages/features
+- **Open features**: across all apps, filterable by status/priority/app
+- **Health dashboard**: all services, all crons, all environments — one view
+
+**Synap infrastructure used:** Views (matrix/table/timeline across entities from multiple apps), entity scoping (pod-wide product entities), bento dashboard with cross-entity widgets.
+
+---
+
+## How Synap's infrastructure maps to DevPlane
+
+| DevPlane need | Synap primitive |
+|---------------|----------------|
+| Store all dev artifacts | Entities (typed profiles, workspace-scoped) |
+| Package dependency graph | Entity relationships (graph view) |
+| Version matrix across products | Views (table, cross-entity filter) |
+| AI with full stack context | Agent + entity context injection |
+| Persistent work sessions | Channels (ai_thread per feature entity) |
+| Remembered decisions and patterns | Memory (session compaction) + knowledge entities |
+| SSH credentials, NPM tokens, API keys | Vault (vault:// references in recipe steps) |
+| One-button publish / deploy | Automations (trigger → step chain) + pg-boss workers |
+| AI-suggested package updates | Proposals (`checkPermissionOrPropose`) |
+| Broadcast after deploy/publish | Channels (notify relevant parties) |
+| Recurring jobs / health checks | Crons (entity + pg-boss) |
+| Knowledge retrieval for AI | Skills (workflow snippets as executable skills) |
+| Secret injection into deploy steps | Vault resolution at runtime |
+| Reversible AI actions | Proposals (reviewable, reversible) |
+
+---
+
+## What's built today (v1) vs north star
+
+| Capability | v1 today | North star |
+|-----------|----------|-----------|
+| App / feature / package / env tracking | ✅ Full CRUD | ✅ Same, richer properties |
+| SSH terminal | ✅ Works | ✅ + context injection, session link |
+| Recipe runner | ✅ Works | ✅ + vault resolution, auto-record |
+| Prompt snippets | ✅ Static templates | → Workflow snippets (executable, AI-derived) |
+| Package dependency graph | ❌ | ✅ P2 |
+| Version matrix (pkg × product) | ❌ | ✅ P2 |
+| AI session per feature (channel) | ❌ | ✅ P1 |
+| Agent with stack context | ❌ | ✅ P1 |
+| One-button NPM publish | ❌ | ✅ P2 |
+| Consumer update proposals | ❌ | ✅ P3 |
+| Knowledge accumulation | ❌ | ✅ P2 |
+| Multi-product overview | ❌ | ✅ P2 |
+| Decision records | ❌ | ✅ P2 |
+| Incident → postmortem → pattern | ❌ | ✅ P3 |
+| Vault-backed credentials in automations | ❌ (SSH only) | ✅ P2 |
+| CLI AI session linking (Claude Code) | ❌ | ✅ P3 |
+
+---
+
+## Implementation phases
+
+### Phase 1 — Channel + Agent foundation (P1)
+
+The highest-leverage change: make every feature and package a communication surface with an AI agent that knows your stack.
+
+1. **Channel per feature entity** — create an `ai_thread` channel automatically when a feature entity is created. Channel name = feature title.
+2. **Agent context injection** — when the AI channel for a feature opens, inject: linked app entity, linked package entities, recent deployments, active incidents on that app. Agent answers "what's the status of X?" without being told.
+3. **Session resume** — DevPlane sidebar shows "Recent sessions" — the last 5 feature channels with unread activity. Click to resume.
+4. **Vault integration for SSH** — environments already have `sshKeyVaultRef`; extend to allow `npmTokenVaultRef`, `githubTokenVaultRef` per app. Used by automations in P2.
+
+**Files to touch:** `lib/devplaneWorkspaceDefinition.ts` (add channel to feature profile), `lib/devplane/hooks.ts` (channel hooks), new `components/FeatureChannel.tsx`.
+
+### Phase 2 — Package graph + automation buttons (P2)
+
+1. **Package dependency edges** — add `dependsOn` (multi-select entity reference) and `consumedBy` (computed reverse) to `devplane_package` profile.
+2. **Version matrix view** — new view: packages as rows, apps as columns, cell = version in use. Highlight drift.
+3. **NPM publish automation** — "Publish" button on package entity → runs pnpm publish via recipe → updates `packageVersion` → posts to package channel → creates "update consumers?" proposals for each linked app.
+4. **Knowledge entities** — add `devplane_decision_record` and `devplane_workflow_snippet` profiles. Snippets become executable (AI can run them as skills).
+5. **Multi-product dashboard** — new `/overview` page: version matrix + deployment timeline + cross-app feature kanban.
+
+### Phase 3 — Intelligence layer (P3)
+
+1. **AI impact analysis** — before any publish, agent analyzes the diff and lists which consumers need updating and why. Shown as a preview before confirming.
+2. **Pattern detection** — AI periodically scans feature channels for repeated step sequences → proposes workflow snippets.
+3. **Incident → postmortem flow** — resolving an incident triggers a structured postmortem: root cause, fix, what to monitor. Stored as linked entity. Surfaces in agent context for future incidents on same app.
+4. **CLI session linking** — `devplane open feature <id>` CLI command → opens the feature's AI channel + terminal + code location. Claude Code session is pre-seeded with entity context.
+5. **Cross-product alerts** — when a package publishes a breaking change, all consuming apps get a notification in their app channel.
+
+---
+
+## Design principles
+
+**System remembers, developer focuses.** The cognitive overhead reduction comes from the system capturing context automatically — not from asking the developer to fill in more fields.
+
+**Everything is an entity.** A pattern, a decision, a deploy run, a postmortem — all entities. Queryable, linkable, surfaceable by AI.
+
+**Proposals over silent automation.** AI-triggered changes (consumer package updates, pattern-derived snippets, postmortem creation) go through proposals. Humans stay in the loop; AI does the legwork.
+
+**Vault-backed, never plaintext.** All credentials (SSH keys, NPM tokens, GitHub tokens, API keys) live in Vault and are resolved at runtime. DevPlane never stores a credential in a property value.
+
+**Channel-first, terminal-second.** The primary interface for a work session is the AI channel (conversation + context). The terminal is a tool you drop into from there, not the entry point.

@@ -1,0 +1,219 @@
+---
+title: 'Eve — Per-Agent Hub Keys'
+description: How the Eve CLI/dashboard provisions a separate Hub Protocol API key per Synap consumer (Eve, OpenClaw, Hermes, OpenWebUI Pipelines, Coder).
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-04'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve — Per-Agent Hub Protocol Keys
+
+**Date:** 2026-05-04
+**Status:** Shipped in `@eve/lifecycle@0.1.0+`. CLI surface: `eve auth …`.
+
+---
+
+## Related
+
+- [Provisioning Paths](./provisioning-paths.mdx) — All pod provisioning paths, including the self-hosted PROVISIONING_TOKEN flow
+- [Trusted Issuers](./trusted-issuers.mdx) — How CP-managed pods grant `setup.agent` scope to external issuers
+- [Auth Architecture](./auth-architecture.mdx) — Where PROVISIONING_TOKEN sits in the broader auth stack
+- [API Keys](./api-keys.mdx) — Hub key lifecycle, rotation, scopes
+- [Hub Protocol](./hub-protocol.mdx) — REST endpoints Eve agents call
+- [Builder Workspace](./builder-workspace.mdx) — The dev workspace seeded by Eve via the `coder` / `eve` Hub keys
+- [Background Tasks](./background-tasks.mdx) — Action vocabulary the Hermes daemon dispatches against Eve-minted Hub keys
+
+---
+
+## Why per-agent
+
+Eve runs alongside a Synap pod and orchestrates a small fleet of services that all need to talk to that pod via Hub Protocol:
+
+- **Eve itself** — the CLI + dashboard run Doctor probes, lifecycle introspection, `eve ai sync`. It needs its own pod identity.
+- **OpenClaw** — the agent runtime makes the bulk of Hub Protocol calls (memory, entities, channels) on behalf of the user.
+- **Hermes** — the builder daemon polls Synap for tasks and posts proposals.
+- **OpenWebUI Pipelines** — the chat sidecar pulls memory, syncs channels, dispatches Hermes jobs.
+- **Coder** — the local AI coder identity. ONE Hub key regardless of which engine binary is selected (`claudecode` / `opencode` / `openclaude`); the engine choice is a `secrets.builder.codeEngine` switch, not a separate Hub identity.
+
+In an earlier version, Eve collapsed all of these into one shared key (`secrets.synap.apiKey`). That had three failure modes:
+
+1. **No audit separation.** Every Hub call landed in the same `api_keys` row, so the pod's audit log couldn't distinguish "OpenClaw wrote a note" from "Hermes posted a proposal."
+2. **Shared blast radius.** Revoking the key to lock OpenClaw out also locked out Doctor, Hermes, and Pipelines.
+3. **No per-agent scope.** All consumers got the union of every scope any of them ever needed.
+
+Per-agent keys fix all three. Each consumer is its own pod-side `users` row with `userType=agent` and `agentMetadata.agentType=<slug>`, owns one API key, and has its own scope set.
+
+## How keys are minted
+
+Eve uses the same canonical endpoint Synap exposes for all external agents:
+
+```
+POST {pod}/api/hub/setup/agent
+Authorization: Bearer <PROVISIONING_TOKEN>
+Content-Type: application/json
+
+{ "agentType": "openclaw", "name": "eve-openclaw", "reason": "install:openclaw" }
+```
+
+Auth: Eve is co-located with the pod (same VPS), so it reads `PROVISIONING_TOKEN` from the pod's `deploy/.env`. This is the **self-hosted** branch of the three auth methods `/setup/agent` accepts (the other two are CP-signed JWT and an existing Hub API key with `setup.agent` scope — used by managed pods and admin self-service respectively).
+
+Response (200):
+
+```json
+{
+  "agentUserId": "uuid-of-the-agent-user",
+  "workspaceId": "uuid-of-the-agent-os-workspace",
+  "hubApiKey": "synap_hub_live_…",
+  "keyId": "uuid",
+  "registration": { "outcome": "CONNECTED_VERIFIED", … }
+}
+```
+
+The endpoint is **idempotent per `agentType`**: re-running it reuses the existing agent user and revokes the previous key. So rotation is a one-call operation; no manual deletion ceremony.
+
+## Eve's agent registry
+
+Source of truth: `@eve/dna/src/agents.ts`.
+
+| `agentType` slug      | Component         | Always provisioned? | Purpose                                                        |
+| --------------------- | ----------------- | ------------------- | -------------------------------------------------------------- |
+| `eve`                 | (none — CLI/UI)   | yes                 | Doctor probes, dashboard introspection, `eve ai sync` admin    |
+| `openclaw`            | OpenClaw          | when installed      | Agent runtime — memory, entities, channels                     |
+| `hermes`              | Hermes            | when installed      | Builder daemon — task polling, proposal posting                |
+| `openwebui-pipelines` | OWUI Pipelines    | when installed      | Chat-side memory injection, channel sync, Hermes dispatch      |
+| `coder`               | (none — local)    | yes                 | Local AI coder subprocess identity (engine via `codeEngine`)   |
+
+`eve` is the always-on canary. Doctor probes use it on every install, so failures here surface immediately whether the rest of the stack is healthy. `coder` is also always-on — any builder workflow that spawns a code subprocess expects this key to exist before first dispatch.
+
+### Engines vs identity (Coder)
+
+`coder` is **one Hub identity** that drives **one of three engine binaries**. The choice lives in `secrets.builder.codeEngine`:
+
+| Engine slug   | Binary              | Auth                                            |
+| ------------- | ------------------- | ----------------------------------------------- |
+| `claudecode`  | `claude`            | `ANTHROPIC_API_KEY` env (engine-owned)          |
+| `opencode`    | `opencode`          | own config dir (engine-owned)                   |
+| `openclaude`  | `openclaude`        | `.eve/openclaude.json` (engine-owned)           |
+| —             | (default)           | `claudecode` when unset                         |
+
+Engine binaries handle their OWN API auth — Eve does NOT keep per-engine API keys in `secrets.json`. The Hub key minted for `coder` only authenticates the agent against the user's pod.
+
+### Legacy migration
+
+Older Eve installs minted three separate Hub keys per engine: `claudecode`, `opencode`, `openclaude`. On the first `eve update` after upgrading, the lifecycle layer detects those legacy slugs in `secrets.agents` and:
+
+1. picks one of them (the engine slug found first) and writes it to `secrets.builder.codeEngine`,
+2. mints the unified `coder` Hub key,
+3. revokes / drops the per-engine entries.
+
+This is one-shot — subsequent runs see the new layout and skip the migration. The legacy slug list is `LEGACY_CODER_ENGINE_SLUGS` in `@eve/dna/agents.ts`.
+
+### Builder Workspace bookkeeping
+
+`secrets.builder.workspaceId` (optional) caches the seeded **Builder Workspace** id after a successful `POST /api/hub/workspaces/from-definition`. Idempotency on the pod side is keyed by the template's `proposalId: "builder-workspace-v1"`, so even if this field is lost the next ensure call resolves back to the same row. See [Builder Workspace](./builder-workspace.mdx).
+
+## When provisioning fires
+
+Three triggers, all driven by `@eve/lifecycle`:
+
+1. **Component install.** `installOne(synap)` calls a post-install hook that mints `agents.eve`. `installOne(openclaw)` mints `agents.openclaw`. Same pattern for `hermes` and `openwebui-pipelines`. Idempotent — already-keyed agents are skipped.
+2. **Post-update reconcile.** After every `eve update synap`, the lifecycle layer health-checks the eve agent's key against `GET /api/hub/auth/status`. On `key_revoked`/`expired` it auto-renews. On a legacy install (no `agents.*` records but a populated `synap.apiKey`), it auto-runs the legacy migration.
+3. **Manual.** `eve auth provision` mints any missing keys; `eve auth renew --agent <slug>` rotates one; `eve auth renew --all` rotates everything.
+
+## Storage layout
+
+`~/.eve/secrets/secrets.json`:
+
+```json
+{
+  "synap": {
+    "apiUrl": "https://pod.example.com",
+    "apiKey": "<mirror of agents.eve.hubApiKey, back-compat>"
+  },
+  "agents": {
+    "eve": {
+      "hubApiKey": "synap_hub_live_…",
+      "agentUserId": "…",
+      "workspaceId": "…",
+      "keyId": "…",
+      "createdAt": "2026-05-04T12:34:56Z"
+    },
+    "openclaw":            { "…": "…" },
+    "hermes":              { "…": "…" },
+    "openwebui-pipelines": { "…": "…" },
+    "coder":               { "…": "…" }
+  },
+  "builder": {
+    "codeEngine": "claudecode",
+    "workspaceId": "<builder-workspace uuid>"
+  }
+}
+```
+
+The legacy `synap.apiKey` field is mirrored from the `eve` agent's key on every write. Older code that reads `synap.apiKey` directly keeps working through one release; new code uses `readAgentKeyOrLegacy(<slug>)` from `@eve/dna`.
+
+## Where each key is used
+
+| Consumer            | Reads                                              | Writes target                                                                 |
+| ------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Eve Doctor (CLI)    | `agents.eve.hubApiKey`                             | n/a                                                                           |
+| Eve Doctor (dash)   | `agents.eve.hubApiKey`                             | n/a                                                                           |
+| `eve ai sync`       | `agents.eve.hubApiKey`                             | `PUT /api/hub/workspaces/:id/eve-provider-routing`                            |
+| OpenClaw            | `agents.openclaw.hubApiKey`                        | OpenClaw container `SYNAP_API_KEY` env (via `installOpenclaw`)                |
+| Hermes              | `agents.hermes.hubApiKey`                          | `.eve/hermes.env` `SYNAP_API_KEY` (via `writeHermesEnvFile`)                  |
+| OpenWebUI           | `agents.openwebui-pipelines.hubApiKey`             | `/opt/openwebui/.env` `SYNAP_API_KEY` (Pipelines proxies most calls)          |
+| OpenWebUI Pipelines | `agents.openwebui-pipelines.hubApiKey`             | `/opt/openwebui-pipelines/.env` `SYNAP_API_KEY`                               |
+| Coder subprocess    | `agents.coder.hubApiKey`                           | Spawned engine env (`SYNAP_API_KEY`) — engine binary handles its own AI auth |
+
+Each consumer falls back to `synap.apiKey` when its per-agent record doesn't exist yet (one-release back-compat).
+
+## CLI surface
+
+```bash
+# Read
+eve auth status                         # table, every agent, one row each
+eve auth status --agent openclaw        # detail view (key prefix, user, scopes, age, failure reason)
+eve auth whoami                         # tight one-liner, defaults to eve agent
+eve auth whoami --agent hermes
+
+# Write
+eve auth provision                      # mint missing keys, idempotent
+eve auth provision --agent openclaw     # one
+eve auth renew --agent eve              # rotate one
+eve auth renew --all                    # rotate every registered agent
+```
+
+## Failure modes and recovery
+
+| Symptom                                                | Likely cause                                                            | Fix                                                                                |
+| ------------------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `PROVISIONING_TOKEN unavailable`                       | No env var, no readable `deploy/.env`                                   | Set `EVE_PROVISIONING_TOKEN=<token>` and retry, or run from the pod host           |
+| `PROVISIONING_TOKEN rejected (401)`                    | Token rotated on the pod, Eve cached an old value                       | Re-read deploy/.env, or set `EVE_PROVISIONING_TOKEN` to the current pod value      |
+| `ISSUER_PENDING_APPROVAL` (202)                        | Operator pasted a CP JWT instead of PROVISIONING_TOKEN                  | Visit the pod's `/admin/trusted-issuers` page to approve, or use the static token  |
+| `POST /api/hub/setup/agent not available (404)`        | Backend predates the per-agent contract                                 | `eve update synap` to a backend ≥ 2026-04                                          |
+| Doctor probes 401 with `key_revoked`                   | Eve agent key was rotated out-of-band                                   | `eve auth renew --agent eve`                                                       |
+| OpenClaw can talk to pod but Hermes can't              | Per-agent key drift (OpenClaw renewed, Hermes wasn't)                   | `eve auth renew --agent hermes`                                                    |
+
+## Implementation pointers
+
+| Concern                            | File                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Agent registry                     | `hestia-cli/packages/@eve/dna/src/agents.ts`                                                      |
+| Secrets schema                     | `hestia-cli/packages/@eve/dna/src/secrets-contract.ts` — `agents` field, `readAgentKeyOrLegacy`   |
+| Mint path                          | `hestia-cli/packages/@eve/lifecycle/src/auth.ts` — `provisionAgent`, `provisionAllAgents`         |
+| Legacy migration                   | `hestia-cli/packages/@eve/lifecycle/src/auth.ts` — `migrateLegacyToAgents`                        |
+| Post-install hook                  | `hestia-cli/packages/@eve/lifecycle/src/index.ts` — `postInstallProvisionAgents`                  |
+| Post-update reconcile              | `hestia-cli/packages/@eve/lifecycle/src/index.ts` — `postUpdateReconcileAuth`                     |
+| CLI surface                        | `hestia-cli/packages/eve-cli/src/commands/auth.ts`                                                |
+| Pod-side endpoint                  | `synap-backend/packages/api/src/routers/hub-protocol/rest/setup.ts`                               |
+
+## Open questions / follow-ups
+
+- **AI dev tools (Claude Code, OpenCode, OpenClaude)** — RESOLVED. Collapsed into the single `coder` agent with engine selection in `secrets.builder.codeEngine`. See the engines table above.
+- **CP-managed pods** — Eve currently only supports the self-hosted PROVISIONING_TOKEN path. Adding the CP-JWT branch (`type: agent_setup` from a CP relay endpoint) would let Eve manage agent keys on managed pods too, without forcing the operator to expose `deploy/.env`.
+- **Scope tightening** — Today every agent gets the full `SETUP_AGENT_HUB_SCOPES` set. Per-agent scopes (e.g. Doctor only needs `hub-protocol.read`) are a possible hardening pass once usage is understood.

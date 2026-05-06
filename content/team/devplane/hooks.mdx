@@ -1,0 +1,90 @@
+---
+title: Hooks reference
+description: All tRPC hooks available in DevPlane — entity queries, mutations, workspace settings
+section: products
+audience: team
+last_updated: '2026-04-29'
+---
+
+All hooks live in `lib/devplane/hooks.ts`. Components import from there — never from `@synap-core/client` directly.
+
+## Entity hooks
+
+### Generic base
+
+```ts
+useDevplaneEntities(profileSlug: string)
+// → trpc.entities.list.useQuery({ profileSlug }, { enabled: !!workspaceId })
+```
+
+All list hooks delegate to this. Adding a new entity type: add a one-liner wrapper.
+
+### Convenience wrappers
+
+```ts
+useSnippets()        // → useDevplaneEntities("devplane_prompt_snippet")
+useIncidents()       // → useDevplaneEntities("devplane_incident")
+useCrons()           // → useDevplaneEntities("devplane_cron")
+```
+
+### Single entity
+
+```ts
+useDevplaneEntity(id: string | null)
+// → trpc.entities.get.useQuery({ id }, { enabled: !!id })
+```
+
+### Mutations
+
+```ts
+useCreateDevplaneEntity()
+// → trpc.entities.create.useMutation + invalidates entities.list
+
+useUpdateDevplaneEntity()
+// → trpc.entities.update.useMutation + invalidates entities.list + entities.get
+
+useDeleteDevplaneEntity()
+// → trpc.entities.delete.useMutation + invalidates entities.list
+```
+
+## Workspace settings hooks
+
+```ts
+useLocalTerminalEnabled()
+// → reads workspace.settings.devplane.localTerminalEnabled
+// → returns boolean
+
+useToggleLocalTerminal()
+// → { isPending, mutate(enabled: boolean) }
+// → writes workspace.settings.devplane.localTerminalEnabled
+
+useAiProviderSettings()
+// → { settings: Record<string, unknown> | null, isLoading }
+// → reads workspace.settings
+
+useUpdateAiProviderSettings()
+// → async (partialSettings) => void
+// → writes partial settings, invalidates workspace query
+```
+
+## AI provider hooks
+
+```ts
+useProviderConfigs()
+// → trpc.devplane.getProviderConfigs.useQuery()
+
+useSaveProviderApiKey()
+// → trpc.devplane.saveProviderApiKey.useMutation + invalidates configs
+```
+
+## Adding a hook
+
+For a new entity type, add to `lib/devplane/hooks.ts`:
+
+```ts
+export function useMyNewThings() {
+  return useDevplaneEntities("devplane_my_new_thing");
+}
+```
+
+That's all — `useDevplaneEntities` handles the `workspaceId` guard and the tRPC query.

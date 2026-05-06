@@ -1,0 +1,108 @@
+---
+title: 'Eve Dashboard'
+description: >-
+  Local Next.js dashboard (port 7979) that visualises every Eve-managed agent and pod.
+  Hosts the `/agents` route with three terminal kinds: Subprocess REPL, Log Tail, Recipe Runner.
+section: general
+audience: users
+version: 2.1+
+last_updated: '2026-05-04'
+tags: []
+hide_title: false
+toc: true
+---
+
+## Overview
+
+The Eve dashboard is the **visual surface** for an Eve-managed stack. It runs locally as a Next.js app on **port 7979** (`hestia-cli/packages/eve-dashboard`). It reads the same `~/.eve/secrets/secrets.json` and `~/.eve/setup-profile.json` the CLI does, and drives lifecycle through `@eve/lifecycle` — no privileged daemon.
+
+The dashboard is OPTIONAL — every page has an equivalent CLI command. It exists for operators who prefer a UI for triage, terminal access, and intent management.
+
+## Pages
+
+| Page              | Purpose                                                                     |
+| ----------------- | --------------------------------------------------------------------------- |
+| **Home**          | Stack overview — Synap pod health, installed components, quick actions       |
+| **Components**    | Per-component install / update / status (via `@eve/lifecycle`)              |
+| **Agents (NEW)**  | List of 5 Eve-managed agents with terminal access — see below                |
+| **Channels**      | Browse pod channels, dry-run deliveries                                     |
+| **AI**            | Provider routing, `eve ai sync`, model preferences                          |
+| **Networking**    | Tunnels, Traefik, exposure status                                            |
+| **Doctor**        | Probe results across the stack (mirrors `eve doctor`)                        |
+| **Settings**      | Secrets, paths, Builder Workspace id                                         |
+
+## `/agents` route
+
+Lists the **five Eve-managed agents** and their live status:
+
+| Slug                   | Status source                          |
+| ---------------------- | -------------------------------------- |
+| `eve`                  | `eve doctor` probe + Hub key liveness  |
+| `openclaw`             | `docker inspect eve-arms-openclaw`     |
+| `hermes`               | `docker inspect eve-builder-hermes`    |
+| `openwebui-pipelines`  | `docker inspect <pipelines container>` |
+| `coder`                | Hub key liveness (no long-lived process — engine spawned per dispatch) |
+
+Each row exposes an "Open Terminal" button that routes to `/agents/[slug]/terminal`. The terminal kind is chosen per agent (see below).
+
+## Three terminal kinds
+
+The terminal page renders one of three components based on the agent slug:
+
+### 1. Subprocess REPL
+
+**Used for:** `eve`, `openclaw`, `coder`.
+
+Spawns the agent binary as a child process via `node-pty` and pipes it through xterm.js for bidirectional I/O. Operator types, agent responds, full TTY semantics. The REPL session lives inside the WebSocket sidecar process — closing the tab terminates the subprocess.
+
+For `coder`, the REPL spawns the engine binary currently selected by `secrets.builder.codeEngine` (`claude` / `opencode` / `openclaude`).
+
+### 2. Log Tail
+
+**Used for:** `hermes`, `openwebui-pipelines`.
+
+Read-only stream of `docker logs -f <container>` piped through the WebSocket sidecar to xterm.js. No input is forwarded to the container. This matches the operational model of these long-running daemons: you observe, you don't drop into a shell.
+
+### 3. Recipe Runner
+
+**Available for:** any agent (separate tab, not the default).
+
+Renders a textarea where each line is a shell command. On submit, the sidecar runs them sequentially (one process per line, fail-fast on non-zero exit) and streams stdout/stderr back to the browser. This is the equivalent of a `devplane_recipe` execution, scoped to an agent's workspace dir.
+
+## WebSocket sidecar
+
+```
+Browser (xterm.js)
+  └── ws://localhost:3041/agents/<slug>?token=<jwt>
+       │
+       └── hestia-cli/packages/eve-dashboard/server/terminal-sidecar.ts
+              ├── verifies JWT (HS256, secret = secrets.dashboard.secret)
+              ├── spawns node-pty subprocess  (REPL kind)
+              ├── pipes docker logs -f         (Log Tail kind)
+              └── runs commands sequentially   (Recipe Runner kind)
+```
+
+Auth: JWT issued by the Next.js login flow, presented either as the `eve-session` cookie OR as `?token=<jwt>` on the WebSocket upgrade URL. Same HS256 secret the Next.js routes use (`secrets.dashboard.secret`) — the sidecar is co-trusted with the dashboard, not separately keyed.
+
+In dev, run alongside Next:
+
+```bash
+pnpm --filter eve-dashboard dev          # Next.js on :7979
+pnpm --filter eve-dashboard dev:sidecar  # WebSocket sidecar on :3041
+```
+
+In prod, the sidecar is started by the same supervisor that starts Next (systemd unit / pm2 / docker compose — depends on the install profile).
+
+## Why a sidecar?
+
+Next.js App Router doesn't support WebSocket upgrades inside Route Handlers without a custom server, and a custom server forfeits the App Router's static optimization, edge runtime support, and the bundling story we want. Splitting the WebSocket surface into a small standalone process keeps the Next.js app boring and lets the sidecar own its own lifecycle (xterm.js streams, node-pty children, docker log forwarding).
+
+The trade-off: two ports (7979 + 3041) and a shared secret. Both run on `localhost` only by default — exposing them is an explicit operator choice.
+
+## Related
+
+- [Builder Workspace](../platform/builder-workspace.mdx) — Where the dashboard reads workspace metadata
+- [Eve — Per-Agent Hub Keys](../platform/eve-agent-keys.mdx) — Hub keys the dashboard surfaces in the `/agents` page
+- [Background Tasks](../platform/background-tasks.mdx) — Intents shown in the agents detail view
+- [Intents](./intents.mdx) — CLI counterpart to the agents UI
+- [Coder](./coder.mdx) — Engine selection for the `coder` REPL

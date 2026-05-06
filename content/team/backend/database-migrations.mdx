@@ -21,3 +21,10 @@ Migrations are strict. Follow these rules for every schema change.
 ## Background
 
 See `src/scripts/migrate.ts` for the runner. The "recoverable errors" silent-skip behavior has been removed — failed migrations are now logged loudly and block the runner. See `src/utils/schema-coherence.ts` for the startup tripwire that runs after migrations and before the HTTP server starts listening.
+
+## Related
+
+- [Migration summary](./migration-summary.mdx) — Unified feeds migration overview
+- [Rollback strategy](./rollback-strategy.mdx) — Safe rollback procedures for failed migrations
+- [Deployment](./delivery-service-migration.mdx) — Migration runner and schema coherence checks
+- [Database](./delivery-service-quickstart.mdx) — Schema coherence tripwire and startup validation

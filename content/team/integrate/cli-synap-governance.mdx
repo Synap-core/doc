@@ -2,7 +2,11 @@
 
 Synap queues some agent writes for human approval. This file covers what triggers a proposal, the auto-approve whitelist, how to handle each response status, and agent-user semantics.
 
-## Response statuses
+## Related
+
+- [CLI synap schema](./cli-synap-schema.mdx) — schema governs what properties agents can mutate
+- [Governance](./synap-governance.mdx) — same governance, UI version
+- [Property types](./property-types.mdx) — property constraints feed the auto-approve logic
 
 Every write endpoint returns a `status` field. Handle all three.
 

@@ -23,6 +23,8 @@ toc: true
 - [OpenClaw Channel Interactions](./openclaw-channels.mdx) — Three messaging paths for agent-to-channel communication
 - [OpenClaw Skill](./openclaw-skill.mdx) — The unified synap skill installed via OpenClaw
 - [Hub Protocol](./hub-protocol.mdx) — REST endpoints used exclusively by OpenClaw integration
+- [Eve — Per-Agent Hub Keys](./eve-agent-keys.mdx) — How OpenClaw gets its dedicated `agents.openclaw` Hub key when installed via the Eve CLI
+- [Builder Workspace](./builder-workspace.mdx) — The new canonical dev workspace template (succeeds the agent-only view of `agent-os.json` for builder use cases)
 
 ### 1. Unified Skill (`synap`)
 ```bash
@@ -65,6 +67,15 @@ Feature flag: `TELEGRAM_BOT_ENABLED` (default OFF). OpenClaw handles external ch
 
 ### 6. Dashboard Context
 CP Dashboard shows per-user: tier, servers, OpenClaw status, spend, intelligence access.
+
+### 7. Workspace templates
+
+Two templates ship in `synap-backend/templates/`:
+
+- `builder-workspace.json` — **canonical dev workspace** (Phase 8). Composes 13 DevPlane profiles with `project` / `task` / `skill` / `provider` from the older agent-os primitives. Seeded by Eve via `POST /api/hub/workspaces/from-definition` (allowlisted to `eve` and `coder` agents). See [Builder Workspace](./builder-workspace.mdx).
+- `agent-os.json` — **still in use, NOT deprecated**. Read by `setup-openclaw.sh` and other downstream consumers that bootstrap an agent-OS shape directly. New builder use cases should pick `builder-workspace.json`; the agent-os template stays for OpenClaw setup and any external scripts already wired to it.
+
+The `builder-workspace.json` template DROPS the `agent` profile entirely — agents are pod-level identities (`users.userType="agent"` + `agents` table + `agent_configs`), never workspace entities. `agent-os.json` retains its `agent` profile for backward compatibility with existing setup paths.
 
 ---
 

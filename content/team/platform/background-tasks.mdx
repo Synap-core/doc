@@ -1,0 +1,133 @@
+---
+title: 'Background Tasks'
+description: Standardized action vocabulary for the background_tasks table. Hermes daemon polls and dispatches via TaskExecutor.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-04'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Background Tasks
+
+**Date:** 2026-05-04
+**Status:** Shipped. Backend registry: `synap-backend/packages/api/src/services/background-task-actions.ts`. Eve mirror: `hestia-cli/packages/@eve/dna/src/background-task-actions.ts`.
+
+---
+
+## Related
+
+- [Builder Workspace](./builder-workspace.mdx) — Where the Hermes daemon dispatches Builder-scoped intents
+- [Eve — Per-Agent Hub Keys](./eve-agent-keys.mdx) — Hub keys that authenticate background-task CRUD
+- [Hub Protocol](./hub-protocol.mdx) — REST surface (`/api/hub/background-tasks/*`)
+- [Proposals](./proposals.mdx) — Some background-task mutations create proposals before execution
+
+---
+
+## What it is
+
+The `background_tasks` table is a per-user, per-workspace queue of cron / event / interval jobs. Each row carries an `action` slug from a **standardized vocabulary** + a free-form `context` JSONB blob.
+
+A CLI surface — `eve intent add | list | resume | …` — writes rows here. The Hermes daemon polls them and dispatches via TaskExecutor (subprocess spawn). Hermes never imports `synap-intelligence-service` code; the daemon's only contact with Synap is Hub Protocol REST.
+
+## Action registry
+
+Nine actions ship in v1. The `custom` slug is the escape hatch — any free-form NL prompt is allowed under that id, with the prompt stored in `context`.
+
+| Action id           | Description                                          | Required context        |
+| ------------------- | ---------------------------------------------------- | ----------------------- |
+| `coder.research`    | Research a topic, write findings to a Note entity    | —                       |
+| `coder.build`       | Build/scaffold code in a project workspace           | `workspaceId`           |
+| `coder.review`      | Review code in a project                             | `workspaceId`           |
+| `coder.refactor`    | Refactor code in a project                           | `workspaceId`           |
+| `hermes.summarize`  | Summarize entities or conversations                  | —                       |
+| `hermes.digest`     | Generate daily / weekly digest                       | —                       |
+| `eve.healthcheck`   | Run periodic eve-doctor probes                       | —                       |
+| `openclaw.skill`    | Invoke a named OpenClaw skill                        | (skill name in context) |
+| `custom`            | Free-form NL prompt — escape hatch                   | (prompt in context)     |
+
+The registry is the single source of truth used by:
+
+- Hub Protocol REST `/background-tasks` POST validator
+- tRPC `backgroundTasks.create` (when wired)
+- Hermes daemon dispatcher (assignee resolution by namespace prefix)
+
+## Adding a new action
+
+Two-line change. Backend is the source of truth — update it FIRST, ship it, then mirror.
+
+1. **Backend** — edit `synap-backend/packages/api/src/services/background-task-actions.ts`. Add an entry to `BACKGROUND_TASK_ACTIONS`. Set `requiresWorkspace` / `requiresEntity` flags if the dispatcher needs them.
+2. **Eve mirror** — edit `hestia-cli/packages/@eve/dna/src/background-task-actions.ts`. Add the matching row to `EVE_BACKGROUND_ACTIONS`. The mirror exists ONLY for fast CLI pre-flight (`eve intent add --action <id>`); the backend's 400 response with the full registry remains the authoritative validator.
+
+Never add to the mirror without the backend entry. A CLI that pretends to know about an action the pod doesn't will fail at dispatch — which is worse than a missing pre-flight check.
+
+### Assignee resolution
+
+`assigneeForAction(actionId)` (Eve mirror) maps an action id to the synthetic assignee slug Hermes uses when materialising a row into a `Task`:
+
+| Namespace    | Assignee   |
+| ------------ | ---------- |
+| `coder.*`    | `coder`    |
+| `hermes.*`   | `hermes`   |
+| `eve.*`      | `eve`      |
+| `openclaw.*` | `openclaw` |
+| `custom`     | `hermes`   |
+| (unknown)    | `hermes`   |
+
+`hermes` is the safe default — the orchestrator can interpret arbitrary prompts via the standard agent loop.
+
+## Hermes daemon flow
+
+```
+Hermes (daemon)
+  │
+  ├── poll loop (interval: pollIntervalMs, default 60s)
+  │     ├── poll /api/hub/agent-users?parentUserId=<self>   — discover personalities
+  │     ├── poll task queue for self + each personality      — TaskPoller
+  │     └── poll /api/hub/background-tasks?status=active     — IntentPoller
+  │
+  ├── for each due intent:
+  │     ├── materialise → synthetic Task with assigneeForAction(row.action)
+  │     ├── enqueue into TaskQueue
+  │     └── track row in intentSources (for status patch on completion)
+  │
+  └── TaskExecutor.execute(task)
+        ├── load agent-config for (assigneeUserId, workspaceId, agentType)
+        ├── pick engine adapter (claudecode / opencode / openclaude / openclaw skill)
+        └── spawn subprocess, capture stdout/stderr, write result back
+```
+
+Hermes never calls IS `dispatch_agent`. Everything flows through subprocess spawn + Hub Protocol writes.
+
+## Failure handling
+
+The IntentPoller tracks **consecutive failures** per intent in-memory. After **3 consecutive failures**, the row's `status` flips to `error` (single PATCH to `/api/hub/background-tasks/:id`). Successful runs reset the counter.
+
+Operators recover with:
+
+```bash
+eve intent resume <id>
+```
+
+This re-PATCHes `status: active` and the daemon picks the row up on the next poll. If the underlying cause hasn't been fixed, the row will trip back to `error` after another 3 failures.
+
+The threshold lives in `hestia-cli/packages/@eve/builder/src/lib/intent-poll.ts` — search for "consecutive" / "threshold". It's a constant, not currently configurable.
+
+## Hub Protocol surface
+
+`/api/hub/background-tasks/*` — full CRUD, per-user scoped:
+
+| Method | Path                            | Purpose                                                 |
+| ------ | ------------------------------- | ------------------------------------------------------- |
+| GET    | `/background-tasks`             | List tasks owned by the calling user                    |
+| POST   | `/background-tasks`             | Create — `action` validated against the registry        |
+| GET    | `/background-tasks/:id`         | Fetch one (404 across user boundary, no leak)          |
+| PATCH  | `/background-tasks/:id`         | Update fields (incl. `status`, `nextRunAt`)             |
+| DELETE | `/background-tasks/:id`         | Delete                                                  |
+
+Unknown action ids return **400** with the full valid registry in the response envelope — so the CLI mirror getting out of sync is recoverable. Mutations may also return **202** with `proposalId` when governance requires approval before execution.
+
+Code: `synap-backend/packages/api/src/routers/hub-protocol/rest/background-tasks.ts` + `synap-backend/packages/api/src/services/background-tasks-service.ts`.

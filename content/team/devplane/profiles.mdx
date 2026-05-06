@@ -1,0 +1,130 @@
+---
+title: Entity profiles
+description: All 11 workspace-scoped entity profiles used by DevPlane
+section: products
+audience: team
+last_updated: '2026-04-29'
+---
+
+All DevPlane entities are workspace-scoped and defined in `lib/devplaneWorkspaceDefinition.ts`. The backend has no knowledge of these profiles — they are created by `createFromDefinition` on first login and verified on every subsequent login by the readiness gate.
+
+## Profile list
+
+### `devplane_app` — Application
+
+| Property | Type | Values |
+|----------|------|--------|
+| `appStatus` | select | planning, active, deprecated, archived |
+| `repoUrl` | url | |
+| `techStack` | text | comma-separated tags |
+| `port` | number | dev port |
+
+### `devplane_feature` — Feature / ticket
+
+| Property | Type | Values |
+|----------|------|--------|
+| `featureStatus` | select | backlog, in_progress, in_review, done, cancelled |
+| `priority` | select | low, medium, high, critical |
+| `linkedApp` | text | app name or ID |
+| `estimatedDays` | number | |
+
+### `devplane_service` — Backend service
+
+| Property | Type | Values |
+|----------|------|--------|
+| `serviceStatus` | select | healthy, degraded, down, maintenance |
+| `serviceType` | select | api, worker, cron, database, cache, queue, other |
+| `servicePort` | number | |
+| `healthCheckUrl` | url | |
+
+### `devplane_package` — npm/pnpm package
+
+| Property | Type | Values |
+|----------|------|--------|
+| `packageName` | text | |
+| `packageVersion` | text | |
+| `isPublished` | boolean | |
+| `packageRegistry` | select | npm, github, private, local |
+
+### `devplane_environment` — Deployment target
+
+| Property | Type | Values |
+|----------|------|--------|
+| `envType` | select | local, development, staging, production |
+| `envUrl` | url | |
+| `isActive` | boolean | |
+
+### `devplane_deployment` — Deploy record
+
+| Property | Type | Values |
+|----------|------|--------|
+| `deploymentStatus` | select | pending, running, succeeded, failed, rolled_back |
+| `deployedVersion` | text | |
+| `deployedAt` | date | |
+| `deployedBy` | text | |
+
+### `devplane_recipe` — Command sequence
+
+| Property | Type | Values |
+|----------|------|--------|
+| `recipeName` | text | |
+| `recipeDescription` | text | |
+| `recipeTemplate` | select | kamal, docker-compose, git-pull, custom |
+| `onFailure` | select | stop, continue, rollback |
+| `recipeSteps` | text | JSON stringified array of steps |
+| `linkedEnvironmentId` | text | |
+| `linkedAppSlug` | text | |
+| `rollbackRecipeId` | text | |
+
+### `devplane_recipe_run` — Run record
+
+| Property | Type | Values |
+|----------|------|--------|
+| `recipeId` | text | |
+| `runStatus` | select | running, success, failed, cancelled |
+| `runSteps` | text | JSON with per-step results |
+| `runStartedAt` | text | ISO timestamp |
+| `runFinishedAt` | text | ISO timestamp |
+| `runDuration` | number | milliseconds |
+| `triggeredBy` | select | manual, automation |
+
+### `devplane_prompt_snippet` — AI prompt template
+
+| Property | Type | Values |
+|----------|------|--------|
+| `snippetTitle` | text | |
+| `snippetCategory` | select | deploy, debug, test, audit, review, custom |
+| `snippetDescription` | text | |
+| `snippetBody` | text | the prompt template, may contain `{{variables}}` |
+
+### `devplane_incident` — Production incident
+
+| Property | Type | Values |
+|----------|------|--------|
+| `severity` | select | critical, high, medium, low |
+| `incidentStatus` | select | open, investigating, resolved |
+| `affectedApps` | text | |
+| `rootCause` | text | |
+| `resolvedAt` | text | ISO timestamp |
+| `incidentDescription` | text | |
+
+### `devplane_cron` — Scheduled job
+
+| Property | Type | Values |
+|----------|------|--------|
+| `cronExpression` | text | standard 5-field cron |
+| `cronStatus` | select | active, paused, error |
+| `cronDescription` | text | |
+| `linkedAppSlug` | text | |
+| `lastRunAt` | text | ISO timestamp |
+| `lastRunStatus` | select | success, failed |
+| `nextRunAt` | text | ISO timestamp |
+
+## Required profiles constant
+
+`hooks/useWorkspaceReadiness.ts` exports `REQUIRED_PROFILE_SLUGS` — an array of all 11 slugs above. The readiness gate checks that every slug in this array appears in `trpc.profiles.list` response. If any are missing, `createFromDefinition` is called to add them.
+
+When adding a new profile to DevPlane:
+1. Add it to `DEVPLANE_WORKSPACE_DEFINITION.profiles` in `lib/devplaneWorkspaceDefinition.ts`
+2. Add its slug to `REQUIRED_PROFILE_SLUGS` in `hooks/useWorkspaceReadiness.ts`
+3. Existing workspaces will automatically pick it up on next login via the readiness gate

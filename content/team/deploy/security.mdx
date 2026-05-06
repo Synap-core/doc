@@ -145,3 +145,10 @@ The CP can rotate its EC signing key without any pod configuration changes:
 | `PROVISIONING_TOKEN`           | Yes (self-hosted)         | Static bearer token for self-hosted agent setup (no CP) |
 | `SYNAP_SERVICE_ENCRYPTION_KEY` | Yes (CP provisioning)     | Encrypts Hub API keys at rest                           |
 | `VAULT_SERVER_KEY`             | Yes (add-on provisioning) | Encrypts add-on bootstrap credentials at rest           |
+
+## Related
+
+- [Security practices](./security.mdx) — Secret management and rotation runbooks
+- [Auth architecture](../../backend/auth-architecture.mdx) — Ory Kratos/Hydra identity system
+- [Security architecture](../../deploy/security-architecture.mdx) — Full system security model
+- [Pod security](../../backend/pod-backups.mdx) — Pod-level security and secrets

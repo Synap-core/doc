@@ -24,7 +24,10 @@ Internet
          ├─ Ollama (inference gateway 127.0.0.1:11435)
          ├─ OpenClaw (Arms)
          ├─ RSSHub (Eyes)
-         └─ Traefik dashboard
+         ├─ Traefik dashboard
+         └─ Open WebUI :3011 (hestia-network ∩ eve-network — optional add-on)
+                ├─ → Synap IS /v1/chat/completions (OpenAI-compat)
+                └─ → Synap Hub POST /mcp (tools, memory, entities)
 ```
 
 **How to read it:** Traffic from the **internet** hits **Legs** (Traefik / tunnel) when you expose sidecar routes. **Synap** owns **Caddy :80/443** and the **API :4000** path for the Data Pod. **Eve sidecars** (Ollama, OpenClaw, RSSHub, etc.) sit on **`eve-network`**. Optional organs attach after Brain/Legs basics — exact compose depends on profile.
@@ -52,19 +55,21 @@ Internet
 | `@eve/legs` | Traefik, gateway, tunnel helpers |
 | `@eve/arms` | OpenClaw install & wiring |
 | `@eve/eyes` | RSSHub, database UI runners |
-| `@eve/builder` | **Hermes Agent deployment**, codegen tools (opencode or OpenClaude), Dokploy optional, subprocess orchestrator |
+| `@eve/builder` | **Hermes Agent deployment**, `coder` engine binaries (claudecode / opencode / openclaude — one selected via `secrets.builder.codeEngine`), Dokploy optional, subprocess orchestrator. Seeds **Builder Workspace** on install — see [Builder Workspace](../platform/builder-workspace.mdx). |
 | `@eve/cli-kit` | Shared flags, JSON output |
+| `packages/install/src/templates/ai-chat-docker-compose.yml` | Docker Compose template for chat UIs (Open WebUI, LobeChat) — no dedicated `@eve/*` package; managed as a compose profile |
 
 ### @eve/builder — v2.0 changes
 
 The Builder organ has been refactored to replace the OpenClaude orchestration layer with **Hermes Agent** as the sole orchestrator (while adding OpenClaude as an optional codegen tool, not as an agent framework):
 
-| Old (v1.0) | New (v2.0) |
+| Old (v1.0) | New (v2.1) |
 |------------|-----------|
-| Orchestrates OpenCode / OpenClaude / Claude Code directly | Deploys Hermes Agent container + codegen tools (opencode and/or OpenClaude) |
-| Direct command execution | Hermes uses its cron scheduler to poll Synap for queued tasks |
-| No sub-agent model | Hermes spawns opencode or OpenClaude via local subprocess (`tools/execute_opencode.py` skill) |
+| Orchestrates OpenCode / OpenClaude / Claude Code directly | Deploys Hermes Agent container; one **`coder`** Hub identity drives one of three engine binaries selected by `secrets.builder.codeEngine` |
+| Direct command execution | Hermes polls Synap (TaskPoller + IntentPoller) for delegated tasks AND background intents |
+| No sub-agent model | Hermes spawns the active engine binary via local subprocess (TaskExecutor + engine adapter) |
 | Optional Dokploy | Optional Dokploy (first-class citizen when enabled) |
+| No workspace template | Eve seeds the **Builder Workspace** on install/update via `POST /api/hub/workspaces/from-definition` |
 
 ### OpenClaw (`@eve/arms`) — v2.0 changes
 

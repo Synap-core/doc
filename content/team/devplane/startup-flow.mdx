@@ -1,0 +1,70 @@
+---
+title: Startup flow
+description: How DevPlane provisions and verifies its workspace on every login
+section: products
+audience: team
+last_updated: '2026-04-29'
+---
+
+DevPlane has a two-phase startup: **onboarding** (first login only) and **readiness gate** (every login).
+
+## Phase 1 — Onboarding (first login)
+
+`hooks/useDevplaneSetup.ts` runs on the `/onboarding` page.
+
+```
+1. Check localStorage["devplane-workspace-id"]
+   └─ found → skip to step 4
+
+2. GET trpc.workspaces.list → look for workspace named "DevPlane"
+   └─ found → save ID, skip to step 4
+
+3. POST trpc.workspaces.createFromDefinition(DEVPLANE_WORKSPACE_DEFINITION)
+   └─ creates workspace + all 11 profiles + views
+   └─ save returned workspaceId
+
+4. updateWorkspaceId(workspaceId) → auth context + localStorage
+
+5. Owner only: check if any devplane_app entities exist
+   └─ none → show "Seed Synap stack" offer
+   └─ has entities → proceed
+
+6. setIsReady(true) → redirect /home
+```
+
+## Phase 2 — Readiness gate (every login)
+
+`hooks/useWorkspaceReadiness.ts` runs inside `WorkspaceReadinessGate` in `app/(app)/layout.tsx`. The gate blocks all app content until state reaches `"ready"`.
+
+### State transitions
+
+| State | What's happening | UI shown |
+|-------|-----------------|----------|
+| `idle` | Not started | — |
+| `no_workspace` | No ID in localStorage | Redirects to `/onboarding` |
+| `checking` | Fetching `profiles.list` | "Connecting…" |
+| `bootstrapping` | Running `createFromDefinition` to add missing profiles | "Configuring workspace" + spinner |
+| `rechecking` | Re-fetching after bootstrap | "Verifying profiles" |
+| `waiting` | Profiles still missing, retrying | "Verifying profiles" + progress bar (N / 11) |
+| `ready` | All 11 profiles confirmed | App content renders |
+
+### Setup overlay
+
+While in any non-ready state, `SetupOverlay` renders a 4-step progress card:
+
+1. **Connected to pod** — done once we get any response from `profiles.list`
+2. **Configuring workspace profiles** — done once bootstrap has run (or was unnecessary)
+3. **Verifying configuration** — active during retries, done on `ready`
+4. **Ready**
+
+After 4 silent retries, a "Check again" button appears. Manual retry resets `bootstrappedRef` so re-bootstrap is possible.
+
+### Why this exists
+
+`DEVPLANE_WORKSPACE_DEFINITION` grows as new features are added. Any workspace created before a new profile was added will be missing it. The readiness gate detects the gap and calls `createFromDefinition` with the existing workspace ID — this is idempotent and adds only what's missing.
+
+Without this gate, a user with an older workspace would see empty pages for new features (e.g. Incidents, Crons) because their workspace was missing those profiles.
+
+## What the pod sees
+
+All workspace and profile creation goes through `trpc.workspaces.createFromDefinition` and `trpc.workspaces.update` — standard tRPC procedures available to any Synap app. There is nothing DevPlane-specific in the backend.

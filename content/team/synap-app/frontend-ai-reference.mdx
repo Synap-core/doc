@@ -6,16 +6,12 @@
 
 ---
 
-## 1. ALWAYS USE THE UI SYSTEM PACKAGE
+## Related
 
-**Rule: All UI components, layout primitives, and theming MUST come from `@synap-core/ui-system`.**
-
-- **Import from:** `@synap-core/ui-system` (or `@synap/ui-system` if aliased)
-- **Never use:** Raw HTML elements for styling, Tailwind, inline hex colors, or third-party UI kits
-- **Layout primitives:** `YStack`, `XStack`, `Card`, `Panel`, `Resizable`, `AppLayout`
-- **Components:** `Button`, `Input`, `Badge`, `Modal`, `Select`, `TagList`, `AvatarGroup`, `StatusPill`, `ProgressBar`, `EmptyState`, etc.
-- **Typography:** Always use `SizableText`, `Paragraph`, `Text`, `Label`—never raw `<div>` or `<span>` for text
-- **Theming:** Use theme tokens (`$background`, `$primary`, `$muted`, etc.)—never hardcode colors
+- [Frontend Intelligence](./frontend-intelligence-integration.mdx) — AI chat integration with Hub Protocol and tRPC
+- [AI Capabilities Guide](../intelligence/ai-capabilities-guide.mdx) — Available AI features for the frontend
+- [AI Interaction](../platform/ai-interaction.mdx) — AI interaction design patterns
+- [Chat Core](../platform/chat-core.mdx) — Chat UI component architecture
 
 See `THEME_SYSTEM_GUIDE.md` and `.claude/skills/front-end/SKILL.md` for detailed usage.
 

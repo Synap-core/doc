@@ -1,0 +1,174 @@
+---
+title: Hermes × Synap — Integration Quality & Current State
+description: Honest per-surface audit of the Hermes–Synap integration after Phases 0–5. What's fully wired, what's partial, and what's still open.
+---
+
+# Hermes × Synap — Integration Quality & Current State
+
+Updated after Phases 2–5 (2026-05-06). For the full phased plan and gap table see `hermes-synap-wiring-plan.mdx`.
+
+---
+
+## Integration Score — Current
+
+| Surface | Score | Status |
+|---|---|---|
+| Memory capture (plugin → knowledge_facts) | 8/10 | Wired and working; dual-write for linked user live |
+| Agent identity linking (agent ↔ human) | 6/10 | Column + middleware + dual-write shipped; lifecycle provisioning gap |
+| AI model routing (Hermes → Synap IS) | 9/10 | Solid — `synap/balanced` tier alias, swappable |
+| OpenWebUI dual source | 8/10 | Auto-configured by `wireOpenwebui()` |
+| Skills — DB user-created | 8/10 | `GET /system` + `POST /:id/execute` live |
+| Skills — SKILL.md volume mount | 9/10 | Auto-mounted at install |
+| MCP server (Hermes → Claude Code) | 8/10 | `:9120` live; `.claude/mcp-servers/hermes.json` auto-written |
+| Webhook subscriptions | 5/10 | Routes + schema shipped; event chain delivery not wired |
+| Eve Dashboard — Intelligence settings | 8/10 | Memory / Skills / System Skills tabs live |
+| Eve Dashboard — Hermes health card | 8/10 | Proxies Hermes `:9119` status |
+| Channel credentials routing | 8/10 | Centralised; 6 of 21 platforms wired |
+| Synap → Hermes reverse push | 2/10 | One-way only; pipeline file exists, not uploaded |
+| **Overall** | **7.5/10** | Production-ready for v1, three gaps block S-tier |
+
+---
+
+## Surface Details
+
+### Memory capture — 8/10
+
+**What works:** Hermes calls the Synap plugin at every session hook. All memory lands in `knowledge_facts` under the hermes agent identity. `GET /memory?query=X` powers `prefetch`. Facts from `sync_turn`, `on_session_end`, and `on_memory_write` all persist via `POST /memory`.
+
+**Gap (reduced):** Dual-write is now implemented — if `linkedUserId` is set on the API key, the same fact is also stored for the linked human. However, the lifecycle does not yet auto-populate `linkedUserId` when provisioning the Hermes agent key, so the gap is provisioning-side, not backend-side.
+
+---
+
+### Agent identity linking — 6/10
+
+**Shipped:**
+- `api_keys.linked_user_id` column (migration `0021`)
+- `CreateApiKeyInput.linkedUserId` in `api-key-repository.ts`
+- `POST /setup/agent` accepts `linkedUserId`
+- Hub middleware: `c.set("linkedUserId", keyRecord.linkedUserId)` when present
+- `rest/memory.ts` dual-write (non-fatal)
+
+**Gap:** `installHermes()` in `@eve/lifecycle` doesn't fetch the pod owner's userId and pass it to `POST /setup/agent` as `linkedUserId`. Until that's wired, Hermes keys exist without the link and dual-write never fires.
+
+**Fix:** In `installHermes()`, call `GET /api/hub/users/me` (or equivalent) to resolve the owner userId, then pass it in the setup request body.
+
+---
+
+### AI model routing — 9/10
+
+Hermes → `http://eve-brain-synap:4000/v1` → Synap IS → OpenRouter/Anthropic/OpenAI.
+
+`synap/balanced` default means Hermes automatically benefits from any model upgrade to Synap IS. Overridable per-install via `secrets.ai.serviceModels.hermes`.
+
+**Gap:** Hermes token usage bypasses Synap IS usage tracking (minor for v1).
+
+---
+
+### OpenWebUI dual source — 8/10
+
+`OPENAI_API_BASE_URLS=synap:4000/v1;hermes:8642/v1` with aligned `OPENAI_API_KEYS`. Auto-managed by `wireOpenwebui()`.
+
+**Gap:** `synap_hermes_dispatch.py` pipeline exists at `assets/pipelines/synap_hermes_dispatch.py` but is not uploaded to OpenWebUI after install. `wireOpenwebui()` needs one `docker exec` call to push it.
+
+---
+
+### Skills — 8/10
+
+Three surfaces all wired:
+- `GET /api/hub/skills/system` — returns all three Eve skill packages (synap, synap-schema, synap-ui) with fallback stubs
+- `POST /api/hub/skills/:id/execute` — triggers user-created DB skills via IS
+- `~/.eve/skills/` volume-mounted at `/opt/data/skills:ro` — Hermes reads SKILL.md files natively
+
+**Gap:** No execution log. Skills fire and results return synchronously but there's no history surface.
+
+---
+
+### MCP server — 8/10
+
+`MCP_SERVER_ENABLED=true` in docker run. Port `9120` exposed. Claude Code config auto-written to `.claude/mcp-servers/hermes.json` by `writeBuilderProjectEnv()`.
+
+**Gap:** No MCP management UI in Eve Dashboard for Hermes (the OpenClaw equivalent exists in `openclaw-config.tsx`). External MCP injection into Hermes config.yaml not yet surfaced.
+
+---
+
+### Webhook subscriptions — 5/10
+
+**Shipped:**
+- Migration `0022_webhook_subscriptions.sql` — clean Hub Protocol schema (`subscriber_id`, `url`, `events TEXT[]`, `secret`, `active`, `created_at/updated_at`)
+- Drizzle schema at `schema/webhook_subscriptions.ts`
+- Hub REST: `POST/GET /webhooks`, `DELETE/PATCH /webhooks/:id`
+- `webhook:manage` scope required; owner-scoped by `subscriberId = apiKeyId`
+- tRPC `routers/webhooks.ts` updated; schema-coherence tripwires added
+
+**Gap:** Event chain dispatch not yet wired. The event router (`event-emit.ts`) does socket fanout only. After fanout it should query `webhook_subscriptions WHERE events @> ARRAY[eventType]` and POST to each URL with `X-Synap-Signature: hmac-sha256(secret, body)`.
+
+**Effort:** ~half a day — the subscription store is ready, the event router hook point exists.
+
+---
+
+### Eve Dashboard — Intelligence settings — 8/10
+
+**Shipped:**
+- `app/(os)/settings/intelligence/page.tsx` — three-tab page: Memory, Skills, System Skills
+- `app/api/intelligence/memory/` — Hub Protocol proxy
+- `app/api/intelligence/skills/` — Hub Protocol proxy
+- `app/api/intelligence/system-skills/` — Hub Protocol proxy
+- `app/api/components/hermes/status/route.ts` — Hermes health proxy to `:9119`
+- `hermes-config.tsx` — `HermesHealthCard` showing gateway/model/MCP status
+- `settings-tabs.tsx` — "Intelligence" nav tab
+
+**Gap:** No skills execution log tab. Memory tab shows facts but no delete action wired. Agents tab (for per-agent model override) not yet in this page.
+
+---
+
+### Channel credentials routing — 8/10
+
+All platform credentials centralised in `secrets.channels.*`. `writeHermesEnvFile()` injects only routed channels. Agent-agnostic — routing changes without re-entering tokens.
+
+**Gap:** UI requires manual `secrets.json` editing. 6 of 21 Hermes-supported platforms are in `buildChannelRouting()`. Channel add flow GUI (G6) is the most user-facing remaining gap.
+
+---
+
+### Synap → Hermes reverse push — 2/10
+
+One-way only: Hermes → Synap. The reverse requires either:
+1. **Webhooks** (Tier 2) — Hermes registers `POST /api/hub/webhooks` at startup. Routes exist, delivery not wired.
+2. **`hermes-dispatch` pipeline** (Tier 3) — Routes incoming Hub messages to Hermes gateway. Pipeline file exists at `assets/pipelines/synap_hermes_dispatch.py`; not uploaded.
+
+Both paths are unblocked on the backend side. Reverse push is the last structural gap in the integration.
+
+---
+
+## Remaining Work — Ordered by Impact
+
+| Priority | Task | Effort | File |
+|---|---|---|---|
+| 1 | Event chain webhook delivery (HMAC dispatch) | ~4h | `event-emit.ts` |
+| 2 | Lifecycle sets `linkedUserId` on Hermes key provisioning | ~2h | `@eve/lifecycle/src/index.ts` `installHermes()` |
+| 3 | `wireOpenwebui()` uploads `synap_hermes_dispatch.py` | ~1h | `@eve/dna/src/wire-ai.ts` `wireOpenwebui()` |
+| 4 | Channel add flow GUI | ~1 day | `settings/channels/page.tsx` |
+| 5 | Skills execution log | ~1 day | new Hub endpoint + `settings/intelligence/logs/` |
+| 6 | External MCP injection UI for Hermes | ~4h | `hermes-config.tsx` MCP section |
+
+Total: ~3–4 days to S-tier.
+
+---
+
+## Backend Audit Record (from Phase 0)
+
+### Original contract mismatches (all fixed)
+
+The generated Python plugin was calling endpoints that did not exist or had wrong contracts:
+
+| Plugin call | Before (broken) | After (correct) |
+|---|---|---|
+| `prefetch(query)` | `POST /memory/search` with text query | `GET /memory?query=X&limit=10` |
+| `sync_turn(user, assistant)` | `POST /memory/turns` (missing) | Two `POST /memory` calls with tagged facts |
+| `on_session_end(messages)` | `POST /memory/sessions` (missing) | One `POST /memory` with compact summary |
+| `on_memory_write(action, ...)` | `POST /memory/writes` (missing) | `POST /memory` for add/update/replace; forget skipped |
+
+`userId` in `CreateMemoryRequestSchema` changed from required to optional — auth fallback resolves it from the Bearer token. This was required for headless agent callers.
+
+### `GET /channels` addition
+
+Was absent from Hub REST even though `listChannels` existed as a tRPC procedure. Added directly to `rest/channels.ts` querying DB directly (same pattern as other Hub REST list endpoints — avoids exposing the full app router through the hub protocol caller).

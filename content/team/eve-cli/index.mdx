@@ -23,7 +23,7 @@ Eve is Synap's **sovereign stack orchestrator** — a **TypeScript CLI** (`eve`)
 
 1. **Guided installation** — `eve setup` installs a complete stack: Synap Data Pod, inference services, routing, agents, and developer tooling. Profiles: `inference_only`, `data_pod`, `full`.
 2. **Organ commands** — `eve brain`, `eve arms`, `eve builder`, `eve eyes`, `eve legs` — each manages a domain of the stack via the organ metaphor.
-  3. **Agent wiring** — Configures OpenClaw (Arms) and Hermes Agent (Builder) to communicate exclusively through Synap's REST API. No agent speaks directly to another. Codegen tool (opencode or OpenClaude) is invoked by Hermes as a subprocess.
+  3. **Agent wiring** — Configures the **5 Eve-managed agents** (`eve`, `openclaw`, `hermes`, `openwebui-pipelines`, `coder`) to communicate exclusively through Synap's REST API. No agent speaks directly to another. The `coder` agent is one Hub identity that drives one of three engine binaries (`claudecode` / `opencode` / `openclaude`) — engine choice is config (`secrets.builder.codeEngine`), not identity. See [coder](./coder.mdx).
 4. **Provider routing** — Stores local tooling preferences (OpenRouter, Anthropic, Ollama) in `.eve/secrets/secrets.json`; optionally syncs non-secret policy via `eve ai sync`.
 
 ---
@@ -42,9 +42,10 @@ Eve is Synap's **sovereign stack orchestrator** — a **TypeScript CLI** (`eve`)
 |-------|---------|------------|----------------|
 | **Brain** | `@eve/brain` | Synap Backend, PostgreSQL, Redis, Ollama | Central memory, API, governance, task queue |
 | **Arms** | `@eve/arms` | OpenClaw | Messaging ingress (WhatsApp, iMessage, Telegram), voice memos, reasoning. Fetches memory from Synap, writes back to Synap. Does NOT do coding. |
-| **Builder** | `@eve/builder` | Hermes Agent, opencode/OpenClaude, Dokploy (optional) | Headless dev orchestrator. Polls Synap for queued tasks, spawns codegen tool via subprocess, writes results to Synap. |
+| **Builder** | `@eve/builder` | Hermes Agent, `coder` engine binary (claudecode / opencode / openclaude), Dokploy (optional) | Headless dev orchestrator. Polls Synap for queued tasks + background intents, spawns the active `coder` engine via subprocess, writes results to Synap. Builder Workspace is seeded automatically on install — see [Builder Workspace](../platform/builder-workspace.mdx). |
 | **Eyes** | `@eve/eyes` | RSSHub, Outerbase | Information intake (RSS feeds), database visualization |
 | **Legs** | `@eve/legs` | Traefik, Pangolin | Reverse proxy, routing, sovereign tunneling |
+| **Add-ons** | compose template | Open WebUI | Optional chat UI wired to Synap IS as OpenAI-compat endpoint. No external DB (SQLite). Includes MCP support via Synap Hub. |
 
 ---
 
@@ -75,7 +76,7 @@ Synap notifies OpenClaw → OpenClaw replies to user
 
 ## Golden Rule: Synap as Central Switchboard
 
-Every agent (OpenClaw, Hermes, codegen tool — opencode or OpenClaude) treats Synap as their sole source of truth:
+Every Eve-managed agent (`eve`, `openclaw`, `hermes`, `openwebui-pipelines`, `coder`) treats Synap as their sole source of truth:
 
 | Layer | What | Where |
 |-------|------|-------|
@@ -94,12 +95,14 @@ No agent runs its own SQLite, Vector DB, or external state store. This applies t
 | Feature | Status | Description |
 |---------|--------|-------------|
 | `eve setup` three-path flow | Shipped | `inference_only`, `data_pod`, `full` — guided wizard with dry-run |
+| Composable installer | Shipped | `eve install` with presets (personal, full, chat, builder, minimal, custom) + `multiselect` |
 | Organ metaphor commands | Shipped | `eve brain`, `eve arms`, `eve builder`, `eve eyes`, `eve legs` |
 | Secrets management | Shipped | `.eve/secrets/secrets.json` — merged secrets across organs |
 | Setup profiling | Shipped | `.eve/setup-profile.json` — record of last `eve setup` choices |
 | Hermes Agent + codegen wiring | Planned v2.0 | `@eve/builder` replaced: Hermes Agent as headless dev orchestrator, opencode (or OpenClaude) invoked via subprocess |
 | Synap-native OpenClaw | Planned v2.0 | OpenClaw stripped of long-term memory; fetches from/write to Synap REST API |
 | Dokploy integration | Shipped (optional) | First-class when enabled via `--with-dokploy`; injects env vars into Builder |
+| Open WebUI chat UI | Shipped (add-on) | Self-hosted chat UI wired to Synap IS as OpenAI-compat endpoint. No external DB. |
 
 ---
 
@@ -113,3 +116,7 @@ No agent runs its own SQLite, Vector DB, or external state store. This applies t
 | [User flows](/team/eve-cli/user-flows) | Setup paths, agent execution flows, exposure semantics | 4 |
 | [Operations](/team/eve-cli/operations) | Paths on disk, Docker vs LXC, logs | 5 |
 | [Repository](/team/eve-cli/repository) | Monorepo layout, bootstrap, release, contributing | 6 |
+| [coder](/team/eve-cli/coder) | Unified `coder` agent + engine selection | 7 |
+| [Dashboard](/team/eve-cli/dashboard) | Local Next.js dashboard + `/agents` terminals | 8 |
+| [Background intents](/team/eve-cli/intents) | `eve intent …` CLI + action registry | 9 |
+| [Open WebUI](/team/eve-cli/open-webui) | Chat UI wired to Synap IS + MCP | 10 |

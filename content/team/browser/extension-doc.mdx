@@ -483,3 +483,9 @@ connect-src 'self' https://api.synap.live https://*.synap.live http://localhost:
 The inline script in `side-panel.html` (theme detector) uses no eval — it reads `matchMedia` and sets a `data-*` attribute, which is allowed under `script-src 'self'` when inlined in the HTML file itself (Chrome extension pages permit this).
 
 **Pod URL injection:** All Hub Protocol URLs are constructed as `${podUrl}/api/hub/…` where `podUrl` comes from `chrome.storage.local` (set only on successful CP handshake or validated direct login). No user-supplied URLs are used without prior authentication.
+
+## Related
+
+- [Browser & Extensions Consolidation](./browser-extensions-consolidation.mdx) — unification strategy for browser/extension docs
+- [Browser Evolution Implementation Plan](./implementation-plan.mdx) — desktop browser feature roadmap
+- [Browser Index](./index.mdx) — browser category overview

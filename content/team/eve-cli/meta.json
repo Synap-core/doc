@@ -11,11 +11,14 @@
     "user-flows",
     "operations",
     "repository",
+    "coder",
+    "dashboard",
+    "intents",
     "hermes-agent",
     "openclaw",
-    "opencode",
     "dokploy",
     "routing-and-connectivity",
-    "rsshub"
+    "rsshub",
+    "open-webui"
   ]
 }

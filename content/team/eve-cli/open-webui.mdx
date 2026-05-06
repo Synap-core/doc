@@ -1,0 +1,156 @@
+---
+title: 'Open WebUI'
+description: >-
+  Self-hosted chat UI wired to Synap IS as an OpenAI-compat endpoint.
+  No external database. MCP support via Synap Hub.
+section: general
+audience: users
+version: 2.0+
+last_updated: '2026-04-29'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+## Overview
+
+Open WebUI is the chat UI add-on for the Eve stack. It connects to **Synap Intelligence Service** as its primary AI backend via a standard OpenAI-compat endpoint, exposes **Synap Hub tools** via MCP, and uses **Ollama** as a local/offline fallback.
+
+Key properties:
+- SQLite by default — no external database required
+- Native OpenAI-compat endpoint support (model list, streaming, function calls)
+- Built-in MCP client for tool calls against Synap Hub (`POST /mcp`)
+- Joins both `hestia-network` and `eve-network` to reach IS and synap-backend
+
+---
+
+## Install
+
+```bash
+# Via preset (includes traefik + synap)
+eve install   # choose "AI chat server" preset
+
+# Explicit components
+eve install --components traefik,synap,openwebui
+
+# Add to an existing stack
+eve add openwebui
+```
+
+Eve writes `/opt/openwebui/.env` with `SYNAP_API_KEY`, `SYNAP_IS_URL`, and a generated `WEBUI_SECRET_KEY`. The file is mode `0600`.
+
+Start the container:
+
+```bash
+docker compose --profile openwebui up -d
+```
+
+---
+
+## Configuration
+
+Environment variables injected at runtime (see `/opt/openwebui/.env` and the compose template):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `WEBUI_SECRET_KEY` | generated | Session signing key |
+| `ENABLE_OPENAI_API` | `true` | Enables the custom IS endpoint |
+| `OPENAI_API_BASE_URL` | `${SYNAP_IS_URL}/v1` | IS base URL (Open WebUI appends `/v1` — do not double-append) |
+| `OPENAI_API_KEY` | `${SYNAP_API_KEY}` | Synap Hub API key |
+| `OLLAMA_BASE_URL` | `http://eve-brain-ollama:11434` | Local Ollama fallback |
+| `WEBUI_MCP_CONFIG` | _(empty)_ | JSON blob configuring the Synap Hub MCP server |
+
+### Model aliases (Synap IS)
+
+The IS exposes these model aliases via `/v1/chat/completions`:
+
+| Alias | Description |
+|-------|-------------|
+| `synap/auto` | IS picks the best model for the task |
+| `synap/balanced` | Cost/quality balance |
+| `synap/advanced` | More capable model |
+| `synap/complex` | Highest capability |
+| `synap/free` | Free-tier routing |
+
+### MCP (Synap Hub tools)
+
+Synap exposes its full tool set via a built-in HTTP MCP server at `POST /mcp` (JSON-RPC 2.0, Bearer auth). Configure it via `WEBUI_MCP_CONFIG`:
+
+```json
+{
+  "synap": {
+    "type": "http",
+    "url": "http://synap-backend-backend-1:4000/mcp",
+    "headers": {
+      "Authorization": "Bearer <SYNAP_API_KEY>"
+    }
+  }
+}
+```
+
+Set the above as the value of `WEBUI_MCP_CONFIG` in `/opt/openwebui/.env` (single-line JSON).
+
+---
+
+## Networking
+
+| Network | Purpose |
+|---------|---------|
+| `hestia-network` | Internal compose network (shared with LobeChat if enabled) |
+| `eve-network` | Shared with Synap backend + IS — required for MCP and IS endpoint access |
+
+---
+
+## Container reference
+
+| Property | Value |
+|----------|-------|
+| Container name | `hestia-openwebui` |
+| Image | `ghcr.io/open-webui/open-webui:main` |
+| Host port | `3011` → container `8080` |
+| Data volume | `hestia-openwebui-data:/app/backend/data` (SQLite + uploads) |
+| Compose profile | `openwebui` |
+
+---
+
+## Update
+
+```bash
+eve update --only openwebui
+# or manually:
+docker pull ghcr.io/open-webui/open-webui:main
+docker restart hestia-openwebui
+```
+
+---
+
+## Backup
+
+`eve backup` lists Docker volumes that include `openwebui` in their name. The primary volume is `hestia-openwebui-data` (SQLite DB + user uploads). Stop the container before exporting:
+
+```bash
+docker stop hestia-openwebui
+docker run --rm \
+  -v hestia-openwebui-data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/openwebui-data.tar.gz /data
+docker start hestia-openwebui
+```
+
+---
+
+## Logs
+
+```bash
+docker logs hestia-openwebui
+docker logs -f hestia-openwebui   # follow
+```
+
+---
+
+## Related
+
+- [Architecture](/team/eve-cli/architecture) — network topology, compose template location
+- [User flows](/team/eve-cli/user-flows) — chat UI flow diagram, install presets
+- [Synap integration](/team/eve-cli/synap-integration) — IS and Hub Protocol details

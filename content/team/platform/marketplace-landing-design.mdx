@@ -1,0 +1,319 @@
+---
+title: 'Marketplace Landing — Design & Wiring Plan'
+description: >-
+  The public Synap App Marketplace: a synap-landing /marketplace page
+  reading from the existing CP catalog (GET /api/marketplace/apps) and
+  surfacing every app on `{slug}.synap.live`. Replaces the dead
+  `cp.synap.sh/marketplace` link and becomes the canonical "Browse
+  marketplace" target across Eve, Browser, and Relay.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Marketplace Landing — Design & Wiring Plan
+
+**Date:** 2026-05-05
+**Status:** Design specification + executable rollout plan. Replaces the placeholder `cp.synap.sh/marketplace` URL referenced from the Eve OS Home with a real public page on `synap.com/marketplace`.
+
+This doc is paired with [Eve OS Home Design](./eve-os-home-design.mdx) — every "Browse marketplace" affordance on Eve, Browser, Relay, and the Open WebUI integration eventually points at the URL described here.
+
+---
+
+## 1. Why a landing-side marketplace
+
+The current state (audited 2026-05-05):
+
+- `synap-control-plane-api` already exposes a public catalog: **`GET /api/marketplace/apps`** with `optionalAuth`. Unauthenticated requests get the published catalog without entitlement data; authenticated ones get the same list enriched with `entitled: true|false` per app.
+- `cp.synap.sh/marketplace` does NOT exist — every dashboard link to it is currently a 404.
+- Only 4 apps are seeded today (`the-arch`, `crm-workspace-pack`, `openwebui`, `dev-agent`) and only one (`the-arch`) has a real `appUrl`. None use the canonical `{slug}.synap.live` domain pattern.
+
+The right home for the marketplace is **synap.com** (the landing site), not the CP. The CP is back-end plumbing — it should not host marketing surface area. The landing already has SEO equity, the rest of the product story, and the design system.
+
+---
+
+## 2. Design intent
+
+Three feelings, in order:
+
+1. **Calm catalog.** Not a feature dump. A clean grid of apps with the same vivid 2.5D icons we use in Eve, the same brand-color registry, the same typography. The marketplace feels like the OS — because it is.
+2. **One-click to use.** Free apps say "Launch" (deep-link to `{slug}.synap.live` directly). Paid apps say "Get" → checkout flow. Workspace packs say "Add to your pod" → CP install flow. Eve components say "Install via Eve" → deep-link `eve install <slug>`.
+3. **Sovereign-friendly.** The marketplace works without an account. Sign-in only required when an action requires entitlement (paid apps, install). No dark patterns, no email gate just to browse.
+
+---
+
+## 3. URL & route shape
+
+```
+/marketplace                          ← catalog grid (public)
+/marketplace?category=ai              ← filter by category
+/marketplace?q=devplane               ← text search
+/marketplace/[slug]                   ← single-app detail page
+```
+
+All four states render server-side from `GET https://cp.synap.sh/api/marketplace/apps`. The CP call is made from the Next.js Server Component on synap-landing — no client fetch unless the user starts typing in the search.
+
+---
+
+## 4. Page composition
+
+### 4.1 Header (catalog page)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Synap App Marketplace                                           │
+│                                                                  │
+│  Sovereign apps that run on your pod. Free, paid, and bundled.   │
+│                                                                  │
+│  [ All ] [ AI ] [ Productivity ] [ Sales ] [ Developer ] [ … ]   │  ← category chips
+│                                                                  │
+│  🔍 Search…                                              ⌘K     │  ← search input
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 4.2 Catalog grid
+
+CSS grid, `auto-fill minmax(280px, 1fr)` — 1 to 4 cards per row depending on viewport. Cards are **wider than Eve's icons** (each is a marketing card, not a launcher tile):
+
+```
+┌────────────────────────────────────────┐
+│ ┌──────┐                               │
+│ │ 🧠  │  The Arch                      │  ← icon (2.5D, brand color)
+│ │      │  Sovereign AI bootstrap       │  ← short pitch (1 line)
+│ └──────┘                               │
+│                                        │
+│  productivity · €1500/mo               │  ← category · price
+│                                        │
+│              [    Get    ]             │  ← entitlement-aware CTA
+└────────────────────────────────────────┘
+```
+
+Card spec:
+
+| Element | Spec |
+|---|---|
+| Outer | radius `16` (matches landing's `Card` primitive); padding `20px`; border `1px` `$borderColor`; bg `$content1` |
+| Icon | 64×64, `app-icon-25d` recipe ported from Eve (gradient + highlight + drop shadow); brand color from registry |
+| Name | `$5` (20px), `$6` weight (semibold) |
+| Pitch | `$3` (15px), `$muted`, single-line truncate |
+| Meta | `$2` (13px), `$muted`, format "{category} · {price}" |
+| CTA | Solid emerald button, height 36; **label depends on entitlement state — see §5** |
+
+### 4.3 Empty state
+
+When the filtered grid is empty, render a centered "Nothing matches `<query>`" with a "Clear filters" button. Never hide the surrounding chrome.
+
+### 4.4 Detail page (`/marketplace/[slug]`)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ← All apps                                                      │
+│                                                                  │
+│  ┌──────────┐                                                    │
+│  │   🧠    │   The Arch                                          │
+│  │          │   Sovereign AI bootstrap                            │
+│  └──────────┘                                                    │
+│                                                                  │
+│  productivity · €1500/mo · 217 installs                         │
+│                                                                  │
+│  [ Get The Arch ]                                                │
+│                                                                  │
+│  ─────────────────────────────────────────────────               │
+│                                                                  │
+│  ## What's included                                              │
+│  Long-form description (markdown) from CP `metadata.long_desc`   │
+│                                                                  │
+│  ## Pricing                                                      │
+│  €1500/month · 14-day refund · cancel anytime                    │
+│                                                                  │
+│  ## Tech                                                         │
+│  Hosted at https://arch.synap.live                               │
+│  Uses your pod for: data, agents, files                          │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+The detail page reads metadata fields the catalog endpoint already returns (`description`, `pricing`, `installCount`) plus an extension to `metadata` for long-form copy (see §7.2).
+
+---
+
+## 5. CTA per app type (entitlement-aware)
+
+The card's primary CTA depends on three things: `appType`, `pricing`, `entitled`.
+
+| `appType` | Free? | Entitled? | CTA label | CTA action |
+|---|---|---|---|---|
+| `url` | yes | (n/a) | **Launch** | `window.open('https://{slug}.synap.live', '_blank')` |
+| `url` | no | yes | **Launch** | same as above |
+| `url` | no | no, signed-in | **Get** | redirect to `/billing/checkout?app={slug}` |
+| `url` | no | no, signed-out | **Get** | redirect to `/auth/sign-in?next=/marketplace/{slug}` |
+| `eve_component` | yes | (n/a) | **Install via Eve** | open the deep-link `eve://install?slug={slug}` (with a fallback "Copy `eve install {slug}` command" affordance for users without the Eve protocol handler registered) |
+| `workspace_pack` | yes | (n/a) | **Add to your pod** | redirect to `app.synap.com/templates/install?slug={slug}` (Browser) |
+| `bundle` | yes | (n/a) | **View bundle** | `/marketplace/{slug}` (detail page lists the constituent apps) |
+
+**Rule:** CTAs are deterministic given `(appType, pricing, entitled)`. No surprise modals. No upsell screens between the click and the action.
+
+---
+
+## 6. Brand-color & icon parity
+
+The marketplace card icon uses the **same registry** as Eve OS Home:
+
+- Source: `app/(os)/lib/brand-colors.ts` in `hestia-cli/packages/eve-dashboard`. Lift this into a shared package OR vendor a copy here — either way, **the registry must stay synchronized** so an app installed on Eve looks identical on the marketplace.
+- Recipe: the same `.app-icon-25d` CSS recipe (top→bottom gradient + ::before specular highlight + inner hairlines + drop shadow). Port it as a Tamagui component or a CSS module on synap-landing.
+- Glyph: Lucide name from the registry, OR remote `iconUrl` if `glyph: null`. White at 95% alpha, stroke 1.9.
+
+**Action item:** publish `@synap/brand-colors` as an npm package in the synap-app workspace and depend on it from both surfaces (eve-dashboard + synap-landing). Tracking: §11 step 5.
+
+---
+
+## 7. Required CP changes
+
+### 7.1 Re-seed with `.synap.live` URLs (8 apps)
+
+Replace the current 4-app `SEED_APPS` array in `synap-control-plane-api/scripts/seed-marketplace.ts` with the canonical 8-app catalog. Every `url` and `eve_component` app gets a real `appUrl` on the `{slug}.synap.live` domain.
+
+| `slug` | `appType` | `appUrl` | Pricing |
+|---|---|---|---|
+| `the-arch` | `url` | `https://arch.synap.live` | €1500/mo |
+| `crm` | `url` | `https://crm.synap.live` | free (was `crm-workspace-pack`, type changed) |
+| `devplane` | `url` | `https://devplane.synap.live` | free |
+| `chat` | `url` | `https://chat.synap.live` | free (replaces inline OpenWebUI launcher) |
+| `synap` | `url` | `https://app.synap.live` | free (the main Synap pod app) |
+| `dev-agent` | `eve_component` | `https://dev-agent.synap.live` | free |
+| `hermes` | `eve_component` | `https://hermes.synap.live` | free |
+| `openclaw` | `eve_component` | `https://openclaw.synap.live` | free |
+
+> The `url` vs `eve_component` distinction stays meaningful: `url` apps are externally hosted and just open in a new tab; `eve_component` apps tell Eve to install a local docker stack. The `appUrl` for the latter is the **public canonical landing page** for the component, not the local install URL.
+
+### 7.2 Extend `metadata` for long-form copy
+
+Add an optional `metadata.longDescription` (Markdown string, max 4 KB) and `metadata.screenshots` (array of public image URLs). The `/marketplace/[slug]` detail page reads these. Schema change is non-breaking — `metadata` is `JSONB`.
+
+Also add `metadata.heroBanner` (single image URL, 16:9, used as the hero strip on the detail page) — optional.
+
+### 7.3 No new endpoints needed
+
+`GET /api/marketplace/apps` already returns everything we need. Detail page issues `GET /api/marketplace/apps` server-side, then filters by slug client-side — Next.js caches the list per request, so this is one fetch per page load.
+
+If catalog growth becomes a perf concern, add `GET /api/marketplace/apps/:slug` — but **out of scope for v1**.
+
+---
+
+## 8. synap-landing changes
+
+### 8.1 New routes
+
+```
+synap-landing/app/marketplace/
+├── layout.tsx           ← shared chrome (header, footer)
+├── page.tsx             ← catalog grid (RSC, fetches CP server-side)
+└── [slug]/
+    └── page.tsx         ← single-app detail
+```
+
+### 8.2 Reuse landing's design tokens
+
+- Card primitive: `<Card>` from `@synap/landing` (or define locally if too rigid)
+- Buttons: `<LandingButton>` for the CTAs
+- Typography: `SizableText` from `@synap-core/ui-system`
+- Icons: extracted `app-icon-25d` recipe + `@synap/brand-colors` registry
+
+### 8.3 Server-side fetch
+
+```tsx
+// app/marketplace/page.tsx
+async function getCatalog(): Promise<MarketplaceApp[]> {
+  const res = await fetch(`${CP_BASE_URL}/api/marketplace/apps`, {
+    next: { revalidate: 60 },  // ISR — 60s cache
+  });
+  if (!res.ok) return [];
+  const json = (await res.json()) as { apps: MarketplaceApp[] };
+  return json.apps;
+}
+```
+
+ISR with 60s `revalidate` keeps the page fast and the catalog fresh.
+
+### 8.4 Auth-aware CTA on the client
+
+The catalog page is a Server Component, but the CTA buttons need the user's auth state for the entitlement-aware label (§5). Wrap each card in a Client Component (`<MarketplaceCard>`) that:
+
+1. Reads the SSR-rendered app metadata.
+2. Checks `useSession()` (Better Auth client) for `signed-in / signed-out`.
+3. Re-fetches `GET /api/marketplace/apps` from the client with credentials when the user is signed-in (one client fetch per session) to upgrade `entitled: false` → `entitled: true` where applicable.
+4. Renders the CTA per §5.
+
+---
+
+## 9. Eve / Browser / Relay redirect
+
+Once the marketplace landing is live, every "Browse marketplace" link across the surfaces must point to `https://synap.com/marketplace`:
+
+| Surface | File | Current target | New target |
+|---|---|---|---|
+| Eve dashboard Home (`+ Add` tile, EmptyState CTA, Updates stat card) | `hestia-cli/packages/eve-dashboard/app/(os)/{lib/cp-oauth.ts, components/empty-state.tsx, components/greeting-row.tsx}` | `${CP_BASE_URL}/marketplace` | `https://synap.com/marketplace` |
+| Eve dashboard dock `+` button | `app/(os)/components/add-app-button.tsx` | same | same |
+| Browser onboarding "Templates" link | `browser/electron/renderer/src/...` | various | `https://synap.com/marketplace?category=workspace_pack` |
+| Relay onboarding store link | `relay-app/...` | none | `https://synap.com/marketplace?category=mobile` |
+
+Strategy: introduce a single `MARKETPLACE_URL` constant (per surface) and grep-replace the inlined CP URL.
+
+---
+
+## 10. SEO
+
+- `/marketplace` and `/marketplace/[slug]` are statically rendered (RSC + `revalidate: 60`).
+- Per-app metadata: `title = "{name} · Synap Marketplace"`, `description = pitch`, `openGraph.image = metadata.heroBanner ?? brand-color icon @ 1200×630`.
+- Schema.org `SoftwareApplication` JSON-LD on the detail page.
+- Sitemap: extend `app/sitemap.ts` to include `/marketplace` + `/marketplace/{slug}` for every published app.
+
+---
+
+## 11. Rollout — exact step-by-step
+
+A clean 6-step rollout. Each step is independently reviewable + revertable.
+
+1. **Re-seed the CP catalog** (PR to `synap-control-plane-api`).
+   - File: `scripts/seed-marketplace.ts`. Replace `SEED_APPS` with the 8-row table from §7.1.
+   - Run: `pnpm seed:marketplace` against staging CP first, then production after sign-off.
+
+2. **Add `metadata.longDescription` to the seed data + add `metadata.heroBanner` placeholders.**
+   - Schema is JSONB so no migration needed. Add long-form copy for at least The Arch and Synap (the two apps with marketing pages today). Other apps can ship with empty long descriptions.
+
+3. **Publish `@synap/brand-colors`** (or vendor — see §6).
+   - Easiest path: copy `app/(os)/lib/brand-colors.ts` → `synap-landing/packages/brand-colors/src/index.ts`. Add a single barrel package at `synap-landing/packages/brand-colors`. Both surfaces import it. Worry about deduplication later.
+
+4. **Build `synap-landing/app/marketplace/page.tsx`** (catalog grid).
+   - RSC, server-side fetch with ISR, render cards.
+   - Client-side wrapper component for the auth-aware CTA.
+   - Search + category filters via URL search params (no JS state machine — form submissions navigate).
+
+5. **Build `synap-landing/app/marketplace/[slug]/page.tsx`** (detail).
+   - Same RSC pattern. Renders Markdown long description, hero banner, CTA.
+
+6. **Repoint Eve / Browser / Relay marketplace links** (§9).
+   - Single env var or constant per surface. Grep + replace.
+   - Eve dashboard: introduce `NEXT_PUBLIC_MARKETPLACE_URL` (defaults to `https://synap.com/marketplace`); read in `app/(os)/page.tsx`, `empty-state.tsx`, `add-app-button.tsx`, `greeting-row.tsx`.
+
+---
+
+## 12. Open questions
+
+1. **Eve component install UX** — `eve://install?slug=` deep-link assumes the protocol handler is registered. Until then, a "Copy command: `eve install {slug}`" affordance is the fallback. Worth investing in a richer "Install via Eve" flow (probably a small modal showing both the deep-link and the copy-paste command) — defer to v1.1.
+2. **Workspace pack install** — currently just opens the Browser app. We could also offer "Install on a fresh pod" (provision + install) for users who don't already have one. Defer.
+3. **Pricing display for paid apps** — Stripe metadata is in `pricing.stripePriceId` but we don't surface tax / currency conversion. Show the seed-time price; if stake is high, fetch the live Stripe price on the detail page.
+4. **Ratings / reviews** — out of scope for v1. The `installCount` is the only social proof we surface.
+
+---
+
+## 13. What this is NOT
+
+- Not a developer portal (developers publishing new apps go through `synap.com/developers` + admin CRUD on the CP).
+- Not a payment processor — Stripe handles that on the `/billing/checkout` flow.
+- Not a search engine for the entire Synap ecosystem — only catalog apps. Posts, channels, public agents land elsewhere.
+- Not a feed — no infinite scroll, no recommendations. A clean curated grid.

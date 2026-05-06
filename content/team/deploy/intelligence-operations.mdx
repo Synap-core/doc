@@ -554,3 +554,10 @@ pool_size = max_connections_postgres / (is_replicas + backend_replicas + headroo
 - **`/metrics` endpoint** is on port 3001 (internal only) — never exposed publicly
 - **Admin routes** (`/admin/*`) use HMAC signature verification with replay protection (±5 min window)
 - **Rate limiting** is layered: Traefik (per customer key) + IS Redis (per customer) + quota-guard (per customer concurrent)
+
+## Related
+
+- [Intelligence deployment](./intelligence-deployment.mdx) — Colocated vs standalone deployment modes
+- [Operations](./intelligence-operations.mdx) — Swarm setup, scaling, and observability
+- [LiteLLM migration](./litellm-migration.mdx) — Cost optimization for LLM spend
+- [Deployment](./intelligence-deployment.mdx) — Docker Compose profiles and networking

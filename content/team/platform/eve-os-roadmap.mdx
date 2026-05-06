@@ -1,0 +1,262 @@
+---
+title: 'Eve OS — Roadmap to "Feels Complete"'
+description: >-
+  Punch list of the remaining work to take Eve from "shell + Home + Agents +
+  Settings + Marketplace are wired" (state of 2026-05-05) to a coherent
+  end-to-end OS the operator can use as their daily shell. Three milestones,
+  five major workstreams, ordered for shippability.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-05-05'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Eve OS — Roadmap to "Feels Complete"
+
+**Date:** 2026-05-05
+**Status:** Forward-looking plan. Treat as a working punch list — every item is independently shippable. Cross-references the design docs that already exist; new design docs are flagged where missing.
+
+This is the doc that answers "what's left after today?". The shell, Home, Agents, Settings, and the marketplace landing all ship today. What's missing is the long tail that turns those surfaces from "demo quality" into a daily driver.
+
+---
+
+## 0. What's already shipped (state-of-the-OS, 2026-05-05)
+
+For reference, so the roadmap doesn't accidentally re-do work:
+
+- **OS shell** (wallpaper + pane + dock) — ships, visionOS material, HeroUI primitives throughout
+- **Home** — greeting + 3 stat squares + app grid + capsule search
+- **Agents app** — Flow view (ReactFlow + pulse edges) + Timeline view + Connect Channels modal (Telegram, Discord, WhatsApp via Baileys)
+- **Settings app** — HeroUI Tabs, 10 tabs, all the legacy admin pages preserved as internal lenses
+- **Marketplace landing** — `synap.com/marketplace` (catalog + detail), reads from CP `optionalAuth` API
+- **CP OAuth** — PKCE flow, eve-dashboard client registered, loopback IP redirect URIs (RFC 8252)
+- **CP marketplace seed** — 8 apps at `{slug}.synap.live`
+
+Not yet shipped: everything below.
+
+---
+
+## 1. Three milestones
+
+| Milestone | Theme | Headline outcome |
+|---|---|---|
+| **M4 — "First-launch story"** | Onboarding + auth + pod-pairing | A brand-new user installs Eve, signs in to CP, pairs a pod, and has a working OS in under 3 minutes |
+| **M5 — "Daily driver"** | Pinning, install flow, in-OS marketplace | The dock is the operator's launcher; installing an app from the marketplace lands as a real icon on the Home in <30s |
+| **M6 — "Polish + scale"** | Light mode + multi-window + native targets | Light mode parity, drag-to-pin, multi-window for power users, App Store + Play Store assets |
+
+Each milestone is ~1–2 weeks of work. Ship M4 first; M5 and M6 can run in parallel.
+
+---
+
+## 2. M4 — First-launch story
+
+### 2.1 Eve install → sign-in → pod-pairing handshake
+
+**Today:** Eve dashboard requires the operator to manually populate `~/.eve/secrets.json` with `synap.apiKey` + `synap.apiUrl`. The Sign-in button on the Home only kicks off marketplace OAuth — it doesn't create or pair a pod.
+
+**Target:** end-to-end flow:
+1. `eve init` (CLI) creates `~/.eve/` and starts the dashboard at localhost:7979.
+2. Dashboard renders a "Welcome to Eve" splash — single primary CTA: "Sign in to Synap CP".
+3. Sign-in via existing CP OAuth → `cp.synap.sh/oauth/authorize` → returns to `localhost:7979/auth/callback`.
+4. Callback page detects "no pod paired yet" → redirects to a new `/setup/pair-pod` page.
+5. Pair-pod page reads the user's CP entitlements, lists their pods (or offers "Create a new free pod"), operator picks one.
+6. CP issues a long-lived per-pod API key (scope: `realtime:observe` + Hub Protocol writes), Eve writes it to `~/.eve/secrets.json`.
+7. Operator lands on the OS Home with apps populated and the Agents app's realtime stream live.
+
+**Files to touch:**
+- New: `hestia-cli/packages/eve-dashboard/app/setup/pair-pod/page.tsx`
+- New CP route: `POST /api/pods/:id/issue-eve-key` returning `{ apiKey, podUrl }`
+- Update: `hestia-cli/packages/@eve/dna/src/secrets-contract.ts` to support the pod-key fingerprint
+- Update: `hestia-cli/packages/eve-dashboard/app/auth/callback/page.tsx` to branch on first-pair vs. returning visitor
+- New design doc: `synap-team-docs/content/team/platform/eve-pod-pairing.mdx` (~1 page)
+
+**Estimated effort:** 4 days
+
+### 2.2 Pod creation flow on synap-landing
+
+**Today:** No SaaS pod provisioning UX. The CP supports it programmatically; the landing has zero entry point.
+
+**Target:** `synap.com/account/pod/provision` already has a stub (saw it in the audit). Wire it end-to-end:
+1. Sign in on landing → arrive on `/account/pod`
+2. "Create your free pod" CTA → POST `/api/pods` (existing CP endpoint)
+3. Provisioning status polled via `useEventStream` (existing) → success → "Pair your Eve install" CTA → kicks off the §2.1 flow
+
+**Files to touch:**
+- `synap-landing/app/account/pod/provision/page.tsx` (12 pre-existing TS errors — fix as part of this work)
+- `synap-control-plane-api/src/routes/pods.ts` (audit needed — does provision endpoint actually return a usable pod state?)
+
+**Estimated effort:** 3 days
+
+### 2.3 First-run channel onboarding nudge
+
+**Today:** Connect Channels modal is reachable from the Agents app only. A first-time operator has no reason to click "Agents" before they connect anything.
+
+**Target:** When the Home has zero events on the realtime stream after 60s of being open, gently surface a "Connect a channel" pill above the search bar (translucent, dismissible). Clicking opens the same modal that lives in Agents.
+
+**Files to touch:**
+- `hestia-cli/packages/eve-dashboard/app/(os)/page.tsx` — wire the `useRealtimeEvents` hook into the Home so the empty-state pill appears
+- `hestia-cli/packages/eve-dashboard/app/(os)/components/empty-channels-pill.tsx` (new)
+
+**Estimated effort:** 1 day
+
+---
+
+## 3. M5 — Daily driver
+
+### 3.1 Pinning persistence (dock + Home)
+
+**Today:** `useDockApps()` returns a hard-coded 3-app list (Home, Agents, Settings). The Home grid renders every installed app — there's no "pinned to dock" model.
+
+**Target:** the operator right-clicks any app icon (Home grid OR marketplace card) → "Pin to dock" → it appears in the dock pill, persisted in `~/.eve/preferences.json` under `home.pinnedAppIds: string[]`. Drag to reorder pins (deferred until M6 because the icon-grid drag UX needs design).
+
+**Files to touch:**
+- New API routes: `GET /api/preferences/home`, `PUT /api/preferences/home` in eve-dashboard
+- Update: `hestia-cli/packages/eve-dashboard/app/(os)/components/use-dock-apps.ts` to read from prefs + merge core apps
+- Update: `hestia-cli/packages/eve-dashboard/app/(os)/components/app-icon.tsx` for context-menu trigger
+- New: a `PinAppMenu` component that pops on right-click / long-press
+
+**Estimated effort:** 2 days
+
+### 3.2 In-OS marketplace surface
+
+**Today:** "Browse marketplace" links open `synap.com/marketplace` in a new tab. Fine for first-time discovery, jarring as a daily-driver experience.
+
+**Target:** add `app/(os)/marketplace/page.tsx` rendering the same catalog INSIDE the OS pane. The synap-landing version stays as the public/SEO surface; the in-OS version reuses `MarketplaceCard` + `MarketplaceIcon` (lift those into a `@synap/marketplace-ui` package for cross-surface reuse). "+ Add" tile + dock add-button switch from external `target="_blank"` to in-OS routing.
+
+**Files to touch:**
+- New package: `synap-app/packages/marketplace-ui/` (or vendor — see decision doc TBD)
+- New: `hestia-cli/packages/eve-dashboard/app/(os)/marketplace/page.tsx`
+- Update: `app/(os)/lib/marketplace-url.ts` — flip from external URL to internal path when the user is signed in
+
+**Estimated effort:** 3 days
+
+### 3.3 App install flow (eve_component apps)
+
+**Today:** `eve_component` apps in the marketplace have a CTA that fires `eve://install?slug=X` deep-link. There's no protocol handler registered, so the CTA does nothing on most setups.
+
+**Target:** Eve dashboard registers a custom protocol handler at install time (`eve://`) → catching the deep-link routes the user to `/install/<slug>` → backend validates entitlement → runs `eve install <slug>` (existing CLI command) → success state with "Open it" CTA that lands the operator on the new app.
+
+**Fallback path** (no protocol handler): the marketplace detail page already shows the manual `eve install <slug>` command in a copy-able code block. Keep it as the universal escape hatch.
+
+**Files to touch:**
+- `hestia-cli/packages/cli/src/commands/install.ts` — already exists, audit the contract
+- New: `hestia-cli/packages/eve-dashboard/app/install/[slug]/page.tsx`
+- New protocol handler registration in the Electron-equivalent shell (out of scope for the web dashboard; flag for the future native Eve build)
+
+**Estimated effort:** 4 days (depends on whether we ship a native Eve wrapper or stay browser-only)
+
+### 3.4 Workspace-pack install flow (Synap pod side)
+
+**Today:** `workspace_pack` apps have a CTA that posts to `app.synap.live/templates/install?slug=X` — that page also doesn't exist yet.
+
+**Target:** build the install handshake on the Synap app:
+1. CTA opens `app.synap.live/templates/install?slug=X`
+2. App resolves the template via `GET /api/marketplace/apps?slug=X`
+3. Existing onboarding's `mergePresetAndAddons()` builds a `WorkspaceProposal`
+4. Operator confirms → workspace created → redirect to that workspace's home
+
+**Files to touch:**
+- `synap-app/packages/features/onboarding/src/install/template-install-page.tsx` (new)
+- `synap-app/packages/apps/browser/src/routes/templates.ts` (add the install route)
+- Reuse: existing `WorkspaceProposal` + `createFromDefinition` plumbing
+
+**Estimated effort:** 3 days
+
+### 3.5 Discord.js bot + WhatsApp message routing (the M3 follow-ups)
+
+Already documented in `agents-app-2026-05.md`. Summary:
+- Discord token persists fine today; **no consumer in the OpenClaw container**. Need a Discord.js bot wired the same way Telegram is.
+- WhatsApp Baileys session opens fine; **inbound messages don't flow to channel-gateway**. Need `sock.ev.on('messages.upsert', ...)` posting to `/api/hub/channels/gateway/inbound`.
+
+**Estimated effort:** 2 days each.
+
+---
+
+## 4. M6 — Polish + scale
+
+### 4.1 Light-mode parity
+
+Tokens already exist (`os-baseLight`, `paneBgLight`, etc.). Hand-test every surface against `prefers-color-scheme: light` and fix the gaps. Target a one-day audit + two-day fix sprint.
+
+### 4.2 Drag-to-reorder pins
+
+Defer until the basic pin/unpin UX is in production. Adopt `dnd-kit/sortable` (already a dep on synap-app side).
+
+### 4.3 Multi-window OS
+
+`(os)/layout.tsx` currently composes a single popup pane. Multi-window means: clicking a dock icon while another popup is open opens a second popup, draggable, focusable. Out of scope for now; flagged because the v1 design doc explicitly called this out as deferred.
+
+### 4.4 Native shells
+
+- **Eve macOS app** — wraps the dashboard in a small Tauri/Electron host that registers the `eve://` protocol handler. Unlocks §3.3.
+- **Eve Windows / Linux ports** — same Tauri build, multi-platform.
+
+### 4.5 Marketplace polish
+
+- Long-form Markdown rendering on detail pages (today: `white-space: pre-wrap`)
+- Hero banners on featured apps (`metadata.heroBanner` is wired but the seed has no images)
+- Actual screenshots / videos
+- Reviews + ratings (out of scope; tracked as an open question in `marketplace-landing-design.mdx` §12)
+
+---
+
+## 5. Cross-cutting work
+
+### 5.1 Shared `@synap/brand-colors` package
+
+Currently the brand-color registry is duplicated across `hestia-cli/packages/eve-dashboard/app/(os)/lib/brand-colors.ts` and `synap-landing/app/marketplace/lib/brand-colors.ts`. Lift to a published npm package. Both surfaces depend on it. Same for `MarketplaceIcon` + `MarketplaceCard` — promote to `@synap/marketplace-ui`.
+
+### 5.2 Realtime workspace ID auto-discovery
+
+`useRealtimeEvents` currently lets the pod auto-pick the workspace based on the API key. Once a single user has multiple workspaces on the same pod (M4 enables that), Eve should let the operator pick which workspace's events to subscribe to (dropdown in the Agents pane header).
+
+### 5.3 OAuth scope expansion
+
+Today: `marketplace:read`, `marketplace:install`. M4's pod-pairing needs a third scope: `pods:pair` (issues a per-pod API key on the user's behalf). Add it to `SUPPORTED_SCOPES` + the `eve-dashboard` client's `allowedScopes` when M4 lands.
+
+### 5.4 Better Auth CORS for synap.live ↔ cp.synap.sh
+
+Currently the marketplace fetches from CP server-side (RSC), so no CORS needed. When the marketplace card upgrades its CTA from "Get" → "Launch" client-side after auth resolves, that client-side `fetch('${CP}/api/marketplace/apps', { credentials: 'include' })` needs CORS. Update the CP's `cors()` middleware allow-list to include `https://www.synap.live`.
+
+---
+
+## 6. Suggested execution order
+
+1. **Day 1–4: M4.1** — pod-pairing flow (gates everything else; today the Sign-in button has nowhere to take a brand-new user)
+2. **Day 5–7: M4.2** — pod provision UX on landing (in parallel with M4.1 if a second person)
+3. **Day 8: M4.3** — first-run channel pill
+4. **Day 9–10: M5.1** — pinning persistence (small, satisfying, daily-driver win)
+5. **Day 11–13: M5.2** — in-OS marketplace surface
+6. **Day 14–15: M5.4** — workspace-pack install
+7. **Day 16–19: M5.3** — eve_component install + native protocol handler
+8. **Day 20+: M5.5 + M6** — Discord/WhatsApp follow-ups + polish
+
+Total: ~4 weeks of focused work to take the OS from "today's state" to "I would actually use this every day."
+
+---
+
+## 7. Decision points (require Antoine's input before implementation)
+
+These are the questions where research alone won't decide — the user has a strong opinion they need to articulate:
+
+1. **Native Eve shell** — Tauri vs. Electron? Stay browser-only and accept the protocol-handler limitation? Plan to invest in any.
+2. **Marketplace screenshots / hero banners** — which design language? Synap brand-flat illustrations, or per-app-team-branded stills?
+3. **Pricing / billing UX** — Stripe Checkout (out-of-domain redirect) or embedded Stripe Elements on synap.live? Affects M5.2's "Get" CTA.
+4. **Multi-pod model** — does an operator pair Eve to ONE pod, or can they switch between several? Affects M4.1 + M5.5.
+5. **Workspace-pack install** — does it create a new workspace ALWAYS, or can it install into an existing workspace? Affects M5.4.
+
+Each of these can be answered in 5 minutes once Antoine has time. Suggest a 30-min review call to chunk through them.
+
+---
+
+## 8. Reference
+
+- [Eve OS Vision](./eve-os-vision.mdx)
+- [Eve OS Shell](./eve-os-shell.mdx)
+- [Eve OS Home — Design Spec](./eve-os-home-design.mdx)
+- [Eve Agents — Design Spec](./eve-agents-design.mdx)
+- [Marketplace Landing — Design & Wiring](./marketplace-landing-design.mdx)

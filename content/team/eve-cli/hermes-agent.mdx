@@ -1,12 +1,12 @@
 ---
 title: 'Hermes Agent'
 description: >-
-  Headless dev orchestrator — polls Synap for tasks, spawns codegen tool (opencode or OpenClaude),
-  writes results to Synap.
+  Multi-personality headless orchestrator — polls Synap for tasks assigned to itself or its personalities,
+  spawns engine subprocesses (claudecode/opencode/openclaude/openclaw skills), writes results to Synap.
 section: general
 audience: users
-version: 2.0+
-last_updated: '2026-04-21'
+version: 2.1+
+last_updated: '2026-05-04'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -15,8 +15,11 @@ toc: true
 
 ## What it is
 
-**Hermes Agent** is an open-source agent framework from Nous Research (~108k stars on GitHub). In Eve v2.0, it   replaces the previous OpenClaude/OpenHands orchestration as the **headless dev orchestrator**
-  (OpenClaude may be used as the codegen tool, but as a subprocess — not as the agent framework) — the "project manager" that runs entirely in the background.
+**Hermes Agent** is the Eve-shipped headless orchestrator — the "project manager" that runs entirely in the background. It polls the user's Synap pod for delegated tasks, dispatches them to engine subprocesses, and writes results back to Synap.
+
+In Eve v2.1+, Hermes is **multi-personality**: it discovers personality user records via the `parentAgentId` JSONB pointer and polls the Hub for tasks assigned to itself **OR any of its personalities**. Per-personality configuration is hydrated from the `agent_configs` table at dispatch time. See the "Multi-personality" section below.
+
+> **Hub Protocol REST is the only contact surface.** Hermes never imports `synap-intelligence-service` code. Subprocess spawn (TaskExecutor + engine adapters) is the only execution path. The IS-side `dispatch_agent` tool is unavailable to the daemon by design — it's an LLM-loop tool, not a Hub surface.
 
 Hermes is a **Python-based agent** with:
 - Built-in cron scheduler for periodic task polling
@@ -37,33 +40,84 @@ Hermes is a **Python-based agent** with:
 ## How it integrates
 
 ```
-Hermes Agent (Docker container)
+Hermes Agent (Docker container OR local daemon)
     │
-    ├── Synap REST API (poll for tasks, write results)
-    │   └── via plugins/memory/synap_provider.py (sync_turn, prefetch)
+    ├── Hub Protocol REST (the ONLY pod-side surface)
+    │   ├── GET  /api/hub/agent-users?parentUserId=<self>     — discover personalities
+    │   ├── GET  /api/hub/agent-configs?userId=&workspaceId=&agentType= — hydrate per-personality config
+    │   ├── (TaskPoller)  poll task queue for self + each personality
+    │   └── (IntentPoller) poll /api/hub/background-tasks?status=active
     │
-    ├── opencode / OpenClaude (local subprocess)
-    │   └── subprocess.run(['opencode', '--task', '<desc>', '--cwd', '<dir>'])
-    │       # or ['openclaude', '--task', '<desc>', '--cwd', '<dir>']
+    ├── Engine subprocesses (TaskExecutor) — engine selected by `secrets.builder.codeEngine`
+    │   ├── `coder` (claudecode | opencode | openclaude) — one Hub identity, one binary per dispatch
+    │   └── openclaw skill — invoke a named OpenClaw skill via the `openclaw` Hub key
     │
     └── Dokploy API (optional, when enabled)
         └── env vars: DOKPLOY_API_URL, DOKPLOY_API_KEY
 ```
 
-Hermes never connects to messaging apps. It exists as a background service that reacts to **task entities created by OpenClaw in Synap**, processes them, and writes results back.
+Hermes never connects to messaging apps. It exists as a background service that reacts to delegated tasks + background intents in Synap, processes them, and writes results back.
+
+### Engine selection (Coder)
+
+`coder` is **one Hub identity** (`agents.coder.hubApiKey`) that drives **one of three engine binaries** at dispatch time. The choice is config in `~/.eve/secrets/secrets.json`:
+
+```json
+{ "builder": { "codeEngine": "claudecode" } }
+```
+
+Default is `claudecode` when unset. Engine binaries (`claude` / `opencode` / `openclaude`) handle their own AI auth — Hermes only injects `SYNAP_API_KEY=agents.coder.hubApiKey` into the subprocess env. Switching `codeEngine` does NOT rotate the Hub key or churn the pod-side identity. See [coder](./coder.mdx) for the full migration story.
+
+### Background intents
+
+Hermes runs a second poll loop — the **IntentPoller** — against `/api/hub/background-tasks?status=active` (default 60s). Each due row materialises into a synthetic Task with assignee derived from the action namespace (`coder.*` → `coder`, `hermes.*` → `hermes`, etc.) and lands in the same TaskQueue as direct tasks. After 3 consecutive failures per intent, the row's `status` flips to `error` and the daemon stops polling it until `eve intent resume <id>`.
+
+See [Intents](./intents.mdx) (CLI surface) and [Background Tasks](../platform/background-tasks.mdx) (data model + action registry).
+
+## Multi-personality
+
+Hermes is one orchestrator that can dispatch to many "personalities" — agent users whose `parentAgentId` points back to Hermes' own user id.
+
+**Discovery.** On every poll cycle (TTL 5 min), Hermes calls `GET /api/hub/agent-users?parentUserId=<hermesUserId>`. The pod returns every `users` row whose `agentMetadata.parentAgentId === hermesUserId`. Each child becomes a personality the daemon polls for tasks.
+
+**Configuration hydration.** Before dispatching a task to a personality, Hermes calls `GET /api/hub/agent-configs?userId=<personalityUserId>&workspaceId=<ws>&agentType=<slug>`. The returned row supplies:
+
+- `promptAppend` — extra system prompt fragment
+- `extraToolIds` — additional tools to whitelist
+- `disabledToolIds` — tools to mask
+- `maxStepsOverride` — agent loop step cap
+- `modelOverride` — model id (e.g. `claude-3-5-sonnet`, `gpt-4o`)
+
+These hydrate the engine's runtime config; engines themselves still own their AI auth (`ANTHROPIC_API_KEY`, etc.).
+
+**Workspace fallback.** Tasks may carry `task.context.workspaceId`; otherwise Hermes uses `defaultWorkspaceId` from its config. Without either, the lookup returns the first row matching `(userId, agentType)` across all workspaces — fine for single-workspace deployments.
+
+The `hermesUserId` MUST be set in Hermes config for personality discovery to fire. When unset, the daemon falls back to legacy single-slug polling (`assignedAgentId='hermes'` only) and skips personalities entirely.
+
+## Boundary: no IS imports
+
+Hermes is in `hestia-cli/packages/@eve/builder/`. It MUST NOT import from `synap-intelligence-service`. The team norm:
+
+- **Allowed:** Hub Protocol REST (TaskPoller, IntentPoller, agent-configs, agent-users)
+- **Allowed:** subprocess spawn via TaskExecutor + engine adapters
+- **Forbidden:** any direct import of IS code, Hub Protocol gRPC, or `dispatch_agent`
+
+`dispatch_agent` is an IS-side LLM tool used inside the orchestrator agent loop; it has no public Hub surface and is not callable from the daemon.
 
 ## Interaction with other parts
 
 | Component | Interaction | Direction |
 |-----------|-------------|-----------|
-| **Synap** | Polls task queue, writes results | Reads/writes |
-| **OpenClaw** | Indirect — OpenClaw creates tasks in Synap, Hermes reads them | No direct communication |
-| **opencode / OpenClaude** | Spawns as subprocess for each task | Writes env vars (Dokploy, task desc, workspace dir) |
+| **Synap pod** | Hub Protocol REST: polls task queue + intents, writes results, reads agent-configs | Reads/writes |
+| **OpenClaw** | Indirect — OpenClaw can create delegated tasks in Synap that Hermes picks up | No direct communication |
+| **`coder` engine binary** | Spawned as subprocess per task (TaskExecutor + adapter for `secrets.builder.codeEngine`) | Writes env vars (`SYNAP_API_KEY=agents.coder.hubApiKey`, task ctx) |
+| **OpenClaw skill action** | Invoked via the `openclaw` Hub key when action namespace is `openclaw.*` | Hub Protocol REST |
 | **Dokploy** | Calls REST API when deploying generated code | Reads/writes |
 
 ## Guidelines
 
-- **Hermes config**: Stored in Docker environment variables, primarily `SYNAP_API_URL` and `SYNAP_API_KEY` (referenced from `.eve/secrets/secrets.json` → `builder.synapApiKey`).
+- **Hermes config**: Stored in Docker environment variables, primarily `SYNAP_API_URL` and `SYNAP_API_KEY`. The Hub key is `agents.hermes.hubApiKey` from `.eve/secrets/secrets.json` (legacy fallback: `synap.apiKey`). See [Eve — Per-Agent Hub Keys](../platform/eve-agent-keys.mdx).
+- **`hermesUserId`**: Required for multi-personality discovery. Without it, the daemon runs in legacy single-agent mode.
 - **Cron interval**: Configurable via Hermes Agent config. Default should be 60 seconds for task polling — fast enough for responsive task handling, not so fast as to overwhelm Synap.
 - **Workspace directory**: Workspace projects live in `~/.eve/workspace/` by default (configurable in secrets). Codegen tool is invoked with `--cwd` pointing to the relevant project.
 - **Skills**: Custom skills live under the Eve skills directory (default: `~/.eve/skills/`). The opencode execution skill follows the pattern:

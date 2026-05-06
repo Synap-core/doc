@@ -1,0 +1,95 @@
+---
+title: 'coder'
+description: >-
+  The unified `coder` agent — one Hub Protocol identity that drives one of three
+  code-generation engine binaries (claudecode / opencode / openclaude). Engine
+  choice is config, not identity.
+section: general
+audience: users
+version: 2.1+
+last_updated: '2026-05-04'
+tags: []
+hide_title: false
+toc: true
+---
+
+## Overview
+
+`coder` is a single agent identity in the Eve registry. It owns ONE Hub Protocol API key (`agents.coder.hubApiKey`) and represents the "local AI coder" role on the user's pod.
+
+Behind that identity, exactly one engine binary runs per dispatch — chosen by `secrets.builder.codeEngine`:
+
+- `claudecode` — Anthropic's `claude` CLI
+- `opencode` — SST's `opencode` CLI
+- `openclaude` — local `openclaude` runner
+
+Earlier Eve installs minted three separate Hub identities (one per engine). v2.1+ collapses them into the single `coder` slug. The engine binary is a runtime detail; the pod-side identity is stable.
+
+> **Why this matters.** The pod's audit log, the Builder Workspace allowlist, and Hermes' action routing all key off `agentType=coder`. Swapping engines (e.g. switching `codeEngine` from `claudecode` to `opencode`) does NOT churn pod identities, doesn't rotate keys, and doesn't break in-flight tasks.
+
+## Engine selection
+
+The active engine is read from `~/.eve/secrets/secrets.json`:
+
+```json
+{
+  "builder": {
+    "codeEngine": "claudecode",
+    "workspaceId": "<builder-workspace uuid>"
+  }
+}
+```
+
+Default is `claudecode` when the field is unset. To switch:
+
+```bash
+# Direct edit — open secrets.json and change codeEngine
+# Or via Eve dashboard /agents/coder/terminal page
+```
+
+Engine binaries handle their **own** API auth — Eve does NOT keep `ANTHROPIC_API_KEY` or per-engine creds in `secrets.json`:
+
+| Engine slug   | Binary         | AI auth                                        |
+| ------------- | -------------- | ---------------------------------------------- |
+| `claudecode`  | `claude`       | `ANTHROPIC_API_KEY` env (engine-owned)         |
+| `opencode`    | `opencode`     | engine's own config dir                        |
+| `openclaude`  | `openclaude`   | `.eve/openclaude.json` (engine-owned)          |
+
+The `coder` Hub key authenticates the agent against the user's pod. Engine creds are separate.
+
+## What changed (migration)
+
+Pre-v2.1 installs had three independent Hub identities:
+
+```
+agents.claudecode.hubApiKey
+agents.opencode.hubApiKey
+agents.openclaude.hubApiKey
+```
+
+On the first `eve update` after upgrading, the lifecycle layer detects these legacy slugs in `secrets.agents` and auto-runs a one-shot migration:
+
+1. Picks one of them (the first engine slug encountered) and writes it to `secrets.builder.codeEngine`.
+2. Mints the unified `coder` Hub key via `POST /api/hub/setup/agent`.
+3. Revokes the legacy per-engine keys and removes their entries from `secrets.json`.
+
+The legacy slug list is `LEGACY_CODER_ENGINE_SLUGS` in `@eve/dna/agents.ts`. Subsequent runs see the new layout and skip the migration. Operators don't have to do anything — the migration is idempotent and runs on existing installs the next time `eve update` fires.
+
+If you want to force a fresh start, `eve auth provision --agent coder` will mint the key on demand.
+
+## Where it shows up
+
+| Surface                          | Behavior                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| **Hermes dispatcher**            | Actions in the `coder.*` namespace (`coder.research`, `coder.build`, …) resolve to assignee `coder`. Hermes loads the engine adapter for `secrets.builder.codeEngine` and spawns it as a subprocess with `SYNAP_API_KEY=agents.coder.hubApiKey`. |
+| **Eve dashboard `/agents`**      | One row labelled "coder" with the active engine in parens (e.g. `coder (claudecode)`). "Open Terminal" routes to `/agents/coder/terminal` — a Subprocess REPL that spawns the active engine binary. |
+| **Builder Workspace seeding**    | The `coder` agentType is allowlisted alongside `eve` for `POST /api/hub/workspaces/from-definition`. DevPlane fallback seeding requires a `coder`-keyed session. |
+| **`eve auth status`**            | Lists `coder` as one of the always-provisioned agents, alongside `eve`. The legacy per-engine rows do NOT appear post-migration. |
+
+## Related
+
+- [Eve — Per-Agent Hub Keys](../platform/eve-agent-keys.mdx) — Full registry, mint flow, legacy migration mechanics
+- [Builder Workspace](../platform/builder-workspace.mdx) — Where `coder.*` actions land
+- [Background Tasks](../platform/background-tasks.mdx) — `coder.*` action vocabulary
+- [Hermes Agent](./hermes-agent.mdx) — Dispatcher that picks the engine adapter at run time
+- [Dashboard](./dashboard.mdx) — Visual `/agents` surface with the Subprocess REPL

@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Auto-generated on 2026-04-22** — 532 pages across 48 topic clusters.
+**Auto-generated on 2026-05-04** — 548 pages across 48 topic clusters.
 This index makes Synap documentation searchable and navigable for both humans and AI agents.
 
 **Canonical documentation surface:** `synap-team-docs/content/`
@@ -13,25 +13,25 @@ This index makes Synap documentation searchable and navigable for both humans an
 
 ## Quick Navigation
 - **compass Product Vision & Strategy** (80 pages): [agora-white.mdx](team/home/agora-white) & ['Strategic Analysis'](team/home/analysis) & [architecture-validation.mdx](team/home/architecture-validation)
-- **help-circle Unclassified** (48 pages): [ai-deprecated.mdx](team/backend/ai-deprecated) & [ai-embeddings-deprecated.mdx](team/backend/ai-embeddings-deprecated) & [backend-product.mdx](team/backend/backend-product)
+- **help-circle Unclassified** (54 pages): [ai-deprecated.mdx](team/backend/ai-deprecated) & [ai-embeddings-deprecated.mdx](team/backend/ai-embeddings-deprecated) & [backend-product.mdx](team/backend/backend-product)
 - **sparkles AI & Intelligence Service** (39 pages): ['Agent Service SDK'](team/intelligence/agent-sdk) & ['Agent System'](team/intelligence/agent-system) & ['Agents README'](team/intelligence/agents-readme)
 - **smartphone Relay Mobile** (35 pages): ['Android Plan'](team/relay/android-plan) & [app-store-guide.mdx](team/relay/app-store-guide) & ['App Store'](team/relay/app-store)
-- **crown Control Plane** (22 pages): ['CP Architecture'](team/control-plane/architecture) & ['Security Audit'](team/control-plane/audit) & ['CP dashboard & pod update pipeline'](team/control-plane/cp-dashboard-updates)
-- **layout Architecture Concepts** (20 pages): ['Architecture'](docs/architecture/concepts/architecture) & ['Artificial Intelligence'](docs/architecture/concepts/artificial-intelligence) & ['Branching Conversations'](docs/architecture/concepts/branching-conversations)
-- **terminal DevOps & Infrastructure** (20 pages): ['AI Governance Audit'](team/devops/ai-governance) & ['Auth Consolidation Audit'](team/devops/auth-audit) & ['Backlink Strategy'](team/devops/backlink-strategy)
+- **crown Control Plane** (23 pages): ['CP Architecture'](team/control-plane/architecture) & ['Security Audit'](team/control-plane/audit) & ['CP dashboard & pod update pipeline'](team/control-plane/cp-dashboard-updates)
+- **layout Architecture Concepts** (21 pages): ['Architecture'](docs/architecture/concepts/architecture) & ['Artificial Intelligence'](docs/architecture/concepts/artificial-intelligence) & ['Branching Conversations'](docs/architecture/concepts/branching-conversations)
+- **terminal DevOps & Infrastructure** (21 pages): ['AI Governance Audit'](team/devops/ai-governance) & ['Auth Consolidation Audit'](team/devops/auth-audit) & ['Backlink Strategy'](team/devops/backlink-strategy)
 - **grid Features Index** (19 pages): ['Workflows'](team/features/ai-workflows) & ['Capture'](team/features/capture) & ['Channels'](team/features/channels)
+- **terminal EVE CLI** (16 pages): ['Architecture'](team/eve-cli/architecture) & ['coder'](team/eve-cli/coder) & ['Eve Dashboard'](team/eve-cli/dashboard)
 - **message-square Communication & Feeds** (16 pages): ['Channel-Agent Flow'](team/platform/channel-agent-flow) & ['Channel System'](team/platform/channel-system) & ['Channels'](team/platform/channels)
 - **clipboard-check Process & Reviews** (15 pages): ['Design Guidelines'](team/platform/design-guidelines) & ['Design System Audit'](team/platform/design-system-audit) & ['Onboarding analytics events'](team/platform/onboarding-analytics-events)
-- **terminal EVE CLI** (13 pages): ['Architecture'](team/eve-cli/architecture) & ['Dokploy'](team/eve-cli/dokploy) & ['Hermes Agent'](team/eve-cli/hermes-agent)
+- **layers Platform Engineering** (13 pages): ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) & ['Background Tasks'](team/platform/background-tasks) & ['Builder Workspace'](team/platform/builder-workspace)
 - **heart Contributing Overview** (12 pages): [backend-contributing.mdx](docs/contributing/backend-contributing) & [browser-installation.mdx](docs/contributing/browser-installation) & [cli-contributing.mdx](docs/contributing/cli-contributing)
 - **terminal Development Guide** (11 pages): [Building Agents](docs/integrate/development/ai/building-agents) & [Direct Plugins](docs/integrate/development/extending/direct-plugins) & [Hybrid Plugins](docs/integrate/development/extending/hybrid-plugins)
 - **monitor Synap App** (11 pages): [command-palette-doc.mdx](team/synap-app/command-palette-doc) & [design-guidelines.mdx](team/synap-app/design-guidelines) & [frontend-ai-reference.mdx](team/synap-app/frontend-ai-reference)
-- **layers Platform Engineering** (10 pages): ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) & ['Connections Architecture'](team/platform/connections) & ['External API'](team/platform/external-api)
 - **wrench Contribution Guides** (9 pages): ['Cli And Compose Consolidation'](docs/contributing/guides/cli-and-compose-consolidation) & [Code Style](docs/contributing/guides/code-style) & ['Connection Sync Roadmap'](docs/contributing/guides/connection-sync-roadmap)
 - **puzzle Integration How-To** (9 pages): ['Api Keys'](docs/integrate/integrations/api-keys) & ['Automation Platforms'](docs/integrate/integrations/automation-platforms) & ['Chat Stream'](docs/integrate/integrations/chat-stream)
+- **server Deployment** (8 pages): [connect-control-plane.md](docs/architecture/deployment/data-pod/connect-control-plane) & ['Docker'](docs/architecture/deployment/data-pod/docker) & ['Production'](docs/architecture/deployment/data-pod/production)
 - **monitor Browser Desktop** (8 pages): ['Architecture'](team/browser/architecture) & [browser-extensions-consolidation.mdx](team/browser/browser-extensions-consolidation) & ['Capture and flows'](team/browser/capture-and-flows)
 - **monitor Studio App** (8 pages): ['Architecture'](team/studio/architecture) & ['Channels'](team/studio/channels) & ['Data Flow'](team/studio/data-flow)
-- **server Deployment** (7 pages): ['Docker'](docs/architecture/deployment/data-pod/docker) & ['Production'](docs/architecture/deployment/data-pod/production) & ['Self Hosted'](docs/architecture/deployment/data-pod/self-hosted)
 - **zap Agent Skills** (7 pages): ['Skill: Automations'](team/intelligence/skill-automations) & ['Skill: Document Management'](team/intelligence/skill-documents) & ['Skill: Entity Management'](team/intelligence/skill-entities)
 - **bot Agent Integration** (6 pages): ['Channels and agents'](docs/integrate/agents/channels-and-agents) & ['Agents'](docs/integrate/agents) & ['MCP'](docs/integrate/agents/mcp)
 - **link-2 Agent Connect Guides** (6 pages): ['Claude Code'](docs/integrate/agents/connect/claude-code) & ['Claude Desktop'](docs/integrate/agents/connect/claude-desktop) & ['Cursor'](docs/integrate/agents/connect/cursor)
@@ -148,7 +148,7 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Vision & Philosophy'](team/home/vision) _updated: '2026-04-20'_
 - ['Visual Assets'](team/home/visual-assets) _updated: '2026-04-20'_
 
-### help-circle Unclassified (48)
+### help-circle Unclassified (54)
 
 - [ai-deprecated.mdx](team/backend/ai-deprecated) 
 - [ai-embeddings-deprecated.mdx](team/backend/ai-embeddings-deprecated) 
@@ -198,6 +198,12 @@ This index makes Synap documentation searchable and navigable for both humans an
 - [telegram-mini-app.mdx](team/integrate/telegram-mini-app) 
 - [view-types.mdx](team/integrate/view-types) 
 - [widget-catalog.mdx](team/integrate/widget-catalog) 
+- [Architecture](team/devplane/architecture) [team] _updated: '2026-04-29'_
+- [Hooks reference](team/devplane/hooks) [team] _updated: '2026-04-29'_
+- [DevPlane](team/devplane) [team] _updated: '2026-04-29'_
+- [DevPlane North Star](team/devplane/north-star) [team] _updated: '2026-04-29'_
+- [Entity profiles](team/devplane/profiles) [team] _updated: '2026-04-29'_
+- [Startup flow](team/devplane/startup-flow) [team] _updated: '2026-04-29'_
 
 ### sparkles AI & Intelligence Service (39)
 
@@ -279,8 +285,9 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['User Flows'](team/relay/user-flows) _updated: '2026-04-20'_
 - ['User Stories'](team/relay/user-stories) _updated: '2026-04-20'_
 
-### crown Control Plane (22)
+### crown Control Plane (23)
 
+- [Pod ↔ Control Plane Trust Architecture](team/control-plane/pod-trust-architecture) 
 - ['CP Architecture'](team/control-plane/architecture) _updated: '2026-04-20'_
 - ['Security Audit'](team/control-plane/audit) _updated: '2026-04-20'_
 - ['CP dashboard & pod update pipeline'](team/control-plane/cp-dashboard-updates) _updated: '2026-04-20'_
@@ -304,8 +311,9 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Signal Layer'](team/control-plane/signal-layer) _updated: '2026-04-20'_
 - ['SLOs'](team/control-plane/slos) _updated: '2026-04-20'_
 
-### layout Architecture Concepts (20)
+### layout Architecture Concepts (21)
 
+- ['Memory & Knowledge'](docs/architecture/concepts/memory-and-knowledge) _updated: '2026-04-23'_ &mdash; tags: memory, knowledge, ai, agents
 - ['Architecture'](docs/architecture/concepts/architecture) _updated: '2026-04-20'_
 - ['Artificial Intelligence'](docs/architecture/concepts/artificial-intelligence) _updated: '2026-04-20'_
 - ['Branching Conversations'](docs/architecture/concepts/branching-conversations) _updated: '2026-04-20'_
@@ -327,8 +335,9 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Why Events'](docs/architecture/concepts/why-events) _updated: '2026-04-20'_
 - ['Workspace As A Service'](docs/architecture/concepts/workspace-as-a-service) _updated: '2026-04-20'_
 
-### terminal DevOps & Infrastructure (20)
+### terminal DevOps & Infrastructure (21)
 
+- [High-Priority TODO Tracker](team/devops/high-priority-todo-tracker) 
 - ['Infrastructure Architecture'](team/devops/infrastructure-architecture) [team] _updated: '2026-04-22'_ &mdash; tags: infrastructure, ci-cd, devops, architecture, deployment
 - ['Operations Runbook'](team/devops/operations-runbook) [team] _updated: '2026-04-22'_ &mdash; tags: runbook, operations, devops, debugging, deployment
 - ['AI Governance Audit'](team/devops/ai-governance) _updated: '2026-04-20'_
@@ -372,8 +381,28 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Views'](team/features/views) _updated: '2026-04-20'_
 - ['Automations'](team/features/workflows) _updated: '2026-04-20'_
 
+### terminal EVE CLI (16)
+
+- ['coder'](team/eve-cli/coder) _updated: '2026-05-04'_
+- ['Eve Dashboard'](team/eve-cli/dashboard) _updated: '2026-05-04'_
+- ['Hermes Agent'](team/eve-cli/hermes-agent) _updated: '2026-05-04'_
+- ['Background intents'](team/eve-cli/intents) _updated: '2026-05-04'_
+- ['Open WebUI'](team/eve-cli/open-webui) _updated: '2026-04-29'_
+- ['Architecture'](team/eve-cli/architecture) _updated: '2026-04-21'_
+- ['Dokploy'](team/eve-cli/dokploy) _updated: '2026-04-21'_
+- ['Eve CLI'](team/eve-cli) _updated: '2026-04-21'_
+- ['OpenClaw'](team/eve-cli/openclaw) _updated: '2026-04-21'_
+- ['Operations & hosting'](team/eve-cli/operations) _updated: '2026-04-21'_
+- ['Repository & builds'](team/eve-cli/repository) _updated: '2026-04-21'_
+- ['Routing & Connectivity'](team/eve-cli/routing-and-connectivity) _updated: '2026-04-21'_
+- ['RSSHub'](team/eve-cli/rsshub) _updated: '2026-04-21'_
+- ['Synap integration'](team/eve-cli/synap-integration) _updated: '2026-04-21'_
+- ['User flows'](team/eve-cli/user-flows) _updated: '2026-04-21'_
+- ['Vision & principles'](team/eve-cli/vision) _updated: '2026-04-21'_
+
 ### message-square Communication & Feeds (16)
 
+- ['Hub Protocol'](team/platform/hub-protocol) _updated: '2026-05-03'_
 - ['Channel-Agent Flow'](team/platform/channel-agent-flow) _updated: '2026-04-20'_
 - ['Channel System'](team/platform/channel-system) _updated: '2026-04-20'_
 - ['Channels'](team/platform/channels) _updated: '2026-04-20'_
@@ -383,7 +412,6 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Feed Architecture Analysis'](team/platform/feed-analysis) _updated: '2026-04-20'_
 - ['Feed onboarding vision & Intelligence Service alignment'](team/platform/feed-onboarding-vision) _updated: '2026-04-20'_
 - ['Feed System'](team/platform/feed-system) _updated: '2026-04-20'_
-- ['Hub Protocol'](team/platform/hub-protocol) _updated: '2026-04-20'_
 - ['Notifications'](team/platform/notifications) _updated: '2026-04-20'_
 - ['Realtime Integration'](team/platform/realtime) _updated: '2026-04-20'_
 - ['Signal Feed AI Classification'](team/platform/signal-feed-ai) _updated: '2026-04-20'_
@@ -409,21 +437,21 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['S-tier Definition of Done'](team/platform/s-tier-definition-of-done) _updated: '2026-04-20'_
 - ['TeamDoc Guidelines'](team/platform/teamdoc-guidelines) _updated: '2026-04-20'_
 
-### terminal EVE CLI (13)
+### layers Platform Engineering (13)
 
-- ['Architecture'](team/eve-cli/architecture) _updated: '2026-04-21'_
-- ['Dokploy'](team/eve-cli/dokploy) _updated: '2026-04-21'_
-- ['Hermes Agent'](team/eve-cli/hermes-agent) _updated: '2026-04-21'_
-- ['Eve CLI'](team/eve-cli) _updated: '2026-04-21'_
-- ['OpenClaw'](team/eve-cli/openclaw) _updated: '2026-04-21'_
-- ['opencode'](team/eve-cli/opencode) _updated: '2026-04-21'_
-- ['Operations & hosting'](team/eve-cli/operations) _updated: '2026-04-21'_
-- ['Repository & builds'](team/eve-cli/repository) _updated: '2026-04-21'_
-- ['Routing & Connectivity'](team/eve-cli/routing-and-connectivity) _updated: '2026-04-21'_
-- ['RSSHub'](team/eve-cli/rsshub) _updated: '2026-04-21'_
-- ['Synap integration'](team/eve-cli/synap-integration) _updated: '2026-04-21'_
-- ['User flows'](team/eve-cli/user-flows) _updated: '2026-04-21'_
-- ['Vision & principles'](team/eve-cli/vision) _updated: '2026-04-21'_
+- ['Background Tasks'](team/platform/background-tasks) _updated: '2026-05-04'_
+- ['Builder Workspace'](team/platform/builder-workspace) _updated: '2026-05-04'_
+- ['Eve — Per-Agent Hub Keys'](team/platform/eve-agent-keys) _updated: '2026-05-04'_
+- ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) _updated: '2026-04-20'_
+- ['Connections Architecture'](team/platform/connections) _updated: '2026-04-20'_
+- ['External API'](team/platform/external-api) _updated: '2026-04-20'_
+- ['External Integrations'](team/platform/external-integrations) _updated: '2026-04-20'_
+- ['Platform'](team/platform) _updated: '2026-04-20'_
+- ['Intelligence UX & Capabilities'](team/platform/intelligence-ux) _updated: '2026-04-20'_
+- ['Proposals & Governance'](team/platform/proposals) _updated: '2026-04-20'_
+- ['Release train & technical debt budget'](team/platform/release-train-and-debt-budget) _updated: '2026-04-20'_
+- ['System Completion Status'](team/platform/system-completion) _updated: '2026-04-20'_
+- ['Universal onboarding north star'](team/platform/universal-onboarding-north-star) _updated: '2026-04-20'_
 
 ### heart Contributing Overview (12)
 
@@ -468,19 +496,6 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Package boundaries'](team/synap-app/package-boundaries) _updated: '2026-04-20'_
 - ['Status and scope'](team/synap-app/status-and-scope) _updated: '2026-04-20'_
 
-### layers Platform Engineering (10)
-
-- ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) _updated: '2026-04-20'_
-- ['Connections Architecture'](team/platform/connections) _updated: '2026-04-20'_
-- ['External API'](team/platform/external-api) _updated: '2026-04-20'_
-- ['External Integrations'](team/platform/external-integrations) _updated: '2026-04-20'_
-- ['Platform'](team/platform) _updated: '2026-04-20'_
-- ['Intelligence UX & Capabilities'](team/platform/intelligence-ux) _updated: '2026-04-20'_
-- ['Proposals & Governance'](team/platform/proposals) _updated: '2026-04-20'_
-- ['Release train & technical debt budget'](team/platform/release-train-and-debt-budget) _updated: '2026-04-20'_
-- ['System Completion Status'](team/platform/system-completion) _updated: '2026-04-20'_
-- ['Universal onboarding north star'](team/platform/universal-onboarding-north-star) _updated: '2026-04-20'_
-
 ### wrench Contribution Guides (9)
 
 - ['Cli And Compose Consolidation'](docs/contributing/guides/cli-and-compose-consolidation) _updated: '2026-04-20'_
@@ -505,6 +520,17 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Skill Invocation'](docs/integrate/integrations/skill-invocation) _updated: '2026-04-20'_
 - ['Webhooks Guide'](docs/integrate/integrations/webhooks-guide) _updated: '2026-04-20'_
 
+### server Deployment (8)
+
+- [connect-control-plane.md](docs/architecture/deployment/data-pod/connect-control-plane) 
+- ['Docker'](docs/architecture/deployment/data-pod/docker) _updated: '2026-04-20'_
+- ['Production'](docs/architecture/deployment/data-pod/production) _updated: '2026-04-20'_
+- ['Self Hosted'](docs/architecture/deployment/data-pod/self-hosted) _updated: '2026-04-20'_
+- ['Tunnels And Domains'](docs/architecture/deployment/data-pod/tunnels-and-domains) _updated: '2026-04-20'_
+- ['Database'](docs/architecture/deployment/infrastructure/database) _updated: '2026-04-20'_
+- ['Storage'](docs/architecture/deployment/infrastructure/storage) _updated: '2026-04-20'_
+- [Overview](docs/architecture/deployment/overview) _updated: '2026-04-20'_
+
 ### monitor Browser Desktop (8)
 
 - [browser-extensions-consolidation.mdx](team/browser/browser-extensions-consolidation) 
@@ -527,16 +553,6 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Pages'](team/studio/pages) _updated: '2026-04-20'_
 - ['Streaming'](team/studio/streaming) _updated: '2026-04-20'_
 
-### server Deployment (7)
-
-- ['Docker'](docs/architecture/deployment/data-pod/docker) _updated: '2026-04-20'_
-- ['Production'](docs/architecture/deployment/data-pod/production) _updated: '2026-04-20'_
-- ['Self Hosted'](docs/architecture/deployment/data-pod/self-hosted) _updated: '2026-04-20'_
-- ['Tunnels And Domains'](docs/architecture/deployment/data-pod/tunnels-and-domains) _updated: '2026-04-20'_
-- ['Database'](docs/architecture/deployment/infrastructure/database) _updated: '2026-04-20'_
-- ['Storage'](docs/architecture/deployment/infrastructure/storage) _updated: '2026-04-20'_
-- [Overview](docs/architecture/deployment/overview) _updated: '2026-04-20'_
-
 ### zap Agent Skills (7)
 
 - ['Skill: Automations'](team/intelligence/skill-automations) _updated: '2026-04-20'_
@@ -549,10 +565,10 @@ This index makes Synap documentation searchable and navigable for both humans an
 
 ### bot Agent Integration (6)
 
+- ['OpenClaw'](docs/integrate/agents/openclaw) _updated: '2026-05-03'_
 - ['Channels and agents'](docs/integrate/agents/channels-and-agents) _updated: '2026-04-20'_
 - ['Agents'](docs/integrate/agents) _updated: '2026-04-20'_
 - ['MCP'](docs/integrate/agents/mcp) _updated: '2026-04-20'_
-- ['OpenClaw'](docs/integrate/agents/openclaw) _updated: '2026-04-20'_
 - ['Skills'](docs/integrate/agents/skills) _updated: '2026-04-20'_
 - ['Synap AI'](docs/integrate/agents/synap-ai) _updated: '2026-04-20'_
 

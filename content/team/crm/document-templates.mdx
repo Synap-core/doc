@@ -1,0 +1,149 @@
+---
+title: 'Document Templates'
+description: 'Template-based document generation for contracts, proposals, and NDAs — one-click instantiation with variable slots'
+section: crm
+last_updated: '2026-05-11'
+tags: [documents, templates, contracts, proposals]
+toc: true
+---
+
+# Document Templates
+
+The CRM document system has two layers:
+1. **Collaborative documents** — freeform notes and shared files linked to contacts and companies, using the Synap document system (TipTap + Yjs) directly
+2. **Templates** — structured documents with variable slots that can be instantiated in one click for a specific client
+
+Both layers use the same underlying document infrastructure. Templates are just documents with `isTemplate: true` and variable markers in the content.
+
+---
+
+## Document Types
+
+| Type | Use case | Who creates it |
+|---|---|---|
+| `note` | Call notes, meeting summaries | Salesperson, auto-linked to contact |
+| `proposal` | Service proposal sent to a prospect | Founder / team lead |
+| `contract` | Service agreement (generated from template) | Founder, from template |
+| `nda` | Non-disclosure agreement | Founder, from template |
+| `meeting-notes` | Structured meeting notes (can be templated) | Salesperson |
+| `other` | Anything else | Any team member |
+
+---
+
+## Template System
+
+### How templates work
+
+A template is a `document` entity with:
+- `isTemplate: true` property
+- Variable slots in the content: `{{variable_name}}` syntax
+- A `templateSchema` property listing all variables with their labels and types
+
+Example template content (Service Agreement):
+```
+SERVICE AGREEMENT
+
+This agreement is between **{{client_legal_name}}** ("Client") and Synap SAS ("Provider").
+
+**Effective date**: {{start_date}}
+**Service scope**: {{service_scope}}
+**Monthly fee**: {{monthly_fee}} EUR
+**Payment terms**: {{payment_terms}}
+
+...
+```
+
+The `templateSchema` for this document:
+```json
+{
+  "variables": [
+    { "key": "client_legal_name", "label": "Client legal name", "type": "string", "required": true },
+    { "key": "start_date", "label": "Start date", "type": "date", "required": true },
+    { "key": "service_scope", "label": "Service scope", "type": "text", "required": true },
+    { "key": "monthly_fee", "label": "Monthly fee (EUR)", "type": "number", "required": true },
+    { "key": "payment_terms", "label": "Payment terms", "type": "string", "required": false }
+  ]
+}
+```
+
+### Generation flow
+
+```
+1. User clicks "New from template" on a contact or company dashboard
+2. Template picker modal opens — lists available templates by type
+3. User selects template (e.g. "Service Agreement")
+4. Variable form renders — pre-filled where data is available from the entity
+   (client_legal_name ← company name, start_date ← today)
+5. User fills/confirms remaining fields
+6. System calls generateFromTemplate(templateId, variables, { linkedEntityId })
+7. New document entity created with:
+   - Content: template content with all {{variables}} replaced
+   - Type: "contract"
+   - isTemplate: false
+   - Linked to the person/company via relationship
+8. Document opens in editor — collaborative, versioned, proposal-gated on edit
+```
+
+### Pre-filling from entity data
+
+The generation action automatically maps entity properties to template variables where the names align:
+
+| Template variable | Auto-filled from |
+|---|---|
+| `client_legal_name` | company name or person's company field |
+| `client_email` | person email |
+| `start_date` | today's date |
+| `client_name` | person name |
+
+Unmapped variables are left for the user to fill in the form.
+
+---
+
+## Template Library
+
+The CRM ships with a default set of templates, seeded into the workspace on provisioning:
+
+| Template | Variables | Use case |
+|---|---|---|
+| **Service Agreement** | client name, legal entity, scope, start date, fee, payment terms | Standard consulting engagement |
+| **Proposal** | client name, problem statement, proposed solution, timeline, investment | Pre-sale proposal |
+| **NDA** | client legal name, jurisdiction, effective date | Before sharing sensitive info |
+| **Meeting Notes** | date, attendees, agenda, decisions, next steps | Structured call summary |
+| **Onboarding Checklist** | client name, start date, assigned team member | First week of engagement |
+
+All templates are editable by the team. New templates can be created from any existing document via "Save as template".
+
+---
+
+## Document-Entity Linking
+
+Documents are linked to persons and companies via the Synap relationship system. A contract linked to a person appears in:
+- The person's client dashboard "Contracts" section
+- The company's "Documents" section (if person is linked to a company)
+- The workspace-level Documents view (filtered by type)
+
+The Documents view (formerly the documents page) is a standard Synap `table` view scoped to document entities — no custom implementation needed.
+
+---
+
+## Implementation
+
+### Reused infrastructure
+- **Editor**: `DocumentEditorCell` from `@synap-core/entity-views` — drop in with `entityId`, auto-creates and links document on first edit
+- **Collaboration**: `useDocumentCollaborationRoom` — Yjs + Socket.IO, no additional setup
+- **Versioning**: `useDocumentVersions` from `@synap-core/document`
+- **Backend**: `trpc.documents.*` procedures (create, get, update, list, delete)
+
+### New: template generation
+`generateFromTemplate(templateId, variables, options)` — a new tRPC mutation that:
+1. Fetches the template document content
+2. Replaces all `{{variable}}` markers with provided values
+3. Calls `documents.create` with the rendered content
+4. Creates a relationship between the new document and the target entity
+5. Returns the new document ID
+
+### New: templateSchema property
+Added to the document entity as a JSONB property. Stored alongside the document entity. The variable form in the UI is rendered from this schema.
+
+### Future: one-click send
+Once the client channel feature ships, a generated contract can be shared directly in the client's channel thread — no external email needed.

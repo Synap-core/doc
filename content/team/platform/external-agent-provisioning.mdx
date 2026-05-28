@@ -1,0 +1,238 @@
+# External Agent Provisioning
+
+**Created**: 2026-05-07
+**Status**: Architecture reference + gap analysis
+
+## Overview
+
+Synap supports two models for connecting external agents/consumers to a pod:
+
+1. **Hub Protocol API Keys** — Bearer-token authenticated agents (OpenWebUI, Hermes, OpenClaw, Claude Desktop/MCP)
+2. **Trusted Issuers (JWT-Bearer Grant)** — Services that sign their own JWTs with registered keypairs
+
+## Auth Model Comparison
+
+### Static Env Var (legacy / the-arch)
+
+```
+Config file → MCP_BEARER_TOKEN=abc123 → Consumer → Bearer token
+```
+
+- Single static string, no audit trail, no revocation, no scope enforcement
+- Fragile at scale: revoking means manually finding every config
+
+### Database-Backed Hub Protocol (Synap)
+
+```
+POST /api/hub/setup/agent → DB row in api_keys (bcrypt hash) → returns plaintext → consumer uses Bearer
+```
+
+- Keys registered in PostgreSQL with scopes
+- bcrypt hash verification (not plaintext comparison)
+- Per-agent isolation: each agentType has its own key
+- Revocable: delete the DB row, key stops working immediately
+- Audit trail: creation time, agentType, scopes, creator
+- Three-tier fallback for consumers: per-agent key → legacy synap.apiKey → eve agent key
+
+## Hub Protocol API Key Provisioning
+
+### Endpoint: `POST /api/hub/setup/agent`
+
+**Auth methods** (first match wins):
+
+1. **CP-signed JWT** — user's CP session mints JWT scoped to pod
+2. **PROVISIONING_TOKEN** — shared secret (what `eve install` uses)
+3. **Hub API key with `setup.agent` scope** — already-authenticated admin
+
+**Flow**:
+
+```
+Admin calls POST /api/hub/setup/agent { agentType: "openwebui" }
+  ↓ (authed via PROVISIONING_TOKEN or CP JWT)
+Pod creates: agent user (userType: "agent") + API key with scopes
+  ↓
+Key stored in: secrets.agents["openwebui"].hubApiKey
+  ↓
+Consumer uses: Bearer <key> on /api/hub/* endpoints
+```
+
+**Return**: `{ hubApiKey, agentUserId, workspaceId }`
+
+### Agent Registry
+
+Defined in `@eve/lifecycle` — `AGENTS[]` array with:
+
+- `id` — unique agent identifier
+- `agentType` — string used in secrets + DB
+- `alwaysProvision` — whether to provision on every install (eve = true)
+- `scopes` — required Hub Protocol scopes for the key
+
+### Three-Tier Fallback Chain
+
+In `readAgentKeyOrLegacySync(agentType, secrets)`:
+
+1. `secrets.agents[agentType].hubApiKey` — per-agent key (preferred)
+2. `secrets.synap.apiKey` — legacy single-key fallback (back-compat)
+3. `secrets.agents.eve.hubApiKey` — eve agent key (always provisioned, always present)
+
+## Trusted Issuers (JWT-Bearer Grant)
+
+For services that **sign their own JWTs** and the pod needs to verify them. RFC 7523 JWT-Bearer flow.
+
+**Flow**:
+
+```
+External service registers JWKS public key with pod
+  ↓
+Admin approves at /admin/trusted-issuers
+  ↓
+Service signs JWT with private key → sends to pod
+  ↓
+Pod verifies JWT against registered public key (JWKS)
+  ↓
+Pod maps JWT to local user + session
+```
+
+**Key distinction**:
+- **API keys** = "here's my bearer token, let me in"
+- **Trusted issuers** = "here's my signed JWT, I proved my identity via a keypair I registered"
+
+### Trusted Issuer Lifecycle States
+
+- `pending` — registered, awaiting admin approval
+- `approved` — admin approved, JWTs verified
+- `revoked` — admin revoked, JWTs rejected
+- `expired` — keypair rotated, old key expired
+
+### Known Gaps
+
+- 202 loop on approval (returns 202 instead of 200)
+- No cascade revoke when upstream key compromised
+- No notification on pending issuers (admin must manually check)
+
+## Auto-Provision Flow
+
+**Problem**: bootstrap-claim and CP→pod claim flows created user sessions but never triggered `provisionAllAgents()`, so AI consumers had no Hub Protocol API keys.
+
+**Solution**: Shared auto-provision endpoint, fired as fire-and-forget after claim flows.
+
+### Endpoint: `POST /api/pod/auto-provision`
+
+**Body**: `{ force?: boolean }` (default: `force: false`)
+
+**Flow**:
+
+```
+1. Probe docker ps to discover running containers
+2. Map container names to component IDs via COMPONENTS
+3. Call provisionAllAgents(installedComponentIds)
+4. Call wireAllInstalledComponents(secrets, runningComponents)
+5. Return { ok: true, provisioned: AgentResult[], wired: WireResult[] }
+```
+
+**Trigger points**:
+
+- `POST /api/pod/bootstrap-claim` — fire-and-forget after successful claim
+- `POST /api/pod/claim` — fire-and-forget after successful claim
+
+**Discovery**: `discoverRunningComponents()` calls `docker ps --format "{{.Names}}"`, matches against `COMPONENTS[].service?.containerName`. Falls back to `["synap"]` if docker unavailable.
+
+## AI Wiring System
+
+**Central file**: `@eve/dna/src/wire-ai.ts`
+
+All per-component wire functions use `readAgentKeyOrLegacySync()` to resolve the agent key, then write env files + restart containers.
+
+| Component | Wire Function | Storage | Restart |
+|-----------|--------------|---------|---------|
+| OpenWebUI | `wireOpenwebui()` | .env with multi-provider URL list | `docker restart` |
+| OpenClaw | `wireOpenclaw()` | auth-profiles.json via docker exec | **recreate** (not restart) |
+| Hermes | `wireHermes()` | hermes.env AI block | **recreate** |
+| Synap IS | `wireSynapIs()` | synap-backend .env provider keys | `docker restart` |
+
+**Note**: `AI_CONSUMERS_NEEDING_RECREATE` = `["openclaw", "hermes"]` — `docker restart` doesn't pick up new env vars for these; they need full `docker compose up -d` or recreate.
+
+## Three Credentials Model
+
+| Credential | Purpose | Channel | Auth |
+|-----------|---------|---------|------|
+| `cp.userToken` | CP user identity | CP API | Cookie / JWT |
+| `pod.userToken` | Pod user identity (Kratos session) | tRPC `/trpc/*` | Cookie / JWT-Bearer |
+| `pod.agentApiKey` | Hub Protocol API key | HTTP `/api/hub/*` | Bearer token |
+
+**Two-channel rule**:
+- `tRPC /trpc/*` → carries **user identity** (authenticated via cookie/JWT)
+- `Hub Protocol /api/hub/*` → carries **API-key identity** (authenticated via Bearer token)
+- Never mix: user actions go through tRPC, agent/service actions go through Hub Protocol
+
+## Provisioning Token Resolution
+
+**Order** (first match wins):
+
+1. `secrets.pod.bootstrapToken` — typed slot (populated by `eve install`)
+2. `secrets.synap.bootstrapToken` — back-compat alias
+3. `process.env.ADMIN_BOOTSTRAP_TOKEN`
+4. `process.env.EVE_PROVISIONING_TOKEN`
+5. `resolveProvisioningToken()` — probes env vars → .env files → docker inspect on backend container
+
+Same discovery logic as `eve setup admin` CLI.
+
+## Gap Analysis
+
+### What Already Exists
+
+| Capability | Status | Location |
+|-----------|--------|----------|
+| Provision agent keys via CLI | ✅ Working | `POST /api/hub/setup/agent` (pod-side, requires PROVISIONING_TOKEN or CP JWT) |
+| Auto-provision after claim flows | ✅ Working | `POST /api/pod/auto-provision` (fired fire-and-forget after bootstrap-claim and CP claim) |
+| Wire AI config for known consumers | ✅ Working | `wireAllInstalledComponents()` in `@eve/dna` |
+| Three-tier key fallback | ✅ Working | `readAgentKeyOrLegacySync()` — per-agent key → legacy synap.apiKey → eve agent key |
+| Agent listing (API) | ✅ Working | `GET /api/agents` — returns AGENTS[] registry with status/hasKey/container state |
+| Agent listing (UI) | ✅ Working | `/agents` page with radial graph, ActivityFeed, NodePanel, ChannelStrip |
+| Trusted issuers DB + verification | ✅ Working | Pod `/admin/trusted-issuers` (admin UI on the pod, not on Eve dashboard) |
+| Trusted issuer info endpoint | ✅ Working | `GET /api/pod/issuer-info` — returns Eve's JWKS URL for pod admin approval |
+| Settings tabs | ✅ Working | 8 tabs: Account, AI, Intelligence, Channels, Components, Networking, Members, Doctor |
+| Dashboard key rotation | ✅ Working | `/settings` page — rotate dashboard secret |
+| secrets-summary API | ✅ Working | `GET /api/secrets-summary` — redacted summary (AI providers, Synap URL/key) |
+| Channel management | ✅ Working | `/agents` page ChannelStrip + ConnectChannelsModal (Telegram, Discord, WhatsApp) |
+| Test-event pipeline | ✅ Working | `POST /api/agents/test-event` — synthetic event for UI verification |
+| Agent users listing (backend) | ✅ Working | tRPC `agents.list`, `agentUsers.list`, REST `GET /api/hub/agent-users` |
+| API keys listing (backend) | ✅ Working | tRPC `apiKeysRouter.adminListAll`, `apiKeysRouter.listSystemKeys` |
+| External-user sub-token provisioning | ✅ Working | `POST /api/hub/setup/external-user` |
+| Magic link bootstrap | ✅ Working | `POST /api/pod/magic-link` proxy |
+| CP→pod claim | ✅ Working | `POST /api/pod/claim` with CP JWT exchange + auto-provision |
+| Bootstrap claim | ✅ Working | `POST /api/pod/bootstrap-claim` with first-admin creation + auto-provision |
+
+### What's Missing
+
+#### UXP — Agents Management (S-tier priority)
+
+1. **No key visibility** — `GET /api/agents` returns `hasKey: boolean` but not key identity prefix or creation date. Operators can't tell when a key was last rotated or which key prefix is active.
+2. **No key regeneration** — if a key is compromised or expired, no dashboard UI. Must use CLI with PROVISIONING_TOKEN.
+3. **No key revocation** — no way to revoke an agent key from the dashboard. Would require DB access.
+4. **No provision-on-demand** — no manual trigger for a single agent (not all-at-once auto-provision). e.g., "provision Claude Desktop now."
+5. **No agent status → action mapping** — the `/api/agents` list shows `hasKey: false` but provides no "Provision" CTA on the UI.
+6. **No external URL exposure** — after provisioning, the consumer needs the external pod URL. Currently operators must find it themselves. The `secrets-summary` doesn't include it.
+
+#### UXP — Trusted Issuers
+
+7. **No trusted issuer management on Eve** — approval happens at `/admin/trusted-issuers` on the pod itself, which requires SSH access or a separate admin login. Eve dashboard shows issuer-info but can't approve.
+8. **No pending notification** — no banner or alert when a trusted issuer is pending. Admin must remember to check.
+
+#### Architecture — Agent Key Lifecycle
+
+9. **No GET `/api/hub/setup/agent`** — provisioning endpoint is POST-only. No read path for listing what was provisioned via this endpoint (only the DB-level tRPC endpoints, which require user auth).
+10. **No key rotation endpoint** — no REST/tRPC endpoint to rotate a specific agent's API key (delete + re-create).
+11. **No revoke endpoint for agent keys** — `apiKeysRouter.removeByUserId` exists at tRPC level but requires user auth and cascades across all keys, not per-agent.
+12. **No agent-key → container sync tracking** — after provisioning, if `wireAllInstalledComponents` fails for a component (e.g., docker unreachable), the state is lost. No `wiringStatus` persistence.
+
+#### Architecture — Auto-Provision
+
+13. **No retry on auto-provision failure** — fire-and-forget with zero retry. If provision fails, the consumer stays broken.
+14. **No manual re-trigger** — can't easily re-run auto-provision for just one component from the dashboard. The `{ force: true }` option re-provisions all.
+15. **No provision result persistence** — `POST /api/pod/auto-provision` returns results but they're not stored anywhere. After a page refresh, no history of what was provisioned.
+
+#### Architecture — Consumer Health
+
+16. **No consumer health check** — no endpoint to verify that a provisioned agent is actually connecting to the pod.
+17. **No MCP-specific provisioning** — Claude Desktop / MCP bridge is treated as a generic agentType "mcp" with no dedicated flow, no wiring, no consumer config generation.

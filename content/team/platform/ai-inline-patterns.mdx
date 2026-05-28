@@ -1,0 +1,212 @@
+---
+title: 'AI Inline Command Syntax'
+description: >-
+  Pattern syntax for embedding typed references and navigation commands directly in AI text streams.
+  Parser, renderer, IS skill integration.
+section: general
+audience: team
+version: 1.0+
+last_updated: '2026-05-27'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# AI Inline Command Syntax
+
+Agents embed typed patterns directly in prose. The frontend parses and renders them as interactive elements—no extra protocol round-trip. The stream IS the UI protocol.
+
+## Pattern Syntax Reference
+
+### References (Always Safe)
+
+References render as clickable entity links. No permission check required.
+
+```
+[[entity:UUID|Name]]        — General entity by ID
+[[doc:UUID|Title]]          — Document by ID
+[[view:UUID|Name]]          — View (table, kanban, calendar, etc.)
+[[person:UUID|Name]]        — Person profile
+[[widget:CELL_KEY|Label]]   — Widget by registered cell key
+[[automation:UUID|Name]]    — Automation/workflow by ID
+[[channel:UUID|Name]]       — Channel by ID
+```
+
+Common widget cell keys:
+- `entity-list`, `view-kanban`, `view-table`, `view-calendar`
+- `stat-card`, `ai-chat`, `iframe-widget`
+- (See `cellRegistry.getAll()` for full list)
+
+### Commands (Permission-Gated)
+
+Commands render as action chips. Permission check determined by workspace `aiGovernance.navigationPermissions`.
+
+```
+[[open:PLACEMENT|TYPE:ID]]
+[[run:UUID|Label]]
+```
+
+**Placements:**
+- `side` — side panel (companion or right dock)
+- `main` — main content area
+- `companion` — companion panel (if available)
+- `floating` — floating modal/popover
+
+**Resource types:**
+- `view` — view by UUID
+- `entity` — entity by UUID
+- `doc` — document by UUID
+- `cell` — cell by registered key
+- `channel` — channel by UUID
+
+**Examples:**
+```
+[[open:side|view:abc-123]]       — suggest opening view in side panel
+[[open:main|cell:view-kanban]]   — suggest kanban cell in main
+[[open:companion|channel:xyz]]   — suggest channel in companion
+[[run:automation-456|Sync Data]] — suggest running automation
+```
+
+## Syntax Rules
+
+**Separator:** Pipe (`|`) is canonical. Colon (`:`) supported for backward compatibility.
+
+Both valid:
+```
+[[entity:uuid|Name]]  ← preferred
+[[entity:uuid:Name]]  ← accepted
+```
+
+**Pattern regex:** `/\[\[(\w+):([^\]|:]+)[|:]([^\]]*)\]\]/g`
+
+Captures:
+1. Kind (`entity`, `open`, `run`, etc.)
+2. ID or key (UUID or `CELL_KEY`)
+3. Label (optional, falls back to ID)
+
+## @synap-core/message-parser
+
+Location: `synap-app/packages/core/message-parser/src/`
+
+**`parseInlinePatterns(text): ParseResult`**
+
+Extracts all patterns from text as structured objects.
+
+```typescript
+interface PatternEvent {
+  kind: 'entity' | 'doc' | 'view' | 'person' | 'widget' | 'automation' | 'channel' | 'open' | 'run';
+  id?: string;              // For references and run commands
+  cellKey?: string;         // For widget references
+  label: string;
+  // For open commands:
+  placement?: 'side' | 'main' | 'companion' | 'floating';
+  resourceType?: 'entity' | 'view' | 'doc' | 'cell' | 'channel';
+  resourceId?: string;
+}
+```
+
+**`resolvePatternMarkers(text): string`**
+
+Transforms patterns into markdown-compatible URLs for ReactMarkdown:
+
+- `[[entity:UUID|Name]]` → `[Name](entity://UUID)`
+- `[[view:UUID|Name]]` → `[Name](view://UUID)`
+- `[[widget:KEY|Label]]` → `[Label](widget://KEY)`
+- `[[open:placement|type:id]]` → `[Open in placement](open://placement/type/id)`
+- `[[run:UUID|Label]]` → `[Label](run://UUID)`
+
+Invalid patterns are skipped silently.
+
+## Frontend Rendering (MessageContent)
+
+Location: `synap-app/packages/core/chat-ui/src/components/MessageContent.tsx`
+
+Uses ReactMarkdown with custom `a` component handler.
+
+**Link handling:**
+
+| Scheme | Component | Behavior |
+|--------|-----------|----------|
+| `entity://`, `doc://`, `view://`, etc. | `EntityLink` | Clickable text (dotted underline), calls `onEntityLinkClick(id, type)` |
+| `widget://` | `EntityLink` | Same as entity links, type='widget' |
+| `open://placement/type/id` | Inline chip | Amber background, ↗ icon, calls `onCommand({ kind: 'open', ... })` |
+| `run://id` | Inline chip | Emerald background, ▶ icon, calls `onCommand({ kind: 'run', ... })` |
+| `http://`, `https://` | Normal link | Opens in new tab |
+
+**Inline chips:**
+
+```tsx
+<button onClick={() => onCommand?.({ kind: 'open', placement, resourceType, resourceId })}>
+  ↗ Open in {placement}
+</button>
+```
+
+Styled with `--companion-primary-light` background, `--companion-primary` text.
+
+Run chips use `--companion-ai` (emerald).
+
+## IS Skill System
+
+Location: `synap-intelligence-service/apps/intelligence-hub/src/skills/ui-patterns.md`
+
+**Trigger:** Automatically loaded for agents with ANY of these tools:
+- `search_unified`, `search_entities`, `search_documents`, `vector_search`
+- `memory_search`, `remember_fact`
+- `list_entities`, `get_entity`
+- `generate_widget`, `create_view`, `create_entity`
+
+Virtually all conversational agents load this skill.
+
+**Content:**
+
+Teaches pattern syntax and best practices. Examples:
+
+```markdown
+After finding a deal:
+> I found the deal [[entity:abc-123|Q1 Enterprise Deal]].
+> You can [[open:side|entity:abc-123]] to see all details.
+
+After creating a widget:
+> Here's a [[widget:view-kanban|Deals Kanban]].
+> [[open:main|cell:view-kanban]] to open it.
+
+Referencing multiple things:
+> Your top deals are [[entity:a1|Deal A]], [[entity:b2|Deal B]], and [[entity:c3|Deal C]].
+> See the [[view:v1|full pipeline]] to compare them all.
+```
+
+**Reinforcement:** `SECTION_PROACTIVE_LINKING` in `prompt-sections.ts` reinforces pattern usage at prompt composition time.
+
+## When to Use Each Pattern
+
+| Pattern | Use When |
+|---------|----------|
+| `[[entity:id\|Name]]` | Mention a specific entity found via search or created by agent |
+| `[[view:id\|Name]]` | Recommend opening a view (kanban, table, calendar) |
+| `[[doc:id\|Title]]` | Reference a document attachment or knowledge base entry |
+| `[[widget:key\|Label]]` | After generating a widget, reference it by cell key |
+| `[[open:side\|...]]` | Suggest opening something in the right panel |
+| `[[open:main\|...]]` | Suggest opening something in the main work area |
+| `[[open:companion\|...]]` | Suggest opening a channel conversation in companion |
+| `[[run:id\|Label]]` | Offer to trigger an automation after describing it |
+
+## Best Practices
+
+1. **Use real IDs only** — Always from tool results or database, never fabricated
+2. **Reference before commanding** — Mention the resource first in prose, optionally suggest where to open it
+3. **One command per resource** — Don't repeat the same `[[open:...]]` pattern
+4. **Don't overload** — Use patterns when they add value, not in every sentence
+5. **Suggest, don't force** — `[[open:...]]` is a suggestion; user always controls navigation
+
+## Known Gaps
+
+- `[[open:...]]` chips in `CompanionCell` parse and render but `onCommand` → `runtime.openSurface()` wiring has a pending gap in the pattern handler registry for certain resource types
+- Eve dashboard has no `CellRuntimeProvider` so `onCommand` is a no-op (Eve can't navigate)
+- Widget cell key discovery requires live registry lookup; agents trained on static list may suggest non-existent keys
+
+## Related
+
+- [AI Companion Architecture](./ai-companion.mdx) — How patterns are rendered in CompanionCell
+- [Hub Protocol](./hub-protocol.mdx) — AI ↔ Backend communication; separate from AI ↔ UI patterns
+- [Proposals and Governance](../governance/proposals-governance/index.mdx) — How navigation permissions are checked

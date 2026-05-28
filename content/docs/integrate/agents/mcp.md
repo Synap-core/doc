@@ -6,7 +6,7 @@ description: >-
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-19'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -17,7 +17,7 @@ toc: true
 
 Synap exposes an [MCP](https://modelcontextprotocol.io/) server at `{pod}/mcp`. Any MCP-capable client — Claude Desktop, Cursor, custom agents — can connect and invoke Synap tools directly.
 
-MCP is the direct-tool-call alternative to skills. Where skills teach the AI *how* to use Synap via markdown, MCP gives the AI a typed function-call interface. Both are governed the same way — writes go through `checkPermissionOrPropose()`.
+MCP is the direct-tool-call alternative to skills. Where skills teach the AI *how* to use Synap via markdown, MCP gives the AI a typed function-call interface. Synap exposes 27 tools across entity management, memory, knowledge, channels, proposals, and workspace operations. Both are governed the same way — writes go through `checkPermissionOrPropose()`.
 
 ---
 
@@ -38,21 +38,83 @@ Source: [`packages/api/src/routers/mcp/`](https://github.com/Synap-core/backend/
 
 ## Exposed tools
 
-A compact set focused on high-value operations:
+**Session & Discovery**
+
+| Tool | Purpose |
+|---|---|
+| `synap_orient` | Bootstrap context: returns your identity, workspaces, and available entity types. Call first in any session. |
+| `synap_governance` | Check auto-approve vs review policy for a workspace. Returns pending proposals. |
+
+**Entities**
 
 | Tool | Purpose |
 |---|---|
 | `synap_search` | Unified keyword search across all entities |
-| `synap_search_entities` | Filtered search by profile, properties, date |
-| `synap_create_entity` | Create an entity with properties and links |
-| `synap_update_entity` | Patch properties or title of an existing entity |
-| `synap_create_relation` | Link two entities with a typed relation |
-| `synap_get_entity` | Fetch one entity by id, optionally with connections |
-| `synap_recall_memory` | Keyword search on stored facts |
-| `synap_store_memory` | Save a fact as plain text |
-| `synap_send_to_channel` | Post a message to a Synap channel |
+| `synap_search_entities` | Filtered entity search by profile type, properties |
+| `synap_get_entities` | List entities by type with pagination |
+| `synap_get_entity` | Fetch one entity by id |
+| `synap_create_entity` | Create an entity (use `profileSlug`, not `type`) |
+| `synap_update_entity` | Patch title, metadata, or `properties` JSONB |
 
-These are curated — not a 1:1 mirror of Hub Protocol's 76+ endpoints. For the full surface (profile creation, view generation, capture pipeline), use the [Hub Protocol REST API](../integrations/sdk-direct) directly or install the [skills](./skills).
+**Relations & Graph**
+
+| Tool | Purpose |
+|---|---|
+| `synap_get_relations` | List relations for an entity |
+| `synap_link_entities` | Create a typed relation between two entities |
+
+**Memory**
+
+| Tool | Purpose |
+|---|---|
+| `synap_remember_fact` | Store a fact in long-term memory |
+| `synap_recall_facts` | Keyword search on stored facts |
+
+**Knowledge**
+
+| Tool | Purpose |
+|---|---|
+| `synap_get_knowledge` | Read a knowledge document by key |
+| `synap_list_knowledge` | List knowledge documents in a namespace |
+| `synap_write_knowledge` | Create or update a knowledge document |
+
+**Documents**
+
+| Tool | Purpose |
+|---|---|
+| `synap_create_document` | Create a Markdown document |
+| `synap_get_document` | Read a document by id |
+
+**Channels & Messaging**
+
+| Tool | Purpose |
+|---|---|
+| `synap_get_channel` | Get personal channel or channel by entity context |
+| `synap_post_message` | Post to a channel/thread, optionally trigger AI response |
+| `synap_send_message` | Simple message insert into a channel |
+
+**Proposals & Governance**
+
+| Tool | Purpose |
+|---|---|
+| `synap_list_proposals` | List pending proposals in a workspace |
+| `synap_revise_proposal` | Update a pending proposal's summary or reasoning |
+
+**Workspace & Structure**
+
+| Tool | Purpose |
+|---|---|
+| `synap_list_profiles` | List entity types (profiles) in a workspace |
+| `synap_create_workspace` | Provision a workspace from a definition |
+| `synap_create_view` | Create a view (table/kanban/bento/etc.) in a workspace |
+
+**Capture**
+
+| Tool | Purpose |
+|---|---|
+| `synap_capture` | Parse unstructured text into entity proposals |
+
+All 27 tools route through the Hub Protocol REST API. For lower-level access or streaming operations, use the [Hub Protocol REST API](../integrations/sdk-direct) directly.
 
 ---
 
@@ -141,8 +203,8 @@ The `@synap-core/mcp-server` bridge translates stdio MCP messages into HTTP call
 
 Every tool call passes through the same proposal system as every other surface:
 
-- `synap_search`, `synap_get_entity`, `synap_recall_memory` — always auto-approved (reads)
-- `synap_create_entity`, `synap_update_entity`, `synap_create_relation`, `synap_store_memory`, `synap_send_to_channel` — auto-approved when the action is in the workspace's whitelist; otherwise returns `proposed` with a `proposalId`
+- **Reads** (`synap_search*`, `synap_get_*`, `synap_recall_*`, `synap_list_*`, `synap_orient`, `synap_governance`) — always auto-approved
+- **Writes** (`synap_create_*`, `synap_update_*`, `synap_link_*`, `synap_remember_*`, `synap_write_*`, `synap_post_*`, `synap_send_*`, `synap_revise_*`, `synap_capture`) — auto-approved when the action is in the workspace's whitelist; otherwise returns `proposed` with a `proposalId`
 
 An MCP `tool call` with status `proposed` is not an error. The client should surface "queued for review" to the user. The actual write happens asynchronously when the user approves.
 

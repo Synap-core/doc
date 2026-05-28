@@ -1,0 +1,113 @@
+---
+title: 'Connectors'
+description: 'External data integrations — current state, limitations, and the path to standalone connector support'
+section: crm
+last_updated: '2026-05-14'
+tags: [connectors, integrations, google-drive, nango, unipile, messaging]
+toc: true
+---
+
+# Connectors
+
+Connectors bring external data (Google Calendar, Google Drive, GitHub, Slack, etc.) into the Synap entity system. In the CRM context, the most relevant connectors are **Google Drive** (shared client files) and **Google Calendar** (meeting events linked to contacts).
+
+---
+
+## Current State
+
+The Synap connector system is built on **Nango** — an OAuth connector platform. The current architecture routes all connector setup through the **Control Plane (CP)**:
+
+```
+User → CP dashboard → Nango OAuth flow → credentials stored in CP
+                                        → synced to pod on request
+```
+
+This means:
+- A user must have a CP account to connect any external service
+- Connector credentials live on the CP, not on the pod
+- Each pod fetches credentials from CP when needed
+- Self-hosted or standalone pod deployments (Eve network) cannot use connectors without CP access
+
+This is an architectural dependency that breaks the self-sovereignty model for standalone deployments.
+
+---
+
+## Desired State
+
+Connectors should be configurable **directly on the pod**, without CP involvement. The target architecture:
+
+```
+User → Pod settings → OAuth flow (Nango or equivalent, pod-local) → credentials stored on pod
+                                                                    → used directly by pod workers
+```
+
+### What changes
+
+| Concern | Current | Desired |
+|---|---|---|
+| OAuth flow initiation | CP dashboard | Pod settings UI |
+| Credential storage | CP database | Pod (encrypted, workspace-scoped entity) |
+| Credential retrieval | CP API call | Pod-local lookup |
+| Setup requirement | CP account | None — any pod user with admin role |
+| Works offline/standalone | No | Yes |
+
+### Implementation path
+
+1. **Nango self-hosted** — Nango supports self-hosted deployment. Running Nango as a service alongside the pod (in the Eve docker-compose stack) eliminates the CP dependency while keeping the same connector abstractions.
+2. **Pod-local credential entity** — Store connector tokens as encrypted entities in the `arch_config`-style singleton pattern, scoped to the workspace.
+3. **Settings UI on pod** — Connector setup lives in the pod's workspace settings, not CP.
+
+This is infrastructure work tracked as a separate initiative. It does not block CRM Phase 1–3 for users who have CP access. It is a prerequisite for standalone Eve deployments.
+
+---
+
+## CRM-Relevant Connectors
+
+### Google Drive
+**Use case**: Attach Drive files to company or person entities. Show linked Drive documents in the client dashboard.
+
+**How it works** (when connected):
+- The Google Drive connector syncs files shared with a configured Drive folder into Synap as `file` entities
+- Files can be linked to a person or company via the relationship system
+- The client dashboard "Google Drive" section queries relationships of type `drive_file → person`
+- Files open directly in Drive (external link) or preview inline (PDF, Docs)
+
+**Setup**: One-time OAuth connection per workspace. Files to sync are configured by folder path or sharing label.
+
+### Google Calendar
+**Use case**: Pull meeting events linked to a contact into the activity timeline.
+
+**How it works**:
+- Calendar events that include a contact's email are automatically linked to that person entity
+- Events appear in the Activity timeline alongside manual notes and tasks
+- Upcoming meetings show in the contact detail header ("Next meeting: Tomorrow at 14:00")
+
+### Slack (future)
+**Use case**: Post CRM notifications to a team Slack channel (new client, stuck deal, contract signed).
+
+### Other connectors
+The platform supports 12 providers (GitHub, Notion, Linear, Dropbox, Todoist, etc.). CRM-specific use cases for these are not planned in the current roadmap but are available if team workflows require them.
+
+---
+
+---
+
+## Messaging Connectors — Unipile
+
+Separate from Nango, the CRM has a **messaging layer** powered by Unipile. This covers real-time inbox access across LinkedIn DMs, WhatsApp, Telegram, Instagram, Messenger, Twitter/X, Gmail, and Slack.
+
+This is **not** a sync connector — it does not pull structured records. It maintains per-user connected accounts and receives push webhooks for incoming messages.
+
+**Setup**: CRM Settings → Integrations → Messaging Service (DSN + API key).
+
+**Connection flow**: User clicks "Connect Account" → Unipile hosted auth wizard → account auto-syncs via `notify_url` webhook → appears in Connected Accounts.
+
+Full design: [Messaging Layer — Unipile](./messaging-unipile.mdx)
+
+---
+
+## For Phase 1–3
+
+CRM features that depend on connectors (Google Drive section on client dashboard) are implemented but show a **"Connect Google Drive" prompt** when no connector is configured. The rest of the dashboard functions fully without connectors.
+
+Connector setup instructions are in the CRM settings page.

@@ -56,30 +56,34 @@ Full decision record: `hestia-cli/docs/openclaw-vs-hermes.md`
 ```yaml
 # service: eve-builder-hermes
 image: nousresearch/hermes-agent:latest
+container_name: eve-builder-hermes
 ports:
-  - "8642:8642"   # OpenAI-compat API gateway
-  - "9119:9119"   # Admin dashboard
-  - "9120:9120"   # MCP server (MCP_SERVER_ENABLED=true)
+  - "8642:8642"   # OpenAI-compat gateway (part of `hermes gateway`)
+  - "9119:9119"   # Admin dashboard (enabled via config.yaml)
+  - "9120:9120"   # MCP server (enabled via config.yaml)
 volumes:
   - ~/.eve/hermes:/opt/data  # HERMES_HOME — config, plugins, sessions
   - ~/.eve/skills:/opt/data/skills:ro  # Synap Hub skill reference
 environment:
   HERMES_HOME: /opt/data
-  API_SERVER_ENABLED: "true"
-  API_SERVER_PORT: "8642"
-  MCP_SERVER_ENABLED: "true"
 env_file:
   - ~/.eve/hermes.env
+# Default entrypoint: `hermes gateway`
+# API server, messaging platforms, and MCP all start together
 ```
 
-Key files on host (all inside `~/.eve/hermes/`):
+**How it works:** The official `nousresearch/hermes-agent:latest` image ships with `hermes gateway` as its default Docker entrypoint. When `hermes.env` contains `API_SERVER_ENABLED=true` and `API_SERVER_KEY=...`, the gateway command automatically starts the OpenAI-compatible API server alongside the messaging platform connectors (Telegram, Discord, etc.) and MCP tools — all in a single process.
+
+**Key files on host (all inside `~/.eve/hermes/`):**
 
 | File | Purpose |
 |------|---------|
-| `config.yaml` | Memory provider, model, MCP server config, API server key |
-| `hermes.env` | Hub credentials, channel tokens, AI wiring |
+| `config.yaml` | Memory provider, model, advanced config (MCP/dashboard enabled via config.yaml) |
+| `hermes.env` | Hub credentials, channel tokens, API_SERVER_KEY, channel routing |
 | `plugins/memory/synap/__init__.py` | Synap MemoryProvider plugin |
 | `plugins/memory/synap/plugin.yaml` | Plugin manifest |
+
+**Important:** Do NOT override the entrypoint with `python -m hermes.api_server`. This was a prior bug that only started the API server without messaging, MCP, or tool support. The correct pattern is: trust the default entrypoint + set env vars in `hermes.env` + config in `config.yaml`.
 
 ---
 
@@ -125,7 +129,7 @@ Memory written by the Hermes agent key is dual-attributed to both the agent iden
 
 **`rest/memory.ts` dual-write** — after saving a fact under the agent identity, if `linkedUserId ≠ userId`, the same fact is written again for the linked human (non-fatal; silently dropped on error).
 
-**Remaining gap:** The lifecycle does not yet automatically resolve the pod owner's userId and pass it as `linkedUserId` when provisioning the Hermes agent key. The endpoint accepts it; the caller doesn't supply it yet.
+**Auto-resolve:** `POST /setup/agent` auto-resolves `linkedUserId` — if not supplied in the request body, it queries for the first human user on the pod and uses that id. Pass an explicit empty string `""` to opt out. Closed in migration `0021_api_keys_linked_user_id.sql`.
 
 ---
 
@@ -187,10 +191,10 @@ wireSynapIs()     → /opt/synap-backend/deploy/.env (OPENAI/ANTHROPIC/OPENROUTE
 wireHermes()      → ~/.eve/hermes.env (AI_BASE_URL, AI_API_KEY, AI_DEFAULT_MODEL)
                     + writeHermesConfigYaml() → ~/.eve/hermes/config.yaml (+ MCP block)
                     + generateSynapPlugin()   → ~/.eve/hermes/plugins/memory/synap/
-                    + docker restart eve-builder-hermes
+                    + docker rm -f + docker run (recreate so new env-file values take effect)
 wireOpenwebui()   → /opt/openwebui/.env (OPENAI_API_BASE_URLS with both IS + Hermes)
                     + docker compose up -d (re-reads .env)
-                    ⚠ pipeline upload not yet wired
+                    ⚠ pipeline upload not yet wired (synap_hermes_dispatch.py exists)
 wireOpenclaw()    → docker exec (for users who keep OpenClaw installed; deprecated flow)
 ```
 
@@ -211,6 +215,41 @@ Three skill systems, one decision per system:
 The skills dir (`~/.eve/skills/`) is mounted read-only at `/opt/data/skills` in the container. Hermes reads SKILL.md files as slash-command references, giving it access to Hub Protocol endpoints without any custom code.
 
 `GET /api/hub/skills/system` lists all three skill packages (synap, synap-schema, synap-ui). `POST /api/hub/skills/:id/execute` triggers user-created DB skills via the IS.
+
+---
+
+## Native Tool Suite (v2.0.0 — shipped)
+
+`SynapMemoryProvider` v2.0.0 exposes a **22-tool suite** to Hermes's LLM via the `get_tool_schemas` / `handle_tool_call` hooks. The tools map directly to Hub Protocol endpoints — the Python plugin is the execution layer, the JSON schemas are what the LLM sees.
+
+| Tool | Hub endpoint | Purpose |
+|------|-------------|---------|
+| `synap_orient` | `GET /entity-types` | Discover profiles + workspace context |
+| `synap_governance` | `GET /settings/proactive-ai` | Read proactive AI preferences |
+| `synap_entity_create` | `POST /entities` | Create any entity (note, task, deal, …) |
+| `synap_entity_get` | `GET /entities/:id` | Fetch entity + properties |
+| `synap_entity_update` | `PATCH /entities/:id` | Update entity properties |
+| `synap_entity_search` | `GET /entities/search` | Full-text entity search |
+| `synap_relation_create` | `POST /relations` | Link two entities |
+| `synap_relation_list` | `GET /relations` | List entity relations |
+| `synap_remember` | `POST /memory` | Write a fact to knowledge graph |
+| `synap_recall` | `GET /memory/search` | Semantic search over knowledge |
+| `synap_knowledge_read` | `GET /knowledge/:id` | Read a knowledge fact |
+| `synap_knowledge_write` | `PUT /knowledge/:id` | Upsert a knowledge fact |
+| `synap_document_create` | `POST /documents` | Create a rich-text document |
+| `synap_document_read` | `GET /documents/:id` | Read document content |
+| `synap_capture` | `POST /capture/structure` | AI-structure raw text into entities |
+| `synap_workspace_create` | `POST /workspaces/from-definition` | Scaffold a workspace from a definition |
+| `synap_view_create` | `POST /views` | Create a view |
+| `synap_channel_get` | `GET /channels/:id` | Get channel details |
+| `synap_channel_message` | `POST /channels/:id/messages` | Post a message to a channel |
+| `synap_search` | `GET /search` | Cross-resource full-text search |
+| `synap_proposal_list` | `GET /proposals` | List pending proposals |
+| `synap_proposal_revise` | `PATCH /proposals/:id` | Approve / reject a proposal |
+
+All handlers are proposal-aware: when `checkPermissionOrPropose()` returns `{ granted: false }` the tool returns `{ status: "pending_approval", proposalId, reviewUrl }` instead of throwing.
+
+Source: `hestia-cli/packages/@eve/dna/src/builder-hub-wiring.ts` → `SYNAP_PROVIDER_PY` / `TOOL_SCHEMAS`.
 
 ---
 
@@ -247,7 +286,7 @@ Backed by `webhook_subscriptions` table (migration `0022_webhook_subscriptions.s
 
 Drizzle schema: `synap-backend/packages/database/src/schema/webhook_subscriptions.ts`.
 
-**Remaining gap:** The event chain delivery step is not yet wired. Routes exist and subscriptions are stored, but the event router (`event-emit.ts`) does not yet dispatch to matching webhook URLs with HMAC signing after socket fanout.
+**Delivery wired (Phase 5 complete):** `emitChatEvent` in `chat-realtime-broadcast.ts` now calls `dispatchWebhooksForEvent(event, data)` (fire-and-forget) after socket fanout. Each matching active subscription receives a POST with `X-Synap-Signature-256: sha256=<hmac>` and `X-Synap-Event: <type>` headers. Implemented in `packages/api/src/utils/webhook-delivery.ts`.
 
 ---
 
@@ -275,25 +314,25 @@ eve add hermes       # installHermes() in @eve/lifecycle
                      #   2. writeHermesConfigYaml() — memory.provider: synap + MCP server block
                      #   3. generateSynapPlugin() — Python plugin
                      #   4. docker pull nousresearch/hermes-agent:latest
-                     #   5. docker run -p 8642:8642 -p 9119:9119 -p 9120:9120 \
-                     #              -v ~/.eve/hermes:/opt/data \
-                     #              -v ~/.eve/skills:/opt/data/skills:ro \
-                     #              --env-file ~/.eve/hermes.env
+                     #   5. docker run -d --name eve-builder-hermes (default entrypoint: hermes gateway)
 
 eve update hermes    # UPDATE_PLAN.hermes → docker pull + postUpdateReconcileHermes()
                      #   regenerates config + plugin so new image boots with current wiring
 
-eve ai apply         # wireHermes() — re-writes env + config + plugin, restarts container
+eve ai apply         # wireHermes() — re-writes env + config + plugin, recreates container
 ```
+
+The container uses the official image's default entrypoint (`hermes gateway`), which starts the API server, messaging platforms, and MCP all together. No `--entrypoint` override.
 
 ---
 
 ## What's Still Remaining
 
-| Gap | Detail |
-|-----|--------|
-| Event chain → webhook delivery | Routes exist, subscriptions persist; event router doesn't yet dispatch to matching URLs with HMAC signing |
-| Lifecycle sets `linkedUserId` automatically | `POST /setup/agent` accepts it; lifecycle doesn't fetch pod owner userId yet |
-| `wireOpenwebui()` pipeline upload | `synap_hermes_dispatch.py` exists; upload call not yet added to `wireOpenwebui()` |
-| Channel add flow GUI | Editing `secrets.json` manually required; Eve Dashboard Channels page is still read-only |
-| `skill_execution_log` / Skills log page | No execution history surface yet |
+| Gap | Status | Detail |
+|-----|--------|--------|
+| Event chain → webhook delivery | ✅ **Closed** | `dispatchWebhooksForEvent` wired in `emitChatEvent`; HMAC-signed POST to each subscriber |
+| Lifecycle sets `linkedUserId` automatically | ✅ **Closed** | `POST /setup/agent` auto-resolves to first human user on pod; explicit `""` to opt out |
+| `wireOpenwebui()` pipeline upload | ⏳ Open | `synap_hermes_dispatch.py` exists; upload call not yet added to `wireOpenwebui()` |
+| Channel add flow GUI | ⏳ Open | Editing `secrets.json` manually required; Eve Dashboard Channels page is still read-only |
+| `skill_execution_log` / Skills log page | ⏳ Open | No execution history surface yet |
+| Hermes tool suite | ✅ **Closed** | `SynapMemoryProvider` v2.0.0 — 22 tools covering full Hub Protocol surface (entities, memory, documents, search, proposals, workspaces, channels) |

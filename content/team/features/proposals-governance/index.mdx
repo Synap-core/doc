@@ -4,19 +4,26 @@ description: 'Governance layer — proposal system for AI mutations, RBAC, appro
 surfaces: ['browser', 'relay', 'studio']
 repos: ['synap-app', 'synap-backend']
 status: 'shipped'
-last_updated: '2026-04-20'
+last_updated: '2026-05-14'
 ---
 
 # Proposals & Governance
 
-The governance layer keeps humans in the loop when AI agents and external connectors mutate data. Direct user mutations go through tRPC/Drizzle normally. AI mutations and external syncs go through `checkPermissionOrPropose()`.
+The governance layer keeps humans in the loop when AI agents and external
+connectors mutate data. Direct user mutations go through tRPC/Drizzle normally.
+AI mutations and external syncs go through `checkPermissionOrPropose()`.
+
+Proposals are part of the event chain. A proposal represents a requested mutation
+that did not execute automatically because governance required review.
 
 ## Proposal flow
 
 | Step | Description |
 |------|-------------|
-| **Proposal creation** | When an AI agent or external connector needs to mutate data, `checkPermissionOrPropose()` is called. It either auto-approves (if in DEFAULT_AUTO_APPROVE whitelist) or creates a proposal for user review. |
-| **Proposal review** | Proposals appear in the "Proposals" tab of the browser app. Users see what was changed, who requested it, and can approve/reject. Timeline tracking shows the full history. |
+| **Request event** | Mutating routes emit `*.requested` with a `correlationId` before governance decides whether the action can execute. |
+| **Proposal creation** | `checkPermissionOrPropose()` either grants, denies, auto-approves, or calls the canonical `createPendingProposal()` helper. Explicit approval endpoints use `createEventBackedProposal()`, which emits the requested event then delegates to `createPendingProposal()`. |
+| **Proposal review** | Proposals appear in Inbox/Studio/Eve review surfaces. Users see the request summary, semantic changes, actor/target names, reasoning, and correlated event chain. |
+| **Approval** | Approval emits `*.validated` with the same `correlationId`; workers/materializers apply the change and emit `*.completed`. |
 
 ## Proposal types
 
@@ -32,16 +39,26 @@ The proposal system manages:
 
 ## Governance principles
 
-1. **Direct user mutations** → tRPC/Drizzle (no proposal)
-2. **AI mutations** → `checkPermissionOrPropose()` → proposal → approval → mutation
-3. **External connector syncs** → `checkPermissionOrPropose()` → proposal → approval → mutation
-4. **Default auto-approve whitelist** → `DEFAULT_AUTO_APPROVE` config for low-risk mutations
-5. **RBAC** → Role-based access control on proposal actions
+1. **Direct user mutations** → tRPC/Drizzle after normal workspace permission checks.
+2. **Governed mutations** → `.requested` event → `checkPermissionOrPropose()` → grant, deny, auto-approve, or pending proposal.
+3. **Explicit proposal requests** → `createEventBackedProposal()` → `.requested` event → `createPendingProposal()`.
+4. **Approval** → `.validated` event → materialization → `.completed` event.
+5. **Default auto-approve whitelist** → `DEFAULT_AUTO_APPROVE` config for low-risk mutations.
+6. **RBAC** → Role-based access control on proposal review actions.
+
+## Backend invariants
+
+- Do not insert pending proposals directly in routers.
+- Use `checkPermissionOrPropose()` for normal writes.
+- Use `createEventBackedProposal()` only for endpoints whose job is to create a proposal directly.
+- `createPendingProposal()` is the only pending-proposal insert helper and owns proposal notifications/side effects.
+- Preserve `correlationId` from requested → proposal → validated → completed.
 
 ## Key files
 
-- Permission check: `synap-backend/packages/api/src/utils/permission-check.ts`
-- Proposal types: `@synap-core/proposal-types` (ProposalWithRequest, buildRequestFromProposal, UniversalProposal)
-- Proposals tab: `browser/electron/renderer/src/apps/proposals`
+- Permission check + canonical pending insert: `synap-backend/packages/api/src/utils/permission-check.ts`
+- Explicit proposal helper: `synap-backend/packages/api/src/utils/event-backed-proposal.ts`
+- Proposal types/review contract: `@synap-core/proposal-types` (`UniversalProposal`, `ProposalReviewModel`)
+- Proposal routers: `synap-backend/packages/api/src/routers/proposals.ts`
 - AI action cells: 3 kinds (ai-proposed-action, ai-doc-proposal, ai-workspace-proposal) in `@synap/ai-action-cells`
 - Proposal review: [/team/platform/proposals](/team/platform/proposals)

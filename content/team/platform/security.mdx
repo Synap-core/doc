@@ -328,7 +328,7 @@ createEntity: scopedProcedure(["hub-protocol.write"]).mutation(
 | `backgroundTasks.*`                | Via `regularBgTasksRouter`             |     All    | Correct                                                                   |
 | `documents.getDocument`            | Via `regularDocumentsRouter`           |  Layer 1+2 | Read only                                                                 |
 | `documents.createDocument`         | Governance check + direct DB           |     All    | Fixed: checkPermissionOrPropose, content in proposal JSONB until approved |
-| `documents.createDocumentProposal` | **Direct DB**                          |   ❌ None    | Creates proposal (intentional — IS the governed action)                   |
+| `documents.createDocumentProposal` | `createEventBackedProposal()`          |     All    | Emits `.requested`, then uses canonical pending proposal insert            |
 | `branches.createBranch`            | Governance check + delegate            |     All    | Fixed: always proposal; executes via channelsRouter on approval           |
 | `branches.mergeBranch`             | Governance check + delegate            |     All    | Fixed: always proposal; user must validate every merge                    |
 | `linking.linkEntity`               | `checkPermissionOrPropose` + direct DB |     All    | Auto-approved via "context.\*" whitelist; workspace membership verified   |
@@ -514,14 +514,17 @@ The `createdByUserId` link enables per-human AI attribution — each user's AI a
 All significant operations emit events to the `events` table:
 
 - `.requested` phase: emitted before the permission check
+- pending proposal rows store `correlationId` and, when available,
+  `requestedEventId` in `proposals.data`
+- `.validated` phase: emitted when a request-shaped proposal is approved
 - `.completed` phase: emitted after successful DB write
-- `correlationId` links the two events together
+- `correlationId` links requested → proposal → validated → completed
 
 The `events` table is append-only (no updates/deletes). Fields:
 
 - `source`: `"api"` (default), `"ai"` (when AI agent — **currently not set, gap P0-6**)
 - `userId`: who triggered it (human or agent user ID)
-- `correlationId`: links .requested → .validated → .completed chain
+- `correlationId`: links .requested → proposal → .validated → .completed chain
 
 ---
 

@@ -1,0 +1,91 @@
+# ADR: Self-Hosted Nango on Eve
+
+**Status**: Accepted  
+**Date**: 2026-05-12
+
+---
+
+## Context
+
+Nango (OAuth integration platform) was initially wired into the Synap control plane (`synap-control-plane-api`). Every OAuth session creation, token refresh, and sync trigger required a round-trip through the CP.
+
+Problems with this:
+- **Single point of failure**: if the CP is unavailable, no user can connect or re-auth a Google/Slack account on their pod
+- **Hard CP dependency**: self-hosted pods without a CP subscription lose all connector functionality
+- **Latency**: token refresh and sync triggers add a CP round-trip for every OAuth operation
+- **Sovereignty contradiction**: user data should live on the pod — but OAuth tokens were stored in the CP-side Nango instance
+
+The audit (2026-05-12) confirmed `NANGO_CONNECTORS_ENABLED` is `false` everywhere and no Nango keys are configured in production. The feature is code-complete but fully dormant — a clean moment to correct the architecture before it ships.
+
+---
+
+## Decision
+
+**Nango runs as a managed Docker service on the pod server**, alongside kratos and hydra, managed by the Eve CLI (`hestia-cli`).
+
+- Docker image: `nangohq/nango:latest`
+- Default port: `3003`
+- Launched via: `eve add nango`
+- Eve CLI generates a random `NANGO_SECRET_KEY` on first install and stores it in `secrets.json` under `connectors.nango.secretKey`
+- Pod env vars written automatically to `deploy/.env`: `NANGO_HOST=http://localhost:3003`, `NANGO_SECRET_KEY=<generated>`
+- When `PUBLIC_URL` is set in `deploy/.env`, `NANGO_WEBHOOK_URL` is also injected into the container so Nango pushes sync events back to the pod
+
+The CP no longer participates in OAuth flows. The pod-side `NangoConnector` (`packages/api/src/connectors/NangoConnector.ts`) calls `http://localhost:3003` directly.
+
+---
+
+## Consequences
+
+**Positive**
+- Pods are fully self-sufficient — connectors work with no CP connection
+- Works on-premises / air-gapped deployments
+- OAuth tokens stay on the user's pod (data sovereignty preserved)
+- Eve CLI owns the complete integration stack: kratos + hydra + nango
+- No CP round-trip latency on token refresh or sync trigger
+
+**Neutral**
+- Each pod maintains its own Nango instance (intended — user data stays local)
+- User must configure OAuth app credentials (Google client ID/secret, etc.) once per pod via the Nango admin UI at `http://<pod-host>:3003`
+- `synap-control-plane-api` Nango code (`src/lib/nango.ts`) remains but is no longer the primary path — can be removed in a future cleanup
+
+**Negative**
+- Nango Docker image adds ~500MB to pod disk footprint
+- User needs to create their own Google Cloud project for OAuth (same as self-hosted Kratos requirement today)
+
+---
+
+## Implementation Notes
+
+### Eve CLI changes
+
+`eve add nango` flow:
+1. Assert brain is ready (Synap must be installed first)
+2. Generate `NANGO_SECRET_KEY` (random 32-byte hex) unless already in `secrets.json`
+3. Create `nango` database in the shared `eve-brain-postgres` container (idempotent)
+4. Pull `nangohq/nango:latest`
+5. Start container on `eve-network` with:
+   ```
+   docker run -d \
+     --name eve-arms-nango \
+     --network eve-network \
+     --restart unless-stopped \
+     -e NANGO_SECRET_KEY=<generated> \
+     -e SERVER_PORT=3003 \
+     -e DATABASE_URL=postgresql://eve:eve@eve-brain-postgres:5432/nango \
+     -e NODE_ENV=production \
+     [-e NANGO_WEBHOOK_URL=<PUBLIC_URL>/api/connectors/nango-webhook]  # only when PUBLIC_URL is set
+     -v eve-arms-nango-data:/var/lib/nango \
+     nangohq/nango:latest
+   ```
+6. Write `NANGO_HOST=http://localhost:3003` and `NANGO_SECRET_KEY` to `deploy/.env`
+7. Store secret in `secrets.json` → `connectors.nango.{ secretKey, installedAt, oauthApps }`
+
+If `PUBLIC_URL` is not yet set in `deploy/.env`, `NANGO_WEBHOOK_URL` is skipped and a warning is printed. Re-run `eve add nango` after setting `PUBLIC_URL` to inject the webhook URL.
+
+### Backend changes
+- `packages/api/src/connectors/NangoConnector.ts` — pod-side SyncConnector implementation
+- Reads `NANGO_HOST` (defaults `http://localhost:3003`) and `NANGO_SECRET_KEY` from env
+- No import of `@nangohq/node` — uses fetch against Nango REST API directly
+
+### Nango integrations (nango.yaml)
+The existing `synap-control-plane-api/nango-integrations/nango.yaml` defines sync specs for google-calendar, google-contacts, google-mail, and github. These specs should be copied to a pod-local `nango-integrations/` directory and deployed to the self-hosted Nango instance on `eve nango init`.

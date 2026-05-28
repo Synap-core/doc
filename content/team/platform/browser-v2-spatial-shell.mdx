@@ -1,0 +1,267 @@
+---
+title: 'Browser V2 Spatial Shell'
+description: 'North Star product and architecture guideline for Synap Browser V2.'
+section: team
+audience: engineers
+version: 0.1
+last_updated: '2026-05-20'
+tags: ['browser', 'surface-runtime', 'renderer-runtime', 'design-system']
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Browser V2 Spatial Shell
+
+**Status:** North Star + implementation contract.
+
+Synap Browser V2 is not a dashboard shell, an admin console, or a generic browser chrome. It is a **spatial surface host**: a calm workspace sea where opened things become islands. The shell exists to place surfaces, preserve context, and let AI work beside the user without forcing every app to own its own chat, panel, or artifact preview.
+
+## Product Principle
+
+The user should feel they are working in a natural, premium workspace that breathes when little is open and scales when many things are open. Synap should feel like an intelligent environment, not a grid of settings panels.
+
+The core metaphor is:
+
+> A calm sea with useful islands.
+
+Every opened thing is a surface:
+
+- entity detail
+- entity list
+- view
+- document
+- markdown artifact
+- generated app
+- source/context
+- proposal
+- companion
+- temporary tool
+
+Apps request surfaces. The host decides where they appear. Renderer resolution decides how they appear.
+
+## Layout Contract
+
+### Sea
+
+The sea is the ambient workspace background. It provides atmosphere, spacing, and orientation. It should be warm, quiet, and readable for all-day use.
+
+Rules:
+
+- The sea is not content.
+- The sea should remain visible around islands.
+- Empty space is a feature, not a bug.
+- Background effects must be atmospheric and restrained.
+- Do not use decorative blobs, loud gradients, or gimmick motion.
+
+### Top Islands
+
+The header is three floating islands, not one long toolbar.
+
+1. **Context Island** — where am I?
+   - workspace
+   - product/lens
+   - active surface
+   - session/version/date hints
+
+2. **Command Island** — what do I want to do?
+   - global search
+   - command center
+   - AI entry
+   - context-aware placeholder
+
+3. **Status Island** — what needs attention?
+   - vault/local state
+   - proposals
+   - notifications
+   - companion toggle
+   - user/avatar
+
+These islands should feel intentional and balanced. They should not become scattered unrelated pills.
+
+### Quiet Rail
+
+The left rail is a quiet spatial anchor, not a full navigation sidebar.
+
+Rules:
+
+- It holds workspace-local navigation generated from current workspace metadata.
+- It may expose a compact space switcher, but spaces are not the main sidebar model.
+- It should stay visually light.
+- It should not compete with active content.
+
+### Main Island
+
+The main island owns the primary task. It can contain tabs like the current Browser does, but the tabs are part of the island, not a global browser strip.
+
+Rules:
+
+- Main island is the dominant surface.
+- It should use the opaque paper material.
+- Inner content should use sections, rows, dividers, chips, and natural spacing.
+- Avoid card-inside-card density unless the content is truly a repeated item collection.
+- Tables are allowed only when the job is actually tabular.
+
+### Side Islands
+
+Side islands are optional. They are not permanent inspectors.
+
+Examples:
+
+- inputs for a generated app
+- source context
+- version history
+- renderer package controls
+- preview
+- secondary entity
+
+Rules:
+
+- Side islands may be docked, tabbed, resized, or replaced.
+- A side island should support any surface, not only forms.
+- The AI companion can become a side island tab or replace the side island temporarily.
+- If no side surface is needed, the workspace should breathe.
+
+### Companion Island
+
+There is one global companion. Apps do not import chat UI directly.
+
+Rules:
+
+- Companion is a surface opened through `surface-runtime`.
+- It sees current context through host-provided surface metadata.
+- It can offer actions, previews, drafts, and proposals.
+- It should not turn every page into a chat product.
+- It should feel like guided work, not an invasive assistant.
+
+### Floating Islands
+
+Floating islands are exceptional and temporary.
+
+Use them for:
+
+- compare
+- peek preview
+- ephemeral tool
+- generated card
+- source quote
+
+Rules:
+
+- Do not scatter the workspace with floating panels.
+- Floating islands should have a clear anchor or reason to exist.
+- One or two floating surfaces can show product power; the default shell should still work without them.
+
+## Material Contract
+
+Depth belongs to islands, not every object inside them.
+
+Use:
+
+- opaque paper for primary surfaces
+- glass for contextual/companion/tool surfaces
+- soft layered shadows
+- hairline dividers
+- restrained warm accents
+- high readability ink colors
+
+Avoid:
+
+- every card having a different shadow depth
+- generic SaaS white cards
+- dense admin panel chrome
+- purple/blue AI gradients
+- default HeroUI visual identity replacing Synap’s identity
+
+HeroUI may provide accessible primitives. Synap spatial shell owns the materials, spacing, rhythm, and composition.
+
+## Architecture Contract
+
+Browser V2 composes existing platform primitives:
+
+- `@synap-core/surface-runtime` — where a surface wants to appear
+- `@synap-core/renderer-runtime` — how a surface should render
+- `@synap-core/surface-session` — live opened surfaces, placement stacks, focus, trails, and companion context
+- `@synap-core/cell-runtime` — universal cell rendering
+- `@synap-core/view-renderer` — view rendering
+- `@synap-core/profile-renderer` — profile/entity rendering
+- future iframe renderer — generated `iframe-srcdoc` apps and widgets
+- `@synap-core/spatial-shell` — reusable Browser V2 visual primitives
+
+No app should own global placement logic. CRM/Data/Views/AI request surfaces and provide metadata.
+
+The live Browser V2 shell should be driven by `@synap-core/surface-session`, not by app-specific tab or panel state. Existing Browser stores can remain as host adapters while actions are migrated to create or update `SurfaceInstance` records.
+
+## Session State Rules
+
+`SurfaceDescriptor` answers: what wants to open?
+
+`RendererTarget` answers: how should it render?
+
+`SurfaceInstance` answers: what is open now, where is it, how did the user get here, and what should the companion know?
+
+Rules:
+
+- Breadcrumbs come from the active surface instance trail.
+- Trails represent the user's journey, not a backend hierarchy.
+- The companion reads a `SurfaceContextSnapshot`, not app-specific state.
+- Side islands, companion, floating panels, and main tabs are all placement stacks over the same session state.
+- Hosts own persistence policy; the shared package stays pure and renderer-agnostic.
+
+See [Surface Session Runtime](./surface-session-runtime.mdx) for the detailed handoff contract.
+
+See [Browser V2 Surface Session Bridge](./browser-v2-surface-session-bridge.mdx) for the Browser-specific adapter state and next-agent instructions.
+
+## Surface Placement Rules
+
+| Placement | Browser V2 behavior |
+| --- | --- |
+| `main` | Open as a tab in the main island. |
+| `side` | Open in a side island tab stack. |
+| `companion` | Open or focus the companion island. |
+| `floating` | Open temporary floating island behind flag. |
+| `fullscreen` | Expand selected island into focused mode. |
+
+## Renderer Rules
+
+Renderer resolution remains metadata-based in V1:
+
+1. explicit `rendererHint`
+2. entity `systemData`
+3. workspace profile/entity templates
+4. profile `uiHints.surface`
+5. property/plugin hints
+6. artifact type/MIME fallback
+7. defaults
+
+Entity surfaces should use `@synap-core/profile-renderer` when the surface refers to a profile/entity. View surfaces should use `@synap-core/view-renderer`. Generated apps should target the iframe renderer path.
+
+## UX Guardrails
+
+Good Browser V2 screens feel:
+
+- spacious but useful
+- premium but not decorative
+- calm but powerful
+- contextual but not hidden
+- AI-native but still user-led
+
+Bad Browser V2 screens feel:
+
+- like Excel without needing Excel
+- like an admin settings console
+- like a normal SaaS dashboard from 2020
+- like an OS gimmick
+- like three unrelated panels fighting for attention
+
+## Implementation Path
+
+1. Freeze this North Star and keep it close to the code.
+2. Extract `@synap-core/spatial-shell` from the validated `Synap V2` prototype.
+3. Create `@synap-core/surface-session` as the shared live session model.
+4. Add Browser V2 behind a feature flag using static demo surfaces.
+5. Wire Browser V2 to `openSurface()` and `SurfaceSessionState`.
+6. Add render bridges for cell, view, profile, artifact, and iframe targets.
+7. Make companion a first-class surface island backed by `SurfaceContextSnapshot`.
+8. Move package/capability visibility into a surface, not a global sidebar.
+9. Deprecate old app-specific panel and chat imports once wrappers all call `openSurface()`.

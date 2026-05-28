@@ -4,7 +4,7 @@ description: 'AI chat across all surfaces — OrchestratorAgent + PersonaAgent, 
 surfaces: ['browser', 'relay', 'studio', 'raycast']
 repos: ['synap-app', 'browser', 'relay-app', 'synap-backend', 'synap-intelligence-service']
 status: 'shipped'
-last_updated: '2026-04-20'
+last_updated: '2026-05-27'
 ---
 
 # Chat
@@ -36,6 +36,39 @@ When an AI agent needs to **mutate data** (create/update/delete entities), it go
 2. If `DEFAULT_AUTO_APPROVE` applies, mutation is applied immediately
 3. Otherwise, user reviews and approves in the Proposals tab
 4. Proactive cells surface AI action opportunities for review
+
+## Inline patterns and AI navigation
+
+Since 2026-05-27, agents can embed typed patterns directly in their response text. The frontend renders them without a backend round-trip.
+
+**Reference patterns** (always rendered, click-navigable):
+
+| Pattern | Renders as |
+|---------|-----------|
+| `[[entity:UUID\|Name]]` | EntityLink chip |
+| `[[view:UUID\|Name]]` | EntityLink chip |
+| `[[doc:UUID\|Title]]` | EntityLink chip |
+| `[[widget:CELL_KEY\|Label]]` | EntityLink chip |
+
+**Command patterns** (permission-gated, rendered as action chips):
+
+| Pattern | Action |
+|---------|--------|
+| `[[open:side\|view:UUID]]` | Open view in side panel |
+| `[[open:main\|cell:CELL_KEY]]` | Open cell in main area |
+| `[[run:UUID\|Label]]` | Trigger an automation |
+
+These patterns are taught to all agents via the `ui-patterns.md` skill file, which loads for any agent with search or retrieval tools.
+
+See [AI Inline Patterns](/team/platform/ai-inline-patterns) for the full syntax reference.
+
+## Widget proposals in chat
+
+When an agent generates a widget, a `WidgetPreviewChip` appears inline after the agent's message. The chip shows the widget title, type, and placement options. Clicking "Open in Side Panel" opens the `iframe-widget` cell, which self-fetches the widget definition and renders it.
+
+Navigation permissions (`aiGovernance.navigationPermissions`) control whether action chips execute automatically or require user confirmation. Configured per-workspace in Settings → Intelligence → AI Navigation.
+
+See [AI Companion Architecture](/team/platform/ai-companion) for the full package and component breakdown.
 
 ## Key files
 

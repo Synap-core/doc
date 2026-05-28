@@ -6,7 +6,7 @@ description: >-
 section: general
 audience: users
 version: 2.1+
-last_updated: '2026-05-04'
+last_updated: '2026-05-11'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -113,6 +113,22 @@ Hermes is in `hestia-cli/packages/@eve/builder/`. It MUST NOT import from `synap
 | **`coder` engine binary** | Spawned as subprocess per task (TaskExecutor + adapter for `secrets.builder.codeEngine`) | Writes env vars (`SYNAP_API_KEY=agents.coder.hubApiKey`, task ctx) |
 | **OpenClaw skill action** | Invoked via the `openclaw` Hub key when action namespace is `openclaw.*` | Hub Protocol REST |
 | **Dokploy** | Calls REST API when deploying generated code | Reads/writes |
+
+## Container runtime requirements
+
+The Hermes container (`nousresearch/hermes-agent:latest`) enforces two hard constraints that the Eve lifecycle layer handles automatically:
+
+**1. Non-root UID (10000).** The gateway process inside the image refuses to start as root (UID 0). Running with `--user 0:0` produces an immediate exit. The container must run as UID/GID `10000`. Eve's `installHermes` and `wireHermes` callers both `chown -R 10000:10000` the workspace directory before `docker run` and do **not** pass `--user` overrides.
+
+**2. Skills mount path `/opt/data/synap-skills`.** Hermes ships bundled skills at `/opt/data/skills` inside the image. Mounting custom skills at the same path shadows the bundled ones — custom tools load but the gateway's built-in capabilities disappear. The correct host→container mount is:
+
+```
+~/.eve/skills/hermes  →  /opt/data/synap-skills:ro   (custom skills, separate from bundled)
+```
+
+Do **not** mount to `/opt/data/skills` or `/opt/data/synap-skills:rw`.
+
+If Hermes exits immediately with a gateway refusal or skill-not-found errors, verify these two points with `docker inspect eve-builder-hermes` — the `User` field must be empty or `10000` and the `Binds` must show `synap-skills`.
 
 ## Guidelines
 

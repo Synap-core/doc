@@ -1,0 +1,236 @@
+---
+title: 'Messaging Layer — Unipile'
+description: 'Unipile integration for CRM messaging: architecture, current state, wiring, and the path to full Synap channel integration'
+section: crm
+last_updated: '2026-05-14'
+tags: [messaging, unipile, channels, webhooks, linkedin, whatsapp, telegram]
+toc: true
+---
+
+# Messaging Layer — Unipile
+
+Unipile is the **messaging transport layer** for the CRM. It aggregates inbox access across LinkedIn DMs, WhatsApp, Telegram, Instagram, Messenger, Twitter/X, Gmail, and Slack into a single API. This is architecturally distinct from Nango: Nango handles data sync (contacts, calendar, files) while Unipile handles real-time conversational messaging.
+
+---
+
+## What Unipile Is (and Is Not)
+
+| Concern | Unipile | Nango |
+|---|---|---|
+| Purpose | Messaging transport — read/send DMs | Data sync — contacts, calendar, files |
+| Auth model | Hosted auth wizard (per social account) | OAuth 2.0 (per provider) |
+| Data flow | Webhook push → entity upsert | Webhook → `runNangoSync()` → entity upsert |
+| Credentials | DSN + API key (workspace-level) | OAuth tokens (user-level, per provider) |
+| State | Per-user, per-platform connected accounts | Per-user OAuth connections |
+| Platforms | LinkedIn, WhatsApp, Telegram, Instagram, Messenger, Twitter, Gmail, Slack | Google (Calendar/Drive/Contacts), GitHub, HubSpot, etc. |
+
+Gmail appears in **both**: Nango syncs Gmail as structured data (emails as entities). Unipile handles Gmail as a messaging inbox (read/send). These are complementary, not duplicate.
+
+---
+
+## API Version Clarification
+
+Unipile's developer portal URL contains `v2.0` (`developer.unipile.com/v2.0/reference`). This is a **documentation portal revision label**, not an API URL version. All REST endpoint paths are `/api/v1/` in both the v1.0 and v2.0 docs — there is no `/api/v2/` URL scheme. The "V2" product generation added new platform support (Telegram, Twitter, Gmail/IMAP, company LinkedIn inbox) and new hosted auth parameters without breaking the URL structure.
+
+**All our connector paths are correct at `/api/v1/`.**
+
+Base URL format: `https://{YOUR_DSN}/api/v1/` with `X-API-KEY: {key}` request header.
+
+---
+
+## Credential Model
+
+Unipile credentials are **workspace-level** (one Unipile account covers all users on the pod), stored in `workspace.settings.messaging`:
+
+```json
+{
+  "messaging": {
+    "unipileDsn": "https://api7.unipile.com:13331",
+    "unipileApiKey": "your-api-key",
+    "unipileWebhookAuthToken": "your-chosen-token"
+  }
+}
+```
+
+This follows the same pattern as Apollo.io and Apify enrichment keys — stored via `saveMessagingConfig` tRPC mutation, read by the `getMessagingConnector()` async factory (falls back to env vars `UNIPILE_DSN`, `UNIPILE_API_KEY`, `UNIPILE_WEBHOOK_SECRET`).
+
+Set via: **CRM Settings → Integrations → Messaging Service**.
+
+---
+
+## Architecture: Current State
+
+```
+User (browser)
+  → "Connect Account" button
+  → trpc: GET /api/hub/messaging/auth-url?redirectUrl=...
+  → backend: POST /api/v1/hosted/accounts/link  (Unipile)
+  → Unipile returns { url }
+  → browser redirects to Unipile hosted auth wizard
+  → user authenticates (QR, OAuth, 2FA — Unipile handles all)
+  → Unipile fires notify_url: POST /api/webhooks/messaging
+  → webhook handler: account.created → upserts messagingAccount row
+  → browser redirects to success_redirect_url (back to CRM settings)
+
+Incoming messages:
+  → Unipile fires webhook: POST /api/webhooks/messaging
+  → parseWebhook validates Unipile-Auth header
+  → message.created → upserts "conversation" entity
+  → entity linked to person entity if sender matches email/linkedin/whatsapp
+```
+
+### Key backend files
+
+| File | Role |
+|---|---|
+| `packages/api/src/connectors/MessagingConnector.ts` | Interface + types (`MessagingConnector`, `WebhookEvent`) |
+| `packages/api/src/connectors/UnipileConnector.ts` | Unipile implementation |
+| `packages/api/src/connectors/index.ts` | `getMessagingConnector()` async factory |
+| `packages/api/src/routers/hub-protocol/rest/messaging.ts` | Hub Protocol REST routes (accounts, conversations, messages, send) |
+| `packages/api/src/routers/webhooks-inbound.ts` | Inbound webhook handler |
+| `packages/api/src/routers/connectors-trpc.ts` | `getMessagingConfig` + `saveMessagingConfig` tRPC procedures |
+
+### Hub Protocol REST routes
+
+All under `/api/hub/messaging/*` (Bearer auth via `X-User-Id` header):
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/messaging/accounts` | List connected accounts (DB + live status merge) |
+| `POST` | `/messaging/accounts/sync` | Pull live accounts from Unipile → upsert to DB |
+| `DELETE` | `/messaging/accounts/:accountId` | Mark account disconnected |
+| `GET` | `/messaging/auth-url?redirectUrl=` | Generate hosted auth link |
+| `GET` | `/messaging/conversations?contactEntityId=` | List conversations across all accounts |
+| `GET` | `/messaging/conversations/:threadId/messages?accountId=` | Get thread messages |
+| `POST` | `/messaging/conversations/:threadId/send` | Send a message |
+
+---
+
+## Webhook Setup
+
+### Webhook endpoint
+
+```
+POST https://<your-backend>/api/webhooks/messaging
+```
+
+No Kratos auth (public endpoint). Auth via `Unipile-Auth` header value matching `unipileWebhookAuthToken` in workspace settings. If no token is configured, the check is skipped (open — not recommended in production).
+
+### Creating webhooks in Unipile
+
+**Via dashboard** (app.unipile.com → Webhooks → Create webhook):
+- Accepts only "Callback URL" — no auth header field is exposed
+- The `Unipile-Auth` token cannot be set via the dashboard UI
+- Practical implication: if using the dashboard, leave "Webhook Auth Token" empty in CRM settings
+
+**Via API** (`POST /api/v1/webhooks`):
+```json
+{
+  "request_url": "https://your-backend/api/webhooks/messaging",
+  "source": "messaging",
+  "headers": [
+    { "key": "Unipile-Auth", "value": "your-chosen-token" },
+    { "key": "Content-Type", "value": "application/json" }
+  ]
+}
+```
+
+Create one webhook per `source` type needed: `messaging` (DMs), `account_status` (lifecycle), `email` (Gmail).
+
+> **TODO**: Auto-register webhooks via API when credentials are saved in CRM settings — eliminates the manual dashboard step and enables the auth token.
+
+### Handled webhook events
+
+| Event | Payload shape | Handler |
+|---|---|---|
+| `status: "CREATION_SUCCESS"` | `{ status, account_id, name: userId }` | Auto-upserts `messagingAccount` row |
+| `status: "RECONNECTED"` | same | Same handler |
+| `event: "message_created"` / `"new_message"` | `{ event, account_id, chat_id, message: {...} }` | Upserts `conversation` entity |
+| `event: "account_reconnection_required"` | `{ event, account_id }` | Updates account status |
+| `event: "account_disconnected"` | `{ event, account_id }` | Updates account status |
+
+The `notify_url` in the hosted auth link (`/api/v1/hosted/accounts/link`) delivers the `CREATION_SUCCESS` payload, enabling zero-click account sync after the user completes auth.
+
+---
+
+## User ↔ Unipile Account Linkage
+
+Unipile accounts are tied to an API key, not to individual users. A single `(dsn, apiKey)` pair may have multiple accounts connected (one LinkedIn, one WhatsApp, etc.). Synap maps these to users via the `messagingAccounts` table.
+
+### How the mapping is established
+
+| Connection path | How user mapping is set |
+|---|---|
+| Via "Connect Account" in CRM (hosted auth) | `notify_url` callback delivers `{ account_id, name: userId }` — exact mapping |
+| Via Unipile dashboard directly | No `name` field — no automatic mapping |
+
+### Auto-seed on first load (current behavior)
+
+When `GET /messaging/accounts` is called for a user with no DB rows, and Unipile has live accounts, all live accounts are claimed by that user. This is correct for **single-owner pods** (Eve deployments) where one person owns all connected accounts.
+
+### Multi-user pods (future)
+
+On shared pods where multiple users connect separate accounts, auto-seed would incorrectly assign accounts to whoever calls the endpoint first. The correct behavior in that case:
+
+1. Do not auto-seed
+2. Show an "unclaimed accounts" list in settings
+3. Let each user explicitly claim an account (ties their `userId` to the `externalId`)
+
+This is not implemented yet — all current pods are single-user. Track as a TODO when multi-user messaging is required.
+
+---
+
+## Connected Accounts: Supported Platforms
+
+All 8 Unipile-supported platforms are exposed in CRM Settings → Integrations → Connected Accounts:
+
+`linkedin` · `gmail` · `whatsapp` · `instagram` · `telegram` · `messenger` · `twitter` · `slack`
+
+Each maps to a `messagingAccounts` DB row with `{ userId, provider, externalId, displayName, status }`.
+
+---
+
+## Desired State: Synap Channel Integration
+
+The current implementation stores incoming conversations as `conversation` entities. This works for CRM display and contact linking but does not integrate with the Synap channel system — meaning Eve/AI cannot read or reply to messages, and conversations don't appear in the unified feed.
+
+### Target architecture
+
+Each connected Unipile account → **`external` type Synap channel** (created on `account.created` webhook).
+
+Each conversation thread → **`thread` type Synap channel** under the account channel.
+
+```
+messagingAccount (DB row)
+  → external channel: "Antoine's LinkedIn" (channel.type = external)
+      → thread channel: "Conversation with Bob" (channel.type = thread)
+          → messages as channel posts
+```
+
+Benefits:
+- Eve can read and autonomously reply to DMs via the Hub Protocol
+- Conversations surface in the Synap feed alongside notes, tasks, emails
+- `proactive_post` can notify the user of important messages
+- Full event chain integration (typed events, delivery router)
+
+### Implementation path (Phase 2)
+
+1. On `account.created` webhook: create `external` channel with `{ provider, accountExternalId }` in properties
+2. On `message.created` webhook: lookup or create `thread` channel under the account's external channel; post message as channel event
+3. Hub Protocol `send` route: write outbound message as a channel post + call Unipile `sendMessage`
+4. Eve tool: `read_messaging_thread(channelId)`, `send_message(channelId, text)` — wraps the same Hub Protocol routes
+
+This does not change the `UnipileConnector` interface. It adds a channel-creation side effect in `webhooks-inbound.ts`.
+
+---
+
+## Known Gaps and TODOs
+
+| Gap | Priority | Notes |
+|---|---|---|
+| Auto-register webhooks via API on settings save | High | Eliminates manual Unipile dashboard step; enables Unipile-Auth header |
+| Verify `/api/v1/` vs `/api/v2/` against live DSN | High | Docs say v1; original code had v2; test with real credentials |
+| `account_status` webhook source | Medium | Separate webhook registration needed for account lifecycle events |
+| Synap channel integration | Low (Phase 2) | Required for Eve participation in messaging |
+| Outbound message tracking | Low | Sent messages not persisted as conversation entities |
+| Read receipt / unread count sync | Low | `unread` flag set on inbound webhook; no read-ack mechanism |

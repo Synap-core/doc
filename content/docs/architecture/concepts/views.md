@@ -5,10 +5,64 @@ description: Documentation covering Views System
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-27'
 tags: []
 hide_title: false
 toc: true
+---
+
+## The Idea in One Line
+
+> Same data. Any lens. No code changes.
+
+A view is not a copy of your data — it is a named query + rendering configuration. Change the view type and the same entities become a kanban board, a timeline, a graph, a masonry feed. The data never moves. Only the lens changes.
+
+This is Config-over-Code in action: **every view is a JSON configuration**. AI can generate a complete dashboard from a plain-language description. No developer required.
+
+## 16 View Types
+
+Synap ships 16 built-in view types across two categories:
+
+### Structured views
+_Schema-driven — columns and fields are defined by the entity profiles in scope._
+
+| Type | Description |
+|------|-------------|
+| `table` | Classic spreadsheet — columns = profile fields |
+| `list` | Compact vertical list, minimal chrome |
+| `grid` | Fixed-column card grid |
+| `gallery` | Image-forward card layout |
+| `kanban` | Grouped by a field (status, priority, assignee) |
+| `matrix` | 2D grouping — rows × columns |
+| `masonry` | Pinterest-style feed, variable card heights |
+| `calendar` | Entities plotted by a date field |
+| `timeline` | Gantt-style, for date ranges and dependencies |
+| `gantt` | Full Gantt with dependency arrows |
+
+### Canvas views
+_Position and relationships matter more than schema._
+
+| Type | Description |
+|------|-------------|
+| `graph` | Node-link diagram of entity relationships |
+| `flow` | Directed flow / workflow diagram |
+| `bento` | Composable dashboard — drag-and-drop widgets |
+| `branch_tree` | Branching conversation / decision tree |
+| `whiteboard` | Infinite canvas with spatial positioning |
+| `mindmap` | Radial concept map |
+
+**Extension**: New view types are adapters in `view-renderer`. The data layer doesn't change.
+
+## AI-Generated Views
+
+Because every view is a configuration, AI can generate views from natural language:
+
+- *"Create a pipeline view of my deals grouped by stage"* → kanban config, `groupBy: dealStage`
+- *"Build a team dashboard with open tasks, recent activity, and deal velocity"* → bento config with 3 widget blocks
+- *"Show me a graph of how my contacts relate to each other"* → graph view config
+
+The AI writes the config. The view renderer runs it. No code touched.
+
 ---
 
 > **Principle**: Separate **Declared Scope** (what the view *intends* to show) from **Query Results** (what typically matches).

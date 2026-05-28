@@ -1,0 +1,428 @@
+---
+title: DevPlane Current State & Roadmap
+description: Complete overview of DevPlane as of May 2026 — architecture, features, UX, package flow, and story organization
+section: products
+audience: team
+last_updated: '2026-05-17'
+---
+
+This document consolidates everything we've built in DevPlane, how it all fits together, and the story/feature organization for what comes next.
+
+## What DevPlane Is Today
+
+DevPlane is a **vertical Synap app** — a purpose-built UI lens over a Synap data pod. No separate database, no separate backend. Every entity is a typed Synap profile, every read/write goes through tRPC, every session is authenticated through the shared CP → pod handshake.
+
+**Live:** [devplane.staging.synap.live](https://devplane.staging.synap.live)
+**Code:** `synap-app/apps/devplane/`
+
+## Architecture Overview
+
+### The Three-Layer Rule
+
+```
+React Component
+  → lib/devplane/hooks.ts        (useApps, useCreateDevplaneEntity…)
+    → @synap-core/client         (tRPC + TanStack Query)
+      → Next.js /trpc proxy
+        → Synap backend pod :4000/trpc
+          → Drizzle ORM → PostgreSQL
+```
+
+**Components never call tRPC directly.** They always go through a hook in `lib/devplane/hooks.ts`. This is the single most important convention — it keeps the data layer testable, mockable, and replaceable.
+
+### Provider Tree — Two Tiers
+
+**Tier 1 — `app/providers.tsx` (always active):**
+```
+NextThemesProvider
+  HeroUIProvider
+    SynapProvider              ← auth context, workspaceId
+      AppStoresSync            ← Zustand hydration
+        AppTRPCProvider        ← tRPC client with 401 interceptor
+          RegistryBoot
+            CellRuntimeWrapper
+              CommandPaletteProvider
+                {children}
+```
+
+**Tier 2 — `app/(app)/layout.tsx` (gated — only when workspace is ready):**
+```
+AuthGuard                      ← full-page overlay if unauthenticated
+  WorkspaceReadinessGate       ← state machine: idle → checking → bootstrapping → ready
+    AppSocketProvider          ← Socket.IO → pod (only after readiness)
+      RealtimeBridge           ← cache invalidation via socket events
+        AppShell + DevPlaneSidebar + {children}
+```
+
+**Why Socket.IO is gated:** tRPC goes through the Next.js `/trpc` proxy, but Socket.IO connects directly to the pod URL. Connecting before workspace readiness produces cross-origin WebSocket errors with no benefit.
+
+### Startup State Machine
+
+`hooks/useWorkspaceReadiness.ts` — runs before any app content renders:
+
+```
+idle
+  → no workspace in localStorage  → no_workspace → redirect /onboarding
+  → workspace found               → checking
+
+checking  (fetching profiles.list)
+  → all 19 profiles present       → ready ✓
+  → profiles missing, first time  → bootstrapping
+
+bootstrapping  (createFromDefinition with existing workspaceId)
+  → done                          → rechecking
+
+rechecking  (fetching profiles.list again)
+  → all 19 profiles present       → ready ✓
+  → still missing                 → waiting
+
+waiting  (scheduled retry every 3.5s, max 4 silent)
+  → profiles appear               → ready ✓
+  → after 4 retries               → show "Check again" button
+  → manual retry                  → reset bootstrappedRef → checking
+```
+
+Key files:
+- `hooks/useWorkspaceReadiness.ts` — state machine, `REQUIRED_PROFILE_SLUGS` array
+- `lib/builderWorkspaceDefinition.ts` — 19-profile `WorkspaceProposal` (source of truth)
+- `hooks/useDevplaneSetup.ts` — first-login flow
+
+### Auth Flow
+
+1. User visits DevPlane → `AuthGuard` checks session
+2. No session → full-page login overlay (not inline in app shell)
+3. After login → `SynapProvider` holds `workspaceId` from localStorage
+4. tRPC 401 errors → `clearSession()` + redirect to `/login`
+5. Middleware protects `/onboarding`, `/stories`, `/api/*`, `/settings`, `/architecture`
+
+Key files:
+- `components/providers/AuthGuard.tsx` — full-page auth gate layout
+- `components/providers/AuthRedirect.tsx` — redirect logic
+- `components/providers/AppTRPCProvider.tsx` — tRPC client with 401 error link
+- `middleware.ts` — route protection
+
+## Entity Profiles (19 total)
+
+The workspace definition lives in `lib/builderWorkspaceDefinition.ts` — a copy of `synap-backend/templates/builder-workspace.json`. When the canonical JSON changes, re-copy the contents.
+
+### DevPlane Core (13)
+
+| Slug | Display | Purpose |
+|------|---------|---------|
+| `devplane_app` | App | Software application — repo, deploy URL, tech stack, ports |
+| `devplane_feature` | Feature | Work item with AI session — status, priority, linked app/packages, agent state machine |
+| `devplane_story` | Story | User-facing story that orchestrates features — drives the AI pipeline |
+| `devplane_service` | Service | Backend service — type, host:port, health check, linked app |
+| `devplane_package` | Package | npm/pnpm package — health grade, dependency edges, publish history |
+| `devplane_environment` | Server | SSH-accessible server node — host, kamal role, provider, vault-backed SSH key |
+| `devplane_deployment` | Deployment | Deploy event — version, commit SHA, linked app/environment |
+| `devplane_recipe` | Recipe | SSH command sequence — kamal/shell/custom template, per-step streaming |
+| `devplane_recipe_run` | Recipe Run | Single recipe execution — per-step status, duration, trigger source |
+| `devplane_prompt_snippet` | Snippet | Reusable AI prompt template — category, executable flag |
+| `devplane_decision_record` | Decision Record | Technical decision with rationale — context, choice, alternatives |
+| `devplane_incident` | Incident | Production incident — severity, status, root cause, linked environment |
+| `devplane_cron` | Cron Job | Scheduled task — cron expression, run history |
+
+### DevPlane Extended (4)
+
+| Slug | Display | Purpose |
+|------|---------|---------|
+| `devplane_package_publish` | Package Publish | npm publish audit trail — version bump, changelog, consumer notification |
+| `devplane_system_component` | System Component | Architecture building block — frontend/backend/database/external-api |
+| `devplane_workflow` | Workflow | User flow through system components — mermaid diagram, trigger, category |
+| `devplane_agent_run` | Agent Run | Pipeline execution — phase (gather/plan/execute/verify/deploy), duration |
+
+### OpenClaw Delegation (4)
+
+| Slug | Display | Purpose |
+|------|---------|---------|
+| `project` | Project | Bounded body of work delegated to agents — status, priority, health, type |
+| `task` | Task | Atomic work item — status, type, token estimates, session key |
+| `skill` | Skill | Agent capability — trust level, category, VirusTotal status |
+| `provider` | Provider | LLM/API provider — cost tracking, key health, budget |
+
+### Additional (2)
+
+| Slug | Display | Purpose |
+|------|---------|---------|
+| `devplane_best_practice` | Best Practice | Codified engineering practice — category, tech stack, CI enforcement |
+| `devplane_codebase_map` | Codebase Map | Structural map of a module — path, key files, conventions |
+
+### Deployment Target (1)
+
+| Slug | Display | Purpose |
+|------|---------|---------|
+| `deployment_target` | Deployment Target | Coolify/Vercel/Netlify target — API URL, auth token ref, environment |
+
+## Navigation Structure
+
+```
+Overview
+── Build:          Architecture · Stories · Features · Apps
+── Knowledge:      Packages · Decisions · Best Practices · Codebase Maps
+── Pipeline:       Agent Runs · Deployments
+```
+
+### Pages
+
+| Route | Component | Purpose |
+|-------|-----------|---------|
+| `/overview` | `app/(app)/overview/page.tsx` | Dashboard: fleet health, apps matrix, active features, deployments, incidents |
+| `/architecture` | `app/(app)/architecture/page.tsx` | React Flow graph + Mermaid tab + List tab for SystemComponent + Workflow entities |
+| `/stories` | `app/(app)/stories/page.tsx` | Kanban board: Backlog → In Progress → In Review → Done |
+| `/stories/[id]` | `app/(app)/stories/[id]/page.tsx` | Story detail with agent pipeline state machine |
+| `/features` | `app/(app)/features/page.tsx` | Feature list with AI channel integration |
+| `/features/[id]` | `app/(app)/features/[id]/page.tsx` | Split-pane: details + persistent AI channel |
+| `/apps` | `app/(app)/apps/page.tsx` | App registry — repo, deploy URL, tech stack |
+| `/packages` | `app/(app)/packages/page.tsx` | Package grid with health grades, stale status, Publish + Impact actions |
+| `/deployments` | `app/(app)/deployments/page.tsx` | Deployment timeline |
+| `/environments` | `app/(app)/environments/page.tsx` | Server list with SSH terminal |
+| `/recipes` | `app/(app)/recipes/page.tsx` | Recipe list with live streaming output |
+| `/decisions` | `app/(app)/decisions/page.tsx` | Decision records |
+| `/best-practices` | `app/(app)/best-practices/page.tsx` | Engineering best practices |
+| `/codebase-maps` | `app/(app)/codebase-maps/page.tsx` | Module structure maps |
+| `/agent-runs` | `app/(app)/agent-runs/page.tsx` | Agent pipeline execution history |
+| `/settings` | `app/(app)/settings/page.tsx` | Workspace settings, AI provider config |
+
+## Package Ordering & Data Flow
+
+### How Data Flows Through the System
+
+```
+User Action (UI)
+  → Hook (lib/devplane/hooks.ts)
+    → tRPC mutation/query (@synap-core/client)
+      → Next.js /trpc proxy route
+        → Synap backend (pod :4000)
+          → Drizzle ORM → PostgreSQL
+            → Socket.IO event (if subscribed)
+              → RealtimeBridge invalidates TanStack Query cache
+                → UI re-renders
+```
+
+### Key Wrappers
+
+**`lib/devplane/hooks.ts`** — All data access goes through here:
+- `useDevplaneEntities(profileSlug)` — generic list hook
+- `useDevplaneEntity(id)` — single entity by ID
+- `useCreateDevplaneEntity()`, `useUpdateDevplaneEntity()`, `useDeleteDevplaneEntity()` — CRUD mutations
+- Profile-specific hooks: `useApps()`, `useFeatures()`, `usePackages()`, `useSnippets()`, `useDecisionRecords()`, `usePackagePublishes()`, `useIncidents()`, `useCrons()`, `useDeploymentTargets()`
+- Channel hooks: `useEntityChannel()`, `useCreateFeatureWithChannel()`, `useSendChannelMessage()`
+- Automation hooks: `useAutoCreateDeployment()`, `useAutoCreateIncident()`
+- Workspace settings: `useMonorepoRoot()`, `useSetMonorepoRoot()`, `useLocalTerminalEnabled()`, `useToggleLocalTerminal()`, `useAiProviderSettings()`, `useUpdateAiProviderSettings()`, `useProviderConfigs()`, `useSaveProviderApiKey()`
+- Deployment helpers: `useAppDeployments()`, `useAppDeploymentTargets()`
+
+**`lib/devplane/intelligence/`** — Pure TypeScript utilities:
+- `impact.ts` — `analyzeImpact()` — BFS traversal of package dependency graph
+- `context.ts` — `buildFeatureContextMessage()` — builds markdown context for AI channel
+
+**`lib/devplane/useRecipeRunner.ts`** — WebSocket recipe runner with per-step streaming
+
+**`lib/devplane/vault.ts`** — Vault reference resolution (server-side only, never stores plaintext)
+
+**`lib/devplane/seed.ts`** — `seedSynapStack()` — creates demo entities for the Synap stack
+
+**`lib/devplane/snippetUtils.ts`** — Prompt snippet utilities
+
+**`lib/devplane/config-schema.ts`** — Configuration schema validation
+
+**`lib/devplane/recipeTemplates.ts`** — Recipe template definitions (kamal, shell, custom)
+
+### Dependency Order
+
+```
+@synap-core/client     ← tRPC client, TanStack Query, types
+@synap-core/stores     ← Zustand stores
+@synap-core/ui-system  ← Shared UI components (if used)
+
+lib/devplane/hooks.ts  ← depends on @synap-core/client
+lib/devplane/types.ts  ← TypeScript types for all entities
+lib/builderWorkspaceDefinition.ts  ← Profile definitions (source of truth)
+hooks/useWorkspaceReadiness.ts  ← depends on builderWorkspaceDefinition
+hooks/useDevplaneSetup.ts  ← depends on useWorkspaceReadiness
+
+components/  ← depends on hooks
+app/  ← depends on components + hooks
+```
+
+## Story & Feature Organization
+
+### Two-Level Hierarchy
+
+**Features** are the main capabilities — the "what the system can do":
+1. **Cell Renderer** — The rendering engine for all entity views (table cells, kanban cards, graph nodes)
+2. **View Renderer** — The view system (table, kanban, calendar, graph, bento, timeline)
+3. **AI Channel** — Persistent AI sessions per entity with context injection
+4. **Agent Pipeline** — The state machine: idle → gathering_context → planning → executing → deploying → done
+5. **Recipe Runner** — SSH command execution with live streaming
+6. **Architecture Graph** — Living architecture map with React Flow + Mermaid
+7. **Package Intelligence** — Health scoring, dependency graph, impact analysis
+8. **External Access** — Webhooks, API access, automation subscriptions
+
+**Stories** are user-facing scenarios — the "how a user experiences it":
+
+### Proposed Stories
+
+#### Architecture Graph
+- "User can add any system component (frontend, backend, database, external API) and see it on the graph"
+- "User can define workflows that connect components and see the flow visualized"
+- "User can toggle between Graph, List, and Mermaid views of the architecture"
+- "User can search and filter components by type, status, or tech stack"
+
+#### AI Channel & Context
+- "User can ask AI and it auto-pinpoints the context (entities/views opened)"
+- "User can click one button to inject current view context into the AI channel"
+- "User can resume any work session — AI remembers the full history"
+- "User can create a feature and get an AI channel pre-seeded with stack context"
+
+#### Agent Pipeline
+- "User creates a story and the agent automatically gathers context, plans, and executes"
+- "User can approve/reject the agent's plan before execution"
+- "User can see the agent's progress through each phase (gather → plan → execute → verify → deploy)"
+- "User can retry a failed agent run with the same context"
+
+#### External Access (Webhooks & API)
+- "Any app can access any data pod data via the shared API + auth package"
+- "An agent can call Synap and be directly connected to memory, event chain, and permission model"
+- "Anyone can subscribe to Synap events and automate based on what's happening"
+- "User can configure webhook endpoints that fire on entity create/update/delete"
+
+#### Package Intelligence
+- "User sees package health grades (A-F) and stale status at a glance"
+- "User can run impact analysis before publishing — see which apps need updating"
+- "User can publish a package with one button — version bump, publish, notify consumers"
+- "User sees version drift across all apps in a matrix view"
+
+#### View System
+- "User can add any view type (table, kanban, calendar, graph) to any entity profile"
+- "User can configure columns, grouping, and filters for table views"
+- "User can see a timeline of deployments on a calendar view"
+- "User can create a bento dashboard with widgets from multiple entity profiles"
+
+## Webhook & External Access Story
+
+This is a major capability that deserves its own story cluster. The goal: **Synap as a platform, not just an app.**
+
+### Three Access Patterns
+
+**1. App → Pod Data (Read/Write)**
+- Any app (DevPlane, CRM, Browser, custom) uses `@synap-core/client` to access pod data
+- Shared auth package handles the CP → pod handshake
+- tRPC routes are workspace-scoped — apps only see their workspace's data
+- Code: `packages/core/client/` — tRPC client, query hooks, mutation helpers
+
+**2. Agent → Synap (Memory + Events + Permissions)**
+- Agents (OpenClaw, custom) connect via the agent identity system
+- Agents get access to: memory (session compaction), event chain (pg-boss workers), permission model (proposals)
+- Agents can create entities, read channels, propose changes
+- Code: `synap-backend/` — agent routes, memory system, proposal engine
+
+**3. External → Synap (Webhooks + Subscriptions)**
+- External systems subscribe to Synap events via webhooks
+- Events: entity created, entity updated, entity deleted, deployment succeeded, incident opened, package published
+- Webhook payloads include entity data, event type, timestamp, workspace ID
+- Users configure webhook endpoints in settings
+- Code: `synap-backend/` — webhook system, event chain, subscription management
+
+### Webhook Event Types
+
+```
+entity.created    → { profileSlug, entityId, workspaceId, timestamp, properties }
+entity.updated    → { profileSlug, entityId, workspaceId, timestamp, changes }
+entity.deleted    → { profileSlug, entityId, workspaceId, timestamp }
+deployment.succeeded → { appId, version, commitSha, environment, timestamp }
+incident.opened   → { incidentId, severity, affectedApps, timestamp }
+package.published → { packageName, fromVersion, toVersion, bumpType, timestamp }
+recipe.completed  → { recipeId, runId, success, duration, triggeredBy }
+```
+
+## Seeding Strategy
+
+### Goal
+
+Seed the Builder workspace with real entities that represent the actual Synap stack. This consolidates the complexity of our codebase into main flows and gives us a living reference.
+
+### What to Seed
+
+**Apps (devplane_app):**
+- synap-app (monorepo)
+- synap-backend (API server)
+- synap-team-docs (documentation site)
+- Eve CLI (desktop app)
+- Relay (mobile app)
+- Browser extension
+
+**Packages (devplane_package):**
+- @synap-core/client
+- @synap-core/stores
+- @synap-core/ui-system
+- @synap-core/icons
+- @synap-core/import-review
+- @synap-core/chat-headless
+- @synap-core/surface-runtime
+- @synap-core/ai-chat
+- @synap-core/entity-views
+- @synap-core/gantt
+- @synap-core/kanban
+- @synap-core/table
+- @synap-core/graph
+
+**System Components (devplane_system_component):**
+- DevPlane Frontend (Next.js app on CT101)
+- Hub Frontend (Next.js app on CT101)
+- Synap Backend (PostgreSQL + Drizzle on pod)
+- Caddy Gateway (reverse proxy on CT100)
+- Coolify Staging (CT104)
+- Coolify Production (CT103)
+- T3 Code (Claude Code web GUI on CT101)
+- Proxmox Host (192.168.1.201)
+- Tailscale Gateway (100.64.0.4)
+
+**Workflows (devplane_workflow):**
+- User Login Flow (CP → pod handshake → workspace readiness)
+- Feature Development Flow (create story → agent pipeline → deploy)
+- Package Publish Flow (version bump → publish → notify consumers)
+- Deployment Flow (recipe → SSH → stream output → create deployment record)
+- Incident Response Flow (detect → triage → fix → postmortem)
+
+**Relations:**
+- DevPlane Frontend → deployed_to → CT101
+- Hub Frontend → deployed_to → CT101
+- Synap Backend → deployed_to → Pod
+- Caddy Gateway → deployed_to → CT100
+- @synap-core/client → consumed_by → DevPlane, Hub, CRM, etc.
+- User Login Flow → part_of_flow → DevPlane Frontend, Synap Backend
+- Feature Development Flow → part_of_flow → DevPlane Frontend, Agent Pipeline
+
+### Seeding Implementation
+
+The seed function should live in `lib/devplane/seed.ts` and be callable from:
+1. First-login flow (`useDevplaneSetup.ts`) — optional "seed with Synap stack" checkbox
+2. Manual trigger from settings page
+3. CLI command (`./tctl sync --seed`)
+
+The seed function should:
+1. Check if entities already exist (idempotent)
+2. Create apps, packages, components, workflows
+3. Create relations between them
+4. Return summary of what was created
+
+## Next Steps
+
+### Immediate (This Week)
+1. **Seed the Builder workspace** with real Synap stack entities
+2. **Wire up the Architecture graph** with seeded components and workflows
+3. **Test the Story → Agent Pipeline flow** end-to-end
+4. **Document the webhook system** in synap-team-docs
+
+### Short Term (Next 2 Weeks)
+1. **Implement webhook endpoints** for entity create/update/delete events
+2. **Add the "See agent in live" button** to story cards (iframe to T3 Code)
+3. **Add the "Chat with agent" button** to story cards (opens AI channel)
+4. **Build the version matrix view** for packages × apps
+
+### Medium Term (Next Month)
+1. **Implement the full agent pipeline** with plan approval and deployment
+2. **Add webhook subscription management** in settings
+3. **Build the multi-product overview** dashboard
+4. **Implement pattern detection** from feature channels

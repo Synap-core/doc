@@ -113,23 +113,30 @@ Server → Client (JSON events):
 Client → Server:  { type: "cancel" }
 ```
 
-## Profile inventory (13 profiles)
+## Profile inventory (19 profiles)
 
 | Slug | Display | Purpose | Key properties |
 |------|---------|---------|----------------|
-| `devplane_app` | App | Software application | appStatus, repoUrl, deployUrl, techStack, port, entityChannelId, npmTokenVaultRef, githubTokenVaultRef |
-| `devplane_feature` | Feature | Work item with AI session | featureStatus, priority, linkedApp, linkedPackages, estimatedDays, entityChannelId |
-| `devplane_service` | Service | Microservice / backend process | serviceStatus, serviceType, host, servicePort, healthUrl, linkedApp, linkedEnvironmentId |
-| `devplane_package` | Package | npm/pnpm package | packageName, packageVersion, dependsOn, consumedByApps, healthScore, healthGrade, staleStatus, uncommittedCount, entityChannelId |
-| `devplane_environment` | **Server** | SSH-accessible server node | envType, **host**, envUrl, isActive, sshUser, sshKeyVaultRef, linkedAppSlug, **kamalRole**, **serverProvider** |
-| `devplane_deployment` | Deployment | Deploy event / release record | deployStatus, version, commitSha, linkedApp, linkedEnvironment, deployedBy, deployedAt, logsUrl, recipeRunId |
-| `devplane_recipe` | Recipe | SSH command sequence | recipeTemplate (kamal/shell/custom), recipeSteps, linkedEnvironmentId, linkedAppSlug, onFailure, rollbackRecipeId |
-| `devplane_recipe_run` | Recipe Run | Single recipe execution | recipeId, runStatus, runSteps, runStartedAt, runFinishedAt, runDuration, triggeredBy |
+| `devplane_app` | App | Software application | appStatus, repoUrl, deployUrl, techStack, port, entityChannelId, deployTargets, autoDeployBranches |
+| `devplane_feature` | Feature | Work item with AI session | featureStatus, priority, linkedApp, linkedPackages, agent_status, assigned_agent, entityChannelId |
+| `devplane_story` | Story | User-facing story orchestrating features | storyStatus, priority, agent_status, featureIds, packageIds, context_doc_id |
+| `devplane_service` | Service | Microservice / backend process | serviceStatus, serviceType, host, servicePort, healthUrl, linkedApp |
+| `devplane_package` | Package | npm/pnpm package | packageName, packageVersion, dependsOn, consumedByApps, healthScore, healthGrade, staleStatus |
+| `devplane_environment` | **Server** | SSH-accessible server node | envType, host, envUrl, isActive, sshUser, kamalRole, serverProvider |
+| `deployment_target` | Deployment Target | Coolify/Vercel/Netlify target | targetType, targetUrl, targetAuthRef, targetEnvType, targetStatus |
+| `devplane_deployment` | Deployment | Deploy event / release record | deployStatus, version, commitSha, linkedApp, linkedEnvironment, deployedBy |
+| `devplane_recipe` | Recipe | SSH command sequence | recipeTemplate, recipeSteps, linkedEnvironmentId, linkedAppSlug, onFailure |
+| `devplane_recipe_run` | Recipe Run | Single recipe execution | recipeId, runStatus, runSteps, runStartedAt, runFinishedAt, triggeredBy |
 | `devplane_prompt_snippet` | Snippet | Reusable AI prompt template | snippetCategory, snippetBody, isExecutable, linkedApp |
-| `devplane_decision_record` | Decision Record | Technical decision with rationale | decisionContext, decisionChoice, alternatives, linkedApp, linkedPackages, madeBy, madeAt |
-| `devplane_incident` | Incident | Production incident | severity, incidentStatus, affectedApps, rootCause, resolvedAt, linkedEnvironment, recipeRunId |
-| `devplane_cron` | Cron Job | Scheduled task registry | cronExpression, cronStatus, linkedAppSlug, lastRunAt, lastRunStatus, nextRunAt |
-| `devplane_package_publish` | Package Publish | npm publish audit trail | publishedPackage, fromVersion, toVersion, bumpType, changelogEntry, publishStatus, consumersNotified |
+| `devplane_decision_record` | Decision Record | Technical decision with rationale | decisionContext, decisionChoice, alternatives, linkedApp, linkedPackages |
+| `devplane_incident` | Incident | Production incident | severity, incidentStatus, affectedApps, rootCause, linkedEnvironment |
+| `devplane_cron` | Cron Job | Scheduled task registry | cronExpression, cronStatus, linkedAppSlug, lastRunAt, nextRunAt |
+| `devplane_package_publish` | Package Publish | npm publish audit trail | publishedPackage, fromVersion, toVersion, bumpType, changelogEntry |
+| `devplane_system_component` | System Component | Architecture building block | componentType, componentStatus, techStack, repoUrl, linkedAppId |
+| `devplane_workflow` | Workflow | User flow through components | workflowStatus, workflowCategory, trigger, linkedComponentIds, mermaidDiagram |
+| `devplane_agent_run` | Agent Run | Pipeline execution | feature_id, pipeline_phase, run_status, agent_name, duration_ms |
+| `devplane_best_practice` | Best Practice | Codified engineering practice | category, tech_stack, title, body, is_enforced |
+| `devplane_codebase_map` | Codebase Map | Module structure map | app_id, module_path, module_name, key_files, conventions |
 
 **Bold properties** were added in the April 2026 data model refinement. `devplane_environment` is named "Server" in the UI to reflect that it represents a physical/virtual server node, not just an abstract environment tier.
 
@@ -160,21 +167,23 @@ Package
 
 ## Navigation structure
 
-Sidebar: 6 groups, 12 items.
+Sidebar: 4 groups, 11 items.
 
 ```
-Home
-── Work:          Apps · Features
-── Stack:         Packages · Services
-── Deploy:        Environments (Servers) · Deployments · Recipes
-── Monitor:       Incidents · Crons
-── Intelligence:  Knowledge (Decisions + Snippets) · Providers
+Overview
+── Build:          Architecture · Stories · Features · Apps
+── Knowledge:      Packages · Decisions · Best Practices · Codebase Maps
+── Pipeline:       Agent Runs · Deployments
 ```
 
 Key pages:
+- `/overview` — dashboard: fleet health, apps matrix, active features, deployments, incidents
+- `/architecture` — React Flow graph + Mermaid tab + List tab (SystemComponent + Workflow)
+- `/stories` — kanban board with agent pipeline state machine
+- `/stories/[id]` — story detail with full agent pipeline controls
 - `/features/[id]` — split-pane: left = details + edit, right = persistent AI channel
-- `/knowledge` — tabbed: Decisions | Snippets (URL: `?tab=decisions`)
 - `/packages` — grid with health grades, stale status, Publish + Impact actions
+- `/settings` — workspace settings, AI provider config, monorepo root
 
 ## Infrastructure model
 
@@ -214,19 +223,24 @@ Health scoring (`scorePackage()` — populates `healthScore`, `healthGrade`, `st
 
 | File | Purpose |
 |------|---------|
-| `lib/devplaneWorkspaceDefinition.ts` | 13-profile `WorkspaceProposal` — source of truth for all DevPlane profiles |
-| `hooks/useWorkspaceReadiness.ts` | Readiness state machine — verifies all 13 profiles, bootstraps missing ones |
+| `lib/builderWorkspaceDefinition.ts` | 19-profile `WorkspaceProposal` — source of truth for all Builder profiles |
+| `hooks/useWorkspaceReadiness.ts` | Readiness state machine — verifies all 19 profiles, bootstraps missing ones |
 | `hooks/useDevplaneSetup.ts` | First-login flow — creates workspace, optional demo seed |
-| `lib/devplane/hooks.ts` | All tRPC hooks for DevPlane entities + channel hooks |
-| `lib/devplane/types.ts` | TypeScript types for all 13 entity profiles |
+| `lib/devplane/hooks.ts` | All tRPC hooks for DevPlane entities + channel hooks + automation hooks |
+| `lib/devplane/types.ts` | TypeScript types for all entity profiles |
 | `lib/devplane/intelligence/` | Pure logic: impact BFS, context builder |
 | `lib/devplane/seed.ts` | `seedSynapStack()` — creates demo entities for the Synap stack |
-| `app/(app)/layout.tsx` | `WorkspaceReadinessGate` + `AppSocketProvider` gating |
+| `lib/devplane/useRecipeRunner.ts` | WebSocket recipe runner with per-step streaming |
+| `lib/devplane/vault.ts` | Vault reference resolution (server-side only) |
+| `app/(app)/layout.tsx` | `AuthGuard` + `WorkspaceReadinessGate` + `AppSocketProvider` gating |
 | `app/providers.tsx` | Root provider tree (no Socket.IO) |
+| `components/layout/DevPlaneSidebar.tsx` | Navigation: Overview, Build, Knowledge, Pipeline groups |
+| `components/providers/AuthRedirect.tsx` | Auth redirect with tRPC 401 interceptor |
+| `middleware.ts` | Route protection for `/onboarding`, `/stories`, `/api/*`, `/settings`, `/architecture` |
 
 ## Design decisions
 
-**Frontend owns profiles.** The pod/backend has no knowledge of DevPlane-specific profiles. `DEVPLANE_WORKSPACE_DEFINITION` is the source of truth. The old `ensureDevplaneProfiles()` in `synap-backend` is dead code — wrong scope (system vs workspace), never called.
+**Frontend owns profiles.** The pod/backend has no knowledge of DevPlane-specific profiles. `BUILDER_WORKSPACE_DEFINITION` is the source of truth. The old `ensureDevplaneProfiles()` in `synap-backend` is dead code — wrong scope (system vs workspace), never called.
 
 **Idempotent bootstrap.** `createFromDefinition` with an existing `workspaceId` adds missing profiles without touching existing ones. This means the readiness gate can repair workspaces created before new profiles were added to the definition — no manual migration needed.
 
@@ -237,3 +251,11 @@ Health scoring (`scorePackage()` — populates `healthScore`, `healthGrade`, `st
 **Recipe steps as JSON string.** Synap property values are typed scalars. `JSON.stringify(steps)` keeps the data in the property system without schema changes.
 
 **Provider-agnostic servers.** `serverProvider` is metadata only — DevPlane connects via SSH regardless of provider. Hetzner, DO, AWS, bare metal — same SSH + vault pattern.
+
+**Full-page auth overlay.** Unauthenticated users see a full-page login overlay, not an inline login inside the app shell. This avoids rendering the app shell with broken data and gives a clean auth experience.
+
+**tRPC 401 → session clear.** When tRPC returns 401, the `AppTRPCProvider` clears the session and redirects to `/login`. No stale auth state.
+
+**Socket.IO gated behind readiness.** Socket.IO connects directly to the pod (not via Next.js proxy). It only mounts after workspace readiness is confirmed to avoid cross-origin WebSocket errors.
+
+**Stories vs Features.** Stories are user-facing scenarios that orchestrate features and drive the AI pipeline. Features are individual work items with their own AI channels. A story can link to multiple features and packages.

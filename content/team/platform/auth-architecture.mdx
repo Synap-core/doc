@@ -4,7 +4,7 @@ description: 'Auth consolidation: Better Auth, API keys, CLI tokens.'
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-10'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -13,7 +13,7 @@ toc: true
 
 # Synap Authentication Architecture
 
-Internal document. Audience: engineers making architectural decisions. Last updated: 2026-04-08.
+Internal document. Audience: engineers making architectural decisions. Last updated: 2026-05-10.
 
 ---
 
@@ -22,6 +22,26 @@ Internal document. Audience: engineers making architectural decisions. Last upda
 - [Security & Permissions](./security.mdx) — Threat surface, audit logging, and validation layered on top of authentication
 - [Permissions](./permissions.mdx) — RBAC model that sits on top of authentication for authorization decisions
 - [Connections Architecture](./connections.mdx) — How CP, pod, and client authentication bridges work together
+
+---
+
+## 2026-05-10 Auth Refactor — What Changed
+
+The Eve dashboard previously maintained its own JWT-Bearer (RFC 7523) flow to mint a `pod.userToken` from a Kratos session. This drift between the cookie-based pod auth and the eve-side token caused repeated operator lockouts.
+
+**The new model is cookie-only for user actions.** The `ory_kratos_session` cookie is set at parent-domain scope by any sign-in surface — pod-admin, eve dashboard, or browser app — and is automatically shared. Eve's `/api/pod/*` proxy forwards this cookie to the pod verbatim. No eve-side token is stored or minted.
+
+**Pod-admin consolidation.** `apps/admin-ui` (a separate SPA) was deleted. Pod-admin (`apps/pod-admin`) now owns both `/login` and `/setup` (first-admin bootstrap) natively. The Caddy `/admin/*` route that previously routed to admin-ui is removed.
+
+**Boot probe.** `verifyPodAdminInvariant()` runs after migrations and before the HTTP listener starts. If critical invariants (e.g., at least one admin user exists after bootstrap) are missing, the pod refuses to boot with a loud, actionable error. This prevents silent broken-state deployments.
+
+**Migration self-heal.** `cmd_install` and `cmd_update` always force-run `kratos-migrate` and `hydra-migrate` — the `service_completed_successfully` short-circuit from Docker Compose's dependency model no longer skips migration on subsequent ups. `createAdminUser` is idempotent (handles 409 and partial-state gracefully).
+
+**`update-pod.sh` hardening.** The destructive `down -v` block (which wiped Kratos/Hydra data volumes) was removed. Project name is aligned to `synap-backend` across all `deploy/*.sh` scripts — COMPOSE_PROJECT_NAME drift was causing containers to be treated as belonging to different stacks.
+
+> **Retired 2026-05-10:** `app/.well-known/jwks.json/route.ts`, `app/api/auth/pod-signin/route.ts`, `app/api/pod/_lib.ts` (mintAndStorePodUserToken), `app/api/pod/issuer-info/route.ts`, and `@eve/dna` helpers `writePodUserToken` / `readPodUserToken` / `clearPodUserToken` were all deleted. See git history for the JWT-Bearer design.
+
+---
 
 ### 1.1 Stack Overview
 

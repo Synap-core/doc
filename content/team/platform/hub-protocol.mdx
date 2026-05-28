@@ -182,10 +182,38 @@ Server-Sent Events over a long-lived connection. Replaces polling for OpenClaw m
 
 The response also echoes `effectiveWorkspaceId` so callers can verify the resolved scope without a follow-up GET.
 
+### Webhook push subscriptions
+
+Agents and external services can register push endpoints to receive real-time event delivery:
+
+```
+POST   /api/hub/webhooks          # register — { url, eventTypes[], signingSecret?, active }
+GET    /api/hub/webhooks          # list own subscriptions
+DELETE /api/hub/webhooks/:id      # unregister
+PATCH  /api/hub/webhooks/:id      # update url / eventTypes / active
+```
+
+When `emitChatEvent` fires a socket event it also calls `dispatchWebhooksForEvent` (fire-and-forget): every active subscription matching the event type receives a POST with:
+- `X-Synap-Event: <eventType>` header
+- `X-Synap-Signature-256: sha256=<hmac-sha256-hex>` header (HMAC over raw body with `signingSecret`)
+- JSON body: `{ event, data, timestamp }`
+
+Subscriptions are owner-scoped (`subscriberId = apiKeyId`). Requires `webhook:manage` API key scope. Admin override with `hub-protocol.admin`. Storage: `webhook_subscriptions` table (migration `0022_webhook_subscriptions.sql`). Implementation: `packages/api/src/utils/webhook-delivery.ts`.
+
+### Agent key identity linking (`linked_user_id`)
+
+`api_keys.linked_user_id` (migration `0021_api_keys_linked_user_id.sql`) ties an agent API key to a human pod owner. When set:
+
+- Hub middleware exposes it as `HubVariables.linkedUserId`
+- `POST /memory` dual-writes the fact under both the agent identity and the linked human user (non-fatal; logged on failure)
+- Sub-tokens (keys with `parent_key_id`) are excluded from dual-write
+
+`POST /api/hub/setup/agent` auto-resolves `linkedUserId` if not supplied — queries for the first human user on the pod. Pass explicit `""` to opt out.
+
 ### See also
 
 - Source: `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` (orchestrator, 341 lines), `routers/hub-protocol/rest/*` (33 per-resource files), `_codecs/*` (request/response Zod schemas).
-- Migrations: `0017_channels_external_id.sql` (externalSource/externalId on channels), `0018_per_user_sub_tokens.sql` (api_key_external_users + api_keys.parent_key_id).
+- Migrations: `0017_channels_external_id.sql` (externalSource/externalId on channels), `0018_per_user_sub_tokens.sql` (api_key_external_users + api_keys.parent_key_id), `0021_api_keys_linked_user_id.sql` (agent identity linking), `0022_webhook_subscriptions.sql` (push subscriptions).
 - Auth: see [Auth Architecture](./auth-architecture.mdx) for the sub-token resolution path inside the bearer-key middleware.
 
 ## Documentation

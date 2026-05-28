@@ -1,0 +1,137 @@
+# External Sources Architecture
+
+How external data (OAuth syncs, scraped data, enrichment APIs) flows into Synap entities in a unified, swappable way.
+
+---
+
+## Two distinct integration patterns
+
+External sources fall into two fundamentally different categories. They use different auth models, different invocation patterns, and serve different CRM actions. They are **not unified under one interface**.
+
+### SyncConnector — OAuth, stateful, per-user
+For services the user is logged into. Handles OAuth session creation, token storage, and incremental record fetching.
+
+**Implementations**: `NangoConnector` (self-hosted Nango)  
+**Interface**: `packages/api/src/connectors/SyncConnector.ts`  
+**Triggered by**: background feed-scheduler (every minute) for active subscriptions  
+**Example**: Gmail → note entities, Google Contacts → person entities, Google Calendar → event entities
+
+### EnrichmentProvider — stateless, API-key, on-demand
+For data APIs that don't require user OAuth. Called directly with input, return structured data.
+
+**Implementations**: `ApifyProvider`, `ApolloProvider`  
+**Interface**: `packages/api/src/connectors/EnrichmentProvider.ts`  
+**Triggered by**: user action (button click) or background scoring worker  
+**Example**: Apollo.io enriches a contact with email/title/company size; Apify scrapes LinkedIn for leads at a target company
+
+---
+
+## Data flow
+
+```
+SyncConnector (Nango)         EnrichmentProvider (Apify/Apollo)
+       ↓                                   ↓
+  fetchRecords()                       enrich()
+       └─────────────────┬─────────────────┘
+                         ↓
+              ConnectorRecord / EnrichmentResult
+                         ↓
+              entity-extract worker
+              (dedup via entity_external_links)
+                         ↓
+              checkPermissionOrPropose()
+                         ↓
+              person / company / note / event entities
+                         ↓
+              CRM "Leads Feed" channel
+```
+
+---
+
+## Registries
+
+Both interfaces have a registry that is populated at pod startup:
+
+```typescript
+// packages/api/src/connectors/index.ts
+syncConnectorRegistry.register(new NangoConnector());
+enrichmentProviderRegistry.register(new ApifyProvider());
+enrichmentProviderRegistry.register(new ApolloProvider());
+```
+
+Query configured providers at runtime:
+```typescript
+// All active sync connectors (isConfigured() = true)
+syncConnectorRegistry.list();
+
+// All enrichment providers capable of enriching a person
+enrichmentProviderRegistry.forCapability("person");
+// → [ApolloProvider, ApifyProvider] if both API keys are set
+```
+
+---
+
+## Implemented adapters
+
+### NangoConnector
+- **Auth**: `NANGO_SECRET_KEY` + `NANGO_HOST` (defaults `http://localhost:3003`)
+- **Self-hosted**: managed by Eve CLI (`eve nango init`)
+- **Models**: `google-contacts-contact` → person, `google-calendar-event` → event, `google-mail-email` → note, `github-issue` → task
+- **Incremental**: passes `modified_after` on each sync tick to fetch only changed records
+
+### ApifyProvider
+- **Auth**: `APIFY_API_TOKEN` env var
+- **Capabilities**: `person`, `company`, `leads`
+- **How**: `enrich({ actorId: "apify/linkedin-profile-scraper", params: { ... } })` → calls `POST /v2/acts/{actorId}/run-sync-get-dataset-items`
+- **Key actors for CRM**:
+  - `apify/linkedin-profile-scraper` — enrich a person from LinkedIn URL
+  - `apify/website-content-crawler` — extract company info from website
+  - `curious_coder/linkedin-company-search` — find companies by criteria
+  - `2s3gOf43bB3bedPji` (LinkedIn Sales Navigator scraper) — lead generation
+
+### ApolloProvider
+- **Auth**: `APOLLO_API_KEY` env var
+- **Capabilities**: `person`, `company`
+- **How**: `enrich({ endpoint: "people/match", params: { name, organization_name, domain } })`
+- **Endpoints**:
+  - `people/match` — find + enrich a person (email, phone, title, LinkedIn)
+  - `organizations/enrich` — enrich a company (size, funding, tech stack, revenue)
+- **Confidence**: 0.9 (highest of the three — verified database)
+
+---
+
+## Adding a new provider
+
+### New SyncConnector
+1. Create `packages/api/src/connectors/MySyncConnector.ts` implementing `SyncConnector`
+2. Register in `index.ts`: `syncConnectorRegistry.register(new MySyncConnector())`
+3. If it needs a Nango integration: add sync spec to `nango-integrations/nango.yaml`
+4. Add model→profileSlug mapping in the entity-extract worker
+
+### New EnrichmentProvider
+1. Create `packages/api/src/connectors/MyEnrichmentProvider.ts` implementing `EnrichmentProvider`
+2. Set `capabilities` to the entity types it can enrich
+3. Register in `index.ts`: `enrichmentProviderRegistry.register(new MyEnrichmentProvider())`
+4. Add env var to `.env.example`
+5. Surface in CRM UI via `enrichmentProviderRegistry.forCapability("person")`
+
+---
+
+## Environment variables
+
+| Variable | Required by | Description |
+|----------|-------------|-------------|
+| `NANGO_HOST` | NangoConnector | Nango server URL (default: `http://localhost:3003`) |
+| `NANGO_SECRET_KEY` | NangoConnector | Nango API secret (auto-generated by `eve nango init`) |
+| `APIFY_API_TOKEN` | ApifyProvider | Apify platform API token |
+| `APOLLO_API_KEY` | ApolloProvider | Apollo.io API key |
+
+---
+
+## Proposal gating
+
+All enrichment mutations go through `checkPermissionOrPropose()`:
+
+- **User-triggered** (click "Enrich contact"): auto-approved — entity updated immediately
+- **AI-triggered** (background ICP scoring worker): creates a proposal — surfaces in CRM inbox for review
+- **Sync-triggered** (Nango incremental): auto-approved for non-destructive property updates (new fields); proposes overwrites of user-edited fields

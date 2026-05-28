@@ -82,6 +82,18 @@ Le système de clés API de Synap permet une authentification sécurisée pour l
 - Permissions granulaires (scopes)
 - Utilisées pour accès direct aux APIs (futur)
 
+### 3. Agent Keys (Clés Agent)
+
+**Format :** `synap_hub_live_xxx` with `key_type = "agent"`
+
+**Usage :** Provisioned by `POST /api/hub/setup/agent` (PROVISIONING_TOKEN auth) for AI agents (Hermes, OpenClaw, custom agents)
+
+**Caractéristiques :**
+
+- `linked_user_id` — optional TEXT column linking the agent key to a human pod owner. When set, memory writes via this key are dual-attributed: the fact is stored for both the agent identity and the linked human, so memories written by the agent surface in the owner's personal knowledge graph.
+- Auto-resolved on provisioning: if `linkedUserId` is not supplied, `POST /setup/agent` queries for the first human user on the pod and uses that id. Pass explicit `""` to opt out.
+- Sub-tokens (child keys with `parent_key_id`) are excluded from dual-write — only the top-level agent key triggers identity linking.
+
 ---
 
 ## Création de Clés

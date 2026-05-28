@@ -4,7 +4,7 @@ description: Auth system audit across all surfaces.
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-10'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -190,7 +190,74 @@ Once `setup/agent` accepts CP JWTs, the CP doesn't need to store the PROVISIONIN
 
 **Overall:** The security primitives are solid (ES256, JWKS, bcrypt, scoped keys). The problem is architectural — too many paths doing the same thing, creating confusion and maintenance burden.
 
+---
+
+## Common Pitfalls (2026-05-10 Lessons)
+
+These were root-caused during the cookie-only auth refactor. Each cost real operator lockout time.
+
+### 1. `kratos-migrate` silently skipped on subsequent `docker compose up`
+
+Docker Compose's `depends_on: condition: service_completed_successfully` caches the result of a one-shot migration container. On subsequent `up` calls, if the container has already exited with code 0, Compose considers the dependency satisfied and skips re-running it. When a new migration is added, this means Kratos (and Hydra) start against a stale schema — Kratos will refuse requests or produce cryptic 500s.
+
+**Fix:** Always run migrations explicitly before `up`:
+```bash
+docker compose run --rm kratos-migrate
+docker compose run --rm hydra-migrate
+```
+`cmd_install` and `cmd_update` now force this on every run.
+
+### 2. COMPOSE_PROJECT_NAME drift between deploy scripts
+
+If `COMPOSE_PROJECT_NAME` differs between scripts (e.g., one uses `synap`, another uses `synap-backend`), Docker treats the containers as belonging to different stacks. `docker compose down` in one script leaves the other stack's containers running, `docker compose ps` shows nothing, and service discovery breaks silently.
+
+**Fix:** All `deploy/*.sh` scripts must export `COMPOSE_PROJECT_NAME=synap-backend`. Verify with `docker compose ls` — you should see exactly one project.
+
+### 3. `update-pod.sh` destructive `down -v` block
+
+The update script previously included a `docker compose down -v` call that wiped all named volumes — including the Kratos PostgreSQL volume containing all identity data and sessions. Operators who ran `update-pod.sh` lost all Kratos users and had to re-run the bootstrap flow.
+
+**Fix:** The `down -v` block has been removed. Updates now do an in-place `pull` + `up --force-recreate` without touching volumes. If you need to wipe state intentionally, do it explicitly and deliberately.
+
+### 4. Eve JWT-Bearer flow creating stale `pod.userToken` after Kratos session expiry
+
+The previous JWT-Bearer mint flow stored `pod.userToken` in `~/.eve/secrets.json`. When the underlying Kratos session expired, the token was still present on disk and eve-dashboard would attempt to use it, receiving 401s. Because the token was cached, the transparent re-mint sometimes failed silently, leaving the operator locked out until they manually cleared the secrets file.
+
+**Fix:** The JWT-Bearer flow and `pod.userToken` have been retired (2026-05-10). Eve now forwards the `ory_kratos_session` cookie directly. There is no eve-side token to go stale — if the cookie is missing or expired, the proxy returns `{ "error": "no-pod-session", "action": "sign-in-required" }` and the operator is routed to the sign-in page immediately.
+
+### 5. Kratos "Unable to locate the table" crash loop after update
+
+After a `synap update`, Kratos could enter a crash loop with `pq: relation "identities" does not exist` (or similar). Root cause: `update-pod.sh` was silently swallowing a failed `kratos-migrate` run (`2>/dev/null || log WARN`), starting Kratos against an empty DB.
+
+**Fix (2026-05-11):** `update-pod.sh` now aborts loudly if `kratos-migrate` fails, then verifies the `identities` table exists before recreating the Kratos container. Additionally, `./synap start kratos` now always regenerates `kratos.yml` before the compose up — so any CORS or config drift is self-healed on every restart.
+
+If you hit this on an existing deployment manually:
+```bash
+cd /opt/synap-backend/deploy
+docker compose -p synap-backend run --rm kratos-migrate
+cd .. && ./synap start kratos
+```
+
+### 6. Kratos CORS not updated after domain change
+
+`kratos.yml` is the sole CORS gatekeeper. It was only regenerated on `cmd_install`, so a domain rename or re-provision left the old origin in the allowed list, causing browsers to receive CORS rejections from Kratos endpoints.
+
+**Fix (2026-05-11):** `./synap start kratos` (called by `cmd_update`, `update-pod.sh`, and `configure-pod.sh` for the kratos service) now always calls `generate_kratos_config()` before compose up. The pod API also runs a non-fatal CORS coherence check on boot and logs a warning if the Kratos allowed-origin doesn't match `DOMAIN`.
+
+### 7. `eve-brain-synap` alias missing after backend force-recreate
+
+`synap-backend-backend-1` must be attached to `eve-network` with the alias `eve-brain-synap` for the eve-dashboard `resolvePodUrl` helper to reach the pod internally (used for the `/api/pod/setup-status` probe). This alias is only attached by `eve install synap` — not by `synap update` or any backend-only recreate. A missing alias causes a 502 on `/api/pod/setup-status`, which the eve-dashboard mistakenly surfaces as a CORS or auth error.
+
+**Fix:** After any `docker compose up --force-recreate backend` that is NOT preceded by `eve install synap`, re-attach manually:
+```bash
+docker network connect eve-network synap-backend-backend-1 --alias eve-brain-synap 2>/dev/null || true
+```
+This is automatically handled when `eve install synap` is run. Long-term fix: move the alias attachment into `synap update` / `eve update`.
+
+---
+
 ## Related
 
 - [Security](security) — Security entrypoint and ownership matrix
 - [Security Best Practices](security-practices) — Operational hardening checklist
+- [Eve Credentials & the Two-Channel Rule](../platform/eve-credentials.mdx) — Current credential model (cookie-only for user actions)

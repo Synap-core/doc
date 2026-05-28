@@ -4,7 +4,7 @@ description: 'Typed event registry, delivery router, automation trigger system.'
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-05-05'
+last_updated: '2026-05-14'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -13,7 +13,7 @@ toc: true
 
 # Event Chain & Signal Routing
 
-> Last updated: 2026-05-05 — added realtime event naming convention (`{actor}:{entity}:{action}`)
+> Last updated: 2026-05-14 — clarified proposal/event-chain linkage and review model.
 
 ## Related
 
@@ -38,6 +38,54 @@ Something happens
       ├── pg-boss "webhook-delivery"         → outbound webhooks fired
       └── events table append               → audit log + pod sync
 ```
+
+## Proposals In The Event Chain
+
+Proposals are review states inside the event chain, not unrelated records.
+
+For a governed mutation, the canonical chain is:
+
+```txt
+entity.update.requested
+      │  correlationId = X
+      ▼
+pending proposal
+      │  proposals.data.correlationId = X
+      │  proposals.data.requestedEventId = requested event id
+      ▼
+entity.update.validated
+      │  same correlationId = X
+      ▼
+entity.update.completed
+      │  same correlationId = X
+      ▼
+UI review model merges proposal row + correlated events
+```
+
+The proposal row stores review/provenance data. The `events` table stores the
+temporal chain. UI surfaces should merge both:
+
+- proposal status, reviewer, source message, agent/user attribution
+- request payload, semantic changes, summary, reasoning
+- correlated requested/validated/completed events
+
+Backend APIs expose this as the `review` object on enriched proposal responses.
+Use `review.events` and `review.correlationId` for timeline UX instead of
+reconstructing event traces in every client.
+
+### Creation Rules
+
+- Normal mutation routers emit `.requested`, then call
+  `checkPermissionOrPropose()`.
+- If review is needed, `checkPermissionOrPropose()` calls the canonical
+  `createPendingProposal()` helper.
+- Explicit proposal endpoints use `createEventBackedProposal()`, which emits
+  `.requested` and then delegates to `createPendingProposal()`.
+- Approval emits `.validated` with the same `correlationId`; materialization emits
+  `.completed`.
+
+This keeps the permission system, proposal inbox, automation triggers, and
+temporal UI on one chain.
 
 ## Event Type Registry
 

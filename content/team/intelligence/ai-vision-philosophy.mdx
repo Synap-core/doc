@@ -4,12 +4,30 @@ _Collaborative Intelligence Without Lock-In_
 
 ---
 
+## The New Frame (May 2026)
+
+The framing below ("ChatGPT alternative, no lock-in") was true in 2025. It is now incomplete. The real breakthrough is different:
+
+> **AI in Synap doesn't just answer questions. It extends the platform itself.**
+
+An AI agent on Synap can:
+- **Create new entity types** — define a `devplane_runbook` profile, register its properties, write the first entity
+- **Generate a complete application** — from a description, produce a profile config + view config + automation config. No code changes.
+- **Extend the knowledge graph** — create entities, wire relations, build the graph that makes future answers possible
+- **Govern its own actions** — every write goes through proposals. The AI is autonomous because the architecture makes it impossible to act without a trace.
+
+The AI isn't a chatbot sitting on top of your data. It's a co-author of the platform itself.
+
+See the architectural north star: [Every application is a configuration. AI writes the config.](/home/product#6-config-over-code-the-generation-principle)
+
+---
+
 ## Executive Summary
 
 **Synap AI** is a multi-agent intelligence system built on an open-source foundation that gives users **true ownership** of their AI capabilities.
 
 **One-Sentence Pitch:**  
-Synap provides ChatGPT-level AI assistance with infinite context, multi-agent collaboration, and conversation branching—while keeping your data and AI logic fully under your control.
+Synap AI doesn't just assist — it generates. Describe any workspace, app, or workflow in plain language; AI produces the configuration that runs it. No code changes required.
 
 **Who It's For:**
 
@@ -297,7 +315,7 @@ You → Data Pod → Hub Protocol ──┬─→ Synap (orchestration)
 | **Context Limit**      | 32K tokens   | Page-scoped  | 200K tokens     | **∞ Infinite**             |
 | **Branching**          | ❌ No        | ❌ No        | ❌ No           | **✅ Yes**                 |
 | **Multi-Agent**        | Single model | Single model | Single model    | **✅ 15+ agents**          |
-| **Autonomous Actions** | ❌ No        | Limited      | ❌ No           | **✅ Yes (with approval)** |
+| **Autonomous Actions** | ❌ No        | Limited      | ❌ No           | **✅ Yes (with approval, navigate & reference inline)** |
 | **API Access**         | ✅ Yes ($)   | Limited      | ✅ Yes ($)      | **✅ Yes (free)**          |
 | **Bring Your Own AI**  | ❌ No        | ❌ No        | ❌ No           | **✅ Yes (Hub Protocol)**  |
 | **Marketplace**        | ❌ No        | ❌ No        | ❌ No           | **✅ Coming**              |
@@ -318,8 +336,8 @@ You → Data Pod → Hub Protocol ──┬─→ Synap (orchestration)
 - ✅ Infinite chat with branching
 - ✅ Open-source backend released
 - ✅ Hub Protocol v1 specification
-- 🔜 Marketplace beta (Q2 2025)
-- 🔜 Self-hosting guide (Q2 2025)
+- ✅ Marketplace beta (Q2 2025)
+- ✅ Self-hosting guide (Q2 2025)
 
 ### Medium-Term (2026)
 
@@ -332,6 +350,9 @@ You → Data Pod → Hub Protocol ──┬─→ Synap (orchestration)
 - **Team Collaboration:** Shared conversations (opt-in)
 - **Advanced Memory:** Long-term learning and adaptation
 - **Integration Ecosystem:** Third-party tools and services
+- **✅ AI Inline Command Syntax** — Agents embed typed references (`[[entity:ID|Name]]`) and navigation commands (`[[open:side|view:ID]]`) directly in prose. Frontend renders them as interactive chips and entity links. No protocol round-trip — the stream is the UI protocol.
+- **✅ AI-Composed Widgets** — Agents generate widgets via proposals; `WidgetPreviewChip` surfaces them inline in the chat; one click opens them in a side panel. Complete AI → UI creation loop.
+- **✅ AI Companion Surface** — `@synap-core/chat-ui` and `@synap-core/chat-headless` packages unify the companion across Browser V2 and Eve dashboard.
 
 ### Long-Term (2027+)
 

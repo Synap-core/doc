@@ -3,14 +3,14 @@ title: DevPlane
 description: Developer intelligence layer — package graph, session continuity, automation, knowledge accumulation, multi-product oversight
 section: products
 audience: team
-last_updated: '2026-04-29'
+last_updated: '2026-05-17'
 ---
 
 DevPlane is the developer intelligence layer built on a Synap data pod. Everything you build, every package you publish, every session you run, every decision you make — stored as connected entities. AI that knows your full stack. One-button automations for the flows you repeat. The mental overhead disappears because the system handles it.
 
-Live at **[devplane.synap.live](https://devplane.synap.live)**.
+Live at **[devplane.staging.synap.live](https://devplane.staging.synap.live)**.
 
-See [North Star](./north-star) for the full vision, pillars, and implementation roadmap.
+See [Current State](./current-state) for the complete architecture, feature list, and roadmap. See [North Star](./north-star) for the full vision, pillars, and implementation phases.
 
 ## What it is
 
@@ -22,32 +22,37 @@ It is the first example of a **vertical Synap app**: derived from `apps/base/`, 
 
 | Section | What you can do |
 |---------|-----------------|
-| **Apps** | Track repositories, tech stacks, ports, deploy URLs. Vault refs for NPM and GitHub tokens. |
-| **Features** | Kanban board (Backlog → In Progress → In Review → Done). Per-feature AI channel with context injection — the agent knows the linked app, packages, recent deployments, and open incidents. |
-| **Services** | Table of backend services with type, host:port, health check URL, and linked app. |
-| **Packages** | Grid with health grades (A–F), stale status, dependency graph edges, publish history. Impact analysis before publishing. |
-| **Servers** | SSH-accessible server nodes with Kamal role (web/worker/db/cache), provider metadata, vault-backed SSH keys. Full xterm.js terminal. |
-| **Deployments** | Timeline with status, version, commit SHA, linked server. Filter by status. |
-| **Recipes** | SSH command sequences with live streaming output per step. Templates: Kamal, Shell, Custom. |
-| **Incidents** | Severity triage, status tracking, root cause, linked to server and recipe run that caused it. |
-| **Crons** | Scheduled job registry: cron expression, status, last/next run, linked app. |
-| **Knowledge** | Two-tab page: Decision Records (context + rationale + alternatives) and Snippets (reusable AI prompts, optionally executable as skills). |
+| **Overview** | Dashboard: fleet health bar, apps × status matrix, active features, recent deployments timeline, open incidents |
+| **Architecture** | React Flow interactive graph + Mermaid tab + List tab for SystemComponent and Workflow entities |
+| **Stories** | Kanban board (Backlog → In Progress → In Review → Done) with agent pipeline state machine |
+| **Features** | Kanban board with per-feature AI channel — agent knows linked app, packages, deployments, incidents |
+| **Apps** | Track repositories, tech stacks, ports, deploy URLs. Vault refs for NPM and GitHub tokens |
+| **Packages** | Grid with health grades (A–F), stale status, dependency graph edges, publish history. Impact analysis before publishing |
+| **Services** | Table of backend services with type, host:port, health check URL, and linked app |
+| **Servers** | SSH-accessible server nodes with Kamal role, provider metadata, vault-backed SSH keys. Full xterm.js terminal |
+| **Deployments** | Timeline with status, version, commit SHA, linked server. Filter by status |
+| **Recipes** | SSH command sequences with live streaming output per step. Templates: Kamal, Shell, Custom |
+| **Decisions** | Decision records with context, rationale, alternatives — linked to apps and packages |
+| **Best Practices** | Codified engineering practices with category, tech stack, CI enforcement flag |
+| **Codebase Maps** | Structural maps of modules — path, key files, conventions, owner |
+| **Agent Runs** | Pipeline execution history — phase tracking, duration, output summary |
+| **Settings** | Workspace settings, AI provider configuration, monorepo root, local terminal toggle |
 
 ## How it relates to Synap
 
 DevPlane uses Synap as pure infrastructure:
 
-- **Data pod** — all entities are stored on `antoine-perso.synap.live` under a workspace named "DevPlane"
+- **Data pod** — all entities are stored on `antoine-perso.synap.live` under a workspace named "Builder"
 - **tRPC** — all reads/writes go through `trpc.entities.*` and `trpc.workspaces.*`, proxied through the Next.js `/trpc` route
 - **Auth** — same CP sign-in → pod handshake flow as all other Synap apps
-- **Workspace definition** — profiles and views are defined entirely in `lib/devplaneWorkspaceDefinition.ts`. The pod/backend never knows about DevPlane-specific profiles. This is intentional.
+- **Workspace definition** — profiles and views are defined entirely in `lib/builderWorkspaceDefinition.ts`. The pod/backend never knows about DevPlane-specific profiles. This is intentional.
 
 ## Workspace bootstrap
 
 DevPlane self-provisions on first login:
 
-1. `useDevplaneSetup` creates the "DevPlane" workspace and all 13 entity profiles via `trpc.workspaces.createFromDefinition`
-2. `useWorkspaceReadiness` (runs on every login) verifies all 13 profiles exist. If any are missing (e.g. after a definition update), it calls `createFromDefinition` with the existing workspace ID — idempotent, adds only what's missing.
+1. `useDevplaneSetup` creates the "Builder" workspace and all 19 entity profiles via `trpc.workspaces.createFromDefinition`
+2. `useWorkspaceReadiness` (runs on every login) verifies all 19 profiles exist. If any are missing (e.g. after a definition update), it calls `createFromDefinition` with the existing workspace ID — idempotent, adds only what's missing.
 
 The "Verifying workspace profiles" setup screen users see on first launch is this readiness gate in action.
 

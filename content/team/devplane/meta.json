@@ -4,6 +4,7 @@
   "icon": "server-cog",
   "pages": [
     "index",
+    "current-state",
     "north-star",
     "---Architecture---",
     "architecture",

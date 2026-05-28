@@ -4,7 +4,7 @@ description: High-level overview and philosophy of Synap
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-27'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -74,6 +74,19 @@ A pod is a dedicated private server — PostgreSQL + pgvector, Typesense search,
 ### 📡 [Hub & spoke](../../architecture/concepts/hub-and-spoke) — pluggable intelligence
 
 Swap AI services per workspace. Connect external agents via Hub Protocol. MCP client unlocks 10,000+ community tools.
+
+### 🤖 AI-composed applications — from conversation to working app
+
+Synap's AI doesn't just answer questions about your data. It can assemble data structures and interfaces for you:
+
+1. **Describe** what you need in natural language
+2. **AI composes** the profiles, views, cells, and widgets from existing building blocks
+3. **You approve** via the proposal system — every mutation is reviewable and reversible
+4. **AI points you there** — inline `[[entity:UUID|Name]]` references and `[[open:side|view:UUID]]` navigation chips in the response take you directly to what was built
+
+The phrase that captures it: **"Any application, from a conversation."** No code. No manual configuration. The AI assembles the Lego bricks; you govern what gets built.
+
+The governance layer (`checkPermissionOrPropose()`, navigation permissions, the event chain) ensures AI-generated changes are always traceable, reversible, and under your control.
 
 ## For whom?
 

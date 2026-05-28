@@ -1,0 +1,156 @@
+# Connector Architecture
+
+Two distinct connector types power all external data integrations in Synap. They differ in state model, auth mechanism, and how they feed data into the pod.
+
+---
+
+## Two Connector Types
+
+### SyncConnector — OAuth / Nango
+
+Stateful, user-authorized integrations where Synap continuously syncs records from an external service. Examples: Google Mail, Google Contacts, Google Calendar, Google Drive, GitHub, Slack, HubSpot, Salesforce, LinkedIn.
+
+- Auth: OAuth 2.0, tokens managed by Nango
+- State: persistent connection per user per provider
+- Data flow: Nango webhooks → `runNangoSync()` → entity upsert pipeline → unified feed
+- Registry: `SyncConnectorRegistry` (`packages/api/src/connectors/index.ts`)
+- Interface: `ISyncConnector` — `createSession()`, `listConnections()`, `revokeConnection()`, `runSync()`
+
+### EnrichmentProvider — API-key / stateless
+
+On-demand enrichment calls, no persistent connection. A single API key is configured per provider at the pod level. Examples: Apollo.io (person/company enrichment), Apify (web scraping / lead discovery).
+
+- Auth: API key stored in pod env vars (`APOLLO_API_KEY`, `APIFY_API_TOKEN`)
+- State: stateless — no per-user connection record
+- Data flow: component calls `trpc.connectors.enrich({ provider, input })` → result returned inline
+- Registry: `EnrichmentProviderRegistry` (`packages/api/src/connectors/index.ts`)
+- Interface: `IEnrichmentProvider` — `enrich(input)`, `isConfigured()`, `capabilities`
+
+---
+
+## Nango — Self-Hosted OAuth Platform
+
+Nango runs as a managed Docker container on the pod host (`eve-arms-nango`, port 3003). It stores OAuth tokens in its own `nango` database on the same postgres instance as Synap (fully isolated at schema level).
+
+### Installing Nango
+
+```bash
+eve add nango   # requires Synap to be installed first (brain must be ready)
+```
+
+What happens:
+1. Generates `NANGO_SECRET_KEY` (random 32-byte hex), stored in `secrets.json → connectors.nango.secretKey`
+2. Creates `nango` database in `eve-brain-postgres` (idempotent)
+3. Starts `nangohq/nango:latest` on `eve-network` with the secret key + database URL
+4. If `PUBLIC_URL` is set in `deploy/.env`, injects `NANGO_WEBHOOK_URL=<PUBLIC_URL>/api/connectors/nango-webhook`
+5. Writes `NANGO_HOST=http://localhost:3003` + `NANGO_SECRET_KEY` to `deploy/.env`
+
+If `PUBLIC_URL` is not yet configured, re-run `eve add nango` after setting it — the container is replaced with the webhook URL included.
+
+### OAuth App Credentials
+
+Nango requires OAuth app credentials (client ID + secret) for each provider. Configure them via the Nango admin UI at `http://<pod-host>:3003` after install.
+
+### Pod ↔ Nango Communication
+
+The pod backend (`NangoConnector`) communicates with Nango directly over the `eve-network` Docker bridge using `NANGO_HOST` and `NANGO_SECRET_KEY`. No CP round-trip.
+
+- `GET /config` — list configured integrations
+- `POST /connect/sessions` — create a short-lived OAuth session token for the frontend
+- `GET /connections` — list active user connections
+- `DELETE /connections/{id}` — revoke a connection
+- `GET /sync/records` — fetch synced records for a connection
+
+### OAuth Flow (Frontend)
+
+```
+CRM Settings → trpc.connectors.session({ providerId })
+  → NangoConnector.createSession(userId, providerId, workspaceId)
+  → returns { token, nangoHost, connectLink }
+  → window.open(connectLink)   # Nango hosted OAuth UI
+  → user completes OAuth
+  → Nango webhook fires → POST /api/connectors/nango-webhook
+  → runNangoSync() → entity upsert
+```
+
+The `createSession` call sets `end_user.id = userId` so the webhook can recover the user ID from `connectionId` without a DB lookup.
+
+### Nango Webhook
+
+`POST /api/connectors/nango-webhook` — no Kratos auth (outside `/trpc/*` auth scope), self-authenticated via HMAC:
+
+```
+signature header: sha256=<hmac-sha256(NANGO_SECRET_KEY, rawBody)>
+```
+
+Payload includes `connectionId` (= userId), `providerConfigKey`, and `model`. The route calls `runNangoSync()` which fetches records from Nango and upserts them as entities.
+
+### Dual Mode (Local vs CP Proxy)
+
+When `NANGO_SECRET_KEY` is set on the pod (`isLocalNango() === true`), all connector tRPC procedures call Nango directly. When it is absent, they proxy to the Control Plane. Frontend code is unaware of which mode is active.
+
+---
+
+## Feed Pipeline Integration
+
+`NangoProvider` (`packages/feed-service/src/providers/NangoProvider.ts`) bridges Nango sync records into the unified feed pipeline. It is registered in `sourceProviderRegistry` at import time (type: `nango-sync`).
+
+Config stored in `source_subscriptions.config`:
+```json
+{ "connectionId": "<userId>", "model": "google-contacts" }
+```
+
+`fetch()` reads `NANGO_HOST` + `NANGO_SECRET_KEY` from env and calls `GET /sync/records`. Returns `SourceItem[]` with cursor = latest `last_modified_at`.
+
+---
+
+---
+
+## MessagingProvider — Unipile
+
+Real-time messaging transport across social inboxes. Not a sync connector (no continuous record pull) and not stateless like enrichment — it maintains per-user connected accounts and receives push events via webhooks.
+
+- Auth: DSN + API key (workspace-level, stored in `workspace.settings.messaging`)
+- Per-user state: `messagingAccounts` table — one row per user per connected platform
+- Account connection: Unipile hosted auth wizard (`POST /api/v1/hosted/accounts/link`)
+- Data flow: Unipile webhook push → `webhooks-inbound.ts` → entity upsert or account sync
+- Platforms: LinkedIn, WhatsApp, Telegram, Instagram, Messenger, Twitter, Gmail, Slack
+- Connector class: `UnipileConnector` (`packages/api/src/connectors/UnipileConnector.ts`)
+- Factory: `getMessagingConnector()` — reads workspace settings, falls back to env vars
+- Hub Protocol: `/api/hub/messaging/*` routes for frontend consumption
+
+See full design: [Messaging Layer — Unipile](../crm/messaging-unipile.mdx)
+
+### Connector type comparison
+
+| Type | Example | Auth | State | Push/Pull | CRM use |
+|---|---|---|---|---|---|
+| SyncConnector (Nango) | Google Calendar | OAuth per user | Per-user connections | Pull (Nango sync) + push (Nango webhook) | Events, contacts, files |
+| EnrichmentProvider | Apollo.io | API key (pod-level) | Stateless | Pull (on-demand) | Person/company data enrichment |
+| MessagingProvider (Unipile) | LinkedIn DMs | DSN+key (workspace) + per-user accounts | `messagingAccounts` table | Push (Unipile webhook) | Inbox, conversations, send |
+
+---
+
+## Adding a New SyncConnector Provider
+
+1. Nango must have a sync spec for the provider — add it to `nango-integrations/nango.yaml` and deploy to the pod Nango instance
+2. Add the provider key to `PROVIDER_META` in `apps/crm/app/(app)/settings/page.tsx` for UI labelling
+3. The `providers` tRPC query reads integrations from Nango at runtime — no code change needed in the backend registry
+
+## Adding a New EnrichmentProvider
+
+1. Create a class implementing `IEnrichmentProvider` in `packages/api/src/connectors/`
+2. Declare an `envVar` (the API key env var name) and `capabilities` array
+3. Register it in `EnrichmentProviderRegistry` in `packages/api/src/connectors/index.ts`
+4. The `enrichmentProviders` tRPC query and `enrich` mutation pick it up automatically
+
+---
+
+## CRM Settings UI
+
+The **External Connections** section in CRM Settings (`apps/crm/app/(app)/settings/page.tsx`) surfaces both connector types:
+
+- **Sync Integrations**: lists all Nango-configured providers, connect/disconnect buttons, OAuth flow via `trpc.connectors.session`
+- **Enrichment Providers**: lists Apollo.io and Apify with configured/not-configured status and the env var name to set
+
+See also: [ADR: Self-Hosted Nango](../infrastructure/adr-nango-self-hosted.mdx)

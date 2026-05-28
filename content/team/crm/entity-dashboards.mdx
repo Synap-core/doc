@@ -1,0 +1,136 @@
+---
+title: 'Entity Dashboards'
+description: 'Status-aware dashboards for persons and companies, built on the Synap bento and entity panel system'
+section: crm
+last_updated: '2026-05-11'
+tags: [dashboards, bento, entity-panels, lead, client]
+toc: true
+---
+
+# Entity Dashboards
+
+The CRM replaces static entity detail pages with **status-aware dashboards** — layouts that adapt to where a contact is in the lifecycle. A lead and a client have different information needs; their dashboards reflect that.
+
+All dashboards are built on two Synap primitives:
+- **Entity panel sections** — registered via `registerPanelSection()`, stored in `profiles.uiHints.panelConfig`
+- **Bento grid** — composable widget layout (drag/drop, auto-saved to backend via `BentoAdapter`)
+
+No custom rendering logic. The CRM registers its sections and widgets once; the platform handles layout, persistence, and rendering.
+
+---
+
+## Person Dashboard
+
+The person detail view adapts its panel layout based on `crmStatus`.
+
+### Lead variant
+`crmStatus: lead | contacted | qualifying | call_booked`
+
+Focus: qualification data, activity history, next action.
+
+| Section | Content |
+|---|---|
+| **Header** | Name, company, status pill (editable inline), ICP score badge |
+| **ICP Data** | Source, LinkedIn URL, estimated value, ICP score — property fields |
+| **Next Action** | Next follow-up date + quick task creation |
+| **Activity Timeline** | Chronological feed of notes, tasks, events linked to this person |
+| **Notes** | Collaborative document editor (auto-created on first edit via `useEntityDocumentContent`) |
+| **The Arch** | If `source = "The Arch"`: collapsible panel showing the original `arch_analysis` summary fetched via Hub Protocol |
+
+### Client variant
+`crmStatus: client`
+
+Focus: active relationship — contracts, tasks, health, shared documents.
+
+| Section | Content |
+|---|---|
+| **Header** | Name, company, "Client" badge, revenue figure, health indicator |
+| **Contracts** | List of document entities of type `contract` linked to this person, with status (draft/signed/expired) |
+| **Active Tasks** | Open tasks linked to this person, grouped by due date |
+| **Shared Documents** | Proposals, NDAs, meeting notes — document entities by type |
+| **Activity Timeline** | Full history of notes, tasks, events |
+| **Google Drive** | Files linked to this person via the Google Drive connector (future: when connector is standalone) |
+| **Client Channel** | Team discussion thread scoped to this client (future feature) |
+
+### Churned variant
+`crmStatus: churned`
+
+Minimal view — reason for churn, last activity, option to reactivate.
+
+---
+
+## Company Dashboard
+
+Companies aggregate their contacts and present a company-level picture.
+
+| Section | Content |
+|---|---|
+| **Header** | Company name, industry, size, ICP fit badge |
+| **Contacts** | All persons linked to this company, with their individual crmStatus pills |
+| **Pipeline** | All persons at this company in `lead → call_booked` stages |
+| **Active Clients** | Persons at this company with `crmStatus: client` |
+| **Documents** | Contracts and proposals linked to this company (company-level documents) |
+| **Revenue** | Sum of `estimatedValue` across all active client persons |
+
+---
+
+## Home Dashboard
+
+The home page is a **bento grid** — a configurable widget dashboard that surfaces the most important information for the day.
+
+Default layout (backend-persisted via BentoAdapter):
+
+| Widget | Purpose |
+|---|---|
+| **Pipeline Stats** | Count per crmStatus column — leads, qualified, clients, churned |
+| **Needs Attention** | Contacts with `nextFollowUpDate ≤ today` or no activity in >14 days |
+| **Recent Activity** | Latest notes, tasks, events across all contacts |
+| **New Leads** | Persons created in the last 7 days |
+| **AI Inbox** | Proactive intelligence suggestions from the Synap IS (future) |
+
+The layout is editable — team members can rearrange, resize, and add widgets to their home dashboard. Changes persist to the backend automatically.
+
+---
+
+## Implementation Architecture
+
+### Panel sections
+CRM-specific sections are registered in the app's init (`registerAll()`) via the platform's section registry:
+
+```typescript
+import { registerPanelSection } from '@synap-core/entity-views';
+
+registerPanelSection({
+  id: 'crm-activity-timeline',
+  label: 'Activity',
+  component: CrmActivityTimeline,
+  profileSlugs: ['person'],
+});
+
+registerPanelSection({
+  id: 'crm-contracts',
+  label: 'Contracts',
+  component: CrmContractsSection,
+  profileSlugs: ['person', 'company'],
+  condition: (entity) => entity.properties.crmStatus === 'client',
+});
+```
+
+### Status-aware layout
+The active panel sections for a given entity are determined by:
+1. The profile's `uiHints.panelConfig` (stored in the workspace)
+2. The `condition` function on each section registration — sections with a condition are shown only when it returns true
+
+This means the lead dashboard and client dashboard are the same profile (`person`), same panel config — just different sections are visible based on `crmStatus`. No duplicated layouts.
+
+### Bento for home dashboard
+The home page uses `BentoAdapter` (from `@synap-core/view-renderer`) which auto-saves layout changes to the backend. Custom CRM widgets are registered in the widget registry:
+
+```typescript
+// CRM-specific widgets registered at app init
+registerWidget('crm-pipeline-stats', CrmPipelineStatsWidget);
+registerWidget('crm-needs-attention', CrmNeedsAttentionWidget);
+registerWidget('crm-recent-activity', CrmRecentActivityWidget);
+```
+
+Each widget fetches its own data via tRPC hooks — no prop drilling from the page.

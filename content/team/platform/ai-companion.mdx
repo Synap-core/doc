@@ -1,0 +1,190 @@
+---
+title: 'AI Companion Architecture'
+description: >-
+  CompanionCell, @synap-core/chat-ui and @synap-core/chat-headless package architecture.
+  CSS custom property tokens. Plain HTML composition with zero Tamagui.
+section: general
+audience: team
+version: 1.0+
+last_updated: '2026-05-27'
+tags: []
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# AI Companion Architecture
+
+The AI Companion is a three-package architecture providing headless hooks, CSS-driven UI components, and a browser-native cell implementation.
+
+## Three-Package Architecture
+
+### @synap-core/chat-headless
+
+Location: `synap-app/packages/core/chat-headless/`
+
+Pure hooks and stores, zero React component imports beyond hooks.
+
+**Exports:**
+- `useChatThread(channelId)` — fetch thread metadata and config
+- `useSendMessage(channelId)` — mutate to send a user message
+- `useStreamingMessage(channelId)` — subscribe to real-time AI response streaming
+- `useChannelContext()` — get channel-scoped context (members, permissions)
+- `useChatMessages(channelId)` — fetch message history
+- `useMessageProposals(channelId)` — get proposal objects attached to messages
+- `useChatUIStore` — client-side ephemeral state (selections, drafts)
+- `useStreamingStore` — streaming-specific state (current stream, partial content)
+
+Framework-agnostic. Consumers compose these with their own renderers (Tamagui, HeroUI, React Native, plain HTML).
+
+### @synap-core/chat-ui
+
+Location: `synap-app/packages/core/chat-ui/src/`
+
+Plain-CSS AI companion UI components. Zero Tamagui, zero HeroUI.
+
+**Architecture:**
+- All styling via CSS custom properties: `--companion-*` tokens
+- Token defaults in `tokens.css` (11px body, 14px message, emerald accents)
+- Components inject tokens inline as fallback (see CompanionCell)
+- No build-time styles; all runtime CSS
+
+**Core components:**
+- `CompanionLayout` — container managing `layout='panel'|'full'`, message list, input, streaming state
+- `MessageContent` — ReactMarkdown + inline pattern rendering (entity links, action chips)
+- `MessageBubble` — individual message with role, timestamp, grouping logic
+- `MessageList` — virtualized message list with auto-scroll
+- `CompanionInput` — textarea + send button + clear draft
+- `ContextStrip` — optional context indicators (3 visible-to-companion surfaces)
+- `ProposalChip` — approve/reject UI for governance proposals
+- `WidgetPreviewChip` — widget generation preview with placement selection
+
+### @synap-core/message-parser
+
+Location: `synap-app/packages/core/message-parser/src/`
+
+Zod pattern schema and parsing logic. Zero React deps.
+
+**Exports:**
+- `parseInlinePatterns(text): ParseResult` — extract all patterns from text, return structured events
+- `resolvePatternMarkers(text): string` — transform `[[kind:id|label]]` → `[label](kind://id)` for ReactMarkdown
+
+**Pattern syntax:**
+```
+References:  [[entity:UUID|Name]], [[doc:UUID|Title]], [[view:UUID|Name]],
+             [[person:UUID|Name]], [[widget:CELL_KEY|Label]],
+             [[automation:UUID|Name]], [[channel:UUID|Name]]
+
+Commands:    [[open:PLACEMENT|TYPE:ID]], [[run:UUID|Label]]
+```
+
+Both `|` and `:` accepted as label separator for backward compatibility.
+
+## CompanionCell (Browser Integration)
+
+Location: `browser/electron/renderer/src/cells/CompanionCell.tsx`
+
+Registered cell key: `'ai-companion'`
+
+**Role:** Data binding layer only. All UI delegated to `CompanionLayout` from `@synap-core/chat-ui`.
+
+**Display mode mapping:**
+- `displayMode='medium'` → `layout='panel'` (side/companion panel)
+- `displayMode='full'` → `layout='full'` (main content area)
+
+**Key features:**
+- Pre-fills draft from `appStore.pendingAIQuery` (Cmd+J integration)
+- Renders context items from active surfaces (up to 3, filtered by `visibleToCompanion`)
+- Wires `onEntityLinkClick` to `runtime.navigate?.()`
+- Wires `onCommand` callbacks to `runtime.openSurface?.()`
+- Hooks `useMessageProposals()` to render `ProposalChip` / `WidgetPreviewChip` after each AI message
+
+**Token injection:**
+Sets CSS custom properties inline on root `<div>`:
+```tsx
+'--companion-bg': 'transparent',
+'--companion-surface': 'rgba(255,255,255,0.04)',
+'--companion-ai': '#10B981',
+'--companion-primary': '#D97706',
+// ... 13 total tokens
+```
+
+## Widget Generation Loop
+
+**Full flow:**
+
+1. User query sent to IS
+2. IS calls `generate_widget` tool → creates widget definition, returns `typeKey`
+3. IS `proposal-extractor.ts` reads `typeKey`, emits in SSE `createdProposals[]` in complete event
+4. `useStreamingStore` persists `createdProposals` on message object
+5. `useMessageProposals(channelId)` exposes to `CompanionCell`
+6. `WidgetPreviewChip` renders with `status='ready'`
+7. User clicks "Open" → `onOpen` callback:
+   - Calls `approveProposal` mutation
+   - Calls `runtime.openSurface()` with `cellKey='iframe-widget'` and `props: { typeKey }`
+8. `IframeWidgetCellWrapper` (cell key `'iframe-widget'`) fetches definition via `trpc.widgetDefinitions.get(typeKey)`, renders `IframeWidgetCell`
+
+## Navigation Permissions
+
+**Workspace governance config:**
+
+```typescript
+aiGovernance.navigationPermissions: {
+  autoApprove: boolean,        // If true, [[open:...]] chips open immediately
+  allowedResourceTypes?: string[] // If set, whitelist specific types (e.g. ['view', 'cell'])
+}
+```
+
+**Resolution:** `getEffectiveGovernance()` in `permission-check.ts` returns defaults when not set:
+- `autoApprove: false` (user must click each chip)
+- `allowedResourceTypes: undefined` (all types allowed)
+
+**UI toggle:** SettingsView Intelligence tab "AI Navigation" section
+
+## Eve Dashboard (Vendored Copy)
+
+Location: `hestia-cli/packages/@synap-core/chat-ui/`
+
+Self-contained copy of `@synap-core/chat-ui` (cannot use `workspace:*` across separate monorepos).
+
+**Usage:** `chat-companion.tsx` imports `CompanionLayout`, injects Eve dark-glass tokens via CSS custom properties.
+
+**Known gap:** No `CellRuntimeProvider` in Eve → `onCommand` chips are inert (navigation not wired).
+
+## Token System
+
+**Required tokens** (all have `--companion-` prefix):
+
+- `bg` — root container background
+- `surface` — card/bubble background
+- `surface-user` — user message bubble background
+- `text` — primary text color
+- `text-muted` — secondary/disabled text
+- `border` — subtle dividers
+- `border-subtle` — very faint borders
+- `input-bg` — text input background
+- `ai` — AI accent color (emerald, constant across modes)
+- `primary` — primary action color (amber/cyan by mode)
+- `primary-light` — primary with reduced saturation (backgrounds)
+- `error` — error/destructive states
+- `radius` — card border radius (e.g. `12px`)
+- `radius-sm` — small element radius (e.g. `8px`)
+- `spacing` — base grid unit (e.g. `4px`)
+
+Default values in `tokens.css`:
+```css
+:root {
+  --companion-bg: white;
+  --companion-surface: rgba(0,0,0,0.02);
+  --companion-ai: #10B981;
+  /* ... etc */
+}
+```
+
+Consumers override by setting on root element (see CompanionCell for example).
+
+## Related
+
+- [AI Inline Patterns](./ai-inline-patterns.mdx) — Pattern syntax for embedding commands in AI text
+- [Cell System](./cell-system.mdx) — Universal rendering unit; CompanionCell is one registration
+- [Proposals and Governance](../governance/proposals-governance/index.mdx) — How proposals flow through the approval chain

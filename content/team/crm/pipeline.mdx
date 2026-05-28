@@ -1,0 +1,116 @@
+---
+title: 'Pipeline'
+description: 'Kanban pipeline view, deal progression, and future automation rules'
+section: crm
+last_updated: '2026-05-11'
+tags: [pipeline, kanban, automations, status]
+toc: true
+---
+
+# Pipeline
+
+The pipeline is the central operational view of the CRM. It shows every person in the system as a card, grouped into columns by `crmStatus`, giving the team an instant read on deal distribution and momentum.
+
+---
+
+## Kanban Layout
+
+Six columns, one per status:
+
+```
+Lead → Contacted → Qualifying → Call Booked → Client → Churned
+```
+
+Each column shows:
+- Column header with status name, color, and contact count
+- Cards sorted by `nextFollowUpDate` ascending (most urgent first)
+- Quick-add button to create a new person directly in that column
+
+### Card design
+
+Each card surfaces the minimum information needed to act:
+
+| Field | Purpose |
+|---|---|
+| Person name | Identity |
+| Company name | Context |
+| ICP score | At-a-glance fit quality |
+| Next follow-up date | Urgency signal (highlighted red if overdue) |
+| Estimated value | Deal size |
+| Avatar / initials | Ownership (assigned team member) |
+
+Cards are **draggable between columns** — dragging a card to a new column updates `crmStatus` immediately (optimistic update, rollback on failure).
+
+### Expanded card view
+
+Clicking a card opens an **expanded inline view** within the kanban — no navigation away from the pipeline. The expanded view shows:
+- All card fields plus email, source, LinkedIn
+- Last 3 activity items (notes, tasks, events)
+- Quick actions: log note, create task, set follow-up date, open full detail
+
+This keeps the salesperson in the pipeline context while acting on individual deals.
+
+---
+
+## Filtering & Sorting
+
+The pipeline supports filters applied across all columns simultaneously:
+
+| Filter | Options |
+|---|---|
+| Owner | Filter by assigned team member |
+| ICP score | Minimum threshold |
+| Estimated value | Range |
+| Age in stage | Contacts stuck >N days in current status |
+| Company | Show only contacts from a specific company |
+| Source | Filter by lead source |
+
+Filters persist to the browser session. A "Reset filters" action clears all.
+
+---
+
+## Stuck Deal Detection
+
+A contact is flagged as **stuck** when:
+- It has been in the same `crmStatus` for more than a configurable threshold (default: 14 days for `contacted`, 7 days for `qualifying`, 3 days for `call_booked`)
+- The card gets a visual indicator (subtle border color or icon)
+- The home dashboard "Needs Attention" widget lists stuck deals
+
+---
+
+## Future: Automation Rules
+
+When a contact moves to a new status, **automation rules** can trigger actions automatically. This is built on the existing Synap automations system (pg-boss workers + the automations router in the backend).
+
+### Planned automation triggers
+
+| Trigger | Example actions |
+|---|---|
+| Status → `contacted` | Create follow-up task due in 3 days |
+| Status → `call_booked` | Create task "Prepare call brief", send calendar invite reminder |
+| Status → `client` | Generate onboarding checklist from template, create client channel |
+| Status → `churned` | Create task "Send churn feedback request", log churn reason prompt |
+| Stuck in stage >N days | Notify owner, flag on home dashboard |
+| `nextFollowUpDate` reached | Notify owner with contact context |
+
+### Automation configuration
+
+Automations are configured per workspace via the automations panel. Each rule has:
+- **Trigger**: event type + conditions
+- **Actions**: ordered list of steps (create entity, send notification, generate document, etc.)
+- **Enabled/disabled** toggle
+
+Rules are stored as `automation` entities in the workspace and executed by pg-boss workers on the backend.
+
+Phase 1 ships the pipeline UI without automations. Automations are a Phase 3 addition once the pipeline is stable.
+
+---
+
+## Full Pipeline View
+
+Beyond the kanban, the pipeline offers a **full view** mode that shows all contacts in a dense table with all CRM properties visible — sortable, filterable, exportable. This is the `Contacts` table view scoped to non-churned persons, surfaced as a toggle on the pipeline page.
+
+| Mode | Best for |
+|---|---|
+| Kanban | Day-to-day deal movement, drag-and-drop status changes |
+| Table (full view) | Bulk review, sorting by value or ICP score, export |

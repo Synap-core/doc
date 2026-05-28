@@ -1,0 +1,20 @@
+{
+  "title": "CRM",
+  "description": "Sales pipeline, contact management, client lifecycle — built on Synap primitives",
+  "root": true,
+  "icon": "users",
+  "pages": [
+    "index",
+    "---Vision & Users---",
+    "user-stories",
+    "---Architecture---",
+    "data-model",
+    "entity-dashboards",
+    "pipeline",
+    "---Features---",
+    "document-templates",
+    "connectors",
+    "---Delivery---",
+    "delivery-phases"
+  ]
+}

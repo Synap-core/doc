@@ -15,6 +15,7 @@
     "dashboard",
     "intents",
     "hermes-agent",
+    "plugins",
     "openclaw",
     "dokploy",
     "routing-and-connectivity",

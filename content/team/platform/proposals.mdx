@@ -6,7 +6,7 @@ description: >-
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-14'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -15,14 +15,192 @@ toc: true
 
 # Proposals & Governance
 
-Governance ensures AI and connector mutations stay reviewable and reversible.
+Governance ensures AI and connector mutations stay reviewable, reversible, and
+explainable inside the event chain.
 
-- `checkPermissionOrPropose()` gates write actions.
-- RBAC + policy checks determine direct execution vs proposal creation.
-- `DEFAULT_AUTO_APPROVE` keeps low-risk operations fast while preserving control.
+The core model is:
+
+```txt
+*.requested event
+      ↓
+permission / governance decision
+      ↓
+direct execution OR pending proposal
+      ↓
+approval emits *.validated
+      ↓
+materializer emits *.completed
+```
+
+A proposal is not a separate governance island. It is the review state of a
+requested mutation. The proposal row stores the pending request, and the event
+chain stores the temporal story around it.
+
+## Canonical Backend Flow
+
+There are two valid creation paths.
+
+### 1. Normal Mutations
+
+Routers that already know the concrete mutation should emit the requested event,
+then call the permission gate:
+
+```txt
+router mutation
+  → auditLog({ phase: "requested", correlationId })
+  → checkPermissionOrPropose({ correlationId, requestedEventId, ... })
+  → granted | denied | proposed
+```
+
+`checkPermissionOrPropose()` remains the canonical governance decision point. It
+checks workspace RBAC, agent policy, destructive-action rules, auto-approve
+settings, and finally creates a pending proposal when review is required.
+
+When it creates a proposal, it uses `createPendingProposal()` in
+`packages/api/src/utils/permission-check.ts`. That helper is the canonical
+pending proposal insert path:
+
+- writes the `proposals` row
+- stores provenance (`agentUserId`, `threadId`, `commandRunId`,
+  `sourceMessageId`)
+- stores event linkage (`correlationId`, `requestedEventId`) inside
+  `proposals.data`
+- emits proposal-created side effects for automations
+- creates proposal notifications
+- broadcasts the proposal-created notification envelope
+
+### 2. Explicit Proposal Requests
+
+Some endpoints exist to request approval directly rather than to attempt a
+normal mutation first. Examples include Hub REST `POST /proposals`, vault access
+requests, and document edit suggestions.
+
+Those paths use `createEventBackedProposal()` in
+`packages/api/src/utils/event-backed-proposal.ts`:
+
+```txt
+explicit proposal endpoint
+  → createEventBackedProposal()
+       → auditLog({ phase: "requested", correlationId })
+       → createPendingProposal()
+```
+
+This helper must stay thin. It creates the `.requested` event, then delegates to
+`createPendingProposal()` so proposal insertion, notifications, and side effects
+do not fork.
+
+## Event Linkage Contract
+
+Request-shaped proposal data should include:
+
+```ts
+{
+  requestId: string;
+  source: "user" | "ai" | "system" | "intelligence" | "agent" | ...;
+  sourceId: string;
+  workspaceId: string | null;
+  targetType: "document" | "entity" | "whiteboard" | "view" | "profile";
+  targetId: string;
+  targetName?: string;
+  changeType: EventAction;
+  data?: Record<string, unknown>;
+  reasoning?: string;
+  summary?: string;
+
+  correlationId?: string;
+  requestedEventId?: string;
+  validatedEventId?: string;
+  completedEventId?: string;
+}
+```
+
+`correlationId` is the stable chain key. Use it to fetch the full trace through
+`EventRepository.getCorrelatedEvents()` or the system event-trace endpoints.
+
+`requestedEventId`, `validatedEventId`, and `completedEventId` are concrete
+anchors for UI review surfaces. They are optional for legacy rows but should be
+present for new event-backed proposals whenever the corresponding event exists.
+
+## Approval Flow
+
+Approval is handled by `packages/api/src/routers/proposals.ts`.
+
+For request-shaped proposals:
+
+```txt
+proposals.approve
+  → emits target.action.validated with the same correlationId
+  → stores validatedEventId on proposal data when available
+  → materializer handles *.validated
+  → materializer emits target.action.completed
+```
+
+Special proposal types can still have custom approval branches, for example
+document content edits and branch operations. Those branches should preserve the
+same review metadata and, when possible, emit or link the relevant validation and
+completion events.
+
+## Review Model For UI
+
+`proposals.list` and `proposals.get` return enriched proposal rows with:
+
+- `request` — normalized request-shaped payload
+- `authorName` / `targetName` — server-resolved display labels
+- `review` — a compact review model for Inbox/Studio/Eve surfaces
+
+The review model includes:
+
+```ts
+{
+  summary: string;
+  actorName?: string;
+  targetName?: string;
+  reasoning?: string;
+  correlationId?: string;
+  requestedEventId?: string;
+  validatedEventId?: string;
+  completedEventId?: string;
+  changes: ProposalReviewChange[];
+  events: ProposalReviewEvent[];
+}
+```
+
+UI should prefer `review` over parsing raw JSON. Raw `proposals.data` remains
+available as the audit fallback.
+
+## Best Practices
+
+- Always emit or create a `.requested` event before creating a pending proposal.
+- Always preserve the same `correlationId` through requested → proposal →
+  validated → completed.
+- Do not insert pending proposals directly in routers. Use
+  `checkPermissionOrPropose()` for normal mutations or
+  `createEventBackedProposal()` for explicit proposal endpoints.
+- Do not duplicate proposal-created side effects. They belong in
+  `createPendingProposal()`.
+- Store human-readable snapshots (`summary`, `targetName`, actor/source fields)
+  at proposal creation time. UI can enrich further, but it should not have to
+  infer everything from IDs.
+- Keep visual components app-specific when needed, but share the data contract
+  through `@synap-core/proposal-types` and backend `ProposalReviewModel`.
+
+## Current Implementation Files
+
+- Governance decision + pending insert:
+  `synap-backend/packages/api/src/utils/permission-check.ts`
+- Explicit event-backed proposal helper:
+  `synap-backend/packages/api/src/utils/event-backed-proposal.ts`
+- Audit/event append helper:
+  `synap-backend/packages/api/src/utils/audit-log.ts`
+- Proposal list/get/approve/reject:
+  `synap-backend/packages/api/src/routers/proposals.ts`
+- Shared proposal contracts:
+  `synap-backend/packages/types/src/proposals/index.ts`
+- Frontend review contract:
+  `synap-app/packages/core/proposal-types`
 
 ## Related
 
-- [Event Chain](./event-chain.mdx) — Proposal lifecycle events (created, approved, rejected) flow through the event chain
+- [Event Chain](./event-chain.mdx) — Requested/validated/completed events and correlation traces
 - [Permissions](./permissions.mdx) — checkPermissionOrPropose() gates direct execution vs proposal creation
 - [Notifications](./notifications.mdx) — Governance notifications created when proposals are submitted/approved/rejected

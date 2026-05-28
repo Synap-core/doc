@@ -8,6 +8,11 @@ Single source of truth for product vision, principles, and roadmap. All feature 
 
 Core promise: "Never lose anything. Never organize anything. Everything you care about, structured and connected — automatically."
 
+**The architectural north star:**
+> *Every application is a configuration. AI writes the config.*
+
+Any workspace, any data model, any UI, any workflow — described in JSON or plain language, generated without a single code change. This is what separates Synap from every other platform: the building block model is expressive enough that the combination of entity profiles + view types + cell composition can produce any application. The code never changes. Only the configuration does.
+
 ## Product Principles
 
 ### 1. Emergent Complexity (Lego Model)
@@ -43,6 +48,22 @@ AI proposes, humans approve. This is not a feature toggle — it's load-bearing 
 Users own their data. Data lives in sovereign pods. The control plane manages billing and marketplace — it never sees user data. Pods can be self-hosted. Data is portable.
 
 **The test**: Could a user export everything and leave? Could they self-host?
+
+### 6. Config-over-Code (The Generation Principle)
+
+Any new application, data model, or workflow should be achievable through configuration — without touching the codebase. Entity profiles define data shapes. View types define rendering. Cell types define UI primitives. The combination covers any use case. When AI needs to create a new application, it writes configuration, not code.
+
+**What this means concretely:**
+- A new CRM = a `person` profile + `deal` profile + kanban view config + a few automations. No code.
+- A new workspace template = a JSON document describing profiles, views, and automations. No code.
+- A new AI-generated dashboard = a bento layout config referencing existing cells. No code.
+- A new entity type = a profile definition. No code.
+
+**What this does NOT mean:** The primitives themselves (view renderer, cell runtime, Hub Protocol) are real code. Config-over-Code applies to *applications built on top of those primitives* — not to the primitives themselves.
+
+**The test**: If implementing this new feature requires a code change rather than a new config, we're missing a primitive. Identify the missing primitive and build it — then the feature becomes configuration.
+
+**The competitive moat**: Every other platform requires developers to extend it. Synap users and AI agents extend Synap by writing configuration. The platform has no ceiling.
 
 ## Product Triptych
 

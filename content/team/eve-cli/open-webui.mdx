@@ -6,7 +6,7 @@ description: >-
 section: general
 audience: users
 version: 2.0+
-last_updated: '2026-04-29'
+last_updated: '2026-05-11'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -111,6 +111,24 @@ Set the above as the value of `WEBUI_MCP_CONFIG` in `/opt/openwebui/.env` (singl
 | Host port | `3011` → container `8080` |
 | Data volume | `hestia-openwebui-data:/app/backend/data` (SQLite + uploads) |
 | Compose profile | `openwebui` |
+
+---
+
+## Version notes
+
+### v0.9.4+ — tool server `config` field required
+
+Open WebUI v0.9.4 introduced Pydantic validation for the `TOOL_SERVER_CONNECTIONS` payload. The `config` key is now **required** on each tool server entry. Omitting it causes a `422 Unprocessable Entity` and the Synap tool server connection is silently skipped.
+
+Eve's `registerSynapAsOpenwebuiToolServer` includes `config: {}` automatically. If you are registering a tool server manually (e.g. via the OWUI admin UI or a direct API call), ensure the body includes:
+
+```json
+{
+  "url": "http://synap-backend-backend-1:4000/mcp",
+  "api_key": "<hub-api-key>",
+  "config": {}
+}
+```
 
 ---
 

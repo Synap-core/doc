@@ -1,0 +1,172 @@
+---
+title: DevPlane North Star Graph
+description: The living knowledge graph of Synap's product direction — entities and relations in the Builder workspace
+section: devplane
+audience: team
+last_updated: '2026-05-27'
+tags: [devplane, graph, north-star, relations, knowledge-graph]
+---
+
+# North Star Graph
+
+The DevPlane North Star graph is a living knowledge graph that captures the product's full architecture as a typed, queryable graph — not a static document, but entities and relations in the Builder workspace on the personal pod.
+
+The graph is self-describing: **Synap documents its own architecture inside Synap.** An AI agent querying the Builder workspace can traverse the entire product topology: what exists, why it was built, which architectural principles govern it, and where it runs.
+
+## Current state (May 2026)
+
+| Entity type | Count | Role |
+|---|---|---|
+| `devplane_capability` (north_star) | 2 | Top-level product goals |
+| `devplane_capability` (pillar) | 4 | Architectural pillars |
+| `devplane_story` | 30 | User-facing outcomes |
+| `devplane_workflow` | 19 | Technical implementation flows |
+| `devplane_best_practice` | 4 | Governing patterns |
+| `devplane_app` | 15 | Apps / clients |
+| `devplane_service` | 9 | Infrastructure services |
+| `devplane_environment` | 6 | Deployment targets (CT100–CT105) |
+| **Relations** | **92** | Typed edges connecting all of the above |
+
+## Graph topology
+
+```
+North Stars ──belongs_to──► Pillars
+Stories     ──belongs_to──► Pillars
+Workflows   ──belongs_to──► Pillars
+Stories     ──implements──► Workflows
+Best Pract. ──validates──►  Workflows
+Apps/Svcs   ──deployed_to►  Environments
+```
+
+Six relation types are in use:
+
+| `type` | Meaning |
+|---|---|
+| `belongs_to` | This entity is governed by / lives under this pillar |
+| `implements` | This story is concretely expressed by this workflow |
+| `validates` | This best practice is a constraint on this workflow |
+| `deployed_to` | This app/service runs in this environment |
+| `narrows` | This entity scopes or specialises a broader one |
+| `has_worker` | This entity owns or drives this background worker |
+
+## Current North Stars
+
+| Title | Pillar |
+|---|---|
+| North Star: Profile Renderer — Two Slots, Two Paths | Config-over-Code |
+| North Star: Generate Everything from Config | Config-over-Code |
+
+**The one-sentence statement:**
+> *Every application is a configuration. AI writes the config.*
+
+Every workspace, view, app, and automation can be fully described in JSON or plain language. No hardcoded rendering, no manual wiring, no code changes required.
+
+## The four pillars
+
+| Pillar | What it governs |
+|---|---|
+| **Config-over-Code** | Schema-driven workspaces, profiles, views, and cells — any app from JSON |
+| **Predictability & Governance** | Proposal system, event chain, RBAC, DevPlane feature pipeline |
+| **Security & Auth** | Zero-trust pod auth, Kratos lifecycle, session flows, agent permissions |
+| **AI-Native Infrastructure** | Hub Protocol, OrchestratorAgent, IS runtime, webhook flows |
+
+## Entity profiles used
+
+| Profile slug | `properties.type` | Role |
+|---|---|---|
+| `devplane_capability` | `north_star` | Top-level product goals |
+| `devplane_capability` | `pillar` | The 4 architectural pillars |
+| `devplane_story` | — | User-facing outcomes |
+| `devplane_workflow` | — | Step-by-step implementation flows |
+| `devplane_best_practice` | — | Governing rules and constraints |
+| `devplane_app` | — | Apps / clients (relay, browser, IS, etc.) |
+| `devplane_service` | — | Infrastructure services (Caddy, Headscale, etc.) |
+| `devplane_environment` | — | Deployment targets (CT100–CT105) |
+
+## Story status vocabulary
+
+| Status | Meaning |
+|---|---|
+| `not-started` | Backlog, not yet scoped |
+| `exploring` | In discovery / spike phase |
+| `building` | Active development |
+| `shipped` | Live in production |
+| `deprecated` | Removed from scope |
+
+## Viewing the graph
+
+In the Builder workspace:
+
+- **Overview page** — North Star card + 4 pillar cards (summary)
+- **North Star page** (`/north-star`) — full hierarchy with stories and workflows per pillar
+- **Architecture page** — ReactFlow graph of capability nodes and relation edges
+- **Environments view** — which apps and services are deployed to each CT node
+
+## Adding nodes
+
+Create entities via the Hub Protocol REST API:
+
+```python
+import requests
+
+BASE = "https://pod.perso.thearchitech.xyz"
+HEADERS = {"Authorization": "Bearer <api-key>", "Content-Type": "application/json"}
+WS = "<builder-workspace-id>"
+USER = "<user-id>"
+
+# Create a capability (pillar or north_star)
+requests.post(f"{BASE}/api/hub/entities", headers=HEADERS, json={
+    "userId": USER, "workspaceId": WS,
+    "profileSlug": "devplane_capability",
+    "title": "Pillar: My New Pillar",
+    "properties": {"type": "pillar", "status": "exploring"}
+})
+
+# Create a story
+requests.post(f"{BASE}/api/hub/entities", headers=HEADERS, json={
+    "userId": USER, "workspaceId": WS,
+    "profileSlug": "devplane_story",
+    "title": "User does X and Y happens automatically",
+    "properties": {"status": "not-started"}
+})
+```
+
+Wire a relation after both entities exist:
+
+```python
+# The field names are: type, sourceEntityId, targetEntityId
+requests.post(f"{BASE}/api/hub/relations", headers=HEADERS, json={
+    "userId": USER, "workspaceId": WS,
+    "type": "belongs_to",
+    "sourceEntityId": "<story-id>",
+    "targetEntityId": "<pillar-id>"
+})
+```
+
+## Registering new relation types
+
+Custom relation types must be registered before use:
+
+```python
+requests.post(f"{BASE}/api/hub/relation-defs", headers=HEADERS, json={
+    "userId": USER, "workspaceId": WS,
+    "slug": "my_relation_type",
+    "displayName": "My Relation",
+    "description": "What this edge means",
+    "isDirectional": True
+})
+```
+
+Current registered types: `belongs_to`, `narrows`, `validates`, `deployed_to`, `has_worker` (plus all platform defaults).
+
+## What this enables for AI agents
+
+An AI agent with Hub Protocol access to the Builder workspace can answer questions like:
+
+- *"Which stories implement the Proposal Flow workflow?"* → traverse `implements` edges
+- *"What best practices govern the User Login Flow?"* → traverse `validates` edges  
+- *"Which services are deployed to CT104?"* → traverse `deployed_to` edges
+- *"What does the Config-over-Code pillar cover?"* → traverse `belongs_to` edges from stories + workflows
+- *"What's the deployment runbook for synap-backend?"* → find workflow entity by type=runbook, read steps
+
+The graph is the memory. The agent navigates it.

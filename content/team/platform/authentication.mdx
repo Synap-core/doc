@@ -1,10 +1,10 @@
 ---
 title: 'Authentication'
-description: 'Auth flows: Better Auth, API keys, JWT.'
+description: 'Auth flows: Kratos cookie, API keys, JWT.'
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-05-18'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -14,6 +14,7 @@ toc: true
 ## Related
 
 - [Auth-architecture](./auth-architecture.mdx) — Auth system design and security model
+- [Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx) — Credential model for Eve dashboard (cookie-only for user actions)
 - [Permissions](./permissions.mdx) — RBAC and permission model
 - [Api-keys](./api-keys.mdx) — API key authentication and management
 
@@ -44,52 +45,85 @@ Synap uses a robust "Two-Layer" authentication strategy to ensure security and p
   - Passes the `userId` and `user` object to tRPC procedures.
 - **Usage**: tRPC procedures (e.g. `workspaces.list`) use `ctx.userId` to filter data securely.
 
-## 🔄 The Authentication Flow
+## How the Cookie Is Set
 
-### 1. Login (Frontend)
+The `ory_kratos_session` cookie is set by Kratos at **parent-domain scope** (e.g., `.myhost.example.com`). Any sign-in surface — pod-admin `/login`, the Eve dashboard, or the Browser app — sets this same cookie and all other surfaces on that domain pick it up automatically.
 
-1.  User enters credentials on Next.js frontend (`/login`).
-2.  Frontend calls Ory Kratos (`/self-service/login/browser`).
-3.  **Success**: Kratos sets a `ory_kratos_session` cookie.
-    - **Domain**: `localhost` (Development) or `.synap.io` (Production).
-    - **SameSite**: `Lax` (typically).
+Pod-admin owns the `/login` and `/setup` (first-admin bootstrap) flows natively. There is no separate admin SPA.
+
+## The Authentication Flow
+
+### 1. Login (any surface)
+
+1. User enters credentials on the sign-in page of any Synap surface.
+2. That surface calls Ory Kratos (`/self-service/login/browser`).
+3. **Success**: Kratos sets an `ory_kratos_session` cookie.
+   - **Domain**: `localhost` (Development) or the parent domain in production (e.g., `.myhost.example.com`).
+   - **SameSite**: `Lax` (typically).
+4. All other surfaces on the same domain now have an authenticated session — no second sign-in.
 
 ### 2. API Request (Browser -> API)
 
-1.  Browser sends request to `http://localhost:3000/trpc/workspaces.list`.
-2.  **Next.js Proxy** intercept the request (defined in `next.config.ts`).
-    - Relays request to `http://localhost:4000/trpc/workspaces.list`.
-    - **Crucial**: Because the browser talks to Port 3000, it treats this as a **Same-Origin** request. Cookies are ALWAY sent.
-3.  **Hono Server (API)** receives request on Port 4000.
-4.  **Hono Middleware** validates cookie with Kratos.
-5.  **tRPC Context** receives validated User ID.
-6.  **Procedure** executes SQL query: `SELECT * FROM workspaces WHERE owner_id = :userId`.
+1. Browser sends request with the `ory_kratos_session` cookie.
+2. **Hono Server (API)** receives the request.
+3. **Hono Middleware** validates cookie with Kratos (`/sessions/whoami`).
+4. **tRPC Context** receives validated User ID.
+5. **Procedure** executes SQL query: `SELECT * FROM workspaces WHERE owner_id = :userId`.
 
-##  Security Decisions
+### 3. Eve Dashboard Proxy
 
-### Why Next.js Rewrites?
+The Eve dashboard's `/api/pod/*` proxy strips all cookies from the incoming browser request except `ory_kratos_session`, then forwards that cookie to the pod. This is the only credential involved in user-action calls — no token is minted or stored by eve-dashboard.
 
-We use Next.js Rewrites (`/trpc` -> API) instead of CORS for three reasons:
+If the proxy receives a request with no `ory_kratos_session` cookie it returns:
+```json
+{ "error": "no-pod-session", "action": "sign-in-required" }
+```
+with HTTP 401.
 
-1.  **Cookie Reliability**: Eliminates "Third-Party Cookie" issues. Browsers treat Frontend and API as the same site.
-2.  **Security**: Hides the internal API URL (`http://localhost:4000`) from the public internet. The browser only knows about the Frontend URL.
-3.  **Simplicity**: No complex CORS preflight (`OPTIONS`) requests or wildcard configurations.
+## Session Finalization
 
-### Why Kratos?
+Every successful auth path — CP handshake, direct Kratos login, and Kratos manual flow — calls `finalizeSession`, which does two things:
 
-- **Security**: Proven, audited identity provider.
-- **Features**: Handles Login, Registration, Recovery, Verification, and 2FA out of the box.
-- **Decoupling**: Auth logic is separate from business logic.
+1. **`storePodSession`** — writes the pod URL, session token, and user email into `localStorage["synap:pods"]` (the `PodSessionMap`). This is the source of truth for the pod switcher and multi-pod sign-out.
+2. **`storeSharedSession`** — clears the `synap-session` and `SYNAP_INSTANCE_URL` cookies before writing the new values. This prevents duplicate cookies when the user switches pods (e.g., accepting an invite on a second pod while a first pod session is still active in the browser).
 
-## 🐛 Debugging Tips
+For the manual Kratos flow, `handleKratosAuthenticated` fetches `GET /kratos/sessions/whoami` before calling `finalizeSession`. This ensures `userId`, `email`, and `name` are populated from the start — required for workspace setup cache keys to resolve correctly.
+
+### CRM invite redirect (`?podUrl=`)
+
+When the CRM login page receives a `?podUrl=<url>` query parameter (set by the pod-admin AcceptForm redirect), it automatically calls `startSelfHostedLogin(podUrl)` and shows `ManualLoginScreen` with the pod URL pre-filled. The user only needs to enter their credentials — no manual pod URL entry. See [Invite Flow](./invite-flow.mdx) for the full sequence.
+
+## Machine Actions (Hub Protocol)
+
+Agent and service calls use a separate channel: `POST /api/hub/*` with `Authorization: Bearer <pod.agentApiKey>`. This is **not** the cookie path. See [Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx) for the full two-channel model.
+
+## Security Decisions
+
+### Why a Cookie Instead of a Bearer Token for User Actions?
+
+- **Single source of truth.** Kratos issues and validates the cookie. Eve holds no copy, mints no token, and cannot fall out of sync with the pod's session state.
+- **Domain-scoped sharing.** The parent-domain scope means every Synap surface on the same host shares the session without a token-exchange roundtrip.
+- **No eve-side secret storage.** Removing `pod.userToken` eliminates the class of bugs where eve's cached token was valid but the underlying Kratos session was revoked or expired.
+
+### Agent API keys vs. User Sessions
+
+These are orthogonal and must remain so:
+
+- **Agent API key** (`pod.agentApiKey`): issued by the pod's agent provisioning flow, stored in `~/.eve/secrets.json`, used in `Authorization: Bearer`, scoped to agent actions, governed by `checkPermissionOrPropose()`.
+- **User session** (`ory_kratos_session` cookie): issued by Kratos, used as a cookie, scoped to user actions, governed by standard RBAC.
+
+Never use an agent API key to authenticate a human user action. Never use a user session to bypass proposal governance for agent actions.
+
+## Debugging Tips
 
 If you encounter `401 Unauthorized`:
 
-1.  **Check Cookies**: Open DevTools -> Application -> Cookies. Is `ory_kratos_session` present for `localhost`?
-2.  **Check Network**: Look at the request to `/trpc/...`.
-    - Is it going to `localhost:3000` (Correct) or `4000` (Incorrect)?
-    - Is the Status `401`?
-3.  **Check API Logs**:
-    - `[orySessionMiddleware] No cookie found`: Browser didn't send it (Use Rewrites/Same-Origin).
-    - `[orySessionMiddleware] Invalid session`: Cookie exists but expired or revoked.
-    - `[createContext]`: If Middleware says "Success" but tRPC says "Unauthorized", check Context Propagation in `index.ts`.
+1. **Check Cookies**: Open DevTools → Application → Cookies. Is `ory_kratos_session` present for your domain?
+2. **Check Network**: Look at the request to `/trpc/...` or `/api/pod/...`.
+   - Is the cookie being sent?
+   - Is the Status `401`?
+3. **Check API Logs**:
+   - `[orySessionMiddleware] No cookie found`: Browser didn't send it — check domain/path scope.
+   - `[orySessionMiddleware] Invalid session`: Cookie exists but expired or revoked. Sign in again.
+   - `[createContext]`: If Middleware says "Success" but tRPC says "Unauthorized", check Context Propagation in `index.ts`.
+4. **Eve proxy returns `no-pod-session`**: The `ory_kratos_session` cookie is missing from the browser request to the proxy. Sign into any pod surface to get a fresh cookie.

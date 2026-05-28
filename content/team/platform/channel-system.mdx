@@ -19,8 +19,17 @@ toc: true
 
 # Channel System — V2
 
-> Status: **IMPLEMENTED** — Migration `0066_channel_system_v2.sql` shipped.  
-> Last updated: 2026-04-11
+> **This is canon.** The data model documented here is the source of truth.
+> If code disagrees, the code is wrong. Public APIs must speak this vocabulary
+> (`channelType` + `contextObjectType` + `scope`) — no `family`, no
+> `threadKind`. The `aiChannelFamily` adapter is a temporary backward-compat
+> shim around `chat.resolveAiChannel` and will be deleted once all consumers
+> migrate to `chat.resolveOrCreateChannel`.
+>
+> Status: **IMPLEMENTED** — Migration `0066_channel_system_v2.sql` (initial)
+> + `0023_channel_v2_restore.sql` (this canon migration). The transitional
+> `thread_kind` column was dropped in `0010_drop_threadKind_column.sql`.  
+> Last updated: 2026-05-18
 
 ---
 

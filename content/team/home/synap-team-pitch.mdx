@@ -1,12 +1,20 @@
 
 SYNAP
-Personal Infrastructurefor Sovereign Intelligence
+Personal Infrastructure for Sovereign Intelligence
 
 
 A technical vision document for people who want to build the next layer of personal computing.
 
-March 2026
+May 2026
 Antoine — Founder & CTO
+
+---
+
+> **Every application is a configuration. AI writes the config.**
+
+Any workspace, data model, UI, or workflow — described in JSON or plain language, generated without a single code change. This is the architectural breakthrough. Bubble needs designers. Webflow needs markup. Notion needs engineers. **Synap needs a sentence.**
+
+---
 
 The Problem Nobody Has Solved
 Every AI product in 2026 asks you to send your data to someone else’s server, use someone else’s interface, and hope they don’t change the rules. Your conversations disappear when you switch providers. Your workflow resets when you start a new chat. Your data sits in silos you don’t control.
@@ -23,6 +31,18 @@ And through it all: AI agents that live on your data. They remember every conver
 The data pod is open source. The hub protocol — 50+ endpoints, the single API surface for all data access — is open and already enables any external agent or service to connect. The intelligence service is proprietary. That’s our layer.
 
 What Makes This Different
+Any App From Configuration
+No other platform generates a complete application — data model, UI, workflows — from configuration alone. Synap's architecture makes this possible because every layer is a config:
+- **Entity profile** = data model config (fields, types, relations)
+- **View** = rendering config (type, groupBy, filters, layout)
+- **Cell** = UI primitive config (widget type, parameters)
+- **Automation** = workflow config (trigger, steps, conditions)
+- **Workspace template** = one JSON document that bootstraps an entire working environment
+
+The building blocks are fixed code. The applications are pure configuration. AI generates the configuration. The result: describe a CRM, a project tracker, a personal analytics dashboard — in plain language — and watch it assemble without a developer.
+
+This is the moat. Every competitor's feature roadmap is about adding new hardcoded screens. Synap's is about making the configuration space more expressive.
+
 The Bento Grid
 Most platforms give you a table and a kanban board. Synap gives you a fully customizable dashboard for any entity type — or any specific entity. Drag widgets, configure parameters, set sizes, add charts, text, metrics, activity feeds. No code. Just JSON under the hood, which means the AI can generate complete dashboards from a natural language description.
 A CRM dashboard, a project tracker, a personal analytics view, a team overview — all built from the same entity data, all configurable per workspace or per entity. The same contacts that appear in your pipeline table can power a relationship dashboard with interaction history, deal velocity, and next-action recommendations.
@@ -41,19 +61,22 @@ This is not a pitch deck for an idea. The core platform is built and running.
 
 50+
 Hub Protocol Endpoints
-Typed, scoped, production-ready
-11
+Typed, scoped, production-ready (21 sub-routers)
+22+
 AI Tools
-Entity, document, search, memory, graph
-7
+Entity, document, search, memory, graph, relations, profiles, skills
+2
 Agent Types
-Orchestrator + 6 specialists
+OrchestratorAgent (full tools) + PersonaAgent (branch-only)
 5
 Memory Blocks
 Session-scoped compaction system
-8
+6
 Channel Types
-AI, branch, A2AI, direct, external...
+personal, thread, sub_thread, feed, external, agent_collab
+16
+View Types
+table, kanban, graph, bento, timeline, masonry, flow, mindmap + more
 ∞
 Event History
 Every mutation stored with full context

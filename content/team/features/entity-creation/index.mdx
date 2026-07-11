@@ -19,6 +19,11 @@ Create entities through multiple entry points: UI forms (browser/studio/relay), 
 | **AI-assisted (Chat)** | User describes what they want in AI chat. OrchestratorAgent extracts entity type and properties, creates a proposal (for AI mutations), user approves, entity is created. |
 | **Hub Protocol REST** | External agents (OpenClaw, OpenClaw) POST to `/api/hub/entities` with entity data. Creates entities on behalf of authenticated agent users. |
 | **Eve CLI** | CLI commands for structured entity creation. Pipe-friendly for automation. Sovereign stack integration. |
+| **Facet attachment** | Not a new entity: when the thing being described already exists as an entity and the message is stating a new *role* for it (client, partner, prospect, speaker), the agent calls `attach_facet` on the existing entity instead of `create_entity`. `POST /api/hub/entities/:entityId/facets`. |
+
+## Resolve identity before creating
+
+AI-assisted creation is **resolve-identity-first**: before creating a new entity, the agent searches for an existing match on strong identity signals (email, phone, url/handle) via `IdentityResolutionService`. A strong-signal match auto-resolves to the existing entity — link, don't create. Only when no match exists (or only a weak, name-only candidate exists that the user should disambiguate) does a new entity get created. This is what prevents "client," "partner," and similar role mentions from spawning duplicate entities for a person/company that's already in the pod — see [Kind + Facets](/docs/architecture/concepts/kind-and-facets#identity-resolution--why-profileslugvalue-was-the-bug).
 
 ## Entity scoping
 

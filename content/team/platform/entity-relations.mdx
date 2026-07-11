@@ -47,6 +47,8 @@ Synap has two orthogonal ways to link entities. Use the right one for the right 
 
 The `getConnections()` procedure returns BOTH unified in one response.
 
+> **Facet context — under design.** Relations always target `entities.id`. There's currently no way to say "this note is about Alice in her `client` facet" as distinct from Alice generally — a relation to a person resolves to the whole entity, not a specific role it's playing. See [Kind + Facets](/docs/architecture/concepts/kind-and-facets#open-questions) for the open question; this page will be updated once facet-scoped relation context ships.
+
 ---
 
 ## Semantic Relations — Complete Model

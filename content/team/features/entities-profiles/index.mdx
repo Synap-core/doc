@@ -13,22 +13,32 @@ Every entity in Synap has a profile type (note, task, person, etc.). Profiles co
 
 ## System profiles (14)
 
-| Slug | Parent | Icon | Scope | Key Properties |
-|------|--------|------|-------|----------------|
-| `note` | — | file-text | pod | content, tags |
-| `task` | — | check-square | pod | status, priority, dueDate |
-| `project` | — | folder | pod | status, tags |
-| `event` | — | calendar | pod | startDate, endDate, location |
-| `person` | — | user | pod | email, phone |
-| `contact` | person | user-check | pod | + role |
-| `company` | — | building | pod | website, industry, employees |
-| `deal` | — | trending-up | workspace | stage, value, closeDate |
-| `bookmark` | — | bookmark | pod | url, domain, source |
-| `website` | bookmark | globe | pod | + favicon |
-| `article` | bookmark | newspaper | pod | + author, publishedAt |
-| `capture` | bookmark | camera | workspace | Quick capture target |
-| `file` | — | file | workspace | fileName, mimeType, fileSize |
-| `anchor` | — | pin | workspace | channelId, messageId |
+> **Note:** `contact` is historical in this table — it has since been converted to a role-profile (a facet), not a standalone kind. See [Kind vs. role profiles](#kind-vs-role-profiles) below.
+
+| Slug | Kind | Parent | Icon | Scope | Key Properties |
+|------|------|--------|------|-------|----------------|
+| `note` | kind | — | file-text | pod | content, tags |
+| `task` | kind | — | check-square | pod | status, priority, dueDate |
+| `project` | kind | — | folder | pod | status, tags |
+| `event` | kind | — | calendar | pod | startDate, endDate, location |
+| `person` | kind | — | user | pod | email, phone |
+| `contact` | role | person | user-check | pod | + role |
+| `company` | kind | — | building | pod | website, industry, employees |
+| `deal` | kind | — | trending-up | workspace | stage, value, closeDate |
+| `bookmark` | kind | — | bookmark | pod | url, domain, source |
+| `website` | kind | bookmark | globe | pod | + favicon |
+| `article` | kind | bookmark | newspaper | pod | + author, publishedAt |
+| `capture` | kind | bookmark | camera | workspace | Quick capture target |
+| `file` | kind | — | file | workspace | fileName, mimeType, fileSize |
+| `anchor` | kind | — | pin | workspace | channelId, messageId |
+
+`deal` is a deliberate exception on the kind side: despite describing a relationship (buyer × seller × stage), it stays a primary kind rather than a facet, because it accrues its own independent life — pipeline stage, close date, its own relations. See [Kind + Facets](/docs/architecture/concepts/kind-and-facets#the-thingness-ladder--and-the-promotion-rule) for the promotion rule.
+
+## Kind vs. role profiles
+
+Profiles carry a `profileKind`: `'kind'` (a primary entity type) or `'role'` (an attachable facet — `client`, `partner`, `prospect`, `sponsor`, `competitor`, and now `contact`). Role profiles set `applicableKinds[]` restricting which kinds they can attach to, and are never assigned directly to `entities.profileId` — they're attached via `entity_facets` instead, additive and workspace-lensed. One real-world thing stays one entity; roles it plays are attachments, not new entities.
+
+Full model: [Kind + Facets →](/docs/architecture/concepts/kind-and-facets).
 
 ## Property schema layers
 

@@ -11,6 +11,9 @@ toc: true
 
 The CRM workspace is defined in `apps/crm/lib/crmWorkspaceDefinition.ts`. All entity types, properties, views, and layout configuration are provisioned from this definition on first launch via `trpc.workspaces.createFromDefinition`.
 
+> **Kind + Facets: `client` / `partner` / `contact` are role-facets, not entities.**
+> This page previously implied (and the workspace definition's `crmStatus` enum still models) relationship state as a property on the `person` entity directly. The canonical model is: `person` and `company` are pure identity **kinds**; `client`, `partner`, `prospect` and similar relationship states are **role-profiles** (`profileKind = 'role'`) attached via `entity_facets` — never a second entity, and increasingly not a bare status property either. The historical `contact` profile has been converted to a facet on `person` (see the conversion manifest below). **Org-keying rule:** a facet like `client` attaches to whichever entity is the actual counterparty — a `person` for an individual client, a `company` for an organizational one — never both, and never a synthetic third entity to represent "the relationship." Full model + the conversion mechanism: [Kind + Facets →](/docs/architecture/concepts/kind-and-facets). The manifest that tracks every kind/facet conversion (including `contact`, `client`, `partner`, `sponsor`, `competitor`) is `synap-backend/packages/database/src/conversions/manifest.ts` — the SSOT for this migration, never a hand-written migration.
+
 ## Entity Profiles
 
 The CRM uses **system-wide profiles** (scoped to `pod`) with **workspace-overlay properties** — properties specific to CRM sales context added on top of the base profile schema. No new profile slugs are created; the CRM enriches existing ones.

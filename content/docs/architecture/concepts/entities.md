@@ -124,12 +124,22 @@ Each workspace renders an entity using a layered schema:
 
 This is why Synap can host three completely different workflows on the same underlying entity graph without one workflow's custom fields polluting another.
 
+Note that this layering is about **which fields you see** on an entity, and is orthogonal to §6 below — an entity's *kind* (what it fundamentally is) and its *facets* (what roles it's playing) are a separate axis from which property layer a field lives on. A `person` entity's `client` facet properties are workspace-lensed the same way overlay fields are, but a facet is an attachment, not a property layer.
+
 ### What this enables
 - **Same people, different systems** — track fundraising context in Relay, personal notes in Knowledge, content-audience tags in Studio. One Antoine, three lenses.
 - **Safe extension** — adding a field in your space can never affect another space. No schema migrations. No "will this break my other app?".
 - **Template composability** — install a new space template and its overlay fields slot in alongside your existing data. Your Person entities grow capabilities without losing identity.
 
 For the full technical model (how base vs. overlay defs are stored, how queries filter, how the write path tags new fields), see [Profile Schemas →](./profile-schemas).
+
+## 6. Kind vs. Facets — identity vs. roles
+
+An entity has exactly **one kind** (its profile, e.g. `person`, `company`, `task`) — fixed, and rarely changes. What it's *being used as* in a given context — client, partner, prospect, speaker — is a **facet**: an additive, workspace-lensed attachment (`entity_facets`), not a second entity. A person who becomes a client doesn't get a new `client` entity; they get a `client` facet attached to the same `person` row. Facets cascade with their parent and are never a separate identity to resolve or dedup against.
+
+The one exception is when a "role" accrues its own independent life — its own timeline, its own relations, its own state machine. `deal` is the canonical example: it stays a primary kind (buyer × seller × stage), never a facet, because it's a relationship-*thing*, not a stance one entity takes.
+
+Full model, storage shape, identity-resolution rules, and the conversion mechanism: [Kind + Facets →](./kind-and-facets).
 
 ---
 

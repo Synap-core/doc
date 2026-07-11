@@ -22,8 +22,15 @@ Profiles define entity shape, behavior, and scope.
 - Custom profiles let teams add domain schemas without backend code changes.
 - Story-based onboarding can scaffold profiles + views from presets.
 
+## Kind vs. role profiles
+
+Every profile carries a `profileKind`: `'kind'` (a primary entity type — person, company, task) or `'role'` (an attachable facet — client, partner, prospect). Role profiles set `applicableKinds[]` to restrict which kinds can wear them, and are never assigned to `entities.profileId` directly — they're attached via `entity_facets` instead. This keeps "what an entity IS" (its kind) separate from "what it's being used as, in context" (its facets).
+
+See [Kind + Facets →](/docs/architecture/concepts/kind-and-facets) for the full model, including the conversion manifest that migrates a profile from a kind to a role.
+
 ## Related docs
 
 - [Platform index](/team/platform)
 - [Views](/team/platform/views)
 - [Synap packages](/team/synap-packages)
+- [Kind + Facets](/docs/architecture/concepts/kind-and-facets)

@@ -15,7 +15,7 @@ toc: true
 
 # First queries with the SDK
 
-**Prerequisites:** a running data pod (see [Installation](/docs/start/getting-started/installation)), your **pod URL**, **workspace ID**, and an **API key**.
+**Prerequisites:** a running data pod (see [Getting started](/docs/start/getting-started) — or [Creating an app](./creating-an-app) if you don't have one yet), your **pod URL**, **workspace ID**, and an **API key**.
 
 > API keys: Synap app → **Workspace Settings → Developer → API keys → Generate**.
 
@@ -26,13 +26,13 @@ toc: true
 ### 1. Install
 
 ```bash
-npm install @synap/react
+npm install @synap-core/react@^1.0.0
 ```
 
 ### 2. Provider
 
 ```tsx
-import { SynapProvider } from "@synap/react";
+import { SynapProvider } from "@synap-core/react";
 
 export default function App({ children }) {
   return (
@@ -50,7 +50,7 @@ export default function App({ children }) {
 ### 3. Read & write
 
 ```tsx
-import { useSynap } from "@synap/react";
+import { useSynap } from "@synap-core/react";
 
 export function NoteList() {
   const { data, isLoading } = useSynap().entities.list.useQuery({
@@ -73,11 +73,11 @@ export function NoteList() {
 ## Option B — TypeScript (no React)
 
 ```bash
-npm install @synap/sdk
+npm install @synap-core/sdk@^1.0.0
 ```
 
 ```typescript
-import { createSynapClient } from "@synap/sdk";
+import { createSynapClient } from "@synap-core/sdk";
 
 const synap = createSynapClient({
   podUrl: "https://your-pod.example.com",
@@ -109,7 +109,8 @@ curl "https://your-pod.example.com/trpc/entities.list?input=%7B%22limit%22%3A5%7
 ## Types
 
 ```typescript
-import type { RouterInputs, RouterOutputs } from "@synap/sdk";
+import type { RouterInputs, RouterOutputs } from "@synap-core/react";
+// (@synap-core/sdk doesn't re-export these — see "Type helpers" in the overview)
 ```
 
 ---

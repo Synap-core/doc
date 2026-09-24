@@ -17,7 +17,7 @@ toc: true
 
 OpenClaw is a self-hosted AI agent runtime. Synap provides OpenClaw with:
 - a data pod (entities, documents, memory, governance)
-- the three Synap skills (`synap`, `synap-schema`, `synap-ui`)
+- the two Synap skills (`synap`, `synap-ui`)
 - an OpenAI-compatible AI provider (via `synap/auto` model routing)
 
 The connection path: **OpenClaw agent → Hub Protocol (`/api/hub/*`) → Synap pod**. OpenClaw never writes to the database directly — it goes through API keys and governance just like every other surface.
@@ -34,7 +34,7 @@ This is the end-to-end onboarding flow:
 1. Detects existing OpenClaw (or starts a fresh instance via Docker)
 2. Runs a security audit
 3. Provisions a pod connection (managed or self-hosted)
-4. Installs the three Synap skills
+4. Installs the two Synap skills
 5. Wires the Synap IS as an AI provider (optional)
 
 Full details: [`synap-cli/src/commands/init.ts`](https://github.com/Synap-core/synap-cli/blob/main/src/commands/init.ts).
@@ -57,7 +57,6 @@ After that, install the skills via OpenClaw's own CLI:
 
 ```bash
 openclaw skills install synap
-openclaw skills install synap-schema
 openclaw skills install synap-ui
 ```
 
@@ -81,7 +80,7 @@ Response:
 {
   "agentUserId": "usr_...",
   "workspaceId":  "ws_...",
-  "hubApiKey":    "sk_live_...",
+  "hubApiKey":    "synap_hub_live_...",
   "keyId":        "key_..."
 }
 ```
@@ -96,7 +95,7 @@ Set the pod connection in OpenClaw's config (`~/openclaw/config.json` or equival
 {
   "synap": {
     "podUrl":      "https://YOUR_POD.synap.live",
-    "hubApiKey":   "sk_live_...",
+    "hubApiKey":   "synap_hub_live_...",
     "workspaceId": "ws_...",
     "agentUserId": "usr_..."
   }
@@ -106,7 +105,7 @@ Set the pod connection in OpenClaw's config (`~/openclaw/config.json` or equival
 Or export env vars that OpenClaw picks up:
 ```bash
 export SYNAP_POD_URL="https://YOUR_POD.synap.live"
-export SYNAP_HUB_API_KEY="sk_live_..."
+export SYNAP_HUB_API_KEY="synap_hub_live_..."
 export SYNAP_WORKSPACE_ID="ws_..."
 ```
 
@@ -114,7 +113,6 @@ export SYNAP_WORKSPACE_ID="ws_..."
 
 ```bash
 openclaw skills install synap
-openclaw skills install synap-schema
 openclaw skills install synap-ui
 ```
 
@@ -186,6 +184,6 @@ Prints pod health, OpenClaw gateway status, skill inventory, and AI config.
 ## Next steps
 
 - [Synap CLI reference](https://github.com/Synap-core/synap-cli) — full CLI command list
-- [Skills architecture](../skills) — the three skills
+- [Skills architecture](../skills) — the two skills
 - [OpenAI-compat endpoint](../../integrations/chat-stream) — chat stream details
 - [Governance](../../../architecture/security/governance) — proposal flow

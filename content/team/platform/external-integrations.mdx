@@ -41,7 +41,7 @@ toc: true
 
 External Caller (Claude Code, custom agent, any HTTP client)
   │
-  │  API key (Bearer sk_live_...)
+  │  API key (Bearer synap_user_...)
   ▼
 ┌─────────────────────────────────────┐
 │  Pod Backend — /api/external/*      │
@@ -81,7 +81,7 @@ A skill becomes a named, callable HTTP endpoint. A developer (or AI) can:
 Example — Claude Code invoking a "extract contacts from email" skill:
 ```bash
 curl -X POST https://mypod.synap.live/api/external/skills/sk_abc123/invoke \
-  -H "Authorization: Bearer sk_live_..." \
+  -H "Authorization: Bearer synap_user_..." \
   -H "Content-Type: application/json" \
   -d '{ "input": { "emailBody": "Hi, I am John Doe..." } }'
 ```
@@ -159,7 +159,7 @@ A single HTTP endpoint on the pod that accepts natural language and returns a st
 
 ```bash
 curl -X POST https://mypod.synap.live/api/external/chat/stream \
-  -H "Authorization: Bearer sk_live_..." \
+  -H "Authorization: Bearer synap_user_..." \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What tasks are overdue this week?",
@@ -257,18 +257,18 @@ POST /api/external/chat/stream
 
 Developers build custom applications (LLM pipelines, automation scripts, VS Code extensions) that read/write Synap pod data and inject it as context into their own AI calls.
 
-This uses existing infrastructure only — `@synap/sdk`, `@synap/react`, Hub Protocol REST. No new endpoints needed.
+This uses existing infrastructure only — `@synap-core/sdk`, `@synap/react`, Hub Protocol REST. No new endpoints needed.
 
 ### The three patterns
 
 **Pattern E1 — Read data, inject into LLM context**
 ```typescript
-import { createSynapClient } from '@synap/sdk';
+import { createSynapClient } from '@synap-core/sdk';
 import Anthropic from '@anthropic-ai/sdk';
 
 const synap = createSynapClient({
   podUrl: 'https://mypod.synap.live',
-  apiKey: 'sk_live_...',
+  apiKey: 'synap_user_...',
   workspaceId: 'ws_...',
 });
 
@@ -298,7 +298,7 @@ await synap.entities.create.mutate({
 ```typescript
 // Hub Protocol is a plain REST API — use fetch() directly
 const response = await fetch('https://mypod.synap.live/api/hub-protocol/search', {
-  headers: { Authorization: 'Bearer sk_live_...' },
+  headers: { Authorization: 'Bearer synap_user_...' },
   method: 'GET',
 });
 
@@ -306,7 +306,7 @@ const response = await fetch('https://mypod.synap.live/api/hub-protocol/search',
 await fetch('https://mypod.synap.live/api/hub-protocol/channels/trigger-ai', {
   method: 'POST',
   headers: {
-    Authorization: 'Bearer sk_live_...',
+    Authorization: 'Bearer synap_user_...',
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
@@ -323,14 +323,14 @@ await fetch('https://mypod.synap.live/api/hub-protocol/channels/trigger-ai', {
 // Call a skill
 const result = await fetch('https://mypod.synap.live/api/external/skills/sk_abc/invoke', {
   method: 'POST',
-  headers: { Authorization: 'Bearer sk_live_...', 'Content-Type': 'application/json' },
+  headers: { Authorization: 'Bearer synap_user_...', 'Content-Type': 'application/json' },
   body: JSON.stringify({ input: { emailText: '...' } }),
 });
 
 // Or stream chat
 const stream = await fetch('https://mypod.synap.live/api/external/chat/stream', {
   method: 'POST',
-  headers: { Authorization: 'Bearer sk_live_...', 'Content-Type': 'application/json' },
+  headers: { Authorization: 'Bearer synap_user_...', 'Content-Type': 'application/json' },
   body: JSON.stringify({ query: 'Summarize my week' }),
 });
 // Parse SSE from stream...
@@ -497,7 +497,7 @@ These things will NOT be built or changed:
 - `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` — zero changes
 - `synap-backend/packages/api/src/routers/skills.ts` (execute procedure) — zero changes
 - All sandbox/isolate code in IS — zero changes
-- `@synap/sdk`, `@synap/react`, `@synap/agent-sdk` — zero changes
+- `@synap-core/sdk`, `@synap/react`, `@synap/agent-sdk` — zero changes
 
 ---
 

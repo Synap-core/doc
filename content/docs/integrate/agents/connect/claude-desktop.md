@@ -59,7 +59,7 @@ Open `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) a
         "mcp-remote",
         "https://YOUR_POD.synap.live/mcp",
         "--header",
-        "Authorization: Bearer sk_live_..."
+        "Authorization: Bearer synap_user_..."
       ]
     }
   }
@@ -92,9 +92,8 @@ If you want the Synap skills in Claude Desktop:
 
 1. Open [claude.ai](https://claude.ai)
 2. Navigate to **Settings → Skills → Upload skill**
-3. Upload each of the three skill directories:
-   - `synap` (core data operations)
-   - `synap-schema` (extend the data model)
+3. Upload each of the two skill directories:
+   - `synap` (core data operations, including extending the data model)
    - `synap-ui` (build views and dashboards)
 4. On next Claude Desktop launch, the skills sync automatically
 

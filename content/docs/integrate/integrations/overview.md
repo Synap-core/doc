@@ -33,7 +33,7 @@ Your data pod exposes three distinct integration surfaces. Choose based on how m
 |--------|----------|----------|------|------|
 | **C — Skill invocation** | `POST /api/external/skills/:id/invoke` | Calling specific named operations | Deterministic, composable, fast | Must know skill ID; no natural language |
 | **D — Chat stream** | `POST /api/external/chat/stream` | Conversational AI with full pod context | Natural language, persistent history, full IS capabilities | Less predictable output; higher latency |
-| **E — SDK + direct API** | tRPC / Hub Protocol REST | Custom apps and LLM pipelines | Full control, type-safe with `@synap/sdk` | Most setup required; you manage context yourself |
+| **E — SDK + direct API** | tRPC / Hub Protocol REST | Custom apps and LLM pipelines | Full control, type-safe with `@synap-core/sdk` | Most setup required; you manage context yourself |
 
 ---
 
@@ -59,7 +59,7 @@ Best when you want the AI to **figure out what to do**: "what's on my plate this
 
 ## Option E — SDK and direct API
 
-For building real apps. `@synap/sdk` gives you typed tRPC access to every procedure on the pod. Hub Protocol REST gives you the same access surface the pod's own AI uses internally.
+For building real apps. `@synap-core/sdk` gives you typed tRPC access to every procedure on the pod. Hub Protocol REST gives you the same access surface the pod's own AI uses internally.
 
 Best when you are **building something**: a custom UI, an LLM pipeline where you manage context yourself, a sync integration, or a script that reads Synap data and feeds it into a separate model.
 

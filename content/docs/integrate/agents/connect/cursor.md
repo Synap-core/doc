@@ -47,7 +47,7 @@ Edit `~/.cursor/mcp.json` (create it if missing):
     "synap": {
       "url": "https://YOUR_POD.synap.live/mcp",
       "headers": {
-        "Authorization": "Bearer sk_live_..."
+        "Authorization": "Bearer synap_user_..."
       }
     }
   }

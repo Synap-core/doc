@@ -67,14 +67,14 @@ Pass the key as a Bearer token in every request:
 
 ```bash
 curl https://YOUR_POD.synap.live/api/external/skills \
-  -H "Authorization: Bearer sk_live_..."
+  -H "Authorization: Bearer synap_user_..."
 ```
 
 For requests that are workspace-scoped (most tRPC procedures), also pass the workspace ID as a header:
 
 ```bash
 curl "https://YOUR_POD.synap.live/trpc/entities.list?input=..." \
-  -H "Authorization: Bearer sk_live_..." \
+  -H "Authorization: Bearer synap_user_..." \
   -H "x-workspace-id: ws_..."
 ```
 

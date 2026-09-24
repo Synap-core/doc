@@ -26,19 +26,19 @@ toc: true
 ### 1. Install
 
 ```bash
-npm install @synap/react
+npm install @synap-core/react
 ```
 
 ### 2. Provider
 
 ```tsx
-import { SynapProvider } from "@synap/react";
+import { SynapProvider } from "@synap-core/react";
 
 export default function App({ children }) {
   return (
     <SynapProvider
       podUrl="https://your-pod.example.com"
-      apiKey="sk_live_..."
+      apiKey="synap_user_..."
       workspaceId="ws_..."
     >
       {children}
@@ -50,7 +50,7 @@ export default function App({ children }) {
 ### 3. Read & write
 
 ```tsx
-import { useSynap } from "@synap/react";
+import { useSynap } from "@synap-core/react";
 
 export function NoteList() {
   const { data, isLoading } = useSynap().entities.list.useQuery({
@@ -73,15 +73,15 @@ export function NoteList() {
 ## Option B — TypeScript (no React)
 
 ```bash
-npm install @synap/sdk
+npm install @synap-core/sdk
 ```
 
 ```typescript
-import { createSynapClient } from "@synap/sdk";
+import { createSynapClient } from "@synap-core/sdk";
 
 const synap = createSynapClient({
   podUrl: "https://your-pod.example.com",
-  apiKey: "sk_live_...",
+  apiKey: "synap_user_...",
   workspaceId: "ws_...",
 });
 
@@ -100,7 +100,7 @@ tRPC is exposed over HTTP at `/trpc`:
 
 ```bash
 curl "https://your-pod.example.com/trpc/entities.list?input=%7B%22limit%22%3A5%7D" \
-  -H "Authorization: Bearer sk_live_..." \
+  -H "Authorization: Bearer synap_user_..." \
   -H "x-workspace-id: ws_..."
 ```
 
@@ -109,7 +109,7 @@ curl "https://your-pod.example.com/trpc/entities.list?input=%7B%22limit%22%3A5%7
 ## Types
 
 ```typescript
-import type { RouterInputs, RouterOutputs } from "@synap/sdk";
+import type { RouterInputs, RouterOutputs } from "@synap-core/sdk";
 ```
 
 ---

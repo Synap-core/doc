@@ -54,10 +54,9 @@ You can skip the CLI and do it manually — every guide has a manual path too.
 
 Synap exposes three integration primitives. Every AI surface uses one or more:
 
-**1. Skills** — Markdown files (+ optional scripts) your AI reads to learn how to use Synap. Three skills ship:
+**1. Skills** — Markdown files (+ optional scripts) your AI reads to learn how to use Synap. Two skills ship:
 
-- `synap` — core data operations: read, write, link, search, remember
-- `synap-schema` — extend the data model (new profiles, new properties)
+- `synap` — core data operations: read, write, link, search, remember, extend the data model (new profiles, new properties)
 - `synap-ui` — build views, dashboards, bento layouts
 
 Skills live in your AI's skills directory (`~/.claude/skills/` for Claude Code) and load progressively — only when the user asks something the skill is about.

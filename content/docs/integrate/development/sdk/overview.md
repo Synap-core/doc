@@ -17,8 +17,8 @@ Synap exposes your data pod as a fully-typed tRPC API. Two npm packages let you 
 
 | Package | Use case |
 |---------|----------|
-| [`@synap/sdk`](https://npmjs.com/package/@synap/sdk) | Vanilla JS / TypeScript, server-side, scripts |
-| [`@synap/react`](https://npmjs.com/package/@synap/react) | React apps — TanStack Query hooks, automatic caching |
+| [`@synap-core/sdk`](https://npmjs.com/package/@synap-core/sdk) | Vanilla JS / TypeScript, server-side, scripts |
+| [`@synap-core/react`](https://npmjs.com/package/@synap-core/react) | React apps — TanStack Query hooks, automatic caching |
 
 Both packages are generated from the same `AppRouter` type, so autocomplete covers all 47+ procedures.
 
@@ -28,24 +28,24 @@ Both packages are generated from the same `AppRouter` type, so autocomplete cove
 
 ```bash
 # Vanilla JS / TypeScript
-npm install @synap/sdk
+npm install @synap-core/sdk
 
 # React
-npm install @synap/react
+npm install @synap-core/react
 ```
 
 Step-by-step first calls (React, TS, cURL) → **[First queries](./first-query)**.
 
 ---
 
-## Vanilla JS — `@synap/sdk`
+## Vanilla JS — `@synap-core/sdk`
 
 ```typescript
-import { createSynapClient } from "@synap/sdk";
+import { createSynapClient } from "@synap-core/sdk";
 
 const synap = createSynapClient({
   podUrl: "https://your-pod.synap.live",
-  apiKey: "sk_live_...",        // generate in Workspace → Settings → API Keys
+  apiKey: "synap_user_...",        // generate in Workspace → Settings → API Keys
   workspaceId: "ws_...",
 });
 
@@ -66,18 +66,18 @@ const results = await synap.search.global.query({ q: "project ideas" });
 
 ---
 
-## React — `@synap/react`
+## React — `@synap-core/react`
 
 ### 1. Wrap your app with `<SynapProvider>`
 
 ```tsx
-import { SynapProvider } from "@synap/react";
+import { SynapProvider } from "@synap-core/react";
 
 export default function App() {
   return (
     <SynapProvider
       podUrl="https://your-pod.synap.live"
-      apiKey="sk_live_..."
+      apiKey="synap_user_..."
       workspaceId="ws_..."
     >
       <YourApp />
@@ -89,7 +89,7 @@ export default function App() {
 ### 2. Call `useSynap()` anywhere inside
 
 ```tsx
-import { useSynap } from "@synap/react";
+import { useSynap } from "@synap-core/react";
 
 function NoteList() {
   const { data } = useSynap().entities.list.useQuery({
@@ -118,7 +118,7 @@ function CreateNote() {
 Generate a key in **Workspace → Settings → Developer → API Keys**. Pass it as `apiKey` — sent as a `Bearer` token.
 
 ```typescript
-createSynapClient({ podUrl, workspaceId, apiKey: "sk_live_..." });
+createSynapClient({ podUrl, workspaceId, apiKey: "synap_user_..." });
 ```
 
 ### Session cookie (browser — already logged in via Synap)
@@ -134,8 +134,8 @@ createSynapClient({ podUrl, workspaceId });
 ## Type helpers
 
 ```typescript
-import type { RouterInputs, RouterOutputs } from "@synap/sdk";
-// or from "@synap/react"
+import type { RouterInputs, RouterOutputs } from "@synap-core/sdk";
+// or from "@synap-core/react"
 
 type CreateInput = RouterInputs["entities"]["create"];
 type EntityList = RouterOutputs["entities"]["list"]["items"][number];

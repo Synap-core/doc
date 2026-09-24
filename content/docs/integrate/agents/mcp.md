@@ -128,7 +128,7 @@ All 27 tools route through the Hub Protocol REST API. For lower-level access or 
     "synap": {
       "url": "https://YOUR_POD.synap.live/mcp",
       "headers": {
-        "Authorization": "Bearer sk_live_..."
+        "Authorization": "Bearer synap_user_..."
       }
     }
   }
@@ -145,7 +145,7 @@ Full guide: [Claude Desktop setup](./connect/claude-desktop).
     "synap": {
       "url": "https://YOUR_POD.synap.live/mcp",
       "headers": {
-        "Authorization": "Bearer sk_live_..."
+        "Authorization": "Bearer synap_user_..."
       }
     }
   }
@@ -164,7 +164,7 @@ curl https://YOUR_POD.synap.live/mcp
 
 # 2. Call a tool via JSON-RPC
 curl -X POST https://YOUR_POD.synap.live/mcp \
-  -H "Authorization: Bearer sk_live_..." \
+  -H "Authorization: Bearer synap_user_..." \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -189,7 +189,7 @@ Older MCP clients expect stdio — a subprocess the client spawns and communicat
     "synap": {
       "command": "npx",
       "args": ["-y", "@synap-core/mcp-server", "--pod", "https://YOUR_POD.synap.live"],
-      "env": { "SYNAP_HUB_API_KEY": "sk_live_..." }
+      "env": { "SYNAP_HUB_API_KEY": "synap_hub_live_..." }
     }
   }
 }

@@ -15,7 +15,7 @@ toc: true
 
 # Claude Code
 
-Connect the Claude Code CLI to your Synap pod. Uses [Anthropic Agent Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills/overview) — three markdown-based skills (`synap`, `synap-schema`, `synap-ui`) drop into `~/.claude/skills/` and Claude auto-discovers them.
+Connect the Claude Code CLI to your Synap pod. Uses [Anthropic Agent Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills/overview) — two markdown-based skills (`synap`, `synap-ui`) drop into `~/.claude/skills/` and Claude auto-discovers them.
 
 **What you get:** Claude can read, write, link, and search every entity in your pod. Extend the schema on demand ("I need a podcast episode type"). Build views and dashboards ("make me a reading-list gallery"). Every mutation is governed — writes outside the auto-approve whitelist queue for your review.
 
@@ -29,10 +29,10 @@ npx @synap-core/cli connect --target=claude-code
 
 The CLI will:
 1. Ask for your pod URL and provision an API key (or accept an existing one)
-2. Copy `synap/`, `synap-schema/`, `synap-ui/` into `~/.claude/skills/`
+2. Copy `synap/`, `synap-ui/` into `~/.claude/skills/`
 3. Print the shell env vars to export
 
-Add the printed `export` lines to your shell rc (`~/.zshrc`, `~/.bashrc`), open a new terminal, and launch `claude` — the three skills show up automatically.
+Add the printed `export` lines to your shell rc (`~/.zshrc`, `~/.bashrc`), open a new terminal, and launch `claude` — both skills show up automatically.
 
 ---
 
@@ -64,9 +64,8 @@ Skills live in `synap-backend/skills/` in the repo. Clone or download just that 
 
 ```bash
 mkdir -p ~/.claude/skills
-cp -r path/to/synap-backend/skills/synap         ~/.claude/skills/
-cp -r path/to/synap-backend/skills/synap-schema  ~/.claude/skills/
-cp -r path/to/synap-backend/skills/synap-ui      ~/.claude/skills/
+cp -r path/to/synap-backend/skills/synap    ~/.claude/skills/
+cp -r path/to/synap-backend/skills/synap-ui ~/.claude/skills/
 ```
 
 Each skill is self-contained: `SKILL.md` + references + optional `scripts/`. The `orient.sh` helper in `synap/scripts/` needs execute permission (`chmod +x`).
@@ -76,7 +75,7 @@ Each skill is self-contained: `SKILL.md` + references + optional `scripts/`. The
 Add to your shell rc:
 ```bash
 export SYNAP_POD_URL="https://YOUR_POD.synap.live"
-export SYNAP_HUB_API_KEY="sk_live_..."
+export SYNAP_HUB_API_KEY="synap_hub_live_..."
 export SYNAP_WORKSPACE_ID="ws_..."      # optional — defaults to first workspace
 export SYNAP_AGENT_USER_ID="usr_..."    # optional
 ```
@@ -105,11 +104,10 @@ Claude will use the `synap` skill to `POST /api/hub/entities` with `profileSlug:
 
 | Skill | When it fires | What it does |
 |---|---|---|
-| `synap` | "save this", "find X", "remind me", "who is Y" | CRUD on entities, memory, documents, links |
-| `synap-schema` | "I need a type for X", "add a field to tasks" | Create profiles, property defs, overlays |
+| `synap` | "save this", "find X", "remind me", "who is Y", "I need a type for X", "add a field to tasks" | CRUD on entities, memory, documents, links, plus profile/property-def creation |
 | `synap-ui` | "build me a dashboard", "make a kanban" | Generate views, bentos, workspace proposals |
 
-You can install just `synap` (read-write) and skip the others — each is optional. See the [skills architecture](../skills) for the full model.
+You can install just `synap` (read-write, including schema extension) and skip `synap-ui` — each is optional. See the [skills architecture](../skills) for the full model.
 
 ---
 
@@ -127,6 +125,6 @@ You can install just `synap` (read-write) and skip the others — each is option
 
 ## Next steps
 
-- [Skills architecture](../skills) — the three-skill split and progressive disclosure
+- [Skills architecture](../skills) — the two-skill split and progressive disclosure
 - [API keys](../../integrations/api-keys) — scope reference, rotation
 - [Claude Desktop](./claude-desktop) — add MCP support alongside skills

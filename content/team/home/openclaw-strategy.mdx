@@ -306,7 +306,7 @@ Or bundled with the docker-compose for self-hosted:
 curl -fsSL https://synap.live/install.sh | bash
 ```
 
-Tech stack: Node.js (same ecosystem as OpenClaw), TypeScript, uses your existing @synap/sdk internally for pod operations. The CLI reads OpenClaw's config at `~/.openclaw/openclaw.json`, modifies it with the hardening rules and Synap provider config, and manages the synap-memory skill lifecycle.
+Tech stack: Node.js (same ecosystem as OpenClaw), TypeScript, uses your existing @synap-core/sdk internally for pod operations. The CLI reads OpenClaw's config at `~/.openclaw/openclaw.json`, modifies it with the hardening rules and Synap provider config, and manages the synap-memory skill lifecycle.
 
 Key design principle: the CLI is **non-destructive and reversible**. It never overwrites OpenClaw config without showing a diff first. Every change can be rolled back with `synap reset`. This builds trust — people are (rightly) paranoid about tools modifying their agent config.
 

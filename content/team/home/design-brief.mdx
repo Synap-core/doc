@@ -144,7 +144,7 @@ Synap is accessible from several entry points. Each has a different intent, but 
 
 **Browser Extension** — One-click capture on any web page. Saves the page, an article, a highlight, or a selection. The entity appears in your pod immediately, classified and linked.
 
-**API + SDK** — `@synap/sdk` wraps all 47+ backend routers. `@synap/react` provides full React-Query hooks. API keys are scoped to 18 permissions and bcrypt-hashed. CORS is whitelisted per pod. Custom cells run in sandboxed iframes with a postMessage SDK. An MCP server means any MCP-compatible AI can use Synap as a structured tool.
+**API + SDK** — `@synap-core/sdk` wraps all 47+ backend routers. `@synap/react` provides full React-Query hooks. API keys are scoped to 18 permissions and bcrypt-hashed. CORS is whitelisted per pod. Custom cells run in sandboxed iframes with a postMessage SDK. An MCP server means any MCP-compatible AI can use Synap as a structured tool.
 
 **Web** — `app.synap.live` handles account management, billing, pod provisioning, and the marketplace. It is not the primary app surface — it's the control plane.
 
@@ -168,7 +168,7 @@ All packages share the same entity system and AI layer. A CRM deal entity and a 
 
 ### Developer Platform
 
-Developers can build custom apps that run inside the Synap browser. `@synap/sdk` wraps the backend. `@synap/react` provides hooks. API keys are scoped and auditable. Custom cells run in sandboxed iframes. CORS is configurable per pod.
+Developers can build custom apps that run inside the Synap browser. `@synap-core/sdk` wraps the backend. `@synap/react` provides hooks. API keys are scoped and auditable. Custom cells run in sandboxed iframes. CORS is configurable per pod.
 
 The same system the Synap team uses to build the 22 built-in apps is available to any developer with API access to a pod.
 

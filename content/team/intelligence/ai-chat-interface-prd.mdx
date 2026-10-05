@@ -1,5 +1,7 @@
 # AI Chat Interface: Complete Frontend PRD
 
+> **Superseded in part (2026-10-05).** The AI-turn UI described here (StreamStatus, ThinkingBlock, AIStepsPanel, ToolDisclosure, StreamingPartsList, per-component tool-verb tables) was retired. An AI turn is now drawn by ONE component, `TurnActivity` (`@synap-core/chat-ui`), over ONE pure model, `deriveTurnActivity` (`@synap-core/types/run-activity`); tool names resolve through `resolveToolLabel` (`@synap-core/types/vocabulary`). The trace persists after the reply settles.
+
 **Date**: 2026-01-08  
 **Purpose**: Comprehensive specification for AI chat visualization system  
 **Scope**: Data layer + Component specifications for AI-powered design generation

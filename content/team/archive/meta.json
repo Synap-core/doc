@@ -5,6 +5,7 @@
   "icon": "archive",
   "pages": [
     "index",
-    "relay-archive"
+    "relay-archive",
+    "..."
   ]
 }

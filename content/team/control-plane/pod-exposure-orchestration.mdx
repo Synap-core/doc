@@ -91,7 +91,7 @@ The `cloudflare-tunnel` profile is emitted by the CP-managed `CloudflareTunnelEx
 - **`POST /pods/:id/provisioning-setup`** — same optional fields persisted before provision trigger.
 - **`POST /self-hosting/provision`** — optional `orchestrationMode`, `exposureMode`; self-hosted rows default `orchestrationMode: self_managed` unless overridden.
 
-Shared types for clients: `synap-control-plane-api/packages/control-plane-types/src/pods.ts`.
+Shared types for clients: `synap-app/packages/core/control-plane-types/src/pods.ts`.
 
 Legacy clients that send `exposureMode: "pangolin_tunnel"` are rejected at the zod layer with a 400; if a pre-0026 row somehow still carries that value (shouldn't happen — the migration rewrites them to `direct_dns`), `getExposureProvider()` normalises it to the direct-DNS provider.
 

@@ -87,6 +87,18 @@ How it is enforced:
 - A write that creates related objects (links, files) needs those subjects in the grant too.
 - A key with no grant keeps the older behaviour: its scopes plus everything you can see.
 
+### Doors a scoped key can read through
+
+A key whose grant is narrower than `*` can only **read** through doors whose reads the grant actually bounds. Every other read door answers `403 GRANT_DOOR_UNSUPPORTED`; doors are added as they are migrated. Writes are always allowed through to the governance gate, which applies the grant.
+
+| Surface | Read doors open to scoped keys |
+|---|---|
+| Hub REST | `GET /users/{id}/entities`, `/entities/{id}`, `/entities/{id}/connections`, `/entities/{id}/facets`, `/documents/{id}`, `/documents/{id}/raw`, `/relations`, `/projects/{id}/outputs`, `/tracks`, `/tracks/{id}`, `/artifacts`, `/commands`, `/commands/{id}`, `/brand/kit` |
+| MCP | `synap_get_entities`, `synap_get_document`, `synap_get_relations`, `synap_list_tracks`, `synap_resolve_identity` |
+| tRPC | `entities.getEntities`, `documents.getDocument`, `relations.listRelations`, `relations.listRelationsPodWide`, `automations.listRuns`, `automations.getRun`, `commands.listCommands`, `commands.getCommand` |
+
+Search, `ask`, knowledge and memory, sessions, channels and messages are not open to scoped keys yet. A key that needs them must use the full-access `*` grant for now.
+
 ---
 
 ## Lifetime

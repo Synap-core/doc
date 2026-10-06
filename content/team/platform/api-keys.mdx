@@ -53,8 +53,13 @@ toc: true
   owner-gated handler must check `agentUserId`. Closed 2026-10-06:
   `getServiceConfig`, the vault grant door (now the governed `vault/grant`),
   the agent governance PATCH, `POST /agent-users`, `/keys/rotate-cli`.
-- **Known gap (being fenced):** read doors that bypass both `scopedDb` and
-  `accessScopeWhere` are bounded by the human floor only.
+- **Door fence:** 101 key-reachable read doors read through neither seam
+  (inventory 2026-10-06). A scoped key (grant ≠ `*`) may only READ through the
+  doors listed in `access/grant-door-fence.ts`; all others answer 403
+  `GRANT_DOOR_UNSUPPORTED`. Migrate a door by routing its reads through
+  `scopedDb` / `accessScopeWhere`, then list it. The highest-leverage fixes
+  wrap the shared helpers `sessionReadableWhere` and `channelVisibilityWhere`
+  (about 38 doors), then Typesense search, `retrieve()` and `ask()`.
 - Design: `CONNECT-RESEARCH/13-w1-grants-design-2026-10-06.md`.
 
 **Version :** 1.0  

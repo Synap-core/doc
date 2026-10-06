@@ -1,11 +1,11 @@
 ---
 sidebar_position: 5
-title: 'Api Keys'
-description: Documentation covering Api Keys
+title: 'API Keys'
+description: Create, scope, grant and revoke API keys for your pod
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-10-06'
 tags: []
 hide_title: false
 toc: true
@@ -13,105 +13,145 @@ toc: true
 
 # API Keys
 
-**Personal access tokens for authenticating external requests to your pod.**
+**Bearer tokens for apps, sites, scripts and AI agents that call your pod.**
+
+A key answers two questions:
+
+- **Which doors can it knock on?** That is its **scopes**, a coarse gate per API surface.
+- **What can it touch once inside?** That is its **grant**, fine-grained: kinds, actions, workspaces, projects, or single objects.
+
+A key can never do more than the person it acts for. Effective access is always *grant ∩ what you can see and do*.
 
 ---
 
 ## Creating a key
 
-1. Open the Synap app and go to **Settings → API Keys**
-2. Click **New Key**
-3. Give the key a name (e.g. "Claude Code", "n8n automation", "custom pipeline")
-4. Select the scopes you need
-5. Click **Create**
+1. Open the Synap app and go to **Settings → API Keys**.
+2. Click **New Key** and name it after what will use it (e.g. "Portfolio site", "n8n", "Claude Code").
+3. Pick its scopes and, through the API (below), its grant and lifetime.
+4. Click **Create**.
 
-The key is displayed **once**. Copy it immediately — it cannot be retrieved after you close the dialog. The stored value is bcrypt-hashed.
+The key is shown **once**, so copy it immediately. Only a hash is stored.
 
----
+To create one programmatically, use tRPC `apiKeys.create`:
 
-## Scope reference
-
-| Scope | What it allows |
-|-------|---------------|
-| `read:entities` | Read entities and their properties |
-| `write:entities` | Create and update entities |
-| `hub-protocol.read` | Read via Hub Protocol: entities, documents, search, memory |
-| `hub-protocol.write` | Write via Hub Protocol: create entities, send messages, trigger AI |
-| `skills.invoke` | List and invoke skills via `/api/external/skills` |
-| `chat.stream` | Stream AI chat via `/api/external/chat/stream` |
-| `mcp.read` | Read resources via the MCP endpoint |
-| `mcp.write` | Write via the MCP endpoint |
-
-Scopes are additive. A key with `hub-protocol.read` can call any read operation in the Hub Protocol surface — it does not need separate `read:entities` for those calls. However, `read:entities` is required for direct SDK (tRPC) reads that go outside the Hub Protocol surface.
+```json
+{
+  "keyName": "Portfolio site",
+  "scope": ["hub-protocol.read"],
+  "expiresInDays": 90,
+  "grant": {
+    "permissions": ["entity.portfolio.read", "document.read"],
+    "workspaceIds": ["<workspace id>"],
+    "label": "Portfolio site"
+  }
+}
+```
 
 ---
 
-## Recommended scope bundles
+## Grants: what a key may touch
 
-| Use case | Scopes to request |
-|----------|------------------|
-| Read-only analytics or reporting | `read:entities`, `hub-protocol.read` |
-| External AI agent (read + write) | `read:entities`, `write:entities`, `hub-protocol.read`, `hub-protocol.write` |
-| Invoke skills only | `skills.invoke` |
-| Chat with your pod | `chat.stream` |
-| Claude Code / custom AI assistant | `skills.invoke`, `chat.stream`, `read:entities` |
-| Full external access | `skills.invoke`, `chat.stream`, `read:entities`, `write:entities`, `hub-protocol.read`, `hub-protocol.write` |
+A grant is a list of **permissions** plus optional **resource sets**. Permissions use the same keys as Synap's governance events, with an optional **kind** in the middle:
 
-Grant only the scopes your use case actually needs. A read-only analytics script does not need `write:entities` or `hub-protocol.write`.
+```
+<subject>[.<kind>].<action>
+```
+
+| Permission | Allows |
+|---|---|
+| `*` | everything you can do (an explicit full-access key) |
+| `entity` | every action on every entity |
+| `entity.knowledge` | every action on `knowledge` entities |
+| `entity.knowledge.read` | reading `knowledge` entities only |
+| `entity.*.read` or `entity.read` | reading every kind |
+| `entity.*.create` | creating any kind |
+| `document.read` | reading documents |
+| `view.read`, `project.read`, `session.read` | reading views, projects, sessions |
+
+Matching is segment by segment. `*` stands for one segment, and a shorter permission covers everything under it: `entity.knowledge` covers `entity.knowledge.read` and `entity.knowledge.update`. There is no partial-word wildcard.
+
+**Resource sets** narrow further. Leave a set out for no narrowing on that axis.
+
+| Field | Narrows to |
+|---|---|
+| `workspaceIds` | those workspaces |
+| `projectIds` | objects filed in those projects |
+| `entityIds` | those exact objects |
+
+How it is enforced:
+
+- **Reads** are filtered in the pod's access layer, so a key with `entity.portfolio.read` simply never sees other kinds.
+- **Writes** are checked at the governance gate before anything else. A write outside the grant is **refused**, never queued for approval.
+- A grant **permits**, it never auto-approves. Agent writes still go through proposals as usual.
+- A write that creates related objects (links, files) needs those subjects in the grant too.
+- A key with no grant keeps the older behaviour: its scopes plus everything you can see.
+
+---
+
+## Lifetime
+
+`expiresInDays` sets how long a key lives:
+
+| Value | Lifetime |
+|---|---|
+| omitted | **90 days** (the default) |
+| a number (1–36500) | that many days |
+| `null` | **never expires**. Choose this deliberately. |
+
+Rotating a CLI key keeps its remaining lifetime.
+
+---
+
+## Scopes: which surfaces a key can call
+
+| Scope | Gate |
+|---|---|
+| `hub-protocol.read` / `hub-protocol.write` | the Hub REST API (`/api/hub/*`) and API-key tRPC calls |
+| `mcp.read` / `mcp.write` | the MCP endpoint (`/mcp`) |
+| `data.read` / `data.write` | aliases of `hub-protocol.*`, honoured on `/mcp` only |
+| `skills.invoke` | `/api/external/skills` |
+| `chat.stream` | `/api/external/chat` and the OpenAI-compatible endpoint |
+| `read:entities` / `write:entities` / `ai:analyze` | the n8n integration routes |
+| `realtime:observe` | read-only realtime subscriptions |
+| `providers.write` | AI provider configuration (operator tools only) |
+
+Older keys may still carry retired scopes (`preferences`, `notes`, `tasks`, …). No door ever checked them, and new keys cannot be minted with them.
+
+---
+
+## Workspace-bound keys
+
+A key created for one workspace (from that workspace's settings, or with a `workspaceIds` grant) is **confined** to it. A request for another workspace is refused with `403`.
 
 ---
 
 ## Using a key
 
-Pass the key as a Bearer token in every request:
+Pass it as a Bearer token:
 
 ```bash
-curl https://YOUR_POD.synap.live/api/external/skills \
-  -H "Authorization: Bearer sk_live_..."
+curl https://YOUR_POD.synap.live/api/hub/entities \
+  -H "Authorization: Bearer synap_hub_live_..."
 ```
-
-For requests that are workspace-scoped (most tRPC procedures), also pass the workspace ID as a header:
-
-```bash
-curl "https://YOUR_POD.synap.live/trpc/entities.list?input=..." \
-  -H "Authorization: Bearer sk_live_..." \
-  -H "x-workspace-id: ws_..."
-```
-
-The external chat and skill endpoints infer the workspace from the key's owner. You only need the explicit header for raw tRPC calls.
 
 ---
 
-## Security
+## Seeing and revoking keys
 
-- Keys are **bcrypt-hashed** at rest. The pod never stores the plaintext value.
-- Keys are **scoped** — a compromised key with only `chat.stream` cannot write entities.
-- Keys are **rate-limited** per pod tier.
-- All API key usage is written to the pod's **audit log**, visible at **Settings → API Keys → Activity**.
-- Keys do not expire automatically, but you can revoke them at any time.
-
-**Best practices:**
-
-- Store keys in environment variables, not in source code
-- Create separate keys per integration (one for Claude Code, one for n8n, one for your custom script)
-- Grant minimum required scopes
-- Rotate keys if you suspect compromise — revoking and recreating takes 30 seconds
+**My connections** lists the keys you hold **and the keys your agents and apps hold for you**, and you can revoke either kind there. `apiKeys.list` also returns each key's grant; showing it on that screen is in progress. Revoking takes effect immediately: in-flight requests with that key get `401`.
 
 ---
 
-## Revoking a key
+## Security notes
 
-1. Go to **Settings → API Keys**
-2. Find the key you want to revoke
-3. Click **Revoke**
-
-Revocation is immediate. Any in-flight requests using the revoked key will return `401 Unauthorized`.
+- Keys are hashed at rest. The pod never stores the plaintext.
+- An AI agent's key cannot mint keys for other agents, widen its own approval rules, or grant itself vault access. Those requests are refused or become proposals you approve.
+- Keep keys in environment variables, one key per integration, with the smallest grant that works.
 
 ---
 
 ## Next steps
 
-- [Connect AI to your pod — overview](./overview)
-- [Skill invocation](./skill-invocation) — requires `skills.invoke`
-- [Chat stream](./chat-stream) — requires `chat.stream`
-- [SDK and direct API](./sdk-direct) — requires `read:entities` and/or `hub-protocol.*`
+- [Connect AI to your pod: overview](./overview)
+- [SDK and direct API](./sdk-direct)

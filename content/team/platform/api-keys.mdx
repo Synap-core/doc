@@ -4,7 +4,7 @@ description: 'API key management, expiry, lastUsedAt tracking.'
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-10-06'
 tags: []
 sidebar_position: null
 hide_title: false
@@ -17,6 +17,45 @@ toc: true
 > Public-facing guide: [/docs/integrate/integrations/api-keys](/docs/integrate/integrations/api-keys)
 >
 > **Related internal docs:** [Trusted issuers](/team/platform/trusted-issuers) · [Hub Protocol](/team/platform/hub-protocol) · [Control Plane operations](/team/control-plane/operations-guide)
+
+## Current model (2026-10-06): scopes, grants, mint doors
+
+> The sections after this one describe the original `hub.requestData` JWT flow. Its
+> data words (`preferences`, `notes`, …) are that router's OWN vocabulary
+> (`routers/hub.ts`). They were retired from `API_KEY_SCOPES` on 2026-10-06
+> because no API-key door checked them.
+
+- **Scopes** gate a key per surface. `hub-protocol.read/write` covers Hub REST and
+  API-key tRPC; `mcp.*` covers `/mcp`; `data.*` is an `/mcp`-only alias;
+  `hub-protocol.admin` is an alias of write, privileged only at mint.
+- **Grants** (table `grants`, migration 0305) bound what a key may touch:
+  `<subject>[.<kind>].<action>` permissions (`entity.knowledge.read`,
+  `entity.*.read`, `*`) plus optional workspace / project / entity sets.
+  Effective = grant ∩ human floor. The grammar lives in ONE pure module,
+  `@synap/governance-policy/grants`. The only writer is `GrantRepository`
+  (attach / resolveForKey). A key whose grant was revoked or expired resolves to
+  deny-all, never to "no grant".
+- **Enforcement points:**
+  - `resolveKeyIdentity` loads the grant for all 3 transports (Hub REST, tRPC,
+    `/mcp`) → `runWithGrant`;
+  - writes: `checkPermissionOrPropose` rung 0 (`utils/grant-write-check.ts`)
+    DENIES out-of-grant writes;
+  - reads: `scopedDb` + `accessScopeWhere` AND `grantReadPredicate`
+    (`access/grant-read.ts`, every scoped table mapped; tripwire
+    `grant-read-coverage`).
+- **Lifetime:** `expiresInDays` omitted → 90 days; a number → that many days;
+  `null` → never (`resolveKeyExpiry`).
+- **Workspace binding:** any key with `workspace_id` is confined
+  (`resolveConfinedWorkspace`), not just `service` keys.
+- **Mint sites:** every file that mints is listed with a reason in
+  `__tripwires__/api-key-mint-sites.test.ts`. A new mint door fails CI.
+- **Agent keys act as their human** (`ctx.userId` = the linked human). An
+  owner-gated handler must check `agentUserId`. Closed 2026-10-06:
+  `getServiceConfig`, the vault grant door (now the governed `vault/grant`),
+  the agent governance PATCH, `POST /agent-users`, `/keys/rotate-cli`.
+- **Known gap (being fenced):** read doors that bypass both `scopedDb` and
+  `accessScopeWhere` are bounded by the human floor only.
+- Design: `CONNECT-RESEARCH/13-w1-grants-design-2026-10-06.md`.
 
 **Version :** 1.0  
 **Date :** 2025-01-20  

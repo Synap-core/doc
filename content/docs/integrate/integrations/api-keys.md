@@ -93,11 +93,11 @@ A key whose grant is narrower than `*` can only **read** through doors whose rea
 
 | Surface | Read doors open to scoped keys |
 |---|---|
-| Hub REST | `GET /users/{id}/entities`, `/entities/{id}`, `/entities/{id}/connections`, `/entities/{id}/facets`, `/documents/{id}`, `/documents/{id}/raw`, `/relations`, `/projects/{id}/outputs`, `/tracks`, `/tracks/{id}`, `/artifacts`, `/commands`, `/commands/{id}`, `/brand/kit` |
-| MCP | `synap_get_entities`, `synap_get_document`, `synap_get_relations`, `synap_list_tracks`, `synap_resolve_identity` |
-| tRPC | `entities.getEntities`, `documents.getDocument`, `relations.listRelations`, `relations.listRelationsPodWide`, `automations.listRuns`, `automations.getRun`, `commands.listCommands`, `commands.getCommand` |
+| Hub REST | `GET /users/{id}/entities`, `/entities/{id}`, `/entities/{id}/connections`, `/entities/{id}/facets`, `/documents/{id}`, `/documents/{id}/raw`, `/relations`, `/projects`, `/projects/{id}`, `/projects/{id}/digest`, `/projects/{id}/outputs`, `/tracks`, `/tracks/{id}`, `/views`, `/proposals`, `/channels`, `/threads`, `/threads/{id}/messages`, `/threads/{id}/branches`, `/messaging/channels`, `/messaging/linked-unread`, `/focus-sessions`, `/artifacts`, `/commands`, `/commands/{id}`, `/brand/kit` |
+| MCP | `synap_get_entities`, `synap_get_document`, `synap_get_relations`, `synap_list_tracks`, `synap_resolve_identity`, `synap_get_project`, `synap_list_projects`, `synap_list_views` |
+| tRPC | `entities.getEntities`, `documents.getDocument`, `relations.listRelations`, `relations.listRelationsPodWide`, `automations.listRuns`, `automations.getRun`, `commands.listCommands`, `commands.getCommand`, `views.listViews`, `proposals.listProposals` |
 
-Search, `ask`, knowledge and memory, sessions, channels and messages are not open to scoped keys yet. A key that needs them must use the full-access `*` grant for now.
+Search, `ask`, knowledge and memory, the object graph, events and runs are not open to scoped keys yet. A key that needs them must use the full-access `*` grant for now.
 
 ---
 

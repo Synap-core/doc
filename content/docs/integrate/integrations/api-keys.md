@@ -99,6 +99,18 @@ A key whose grant is narrower than `*` can only **read** through doors whose rea
 
 Search, `ask`, knowledge and memory, the object graph, events and runs are not open to scoped keys yet. A key that needs them must use the full-access `*` grant for now.
 
+### Access roles: reusable grants
+
+Save a grant under a name in **Settings → AI → Access roles**, or with **Save as role** in any access editor. The next key, app or agent can start from it.
+
+- A role is a **template**. A key made from a role keeps what the role said at that moment. Editing the role later never changes an existing key.
+- The key remembers which role it came from. Pass `grant.roleId` when minting through the API; it must be one of your own roles.
+- Only you can create or change your roles. Your agents can list them but never edit them.
+
+### Limiting an agent
+
+An agent's **capabilities** use the same permission keys. In the agent's panel, the same editor limits what it may **change**, down to one kind (`entity.knowledge.update`). An agent can always **read** what you can read, so the read column is shown on and locked. Leaving every box unticked makes the agent read-only. It never reverts to full access.
+
 ---
 
 ## Lifetime
@@ -151,7 +163,7 @@ curl https://YOUR_POD.synap.live/api/hub/entities \
 
 ## Seeing and revoking keys
 
-**My connections** lists the keys you hold **and the keys your agents and apps hold for you**, and you can revoke either kind there. `apiKeys.list` also returns each key's grant; showing it on that screen is in progress. Revoking takes effect immediately: in-flight requests with that key get `401`.
+**My connections** lists the keys you hold **and the keys your agents and apps hold for you**, and you can revoke either kind there. Each key shows what it may touch, e.g. "Read Portfolios, Documents · 1 Space". Revoking takes effect immediately: in-flight requests with that key get `401`.
 
 ---
 

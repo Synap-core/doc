@@ -60,6 +60,29 @@ toc: true
   `scopedDb` / `accessScopeWhere`, then list it. The highest-leverage fixes
   wrap the shared helpers `sessionReadableWhere` and `channelVisibilityWhere`
   (about 38 doors), then Typesense search, `retrieve()` and `ask()`.
+- **Access roles** (table `grant_roles`, migration 0307): a person's reusable
+  permission lists, `{ name, description, grant }` — the `GrantRole` shape the
+  built-in presets use. Write door `GrantRoleRepository`; tRPC
+  `grantRoles.list/create/update/archive` (owner-scoped; an agent key may list
+  but every write is FORBIDDEN). A role is a TEMPLATE: a mint copies its grant
+  and stamps `grants.role_id` (lineage only), so editing a role never widens an
+  existing key. A `roleId` that is not the minter's own revokes the key.
+- **Agent capabilities read the same grammar.** `agentHasCapability`
+  (governance-policy rung 1) accepts grant patterns next to the legacy forms
+  (`entity.create`, `entity.*`, `*.*`, checked first), so an agent can be
+  limited to one kind (`entity.knowledge.update`). For a write by id the
+  resolver reads the entity's stored kind, only when the agent holds a
+  kind-limited capability. Reads stay exempt (an agent reads what its human
+  reads). Stored `[]` = unrestricted; an EMPTY selection is stored read-only
+  (`['entity.read']`), never `[]`.
+- **One UI.** `<GrantSelector>` / `<GrantSummary>` (`@synap-core/grant-selector`)
+  edit and show every grant: developer keys, the agent capability editor
+  (`CapabilityMatrix` = the selector in agent mode: reads locked on,
+  `AGENT_GRANT_CATALOG`), Settings › Access roles. Starting points come from
+  `useGrantRoles` and kind rows from `useGrantKinds` (`@synap-core/hooks`).
+  pod-admin My connections and relay show a key's grant through the same pure
+  model (`summarizeGrant`). The model (grammar, catalog, draft, agent mapping,
+  presets, lineage) is `@synap-core/types/grants`.
 - Design: `CONNECT-RESEARCH/13-w1-grants-design-2026-10-06.md`.
 
 **Version :** 1.0  

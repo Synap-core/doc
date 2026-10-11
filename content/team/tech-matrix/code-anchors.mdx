@@ -614,10 +614,9 @@ Raycast-specific hooks for command state, workspace selection, and data fetching
 
 ### Architecture
 
-Three-path CLI flow:
-1. **Existing OpenClaw** — Connects to existing OpenClaw installation
-2. **Fresh server** — Provisions new server with Synap stack
-3. **Laptop** — Local development setup with local-only mode
+Two-flow CLI (synap-cli d809e0d):
+1. **Server** — only when a pod already runs on this machine; OpenClaw beside it is wired, otherwise connects to the existing pod
+2. **Desktop / workstation** — any other machine; asks where the pod should run (log in, "This machine" docker-compose install, managed, self-host)
 
 ### Key Files
 
@@ -625,7 +624,7 @@ Three-path CLI flow:
 CLI bootstrap, command routing, and argument parsing.
 
 ### [cli] src/commands/ — CLI commands
-- `init` — Three-path setup flow
+- `init` — Server / desktop setup flows
 - `connect` — Pod connection
 - `status` — OpenClaw and pod status check
 

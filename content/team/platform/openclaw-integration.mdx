@@ -38,10 +38,10 @@ One skill covering knowledge graph, message relay, A2AI, and governance. Hub Pro
 ```bash
 npx @synap/cli init
 ```
-Three-path flow:
-- **Path A:** Existing OpenClaw → detect, harden, pod, skill, seed
-- **Path B:** Fresh server → resource check, bundle install, connect
-- **Path C:** Laptop → managed/VPS/existing pod
+Two flows (no "fresh server" path since synap-cli d809e0d):
+- **Server flow:** only when a pod already runs on this machine. OpenClaw beside it → detect, harden, pod, skill, seed; no OpenClaw → connect to the existing pod
+- **Desktop / workstation flow:** every other machine (Mac, Linux, fresh VPS with Docker) → "Where should your Synap pod run?": log in to an existing pod, "This machine" (docker-compose, installs the pod), managed, or self-host instructions
+- OpenClaw on a fresh server = run `synap init` twice (pod first, then wiring)
 
 Commands: `init`, `connect`, `security-audit`, `status`, `update`
 

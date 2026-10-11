@@ -38,7 +38,7 @@ Use this when you want a **guided setup** from a machine that should talk to you
 npx @synap/cli init
 ```
 
-The CLI walks through linking an existing OpenClaw install, pointing at a fresh server, or a local laptop flow. It is the **user-facing** entry for “connect my agents to Synap.”
+The CLI walks through linking an existing OpenClaw install, connecting to or installing a pod from any machine (including a fresh server with Docker), or a local laptop flow. It is the **user-facing** entry for “connect my agents to Synap.”
 
 > **Direction of travel:** today you may still see **two** surfaces — a **`synap` script** shipped with the backend repo (install/update/migrate in Docker) and **`@synap/cli` on npm** (agent bridge). We are **consolidating** toward one coherent CLI story; until then, use **`npx @synap/cli`** for **agents & OpenClaw**, and the **backend `synap`** helper for **pod install/update** when you self-host from the repo.
 

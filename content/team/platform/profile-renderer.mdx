@@ -1,463 +1,135 @@
 ---
 title: 'Profile Renderer'
 description: >-
-  North Star: two-slot, two-path pluggable renderer system. Every profile renders
-  through a resolver (workspace overlay → profile default → fallback). Renderers
-  are typed configs or sandboxed files. AI is a producer, not a third storage kind.
+  How a profile (kind) picks its renderer today: four content kinds, the
+  resolution chain (renderer_bindings, workspace overlay, profile defaults,
+  hardcoded fallback), the writers, and which surfaces actually consume each
+  content kind.
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-05-19'
+last_updated: '2026-10-13'
 tags: []
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Profile Renderer — Two Slots, Two Paths
+# Profile Renderer
 
-**Status:** North Star (architecture locked 2026-05-19, infrastructure in progress).
-**Audience:** anyone building entity surfaces (CRM, Studio, Browser, Eve OS, package authors, AI agents that emit UIs).
+**Status:** describes the code as of 2026-10-13. Every claim carries a `file:line`; paths are relative to the monorepo root. Nothing here is aspirational. The previous version of this page (two slots, three layers, `RendererRef` paths, a `pod-sdk`) described a North Star that was not built as written; it is replaced.
 
 ## Related
 
-- [Entity Profiles](./entity-profiles.mdx) — what profiles are; this doc covers how they render
-- [Property Def Scoping](./property-def-scoping.mdx) — sister resolver for *schema*; this is the resolver for *rendering*
-- [Cell System](./cell-system.mdx) — sub-page units composed inside renderers (cells live below renderers)
-- [Views](./views.mdx) — list view adapters; in the new model, they are config-path list renderers
-- [Creating Apps](./creating-apps.mdx) — the broader workspace-as-app vision this enables
+- [Entity Profiles](./entity-profiles.mdx) — what profiles are; this page is how they render
+- [Property Def Scoping](./property-def-scoping.mdx) — sister resolver for *schema*
+- [Cell System](./cell-system.mdx) — cells are what a renderer ref points at
+- [Views](./views.mdx) — view adapters (the `collection` surface)
 
-## TL;DR
+## The four content kinds
 
-Any entity, in any profile, in any workspace, can be opened to a renderer chosen by the user, the workspace owner, or AI. Renderers are pluggable, AI-extendable, file-uploadable, and resolved at runtime. The product becomes self-generating: new apps emerge from data + configuration, not code deploys.
+A profile can bind one renderer per **content kind**. The taxonomy is shared by backend and frontend (`synap-backend/packages/types/src/renderables/content-kinds.ts:20-26`, `:41-46`):
 
-The system has exactly two axes:
+| Content kind     | Renders                                             |
+| ---------------- | --------------------------------------------------- |
+| `entity-detail`  | ONE entity, its full page                           |
+| `entity-card`    | ONE entity, its small embeddable block              |
+| `entity-profile` | the WHOLE profile, its dashboard / home             |
+| `collection`     | a view of MANY entities (table, kanban, gallery...) |
 
-- **Two slots per profile** — *list* (open a profile, see all its entities) and *detail* (open one entity).
-- **Two paths per renderer** — *config* (typed, safe, replicable) and *file* (sandboxed, custom, escape hatch).
+`widget` is a fifth `CONTENT_KINDS` member (the default for a cell) but is never assigned to a profile (`PROFILE_CONTENT_KINDS` excludes it, `content-kinds.ts:41-46`).
 
-That's 2×2. Everything else is consequence.
+### Slot names on the wire (MCP / Hub / tRPC writers)
 
-## Why two slots
+External agents do not say `collection`; they say a **slot**. The mapping is one constant (`synap-backend/packages/api/src/services/profiles/renderer-slots.ts:25`, `:37-42`):
 
-Every well-tested platform that solves "render my data type X" separates these slots:
+| Slot (wire)  | Content kind     |
+| ------------ | ---------------- |
+| `list`       | `collection`     |
+| `detail`     | `entity-detail`  |
+| `card`       | `entity-card`    |
+| `dashboard`  | `entity-profile` |
 
-- Notion: database views (list) vs page templates (detail)
-- Airtable: views (list) vs interfaces (detail)
-- Anytype: sets/collections (list) vs object layouts (detail)
+Scopes a binding can be written at: `workspace`, `pod`, `user` (`renderer-slots.ts:33`).
 
-The slots are not interchangeable. A kanban makes sense for *all* tasks; a kanban renderer for *one* task is incoherent. Conflating them was Salesforce's first mistake.
+## Resolution chain
 
-## Why two paths (not three)
+One function answers it: `ProfileResolutionService.getEffectiveRendererWithSource(profileSlug, workspaceId, contentKind, scope)` (`synap-backend/packages/database/src/services/profile-resolution-service.ts:1151-1248`). It returns `{ ref, source, binding? }`; the first layer that has an answer wins.
 
-The natural temptation is to split renderers by origin: built-in, AI-generated, user-uploaded. That's wrong. Origin is a *producer* concern, not a *substance* concern.
+| Layer | Store | `source` | Lines |
+| ----- | ----- | -------- | ----- |
+| 0 | `renderer_bindings`, six rungs, most specific first: user-object, user-kind, workspace-object, workspace-kind, pod-object, pod-kind | the binding's own scope (`user` / `workspace` / `pod`), plus a `binding` discriminant | `:1167-1173`; doc `:1127-1131`; type `:219-220` |
+| 1 | `workspaces.settings.profileRenderers[slug][contentKind]`, falling back to the legacy slot key (`list`/`detail`/`dashboard`) | `workspace` | `:1176-1189`; legacy map `:586-593` |
+| 2 | `profiles.defaultRenderers[contentKind]`, then the deprecated `default_list/detail/dashboard_renderer` columns | `profile` | `:1193-1219`; columns `synap-backend/packages/database/src/schema/profiles.ts:185-189` |
+| 3 | Hardcoded fallback, NOT a binding | `default` | `:1227-1247` |
 
-The real distinction — the one that lines up with security, cacheability, indexability, and contract stability — is **interpreted config vs untrusted code**:
+Layer-3 values: `entity-profile` -> cell `profile-dashboard`; `entity-card` -> cell `__entity-block`; `collection` -> cell `list`; anything else (`entity-detail`) -> cell `entity-detail`. `source === "default"` is the signal that nothing is bound.
 
-| Path       | What it is                                                | Security                                        | Producer                                 |
-| ---------- | --------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------- |
-| **Config** | A `rendererKey` + typed config object, interpreted by trusted host code | Safe — host owns execution                      | Built-in registry, AI, user (via picker) |
-| **File**   | A sandboxed iframe bundle that uses the Pod SDK           | Sandbox + capability manifest + proposal gating | User, AI, package author                 |
+Details worth knowing:
 
-AI is a producer that can target either path. So is the user (via the picker). So is a package author (via templates shipped with their workspace package). The substance — config or file — is what determines security, storage, and lifecycle.
+- **`entity-card` has no legacy twin.** It reads no deprecated column; it lives only in `defaultRenderers` and `renderer_bindings` (`profile-resolution-service.ts:586-593`, `set-profile-renderer.ts:73-78`).
+- **The two user rungs and three object rungs only exist when the caller passes `userId` / `subjectId`** in `scope`; without them they are skipped (`profile-resolution-service.ts:1143-1146`). The tRPC read passes `userId` always and `subjectId` only if the client sends one (`synap-backend/packages/api/src/routers/profiles.ts:1750-1796`).
+- **The per-entity override `entities.systemData.renderer` is not in this chain.** The backend leaves it to the browser (`profile-resolution-service.ts:1148-1150`). See "Per-entity override" below.
+- Reads go through `trpc.profiles.getEffectiveRenderers({ profileSlug, contentKind?, workspaceId?, subjectId? })`, which returns the ContentKind-keyed map plus a sibling `sources` map (`routers/profiles.ts:1750-1830`).
 
-This breaks the v0/Lovable failure mode: once an AI emits a renderer, it lives as a normal `RendererRef`. The next edit is a property change (config path) or a fresh proposal (file path) — not a regeneration spiral that loses context.
+### renderer_bindings has a writer (the old "no writer yet" is stale)
 
-## The 2×2
+`renderer_bindings` is the canonical store (`synap-backend/packages/database/src/schema/renderer-bindings.ts`). It has exactly one write door, `setRendererBinding` / `revokeRendererBinding` (`synap-backend/packages/database/src/services/renderer-binding-service.ts:216`, `:286`), reached only through `setProfileRenderer` (below). Two comments in the code still say the table has no writer: `profile-resolution-service.ts:1136-1137` and `:1163-1166`; they describe the wave that landed the read rungs and are out of date (`renderer-binding-service.ts:6-8` and `renderer-bindings.ts:8-16` record the correction). A pod where nobody has promoted a cell has an empty table, so resolution there still falls through to layers 1-3.
 
-|                | **Config path** (safe, typed, replicable)                                                       | **File path** (sandboxed, custom, escape hatch)                                |
-| -------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| **List slot**  | Registered list renderer + typed config (`kanban` / `table` / `list` / `calendar` / `gallery` / `graph` / `timeline` / `gantt` / `matrix` / `map` / `bento`) | Sandboxed iframe file that renders all entities of a profile via the Pod SDK   |
-| **Detail slot**| Registered detail renderer + typed config (`form` / `document` / `dashboard` / `comment-thread`) | Sandboxed iframe file that renders one entity via the Pod SDK                  |
+Two restrictions on what is actually reachable:
 
-## Storage
+- **Whole-kind only.** `setProfileRenderer` rejects any non-null `subjectId` with `BAD_REQUEST` (`set-profile-renderer.ts:220`). The three `object` rungs are readable but nothing can write them through the door.
+- **`surface`.** Bindings carry a surface, `app` (default) or `mcp-app` (`renderer-bindings.ts:97-100`). The in-app chain above reads `app` only. An `mcp-app` binding serves outside AI hosts and is never mirrored into the legacy stores (`set-profile-renderer.ts:177-183`).
 
-Two columns, one settings overlay. No new tables for the renderers themselves — built-in renderers live in code (registered as cells in `cellRegistry`), generated configs are inline JSONB, file-path renderers reuse the existing `iframe-srcdoc` / `external-app` kinds and live in `widget_definitions`.
+## Writers
 
-`RendererRef` is an **alias of the existing `RendererTarget`** from `@synap-core/renderer-runtime`. There is no new discriminated union — the two paths are already encoded in `RendererTarget.kind`:
+All writers converge on **`setProfileRenderer`** (`synap-backend/packages/api/src/services/profiles/set-profile-renderer.ts:198`):
 
-```ts
-// from @synap-core/renderer-runtime — re-exported as RendererRef by profile-renderer
-type RendererTarget =
-  | { kind: 'cell';          cellKey: string; props: Record<string, unknown>; /* … */ }   // config path (registered)
-  | { kind: 'view';          viewId: string;  /* … */ }                                    // config path (saved view)
-  | { kind: 'iframe-srcdoc'; appId: string;   srcdoc: string; /* … */ }                    // file path (inline bundle)
-  | { kind: 'external-app';  appId: string;   url: string;    /* … */ }                    // file path (pod-served URL)
-  | { kind: 'url';           url: string;     /* … */ };
-```
+| Door | Where |
+| ---- | ----- |
+| tRPC `profiles.setProfileRendererOverride` | `routers/profiles.ts:1980` |
+| Hub REST `profiles.setRenderer` | `routers/hub-protocol/profiles.ts:336`, call at `:415` |
+| `profile/renderer.set` proposal executor (agent proposal -> applied on approval) | `routers/proposals/executors/profile.ts:210` |
+| MCP `synap_promote_cell_to_renderer` (calls `profiles.setRenderer`) | `routers/mcp/handlers/build.ts:234-257`; schema `routers/mcp/tools/index.ts:2610` |
 
-Capability manifest, integrity hash, and SDK version pinning attach to file-path renderers as a **Phase 3 hardening layer** above this basic shape — see "File-path security" below.
+What it does, in order: refuse `subjectId`; check the ref is allowed for the scope (`source-app` refs are user x detail only); `assertMayBindRenderer` (user scope = only yourself; workspace = editor+ or pod admin; pod = pod admin); check the cell's renderer type against the surface; write the binding; then **mirror to the legacy stores** while `MIRROR_LEGACY_RENDERER_STORES = true` (`set-profile-renderer.ts:83`):
 
-### Schema columns
+- scope `pod` -> `profiles.defaultRenderers[contentKind]` plus the deprecated column for that slot (`:371-378`)
+- scope `workspace` -> `workspaces.settings.profileRenderers[slug][contentKind]` (`:384-417`)
+- scope `user`, `mcp-app`, and non-profile object kinds are never mirrored (`:177-183`)
 
-```sql
--- migration: 0067_profile_renderer.sql (provisional number)
+A pod-scoped default cannot be cleared while the mirror is on (`:186-197`). Agents get `status: "proposed"` from the governance gate; operators auto-apply.
 
-ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS default_list_renderer   JSONB,
-  ADD COLUMN IF NOT EXISTS default_detail_renderer JSONB;
+**MCP `synap_create_cell`** (`build.ts:136`, schema `tools/index.ts:2553`) defines a cell. It accepts an optional `contentKind` (the slot the cell renders; default `widget`, which is never offered when assigning a renderer to a profile) and carries it through both the proposal and the direct path (`build.ts:152-156`, `:194-196`, `:229`). Binding the cell to a profile is the separate `synap_promote_cell_to_renderer` call, whose `slot` takes `list | detail | card | dashboard` and `scope` takes `workspace` (default) or `pod` per the tool description (`tools/index.ts:2610-2700`).
 
--- nullable. NULL means "fall back to system default for the slot".
-```
+## Frontend consumers
 
-### Workspace overlay
+Resolution precedence on the client is one function, `pickEffectiveRenderer` (`synap-app/packages/web/src/cell-runtime/profileRendererPrecedence.ts:76-96`): an explicit binding (`source` `workspace` or `profile`) wins; when the backend offers only its `default`, the caller's local fallback gets first refusal for `entity-detail` and `entity-card` only (`:45`, `:54-57`). `collection` and `entity-profile` do not get this flip (`:48-53`). The client's `ProfileRendererSource` type there is still `"workspace" | "profile" | "default"` (`:33`), narrower than the backend's five values (`profile-resolution-service.ts:219-220`); the extra `user`/`pod` values fall through as explicit bindings.
 
-Inside `workspaces.settings` (existing JSONB column — no migration needed for the overlay itself, just a new key):
+| Content kind | Consumer | Evidence |
+| ------------ | -------- | -------- |
+| `entity-detail` | Browser `ProfileEntityDetailCell`, through `useSlotResolver`; local fallback is the per-profile cell `entity-detail-${slug}`, else null (backend default) | `browser/electron/renderer/src/cells/ProfileEntityDetailCell.tsx:313`, `:641-680` |
+| `entity-detail` | Relay `useEntityRenderer`: queries **only** `entity-detail`; resolves a natively implemented cell key, else loads frame-cell source, else null and the generic detail renders | `relay-app/src/cells/useEntityRenderer.ts:105` |
+| `entity-profile` | Browser `ProfileDashboardCell`, fallback cell `profile-dashboard` (the built-in bento) | `browser/electron/renderer/src/cells/ProfileDashboardCell.tsx:79-95` |
+| `collection` | Browser `ViewPage` and `Plane`: read `getEffectiveRenderers({contentKind:'collection'})`; a `view-<type>` cell key or a `view-adapter` ref picks the adapter, any other cell key becomes the bound cell | `browser/electron/renderer/src/components/views/ViewPage/index.tsx:112-137`, `.../Plane/index.tsx:86-110` |
+| `entity-card` | **`EntityBlockCell` in synap-app is the only consumer.** It queries `entity-card`, renders the bound cell if there is one, else `<EntityCard>`. It backs bento entity blocks, document embeds, the whiteboard entity shape and the sheet | `synap-app/packages/web/src/cell-runtime/cells/EntityBlockCell.tsx:68-70`, `:101-103` |
 
-```ts
-interface WorkspaceSettings {
-  // … existing keys …
-  profileRenderers?: Record<string, {
-    list?: RendererRef;
-    detail?: RendererRef;
-  }>;
-}
-```
+The browser's `profileSlotRenderer.tsx` (`useSlotResolver` `:90`, `resolveSlotTarget` `:144`) is the shared client resolver for detail, dashboard and collection hosts. A failed read draws the fallback with a "couldn't load - Retry" mark rather than folding into "nothing is bound" (`:140-143`, `:150-163`).
 
-Mirrors how `profileBentoViewIds` already lives in `settings`. Same merge-on-update semantics (`z.record`).
+`ProfileRendererSettingsCell` is the Studio UI that reads and writes all four kinds (`browser/electron/renderer/src/cells/ProfileRendererSettingsCell.tsx`).
 
-### Schema coherence
+### Per-entity override
 
-`schema-coherence.ts` gains two entries under `profiles`:
+`entities.systemData.renderer`, written by `trpc.entities.setEntityRenderer`, is "layer 1" of the browser's own precedence table, consulted before the profile-level fetch, and only a `{kind:'cell'}` ref whose `cellKey` is registered is honoured (`browser/electron/renderer/src/cells/profileSlotRenderer.tsx:41-65`, `:150`).
 
-```ts
-default_list_renderer:   { type: 'jsonb', required: false },
-default_detail_renderer: { type: 'jsonb', required: false },
-```
-
-Pod startup refuses to boot if these are missing, matching the existing tripwire pattern.
-
-## Resolver
-
-The single rendering rule. Mirrors `getEffectiveProperties` exactly.
-
-```ts
-// synap-backend/packages/database/src/services/profile-resolution-service.ts
-
-async getEffectiveRenderer(
-  profileSlug: string,
-  workspaceId: string | null,
-  slot: 'list' | 'detail',
-): Promise<RendererRef> {
-  // 1. workspace overlay
-  if (workspaceId) {
-    const workspace = await this.workspaces.get(workspaceId);
-    const overlay = workspace?.settings?.profileRenderers?.[profileSlug]?.[slot];
-    if (overlay) return overlay;
-  }
-
-  // 2. profile default
-  const profile = await this.profiles.getBySlug(profileSlug, workspaceId);
-  const defaultRef = slot === 'list'
-    ? profile?.defaultListRenderer
-    : profile?.defaultDetailRenderer;
-  if (defaultRef) return defaultRef;
-
-  // 3. system fallback — keeps the system bootable when no profile config exists.
-  //    Returns RendererTarget shapes (kind: 'cell') backed by existing registered cells.
-  return slot === 'list'
-    ? { kind: 'cell', cellKey: 'list',          props: {} }
-    : { kind: 'cell', cellKey: 'entity-detail', props: {} };
-}
-```
-
-### Hub Protocol endpoint
-
-```
-GET /api/hub/profiles/{slug}/renderers?workspaceId=...
-→ { list: RendererRef, detail: RendererRef }
-```
-
-For external agents (Eve, Hermes, IS) that need to know how to surface an entity without going through tRPC.
-
-### tRPC procedure
-
-`trpc.profiles.getEffectiveRenderers({ profileSlug, slot? })` — workspace-scoped via `workspaceProcedure`. Returns one or both slots.
-
-## Packages
-
-| Package                              | Status   | Responsibility                                                                                            |
-| ------------------------------------ | -------- | --------------------------------------------------------------------------------------------------------- |
-| **`@synap-core/profile-renderer`** / **`@eve/profile-renderer`** | **NEW** (shipped 2026-05-19, beautiful renderer added 2026-05-20) | `<EntityRenderer>` host + `useResolvedRenderer` hook + type aliases (~140 LOC). **Plus** built-in `<EntityDetailRenderer>` — schema-driven fields (5-tier dispatch), relations panel (graph / property / channel groups), 2-column layout. Helpers exported: `EntityChip`, `RelationsPanel`, `buildSchemaAwareField`, `statusColorFor`, `priorityColorFor`. ~900 LOC total. |
-| **`@synap-core/pod-sdk`**            | **NEW**  | `useUser`, `useWorkspace`, `usePodQuery`, `usePodMutation`, `useEntity`, `useProfile`, HeroUI re-exports, theme tokens. Dual backend (in-host direct, in-sandbox postMessage bridge) |
-| `@synap-core/view-renderer`          | extends  | List view adapters become config-path renderers in the new registry. No behavior change; metadata only   |
-| `@synap-core/cell-runtime`           | unchanged| Cells remain sub-page units composed inside renderers                                                     |
-| `@synap-core/entity-card`            | unchanged| `FieldRenderer` (Tamagui) still used by config-path renderers on Tamagui surfaces                         |
-| `@synap-core/heroui-fields`          | unchanged| `HeroField` (HeroUI) still used by config-path renderers on HeroUI surfaces                               |
-
-### `@synap-core/profile-renderer`
-
-Shipped 2026-05-19 as Phase 1 infrastructure. ~140 LOC. Source-direct (no build step), depends only on `@synap-core/renderer-runtime` + `@synap-core/surface-runtime` + React.
-
-**Public surface:**
-
-```ts
-// types.ts
-export type ProfileRendererSlot = 'list' | 'detail';
-
-// RendererRef is an alias of RendererTarget — no new union.
-export type RendererRef = RendererTarget;
-
-export interface ProfileRendererContext {
-  profileSlug: string;
-  workspaceId: string | null;
-  slot: ProfileRendererSlot;
-  entityId?: string;
-}
-
-// Caller-injected. Real implementations: tRPC, Hub Protocol REST, mock for tests.
-export type ProfileRendererResolver = (
-  ctx: ProfileRendererContext,
-) => Promise<RendererRef | null>;
+**Where it is ignored:** the ref carries no content kind, and every ref written so far was written for the detail page. So `pickEffectiveRenderer` / `EntityBlockCell` deliberately do not honour it: honouring it on a card would push a full-page cell into a bento block. Only the browser resolver, which has the entity in hand, applies it, and only for detail (`profileRendererPrecedence.ts:15-22`). Relay does not read it either (`useEntityRenderer.ts` queries the profile map only). A per-entity card override would need its own content-kind-keyed store (`profileRendererPrecedence.ts:22`).
 
-export type ProfileRendererState =
-  | { status: 'loading' }
-  | { status: 'resolved'; target: RendererRef }
-  | { status: 'not-found' }
-  | { status: 'error'; error: Error };
-```
+## Known gaps
 
-```tsx
-// EntityRenderer.tsx — the single host every app mounts
-export interface EntityRendererProps {
-  profileSlug: string;
-  workspaceId: string | null;
-  entityId?: string;                                   // omit → list slot, provide → detail
-  resolve: ProfileRendererResolver;                    // injected data source
-  renderTarget: (target: RendererRef) => ReactNode;    // injected renderer
-  fallback?: ReactNode;
-  empty?: ReactNode;
-  errorFallback?: (error: Error) => ReactNode;
-}
+- **`entity-card` has one consumer.** The view adapters Grid, Masonry, Kanban, List and Pipeline each draw their own cards and never query `entity-card`; none imports `EntityBlockCell` or `EntityCard` (grep over `synap-app/packages/web/src/view-renderer` and `.../whiteboard` finds only `SheetAdapter` and the whiteboard shape). Relay never queries `entity-card` (no occurrence under `relay-app/src`). A card binding therefore changes bento, embeds, whiteboard and sheet, and nothing else.
+- **No media in the shared card model.** `synap-app/packages/hooks/src/profile-renderer/card/kind-card-model.ts` (face, title, subtitle, leading mark, status, up to 5 facts) has no image slot (no `image`, `media` or `cover` in `card/*.ts`). The audit behind the consolidation also found card implementations outside the model that this grep does not cover; see the session below.
+- **Stale comments** at `profile-resolution-service.ts:1136-1137` and `:1163-1166` still say `renderer_bindings` has no writer (see above).
+- **`ProfileRendererSource` on the client is narrower** than the backend union (`profileRendererPrecedence.ts:33`).
+- The legacy mirror (`MIRROR_LEGACY_RENDERER_STORES`) and the deprecated `default_*_renderer` columns are time-boxed and still live (`set-profile-renderer.ts:83`).
 
-export function EntityRenderer({ /* … */ }) {
-  const slot: ProfileRendererSlot = entityId ? 'detail' : 'list';
-  const state = useResolvedRenderer({ profileSlug, workspaceId, slot, entityId }, resolve);
-
-  if (state.status === 'loading') return fallback;
-  if (state.status === 'error') return errorFallback ? errorFallback(state.error) : empty;
-  if (state.status === 'not-found') return empty;
-  return renderTarget(state.target);
-}
-```
-
-**Why `resolve` and `renderTarget` are injected, not built-in:**
-
-- **`resolve`** depends on the data source (tRPC, Hub Protocol, mock). Injecting keeps the package dependency-light below `renderer-runtime` + `surface-runtime`.
-- **`renderTarget`** depends on host capabilities. Cell rendering needs `@synap-core/cell-runtime`'s `CellRenderer`; iframe-srcdoc rendering needs a sandbox host; URL rendering needs a router. Apps choose which kinds they support.
-
-The package owns the slot semantics and the resolver state machine — nothing else. Existing primitives do the heavy lifting.
-
-### `@synap-core/pod-sdk`
-
-The contract for code running *inside* a sandboxed renderer. Stable surface: every breaking change bumps `sdkVersion`. Files pin a major.
-
-```ts
-// Identity & workspace
-export function useUser(): User;
-export function useWorkspace(): Workspace | null;
-
-// Data
-export function usePodQuery<T>(key: PodQueryKey, input: unknown): UseQueryResult<T>;
-export function usePodMutation<T, V>(key: PodMutationKey): UseMutationResult<T, V>;
-
-// Entity-shaped helpers
-export function useEntity(id: string): UseQueryResult<Entity>;
-export function useEntities(filter: EntityFilter): UseQueryResult<Entity[]>;
-export function useProfile(slug: string): UseQueryResult<Profile>;
-export function useEffectiveProperties(profileId: string): UseQueryResult<EffectiveProperty[]>;
-
-// UI primitives — pre-themed, theme tokens live in CSS variables propagated via postMessage handshake
-export * from './ui';   // re-exports HeroUI components + Synap-themed wrappers
-export { theme } from './theme';
-```
-
-**Dual backend.** A build-time switch selects:
-
-- *In-host mode* — the SDK calls tRPC directly via the existing client. Used by built-in renderers running in the main bundle.
-- *In-sandbox mode* — every SDK call serializes to a postMessage envelope, sent to the parent window, the parent's tRPC client makes the actual call, the result is returned. Used by file-path renderers.
-
-The two modes share types and hook signatures. Renderer authors write code once.
-
-### Sandbox host — Phase 3 hardening above existing iframe support
-
-File-path rendering does **not** ship in `@synap-core/profile-renderer`. The existing `renderer-runtime` resolver already returns `kind: 'iframe-srcdoc'` and `kind: 'external-app'`, and apps already know how to mount iframes for those kinds (e.g., `IframeCustomWidget` in the bento widget surface).
-
-Phase 3 adds a **hardened iframe host** that sits on top of those existing kinds when the source is an AI-generated or user-uploaded renderer bundle:
-
-```tsx
-// Phase 3 — not in profile-renderer; likely a sibling package or extension of cell-runtime
-function SandboxedRendererHost({ fileRef, manifest, ... }) {
-  // 1. Verify manifest signature + integrity
-  // 2. Check requested capabilities → granted vs proposal-gated
-  // 3. Mount <iframe sandbox="allow-scripts"> served from same-origin pod
-  // 4. postMessage handshake: send user, workspace, entity, theme tokens, granted capabilities
-  // 5. Bridge SDK calls: child → parent envelope → parent's tRPC client → reply
-  // 6. Capability denial → proposal flow (existing checkPermissionOrPropose path)
-}
-```
-
-Files served from `${podUrl}/renderer-assets/{fileRef}` (same-origin sandboxed iframe is the secure pattern — never external URLs). Files cannot escape the iframe, cannot reach the host DOM, cannot touch cookies directly, cannot reach the file system. All data flows through the postMessage bridge.
-
-For Phase 1, profile-renderer's `renderTarget` callback returns whatever the host app does today for iframe-srcdoc — no hardening, no SDK bridge. Phase 3 adds those layers without changing the storage shape.
-
-## Backend
-
-### Migration
-
-```sql
--- migrations/0067_profile_renderer.sql
-
-ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS default_list_renderer   JSONB,
-  ADD COLUMN IF NOT EXISTS default_detail_renderer JSONB;
-
--- baseline catch-up
--- also added to migrations/0000_baseline_schema.sql with IF NOT EXISTS guards
-```
-
-### Service
-
-`ProfileResolutionService.getEffectiveRenderer(profileSlug, workspaceId, slot)` — added next to `getEffectiveProperties`. Pure read, no side effects. Cached via the existing profile resolution cache; invalidated on profile update or workspace settings update.
-
-### Routers
-
-- tRPC: `trpc.profiles.getEffectiveRenderers({ profileSlug, slot? })` — workspace-scoped
-- tRPC: `trpc.profiles.setDefaultRenderer({ profileSlug, slot, ref })` — admin-only on the profile owner side
-- tRPC: `trpc.workspaces.setProfileRendererOverride({ profileSlug, slot, ref })` — workspace-scoped, edits `settings.profileRenderers`
-- Hub Protocol REST: `GET /api/hub/profiles/{slug}/renderers?workspaceId=...`
-
-## AI generation (deferred wiring, documented now)
-
-AI is a producer of `RendererRef`. It is not a third storage kind.
-
-### Contract
-
-```ts
-interface RendererGenerationRequest {
-  prompt: string;
-  profileSlug: string;
-  workspaceId: string;
-  slot: 'list' | 'detail';
-  // Pre-filled context the host injects, not the user:
-  context: {
-    propertyDefs: EffectiveProperty[];
-    sampleEntities: Entity[];
-    workspaceTheme: ThemeTokens;
-    availableRenderers: ProfileRendererDef[];  // catalog AI can pick from
-  };
-}
-
-type RendererGenerationResult =
-  | { kind: 'config'; ref: RendererRef; reasoning: string }
-  | { kind: 'file';   ref: RendererRef; reasoning: string; codePreview: string };
-```
-
-### Rules the AI is given (in the system prompt)
-
-1. **Prefer config.** A `{kind:'config', rendererKey: 'kanban', config: {...}}` is always preferred over a file. Files are only emitted when the user explicitly asks for something not expressible in any existing renderer's config.
-2. **Bind to real fields.** Generated configs must reference property defs from the provided context. Never invent fields.
-3. **One candidate per request.** No regeneration spirals — if the user wants iteration, they accept this candidate then request changes. Each iteration is a *new candidate the user accepts or rejects*, not an in-place mutation. (Lessons from v0/Lovable.)
-4. **Files must use the Pod SDK.** Generated code uses `@synap-core/pod-sdk` for all auth, data, and UI. The AI is given the SDK reference docs as context.
-
-### Storage of AI output
-
-A `RendererRef` produced by AI is stored identically to one produced by a human picker. No `source` discriminator on the storage; if traceability matters, the `manifest.author` field on file-path refs and an audit log entry capture it.
-
-## File-path security (deferred wiring, documented now)
-
-### What is enforced
-
-- iframe with `sandbox="allow-scripts"` only — no `allow-same-origin`, no `allow-forms`, no `allow-top-navigation`
-- Served from `${podUrl}/renderer-assets/{fileRef}` — same-origin to the pod, but the sandbox attribute strips ambient authority
-- All data via postMessage envelope; no direct DOM, no direct cookies, no direct file system, no direct network beyond what the SDK proxies
-- Manifest declares `requiredCapabilities`; anything beyond the default set (read own profile, read own entities, read theme) flows through `checkPermissionOrPropose()` exactly like every other AI mutation
-- Bundle hash verified on serve; bundle pinned per `fileRef`
-
-### What is NOT supported
-
-- Node-level access (the Obsidian Templater anti-pattern)
-- Loading from external URLs
-- Importing arbitrary npm packages at runtime — files bundle their dependencies or use the SDK's re-exports
-- Cross-iframe communication outside the bridge
-
-## Picker UI (deferred wiring, documented now)
-
-A Notion-style "Change view" affordance lives on every profile and entity surface. Three tabs, one storage shape underneath:
-
-| Tab        | What the user sees                                                                                                | What gets persisted          |
-| ---------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Built-in   | Grid of `cellRegistry` entries tagged as profile renderers (via cell metadata), filtered by applicable profiles. Click → pick → optional config form | `RendererTarget { kind: 'cell', cellKey, props }` |
-| Ask AI     | Prompt box with pre-filled context (profile name, property defs, sample). Submit → AI returns a candidate → user accepts/rejects | `RendererTarget` (any kind) |
-| Add file   | Upload bundle + manifest. Capability manifest reviewed. Proposal-gated for non-default capabilities                | `RendererTarget { kind: 'iframe-srcdoc' \| 'external-app' }` |
-
-The picker writes either to the profile default (admin-only) or to the workspace overlay (workspace member). Per-user overrides are explicitly out of scope until/unless there's user demand.
-
-## Migration plan
-
-1. **Browser canary.** Universal routes `/entity/:profileSlug` (list) and `/entity/:profileSlug/:id` (detail) mount `<EntityRenderer>`. Ship with 3 config-path list renderers reusing existing view adapters (`kanban`, `table`, `list`) and 2 config-path detail renderers (`form`, `document`). File path is stubbed but the resolver wires through. Proves the model end-to-end.
-
-2. **CRM.** Migrate the four hardcoded detail pages one at a time: contacts → companies → deals → clients. Each migration replaces ~500–700 lines of bespoke layout with `<EntityRenderer>` + a registered detail renderer. Bespoke CRM logic moves into the renderer's component or into cells composed inside it.
-
-3. **Studio.** Replace `EntityRenderer` dispatch and profile-specific overrides with calls to the new resolver. Studio's `GenericEntityView` becomes the `form` detail renderer; existing overrides become per-profile defaults via `profiles.default_detail_renderer`.
-
-4. **Eve OS.** Adopts the same package. Eve's `/data/[id]` route becomes the universal pattern, with workspace context flowing through scope. Manual `HeroField` building in Eve is replaced by the `form` renderer's standard rendering.
-
-## Anti-goals
-
-Explicitly NOT in scope. Each was tempting, and each is the wrong direction:
-
-- **Salesforce-style assignment matrix** (`App × RecordType × Profile × FormFactor`). Two axes, that's all.
-- **Two parallel paradigms** for the same job (Airtable's views vs interfaces). One `RendererRef`, two paths, two slots.
-- **Per-user renderer overrides.** Workspace is the unit, like the sidebar. Per-user can land later if real demand surfaces.
-- **AI as a separate storage kind.** AI produces config or file; the storage doesn't care who made it.
-- **Trusted JS execution** (Obsidian Templater model). All file-path code runs sandboxed.
-- **Mixing cells and renderers in one registry.** Cells = sub-page units. Renderers = page-level. Conflating made the previous model fuzzy.
-- **AI regeneration loops** (v0/Lovable). Each AI generation is a new candidate, not a mutation.
-- **External URLs for renderer files.** Same-origin pod-served only.
-
-## Definition of done
-
-### Phase 1 — Infrastructure (current)
-
-- `@synap-core/profile-renderer` package builds, type-checks, tested in isolation
-- `@synap-core/pod-sdk` package builds with in-host backend working; in-sandbox backend stubbed with a documented contract
-- Backend migration applied: two JSONB columns on `profiles`, settings key documented
-- `ProfileResolutionService.getEffectiveRenderer` returns correctly with overlay precedence
-- Hub Protocol endpoint returns correctly for external agents
-- Schema-coherence tripwire updated
-
-### Phase 2 — Browser canary
-
-- `/entity/:profileSlug` and `/entity/:profileSlug/:id` routes live in Browser
-- `<EntityRenderer>` mounts for any profile the user can see
-- 3 list renderers + 2 detail renderers registered
-- Picker UI stub (lets user pick from built-in only — AI tab and Add-file tab present but stubbed)
-
-### Phase 3 — AI + File path
-
-- AI generation endpoint live, producing config-path refs (file-path emission gated behind a flag until sandbox is hardened)
-- Sandbox host implemented; one test file-path renderer ships to validate end-to-end
-- Capability manifest + proposal flow integrated
-
-### Phase 4 — App migrations
-
-- CRM detail pages migrated (one per slug)
-- Studio dispatch replaced
-- Eve OS adopts the package
-
-## Open questions
-
-1. **Where do file-path bundles live?** Extend `widget_definitions` (which already has iframe widgets) vs. a new `renderer_files` table vs. `assets` with a `kind: 'renderer-bundle'` discriminator. Decision deferred to Phase 3.
-2. **SDK versioning policy.** Major-pin per file vs. compatibility ranges. Lean toward strict major-pin to avoid breakage.
-3. **Renderer marketplace?** Package authors can ship renderers; how do they get distributed beyond the bundled set? Out of scope for now; design must not preclude.
-4. **Per-entity override.** Browser today has `entity.systemData.bentoViewId` — an entity-level override. Should this survive as a third resolution layer (entity → workspace overlay → profile default → fallback)? Provisional answer: yes, kept for ad-hoc override but not surfaced in the picker until Phase 3.
-5. **Workspace package templates.** Workspace packages (CRM, Project Management, etc.) want to ship `profileRenderers` defaults in their template JSON. Templates already provision profiles, views, bento; this adds one field per profile.
-
-## Why this changes the product
-
-Today, building a new app on Synap means: write profile + write views + write workspace template + write a bespoke detail page somewhere in the app code. The bespoke page is the friction point — it requires a code deploy and an app team.
-
-With this North Star: profile + property defs + renderer choices. All data. All editable in the workspace. All AI-generatable. A new "app" is a workspace template that picks the right renderers for its profiles. The Browser (and Eve) become universal entity surfaces — they don't care what the data looks like, the resolver tells them. Apps become data, not deploys.
-
-That's the self-generating product. This doc is the contract.
+**Ongoing consolidation.** Entity rendering (one base renderer, family variants, one gallery, a media resolver) is being consolidated under Synap session `7a1007b3-e41e-424e-b361-046bbcd9df58`. This page describes the code before that work lands; expect the card and media sections to change.

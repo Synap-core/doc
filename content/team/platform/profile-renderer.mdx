@@ -67,19 +67,19 @@ Layer-3 values: `entity-profile` -> cell `profile-dashboard`; `entity-card` -> c
 
 Details worth knowing:
 
-- **`entity-card` has no legacy twin.** It reads no deprecated column; it lives only in `defaultRenderers` and `renderer_bindings` (`profile-resolution-service.ts:586-593`, `set-profile-renderer.ts:73-78`).
+- **`entity-card` has no legacy twin.** It reads no deprecated column; it lives only in `defaultRenderers` and `renderer_bindings` (`profile-resolution-service.ts:586-593`, `set-profile-renderer.ts:86-93`).
 - **The two user rungs and three object rungs only exist when the caller passes `userId` / `subjectId`** in `scope`; without them they are skipped (`profile-resolution-service.ts:1143-1146`). The tRPC read passes `userId` always and `subjectId` only if the client sends one (`synap-backend/packages/api/src/routers/profiles.ts:1750-1796`).
 - **The per-entity override `entities.systemData.renderer` is not in this chain.** The backend leaves it to the browser (`profile-resolution-service.ts:1148-1150`). See "Per-entity override" below.
 - Reads go through `trpc.profiles.getEffectiveRenderers({ profileSlug, contentKind?, workspaceId?, subjectId? })`, which returns the ContentKind-keyed map plus a sibling `sources` map (`routers/profiles.ts:1750-1830`).
 
 ### renderer_bindings has a writer (the old "no writer yet" is stale)
 
-`renderer_bindings` is the canonical store (`synap-backend/packages/database/src/schema/renderer-bindings.ts`). It has exactly one write door, `setRendererBinding` / `revokeRendererBinding` (`synap-backend/packages/database/src/services/renderer-binding-service.ts:216`, `:286`), reached only through `setProfileRenderer` (below). Two comments in the code still say the table has no writer: `profile-resolution-service.ts:1136-1137` and `:1163-1166`; they describe the wave that landed the read rungs and are out of date (`renderer-binding-service.ts:6-8` and `renderer-bindings.ts:8-16` record the correction). A pod where nobody has promoted a cell has an empty table, so resolution there still falls through to layers 1-3.
+`renderer_bindings` is the canonical store (`synap-backend/packages/database/src/schema/renderer-bindings.ts`). It has exactly one write door, `setRendererBinding` / `revokeRendererBinding` (`synap-backend/packages/database/src/services/renderer-binding-service.ts:216`, `:286`), reached only through `setProfileRenderer` (below). Two comments in the code still say the table has no writer: `profile-resolution-service.ts:1145` and `:1164`; they describe the wave that landed the read rungs and are out of date (`renderer-binding-service.ts:6-8` and `renderer-bindings.ts:8-16` record the correction). A pod where nobody has promoted a cell has an empty table, so resolution there still falls through to layers 1-3.
 
 Two restrictions on what is actually reachable:
 
 - **Whole-kind only.** `setProfileRenderer` rejects any non-null `subjectId` with `BAD_REQUEST` (`set-profile-renderer.ts:220`). The three `object` rungs are readable but nothing can write them through the door.
-- **`surface`.** Bindings carry a surface, `app` (default) or `mcp-app` (`renderer-bindings.ts:97-100`). The in-app chain above reads `app` only. An `mcp-app` binding serves outside AI hosts and is never mirrored into the legacy stores (`set-profile-renderer.ts:177-183`).
+- **`surface`.** Bindings carry a surface, `app` (default) or `mcp-app` (`renderer-bindings.ts:97-100`). The in-app chain above reads `app` only. An `mcp-app` binding serves outside AI hosts and is never mirrored into the legacy stores (`set-profile-renderer.ts:273-279`).
 
 ## Writers
 
@@ -96,9 +96,9 @@ What it does, in order: refuse `subjectId`; check the ref is allowed for the sco
 
 - scope `pod` -> `profiles.defaultRenderers[contentKind]` plus the deprecated column for that slot (`:371-378`)
 - scope `workspace` -> `workspaces.settings.profileRenderers[slug][contentKind]` (`:384-417`)
-- scope `user`, `mcp-app`, and non-profile object kinds are never mirrored (`:177-183`)
+- scope `user`, `mcp-app`, and non-profile object kinds are never mirrored (`:273-279`)
 
-A pod-scoped default cannot be cleared while the mirror is on (`:186-197`). Agents get `status: "proposed"` from the governance gate; operators auto-apply.
+A pod-scoped default cannot be cleared while the mirror is on (`:283-290`). Agents get `status: "proposed"` from the governance gate; operators auto-apply.
 
 **MCP `synap_create_cell`** (`build.ts:136`, schema `tools/index.ts:2553`) defines a cell. It accepts an optional `contentKind` (the slot the cell renders; default `widget`, which is never offered when assigning a renderer to a profile) and carries it through both the proposal and the direct path (`build.ts:152-156`, `:194-196`, `:229`). Binding the cell to a profile is the separate `synap_promote_cell_to_renderer` call, whose `slot` takes `list | detail | card | dashboard` and `scope` takes `workspace` (default) or `pod` per the tool description (`tools/index.ts:2610-2700`).
 
@@ -114,13 +114,13 @@ Resolution precedence on the client is one function, `pickEffectiveRenderer` (`s
 | `collection` | Browser `ViewPage` and `Plane`: read `getEffectiveRenderers({contentKind:'collection'})`; a `view-<type>` cell key or a `view-adapter` ref picks the adapter, any other cell key becomes the bound cell | `browser/electron/renderer/src/components/views/ViewPage/index.tsx:112-137`, `.../Plane/index.tsx:86-110` |
 | `entity-card` | **`EntityBlockCell` in synap-app is the only consumer.** It queries `entity-card`, renders the bound cell if there is one, else `<EntityCard>`. It backs bento entity blocks, document embeds, the whiteboard entity shape and the sheet | `synap-app/packages/web/src/cell-runtime/cells/EntityBlockCell.tsx:68-70`, `:101-103` |
 
-The browser's `profileSlotRenderer.tsx` (`useSlotResolver` `:90`, `resolveSlotTarget` `:144`) is the shared client resolver for detail, dashboard and collection hosts. A failed read draws the fallback with a "couldn't load - Retry" mark rather than folding into "nothing is bound" (`:140-143`, `:150-163`).
+The browser's `profileSlotRenderer.tsx` (`useSlotResolver` `:90`, `resolveSlotTarget` `:144`) is the shared client resolver for detail, dashboard and collection hosts. A failed read draws the fallback with a "couldn't load - Retry" mark rather than folding into "nothing is bound" (`:140-143`, `:157-163`).
 
 `ProfileRendererSettingsCell` is the Studio UI that reads and writes all four kinds (`browser/electron/renderer/src/cells/ProfileRendererSettingsCell.tsx`).
 
 ### Per-entity override
 
-`entities.systemData.renderer`, written by `trpc.entities.setEntityRenderer`, is "layer 1" of the browser's own precedence table, consulted before the profile-level fetch, and only a `{kind:'cell'}` ref whose `cellKey` is registered is honoured (`browser/electron/renderer/src/cells/profileSlotRenderer.tsx:41-65`, `:150`).
+`entities.systemData.renderer`, written by `trpc.entities.setEntityRenderer`, is "layer 1" of the browser's own precedence table, consulted before the profile-level fetch, and only a `{kind:'cell'}` ref whose `cellKey` is registered is honoured (`browser/electron/renderer/src/cells/profileSlotRenderer.tsx:41-65`, `:154`).
 
 **Where it is ignored:** the ref carries no content kind, and every ref written so far was written for the detail page. So `pickEffectiveRenderer` / `EntityBlockCell` deliberately do not honour it: honouring it on a card would push a full-page cell into a bento block. Only the browser resolver, which has the entity in hand, applies it, and only for detail (`profileRendererPrecedence.ts:15-22`). Relay does not read it either (`useEntityRenderer.ts` queries the profile map only). A per-entity card override would need its own content-kind-keyed store (`profileRendererPrecedence.ts:22`).
 
@@ -128,7 +128,7 @@ The browser's `profileSlotRenderer.tsx` (`useSlotResolver` `:90`, `resolveSlotTa
 
 - **`entity-card` has one consumer.** The view adapters Grid, Masonry, Kanban, List and Pipeline each draw their own cards and never query `entity-card`; none imports `EntityBlockCell` or `EntityCard` (grep over `synap-app/packages/web/src/view-renderer` and `.../whiteboard` finds only `SheetAdapter` and the whiteboard shape). Relay never queries `entity-card` (no occurrence under `relay-app/src`). A card binding therefore changes bento, embeds, whiteboard and sheet, and nothing else.
 - **No media in the shared card model.** `synap-app/packages/hooks/src/profile-renderer/card/kind-card-model.ts` (face, title, subtitle, leading mark, status, up to 5 facts) has no image slot (no `image`, `media` or `cover` in `card/*.ts`). The audit behind the consolidation also found card implementations outside the model that this grep does not cover; see the session below.
-- **Stale comments** at `profile-resolution-service.ts:1136-1137` and `:1163-1166` still say `renderer_bindings` has no writer (see above).
+- **Stale comments** at `profile-resolution-service.ts:1145` and `:1164` still say `renderer_bindings` has no writer (see above).
 - **`ProfileRendererSource` on the client is narrower** than the backend union (`profileRendererPrecedence.ts:33`).
 - The legacy mirror (`MIRROR_LEGACY_RENDERER_STORES`) and the deprecated `default_*_renderer` columns are time-boxed and still live (`set-profile-renderer.ts:83`).
 

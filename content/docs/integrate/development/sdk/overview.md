@@ -42,14 +42,52 @@ Step-by-step first calls (React, TS, cURL) → **[First queries](./first-query)*
 
 ---
 
-## Vanilla JS — `@synap-core/sdk`
+## Servers and scripts with an API key — `@synap-core/hub-rest-client`
+
+```bash
+npm install @synap-core/hub-rest-client
+```
+
+```typescript
+import { HubRestClient } from "@synap-core/hub-rest-client";
+
+const synap = new HubRestClient({
+  podUrl: "https://your-pod.synap.live",
+  apiKey: process.env.SYNAP_HUB_API_KEY!, // synap_hub_... or synap_user_...
+  workspaceId: "ws_...",
+});
+
+// Search and read
+const notes = await synap.searchEntities("project ideas", { profileSlug: "note", limit: 20 });
+const recent = await synap.getRecentEntities({ limit: 20 });
+
+// Create
+const note = await synap.createEntity({
+  profileSlug: "note",
+  title: "My note",
+  content: "Hello!",
+});
+```
+
+> **API keys do not work with `createSynapClient`.** It talks to the pod's `/trpc`
+> endpoint, which only accepts a signed-in session (Kratos `sessionToken` or cookie)
+> or the local-mode token. Hub / user API keys (`synap_hub_*`, `synap_user_*`) are
+> refused there (401), and `createSynapClient` throws early if you pass one. For
+> servers and scripts holding an API key, use `@synap-core/hub-rest-client` against
+> `/api/hub/*`.
+
+---
+
+## Signed-in apps — `@synap-core/sdk`
+
+`createSynapClient` is the typed tRPC client for an app with a signed-in user.
 
 ```typescript
 import { createSynapClient } from "@synap-core/sdk";
 
 const synap = createSynapClient({
   podUrl: "https://your-pod.synap.live",
-  apiKey: "sk_live_...",        // generate in Workspace → Settings → API Keys
+  sessionToken, // Kratos session token (browser apps: omit it and rely on the cookie)
   workspaceId: "ws_...",
 });
 
@@ -81,7 +119,7 @@ export default function App() {
   return (
     <SynapProvider
       podUrl="https://your-pod.synap.live"
-      apiKey="sk_live_..."
+      sessionToken={sessionToken}
       workspaceId="ws_..."
     >
       <YourApp />
@@ -127,12 +165,12 @@ Pass a Kratos API session token as `sessionToken` — sent as an `x-session-toke
 createSynapClient({ podUrl, workspaceId, sessionToken: "ory_st_..." });
 ```
 
-### 2. API key (recommended for external apps and scripts)
+### 2. API key (`apiKey`): local-mode token only
 
-Generate a key in **Workspace → Settings → Developer → API Keys**. Pass it as `apiKey` — sent as a `Bearer` token.
+`apiKey` is sent as a `Bearer` token to `/trpc`, which on a real pod is behind Ory session auth. It is only meaningful for the LOCAL_MODE token (local development). Hub and user API keys (`synap_hub_*`, `synap_user_*`) are refused by `/trpc`, and `createSynapClient` throws early if you pass one. For those, use [`@synap-core/hub-rest-client`](#servers-and-scripts-with-an-api-key--synap-corehub-rest-client) against `/api/hub/*`.
 
 ```typescript
-createSynapClient({ podUrl, workspaceId, apiKey: "sk_live_..." });
+createSynapClient({ podUrl, workspaceId, apiKey: process.env.SYNAP_LOCAL_MODE_TOKEN });
 ```
 
 ### 3. Session cookie (browser — already logged in via Synap)
@@ -149,7 +187,7 @@ Pass `onAuthError` to be notified when the pod rejects a request with `401` (exp
 createSynapClient({
   podUrl,
   workspaceId,
-  apiKey,
+  sessionToken,
   onAuthError: ({ message }) => {
     // sign the user out / trigger re-auth
   },

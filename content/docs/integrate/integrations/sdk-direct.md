@@ -45,19 +45,19 @@ npm install @synap/react
 Pull structured data from your pod, build a prompt, write results back.
 
 ```typescript
-import { createSynapClient } from '@synap/sdk';
+import { HubRestClient } from '@synap-core/hub-rest-client';
 import Anthropic from '@anthropic-ai/sdk';
 
-const synap = createSynapClient({
+// Hub / user API keys go to hub-rest-client (/api/hub/*), not createSynapClient (/trpc).
+const synap = new HubRestClient({
   podUrl: 'https://YOUR_POD.synap.live',
-  apiKey: 'sk_live_...',
+  apiKey: process.env.SYNAP_HUB_API_KEY!,
   workspaceId: 'ws_...',
 });
 
 // 1. Read data from your pod
-const tasks = await synap.entities.list.query({
+const tasks = await synap.getRecentEntities({
   profileSlug: 'task',
-  filter: { status: 'in-progress' },
   limit: 50,
 });
 
@@ -251,7 +251,7 @@ export default function App({ children }: { children: React.ReactNode }) {
   return (
     <SynapProvider
       podUrl="https://YOUR_POD.synap.live"
-      apiKey="sk_live_..."
+      sessionToken={sessionToken}
       workspaceId="ws_..."
     >
       {children}

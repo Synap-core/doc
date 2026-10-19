@@ -38,7 +38,7 @@ export default function App({ children }) {
   return (
     <SynapProvider
       podUrl="https://your-pod.example.com"
-      apiKey="sk_live_..."
+      sessionToken={sessionToken}
       workspaceId="ws_..."
     >
       {children}
@@ -73,36 +73,51 @@ export function NoteList() {
 ## Option B — TypeScript (no React)
 
 ```bash
-npm install @synap-core/sdk@^1.0.0
+npm install @synap-core/hub-rest-client
 ```
 
 ```typescript
-import { createSynapClient } from "@synap-core/sdk";
+import { HubRestClient } from "@synap-core/hub-rest-client";
 
-const synap = createSynapClient({
-  podUrl: "https://your-pod.example.com",
-  apiKey: "sk_live_...",
+const synap = new HubRestClient({
+  podUrl: "https://your-pod.synap.live",
+  apiKey: process.env.SYNAP_HUB_API_KEY!, // synap_hub_... or synap_user_...
   workspaceId: "ws_...",
 });
 
-const entities = await synap.entities.list.query({ limit: 20 });
-const created = await synap.entities.create.mutate({
+// Search and read
+const notes = await synap.searchEntities("project ideas", { profileSlug: "note", limit: 20 });
+const recent = await synap.getRecentEntities({ limit: 20 });
+
+// Create
+const note = await synap.createEntity({
   profileSlug: "note",
-  title: "Hello from the SDK",
+  title: "My note",
+  content: "Hello!",
 });
 ```
+
+> **API keys do not work with `createSynapClient`.** It talks to the pod's `/trpc`
+> endpoint, which only accepts a signed-in session (Kratos `sessionToken` or cookie)
+> or the local-mode token. Hub / user API keys (`synap_hub_*`, `synap_user_*`) are
+> refused there (401), and `createSynapClient` throws early if you pass one. For
+> servers and scripts holding an API key, use `@synap-core/hub-rest-client` against
+> `/api/hub/*`.
+
+For a signed-in app, use `createSynapClient({ podUrl, workspaceId, sessionToken })` from `@synap-core/sdk`.
 
 ---
 
 ## Option C — cURL
 
-tRPC is exposed over HTTP at `/trpc`:
+With a hub / user API key, call the pod's Hub REST API (`/api/hub/*`):
 
 ```bash
-curl "https://your-pod.example.com/trpc/entities.list?input=%7B%22limit%22%3A5%7D" \
-  -H "Authorization: Bearer sk_live_..." \
-  -H "x-workspace-id: ws_..."
+curl "https://your-pod.example.com/api/hub/entities?limit=5&workspaceId=ws_..." \
+  -H "Authorization: Bearer $SYNAP_HUB_API_KEY"
 ```
+
+(The tRPC endpoint `/trpc` does not accept API keys; it needs a signed-in session.)
 
 ---
 

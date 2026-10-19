@@ -1,68 +1,27 @@
 ---
 title: 'CRM'
-description: 'Sales pipeline, contact management, and client lifecycle management — built natively on Synap primitives'
+description: 'A focused, lead-first pre-sale workspace built on Synap primitives'
 section: crm
 audience: all-teams
-last_updated: '2026-05-11'
-tags: [crm, sales, pipeline, contacts, clients]
+last_updated: '2026-07-19'
+tags: [crm, leads, pipeline, business-development]
 toc: true
 ---
 
 # CRM
 
-The Synap CRM is a **sales and client lifecycle tool** built as a first-party Synap app. It manages the full arc from finding a lead to running an active client relationship — using Synap's native primitives (entity profiles, bento dashboards, document system, channel system) rather than reimplementing them.
+Synap CRM is a focused pre-sale application: a business developer turns a
+person or company into a qualified lead, attaches one or more commercial
+proposals, wins a deal, and hands the resulting client to another system.
 
-The CRM is not a generic CRM product. It is built for the Synap team's own sales process: finding builders and companies who need a second brain, qualifying them, closing, and then serving them as clients with structured deliverables (contracts, proposals, task lists, shared documents).
+It is not a delivery, project-management, campaign, document, or automation
+application. The visible product is intentionally three surfaces:
 
-## North Star
+- **Pipeline** — daily lead work, follow-ups, and clients won.
+- **Contacts** — people research, import, enrichment, and qualification.
+- **Companies** — organizational research and qualification.
 
-> Any team member can open the CRM, immediately see what needs attention today, act on it, and close the loop — without switching tools.
-
-That means:
-- The pipeline shows the full status of every lead and client at a glance
-- Each contact and company has a dashboard tailored to where they are in the lifecycle
-- Contracts and proposals are generated from templates in one click
-- Activity (notes, tasks, events) is captured and surfaced automatically
-- Finding new leads and qualifying them happens inside the same flow
-
-## What it is NOT
-
-- **Not a marketing tool** — no email sequences, broadcast campaigns, or analytics funnels
-- **Not The Arch** — The Arch is a separate intelligence system for grant-specific lead analysis (currently Stellar blockchain). The Arch and the CRM are sibling Synap apps on the same pod. See [Data Model → The Arch Relationship](./data-model) for details.
-- **Not a project management tool** — tasks exist in the CRM to track follow-ups and client work, but deep project planning lives in the broader Synap workspace
-
-## App Structure
-
-The CRM is a standalone Next.js app (port 3030 in dev) derived from the Synap `apps/base` template. It provisions its own workspace on first launch via `createFromDefinition`, which seeds all profiles, views, and layout configuration.
-
-```
-apps/crm/
-├── app/(app)/
-│   ├── home/          # Dashboard — pipeline stats, activity, AI inbox
-│   ├── pipeline/      # Kanban by crmStatus
-│   ├── contacts/      # Table view of all persons
-│   ├── contacts/[id]/ # Contact detail — status-aware dashboard
-│   ├── companies/     # Company list with contact aggregation
-│   ├── clients/       # Client-focused view with health indicators
-│   ├── activity/      # Timeline of notes, tasks, events
-│   ├── leads/         # Find Leads — discovery surface
-│   └── documents/     # Document library (contracts, proposals, NDAs)
-├── lib/
-│   ├── crmWorkspaceDefinition.ts  # Workspace schema (profiles, views, layout)
-│   └── useCrmSetup.ts             # Workspace provisioning hook
-└── components/
-    ├── layout/CrmShell.tsx        # App shell + sidebar navigation
-    └── crm/                       # CRM-specific UI components
-```
-
-## Key Concepts
-
-| Concept | What it means in the CRM |
-|---|---|
-| **Person** | A contact — lead, prospect, or active client. Central entity. |
-| **Company** | An organization. Multiple persons can belong to a company. |
-| **crmStatus** | The lifecycle stage of a person: `lead → contacted → qualifying → call_booked → client → churned` |
-| **Document** | A collaborative document linked to a person or company (notes, contracts, proposals) |
-| **Template** | A document with variable slots that can be instantiated for a specific client |
-| **Activity** | Notes, tasks, and calendar events associated with contacts |
-| **Pipeline** | The kanban view of all persons grouped by crmStatus |
+The reusable **Business Developer** template add-on supplies the CRM-local
+facets, commercial proposal fields, commission model, and human-governed
+playbooks. Any Pod can compose it onto CRM without creating a second workspace
+or altering the generic data backend.

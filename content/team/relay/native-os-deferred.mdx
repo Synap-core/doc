@@ -103,7 +103,7 @@ entities. But our routes are kind-specific (`/note/:id`, `/person/:id`,
 
 **Options:**
 - (a) **Prefix the id** — index items with `uniqueIdentifier =
-  '${kind}:${id}'` so we can parse it back. Minimal code, but the id
+  '$&#123;kind}:$&#123;id}'` so we can parse it back. Minimal code, but the id
   isn't a valid UUID from the user's perspective and some Spotlight
   features (e.g. handoff to the backend) expect raw ids.
 - (b) **Shared-storage id→kind map** — maintain a map in shared storage,

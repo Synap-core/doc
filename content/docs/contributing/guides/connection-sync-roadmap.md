@@ -93,7 +93,7 @@ Scope: hub-protocol.read
 The typed client wraps it:
 
 ```typescript
-import { HubRestClient } from "@synap/hub-rest-client";
+import { HubRestClient } from "@synap-core/hub-rest-client";
 
 const client = new HubRestClient({ podUrl, apiKey });
 const { connections, counts } = await client.getConnections(entityId);

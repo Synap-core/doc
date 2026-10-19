@@ -257,7 +257,7 @@ If primary audience is OpenClaw/agent builders:
 
 ### Colors
 - Primary: amber/warm gold (`$primary`) — intelligent, warm, not cold-tech
-- AI accent: emerald (`$ai / $aiLight`) — specifically for AI-related features
+- AI accent: the logo yellow (`--synap-ai` / `--synap-ai-light`) — specifically for AI-related features (emerald retired 2026-09-25)
 - Background: dark, warm (#0a0a0a-adjacent) — premium, focused
 - No shadows. Subtle borders for depth (`$borderColor`).
 

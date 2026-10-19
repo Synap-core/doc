@@ -21,7 +21,7 @@ toc: true
 
 Two access surfaces, same underlying API:
 
-- **`@synap/sdk`** — typed tRPC client generated from the live `AppRouter`. Full autocomplete, runtime validation, and tree-shaking. Use this for TypeScript/JavaScript projects.
+- **`@synap-core/sdk`** — typed tRPC client generated from the live `AppRouter`. Full autocomplete, runtime validation, and tree-shaking. Use this for TypeScript/JavaScript projects.
 - **Hub Protocol REST** — the same access surface the pod's own AI uses internally. Raw HTTP, language-agnostic, no client library required.
 
 Both give you direct read/write access to entities, documents, views, channels, search, and more. You manage the context you pass to your own LLM — the pod is your structured data backend.
@@ -32,10 +32,10 @@ Both give you direct read/write access to entities, documents, views, channels, 
 
 ```bash
 # TypeScript / Node.js
-npm install @synap/sdk
+npm install @synap-core/sdk
 
 # React apps (includes hooks + provider)
-npm install @synap/react
+npm install @synap-core/react
 ```
 
 ---
@@ -45,7 +45,7 @@ npm install @synap/react
 Pull structured data from your pod, build a prompt, write results back.
 
 ```typescript
-import { createSynapClient } from '@synap/sdk';
+import { createSynapClient } from '@synap-core/sdk';
 import Anthropic from '@anthropic-ai/sdk';
 
 const synap = createSynapClient({
@@ -171,7 +171,7 @@ The AI response will be delivered as a message in that channel. Poll `GET /api/h
 Call a skill to extract structured data, then chat with the result:
 
 ```typescript
-import { createSynapClient } from '@synap/sdk';
+import { createSynapClient } from '@synap-core/sdk';
 
 const POD_URL = 'https://YOUR_POD.synap.live';
 const API_KEY = 'YOUR_API_KEY';
@@ -230,7 +230,7 @@ while (true) {
 The SDK exports input and output types for every procedure:
 
 ```typescript
-import type { RouterInputs, RouterOutputs } from '@synap/sdk';
+import type { RouterInputs, RouterOutputs } from '@synap-core/sdk';
 
 type CreateInput = RouterInputs['entities']['create'];
 // → { profileSlug: string; title: string; properties?: Record<string, unknown>; workspaceId?: string; ... }
@@ -245,7 +245,7 @@ type Entity = RouterOutputs['entities']['list']['items'][number];
 
 ```tsx
 // app.tsx
-import { SynapProvider } from '@synap/react';
+import { SynapProvider } from '@synap-core/react';
 
 export default function App({ children }: { children: React.ReactNode }) {
   return (
@@ -262,7 +262,7 @@ export default function App({ children }: { children: React.ReactNode }) {
 
 ```tsx
 // TaskList.tsx
-import { useSynap } from '@synap/react';
+import { useSynap } from '@synap-core/react';
 
 export function TaskList() {
   const { data, isLoading } = useSynap().entities.list.useQuery({

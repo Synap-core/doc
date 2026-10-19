@@ -193,11 +193,11 @@ User: _"I'm trying to figure out whether we should build our own orchestrator or
 
 Don't interrupt the conversation to ask "should I log this as a question?" — just do it and add a one-line trailer at the end of your response:
 
-> (Logged as question on Project Eve. Review: https://studio.synap.live/proposals/…)
+> (Logged as question on Project Eve. Review: https://`<your-pod>`/open/…)
 
 If the creation was auto-approved (entity.create is on the whitelist), there's no proposal; just show a link to the entity:
 
-> (Logged as question → https://studio.synap.live/entities/ent_question_1)
+> (Logged as question → https://`<your-pod>`/open/ent_question_1)
 
 ## Linking — the core principle
 
@@ -250,14 +250,14 @@ Every write returns a `status` field:
 **`"proposed"` is not an error.** It's the governance system queueing your change. When you get it:
 
 1. Tell the user exactly what was queued — use the `summary` field **verbatim**. Don't paraphrase.
-2. Give them the link to review — `reviewUrl` opens the proposal in Synap Studio. Show the link as-is.
+2. Give them the link to review — `reviewUrl` opens the proposal in the Synap browser (the pod bounces the bare id to the right object). Show the link as-is.
 3. Move on with the conversation. Don't wait or poll.
 
 Example response to the user:
 
-> I queued **Delete task "Q2 plan review"** for your review. Destructive actions need your approval. Open it: https://studio.synap.live/proposals/prp_abc
+> I queued **Delete task "Q2 plan review"** for your review. Destructive actions need your approval. Open it: https://`<your-pod>`/open/prp_abc
 
-Auto-approved by default (for agent API keys): `entity.create`, `entity.update`, `document.create`, `relation.create`, `view.create`, `profile.create`, `property_def.create`, `channel.create`, `memory.*`, all reads. Destructive actions (`delete`, `archive`, `purge`) always propose in agent-owned workspaces.
+Auto-approved by default (for agent API keys): `entity.create`, `entity.update`, `document.create`, `relation.create`, `view.create`, `property_def.create`, `channel.create`, `memory.*`, all reads. Defining a kind or role (`profile.create`) always goes to review for an agent — no governance rule can widen it. Destructive actions (`delete`, `archive`, `purge`) always propose in agent-owned workspaces.
 
 For the full whitelist, agent-user semantics, and workspace overrides, read **`governance.md`**.
 

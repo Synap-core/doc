@@ -45,7 +45,7 @@ Self-hosted operators can enable and manage OpenClaw via backend CLI (`synap`) a
 For end-to-end onboarding from user side:
 
 ```bash
-npx @synap/cli init
+npx @synap-core/cli init
 ```
 
 CLI repo:

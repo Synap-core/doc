@@ -167,24 +167,26 @@ node dist/index.js init
 
 ---
 
-## CP endpoints used by this CLI
+## Account-service and Pod contracts used by this CLI
 
-| Method | Path | Auth | Used by |
+| Method | Contract | Auth | Used by |
 |--------|------|------|---------|
 | `GET` | `/auth/me` | Bearer token | `isLoggedIn()` |
-| `GET` | `/pods` | Bearer token | Pod list in `init` |
-| `POST` | `/pods/handshake-jwt` | Bearer token | `provisionUserOnPod()` |
+| `GET` | `/pods` | Bearer token | Pod relationship ledger in `init` |
+| issuer-specific | Short-lived `user-exchange` assertion for one Pod origin | Account session | `provisionUserOnPod()` |
 | `POST` | `/pods/setup-agent` | Bearer token | `setupAgentViaCp()` |
 | `GET` | `/openclaw/status?podId=` | Bearer token | `getOpenClawRemoteStatus()` |
 
-Pod endpoints (called directly, Bearer = Hub API key):
+Pod endpoints are called directly; account-service credentials never become Pod session credentials:
 
-| Method | Path | Used by |
+| Method | Path | Auth / used by |
 |--------|------|---------|
 | `GET` | `/api/health` | `checkPodHealth()` |
-| `POST` | `/api/handshake` | `provisionUserOnPod()` |
-| `POST` | `/api/hub/setup/agent` | `setupAgent()` |
+| `POST` | `/api/federation/exchange` | Pod-specific assertion; `provisionUserOnPod()` obtains a Pod-local session |
+| `POST` | `/api/hub/setup/agent` | Pod provisioning credential; `setupAgent()` |
 | `GET` | `/api/provision/status` | `synap status` IS section |
+
+`/pods/handshake-jwt` and `/api/handshake` are retired. Do not add a CLI fallback to either endpoint.
 
 ---
 

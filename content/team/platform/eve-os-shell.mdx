@@ -134,7 +134,7 @@ The wallpaper component renders ONCE in the OS layout and never unmounts during 
 
 | Viewport | Pane width | Pane height | Margin |
 |---|---|---|---|
-| Mobile (<640px) | full-width minus 16px gutter | full-height minus dock + 16px | 8px sides, dock-height + 16px bottom |
+| Mobile (&lt;640px) | full-width minus 16px gutter | full-height minus dock + 16px | 8px sides, dock-height + 16px bottom |
 | Tablet (640–1024px) | 90vw, max 800px | 88vh | centered |
 | Desktop (>1024px) | 80vw, min 1024px, max 1440px | 84vh, min 600px, max 920px | centered |
 | Wide (>1600px) | 1440px | 920px | centered |
@@ -207,7 +207,7 @@ export function Pane({ title, back, actions, children }: PaneProps) {
 - 16px above the viewport bottom edge
 - Height 64px (icon size 48px + 8px padding top/bottom)
 - Width: hugs content (rounded pill), max 80vw
-- Horizontal scroll if too many apps to fit (rare — most operators have <10 pinned)
+- Horizontal scroll if too many apps to fit (rare — most operators have &lt;10 pinned)
 
 ### Visual
 

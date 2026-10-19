@@ -485,7 +485,7 @@ docker exec $(docker ps -q -f name=synap_intelligence-hub | head -1) wget -qO- h
 
 After deploying the observability stack, configure Uptime Kuma at `https://status.your-domain.com`.
 
-> **Shortcut:** `synap infra monitors` prints the exact table below pre-filled with your domain and Valkey password.
+> **Shortcut:** `infra monitors` prints the exact table below pre-filled with your domain and Valkey password. This is the **IS terminal client's** own `infra` command (`synap-intelligence-service/apps/cli`, package `@synap/chat`) — a Docker Swarm operations wizard, unrelated to the retired `synap-cli` (`synap`) Dokploy client, which never had a `monitors` subcommand.
 
 **Add these monitors (Uptime Kuma → uptime-kuma service is on `synap_internal` overlay, so internal DNS works):**
 

@@ -1,0 +1,147 @@
+---
+title: 'Adding a sync source'
+description: 'How to add a new brokered-connector sync source — config over code, one door.'
+section: general
+audience: developers
+version: 1.0+
+last_updated: '2026-09-13'
+tags: [connectors, sync, nango, import]
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Adding a sync source
+
+A sync source (Connect & Mirror, `CONNECT-AND-MIRROR-PLAN.md`) is **config over code**:
+a capability template declaration + one pure mapping handler. There is exactly one
+trigger door and one write door — never a second pipeline per provider.
+
+## The four pieces
+
+### 1. Capability template — declare the sync kinds
+
+Add `tools[<provider>].metadata.sync` to the provider's capability template
+(e.g. `synap-control-plane-api/src/seeds/capability-templates/nango-google.capability.json`
+for Google). **`sync.enabled: true` at the top level is required** — the runner
+checks it before ever looking at a kind's own `enabled` (`connection-sync.ts`,
+`syncCfg?.enabled !== true` → `{ skipped: true, reason: "sync_disabled" }`, a SILENT
+skip with no error). Omitting it is the single most common way to follow this guide
+and get nothing: `kinds.<kind>.enabled: true` alone is not enough. Each kind then
+gets its own `enabled`, `windowDays` (first-run lookback bound), and `itemLimit`
+(first-run item bound):
+
+```json
+{
+  "tools": {
+    "google": {
+      "metadata": {
+        "sync": {
+          "enabled": true,
+          "kinds": {
+            "event": { "enabled": true, "windowDays": 90, "itemLimit": 200 },
+            "email.thread": { "enabled": true, "windowDays": 90, "itemLimit": 200 },
+            "contact": { "enabled": true, "windowDays": 90, "itemLimit": 200 }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+These are defaults — a user override in the installed workspace's own copy of the
+template survives a reconcile (`mergePreservingExisting`), it is never clobbered.
+
+If the provider is reached through the CP proxy (any `nango://` provider), its host
+must appear as a `baseUrlOverride` value somewhere in the template — the CP proxy
+allowlist (`synap-control-plane-api/src/lib/provider-proxy-hosts.ts`) is DERIVED from
+every shipped template's declared hosts, never hand-maintained, so a host no template
+declares is refused regardless of what the sync handler does. A **brand new**
+`nango-*.capability.json` file must also be added to that file's `TEMPLATES` array
+(templates are bundled statically, not scanned from disk) — its own test fails if a
+template file exists that `TEMPLATES` doesn't list.
+
+### 2. Sync-kind handler — read → pure map → phase
+
+Register a handler with `registerSyncKind` (`synap-backend/packages/api/src/services/event-sync/sync-kind-registry.ts`).
+**Registration is a SIDE EFFECT of importing the handler module** — calling
+`registerSyncKind` inside it is not enough by itself. Google's handlers register
+because `connection-sync.ts` has `import "./google-sync-kinds.js"` near its top; a
+new provider's handler file needs the same side-effect import added there (or into
+whatever aggregator `google-sync-kinds.js` is generalized into), or the handler is
+dead code that never runs, with no error to say so.
+
+A handler has three parts, and only the middle one is provider-specific:
+
+- **Read**: call the provider through a capability verb (e.g. `calendar_list`,
+  `gmail_search`) — the same execution door and governance gate every other capability
+  call uses. Never a bespoke HTTP client per sync source.
+- **Map**: a **pure function**, no I/O, `providerRecord → graph fragment` (entities +
+  relations + identity signals + an optional external link `url`). Pure so it is
+  unit-testable against recorded fixtures with no live provider.
+- **Phase**: advance `SyncPhase` (`fetching` → `mapping` → `review_ready` → `synced` |
+  `failed`) and `SyncCounts` via the sync-state store, so `getConnectionSyncStatus`
+  reports real progress, not a guess.
+
+### 3. Write path — identity-resolved, never a second insert door
+
+All writes go through `EntityUpsertService` (identity signals: email/phone/url — the
+same strong-signal resolution used everywhere else, never a second dedup
+implementation). First run of a connection×kind is grouped into ONE `import.graph`
+proposal via the Import Orchestrator. Steady runs are gated **per write action**, not
+once per connection: a `SyncWriteGate` calls `resolveConnectionSyncDecision` once per
+`(subjectType, action)` pair it actually needs (e.g. `entity.create` vs
+`entity.update` can resolve differently), memoized per run. `auto` writes directly;
+anything else is deferred (filed for review, never written) — the rule can widen
+auto-create/update, but never bypasses the governance floors on a destructive write.
+
+### 4. External link + "Open in source"
+
+If the mapped record has a natural web URL (e.g. a calendar event's `htmlLink`), set
+it on the external link (`entity_external_links.url`). Not every kind has one — Google
+Calendar events do; Google contacts and the people/companies resolved from Gmail
+correspondence do not (there is no per-thread or per-message url stored, so those
+entities carry no "Open in" action today). Where a url IS stored, extend the pure
+`externalTargetFor(provider, link)`
+(`synap-backend/packages/api/src/services/places/external-target.ts`) with a
+**host-pinned** allowlist entry for the new provider — it must validate the stored URL
+is `https:` and matches a known host for that provider before ever returning it; it
+never reconstructs a URL from an id. This is what lets `places.openTarget` and the
+"Open in `<Provider>`" affordance on every client work with zero client-side code.
+
+## What you get for free
+
+Registering these four pieces (not a fifth path) gets you, with no additional code:
+
+- **Bounded first sync** with a single grouped review, not N proposals.
+- **Governance**: default-auto after approval, user-editable per connection, floors
+  (delete/archive/merge) always still gate through `propose`.
+- **`origin: "sync"`** on every write's side-effect payload — indexed and embedded
+  like any entity, but event automations skip it by default (an automation opts in
+  explicitly).
+- **Progress + status** in every client via `getConnectionSyncStatus`
+  (`connectors.syncStatus` tRPC, `GET /connectors/sync-status` Hub REST), and via
+  `synap cap sync-status` on the CLI.
+- **"Open in source"** on every client that resolves renderers through
+  `resolveEntityOpenTarget` — no per-app hand-built URL construction.
+
+## What NOT to do
+
+- Do not add a second `SCHEME_HANDLERS` entry or a second connect flow — connect is one
+  door (`resolveBroker` → pod tRPC/Hub REST `connectors.session`) for every provider.
+- Do not write directly to `entities`/`entity_external_links` from a sync-kind handler
+  — always through `EntityUpsertService`, or a merge/dedup class of bug reappears.
+- Do not hand-roll a URL for "open in source" client-side — extend
+  `externalTargetFor` on the pod instead, so the host-pin allowlist stays in one place.
+- Do not assume every write should fire automations — sync writes are `origin: "sync"`
+  on purpose; an automation that genuinely needs to react to synced data opts in with
+  `triggerConfig.includeSyncOrigin`, it is not the default.
+
+## Related
+
+- [Connectors](/team/crm/connectors) — the shipped Google connector and sync model
+- [Import Pipeline](/team/platform/import-pipeline) — the general entity-creation path
+  sync writes flow through
+- `CONNECT-AND-MIRROR-PLAN.md` (repo root) — the full plan, decisions, and wave history
+- `synap-control-plane-api/CONNECTORS-NORTH-STAR.md` §4 — broker architecture

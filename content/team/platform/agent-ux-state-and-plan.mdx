@@ -1,0 +1,132 @@
+# Agent UX — State of the Room & the Next-Grade Plan
+
+*Synap Technologies — Version 0.1, June 2026*
+*Grounded in a read-only audit of the live code (4 code audits + 1 external best-practices sweep, June 2026). Companion to [The Homoiconic Substrate](/team/home/homoiconic-substrate) — agent UI is where the substrate becomes visible.*
+
+---
+
+## The headline finding
+
+Synap's agent UI is **ahead of the modern bar on architecture and disconnected at the last mile.** Across every audit, the same pattern recurs:
+
+> **The data and plumbing for next-grade UX is fully built and wired to the hooks — then discarded at the final component.**
+
+This reframes the work. "Next-grade" here is **mostly wiring + deletion, not greenfield building** — the same *consolidation, not invention* theme as the substrate program. The single true *build* (rendering cells inline in chat) is the homoiconic thesis itself, surfaced in the conversation — so agent UI and the universal-node work are the same project.
+
+Evidence of "built then discarded":
+- `useStreamingMessage` computes `streamingError {code, message, recoverable}` → **read by no component**. Model/network/rate-limit errors fail silently.
+- The hook returns `currentStep` + `streamingSteps` (live "Searching notes…") → `CompanionCell` destructures only `{streamingContent, isStreaming}` → generic 3-dot pulse.
+- `ThinkingBlock`, `RoutedThinkingChip`, `DecisionRow`, `RProposal`, `ArtifactCard`, `ProposalChip`, `ViewProposalCard` — all built, exported, **consumed by zero live surfaces.**
+
+> **Execution status (2026-06-07): Wave 1 SHIPPED & type-check-VERIFIED (runtime NEEDS-DOGFOOD).** Centralized the discarded stream UX into the agnostic base `@synap-core/chat-ui`: one `resolveMessageAuthor` (replaces RoomView's + ChannelPanel's divergent copies — **fixes the A2AI glass-box identity bug**, P0 from §scorecard #5/#6), one `StreamStatus` (surfaces the live tool/step the hook returned but every surface discarded — A2), one `StreamError` (inline error + Retry/Regenerate — A1), and `useStreamingMessage` now returns `error`. `RoutedThinkingChip` un-deadened (exported). All 3 packages type-check exit 0 (zero regressions); reviewed by 4 read-only lenses (code/slop/UX/layers), all must-fixes applied. **Remaining:** Wave 1b (fold `ChatView.tsx`'s inline error + the Tamagui `StreamingIndicator.tsx` into these — dedup + retire Tamagui); Room parity is blocked on **E1** (its lighter `useRoomStreaming` doesn't yet feed `error`/`currentStep`); Waves B/C/D unstarted.
+
+---
+
+## The surface map (what is the "room UI")
+
+The user-facing **"room UI" = `RoomShell`** (from `@synap-core/channels`, built on the presentational `@synap-core/room-ui`), mounted in the PRIMARY browser app via **`GlobalRoomApp.tsx`** under the **"Chat"** sidebar button (`Cmd+Shift+C`). It is **live-wired** (despite a stale "mock data" comment).
+
+There are **two conversation paradigms** plus legacy debt — real fragmentation:
+
+| Paradigm | Stack | Entry | Status |
+|---|---|---|---|
+| **Room** (multiplayer) | `@synap-core/room-ui` (presentational) + `@synap-core/channels` (`RoomShell`/`RoomView`) | `GlobalRoomApp` ("Chat" button) | **Canonical** |
+| **Companion** (1:1 AI) | `@synap-core/chat-ui` + `@synap-core/chat-headless` → `CompanionCell` | `GlobalChatApp` (dormant), `GlobalCompanionBar` | **Canonical** |
+| All-channels | browser `ChannelsApp` | "Channels" app (hidden) | Active, **overlaps Room** |
+| Standalone-web | `@synap-core/chat-app`, `apps/intelligence` | web only | Separate impl |
+| Legacy | `@synap-core/chat-interface` (deprecated, warns), `ai-chat` UI half | still imported by live `channels` | **Debt** |
+
+`@synap-core/chat-ui` is the shared identity base (`resolveIdentityColor`, `ChatParticipant`) under both paradigms. **Naming trap:** the "Chat" button loads the Room, not the 1:1 `GlobalChatApp` (dormant).
+
+---
+
+## The 2026 best-practice bar (what "next-grade" means)
+
+The field has converged (Vercel AI SDK, assistant-ui, CopilotKit/AG-UI, Thesys C1, MUI X Chat all independently arrived here):
+
+1. **A message is a `parts[]` array, not a string.** Each part has a `type` and a lifecycle `state`; the client maps `type → React component` via a stable key. **Text is the fallback renderer, not the primary one.** Tool-result → component by *shape contract* (add an artifact = define output schema + register one renderer; no chat-shell edits). *Synap's "everything is a cell" is already this pattern.*
+2. **Streaming = structured parts, not just tokens.** AG-UI's ~16 events are the reference vocabulary: lifecycle (`RunStarted/Finished/Error`, `StepStarted/Finished`), text (`TextMessageStart/Content/End`), tool (`ToolCallStart/Args`=partial-JSON/`End/Result`), state (`StateSnapshot`, `StateDelta`=RFC-6902 JSON Patch, `MessagesSnapshot`=rehydrate a room you joined mid-run), `Custom`/`Raw`.
+3. **Markdown-aware streaming (anti-flicker)** — Vercel's **Streamdown** is the reference: style *unterminated* blocks (odd `**` → hide from the marker until closed), only highlight code on an even-backtick fence, animate at the AST-node level, O(n) incremental parse (never re-parse the whole buffer per token), sanitize model-controlled links/images.
+4. **Reasoning display: collapsed-by-default progressive disclosure** (Claude is the cited gold standard). Every step is an explicit state: `queued | running | waiting-for-approval | error | retried | completed`. Link outputs back to originating steps/evidence. *More transparency ≠ better UX.*
+5. **Errors: split run-error vs tool-error.** Tool error = inline failed-cell with a per-step **Retry**; run error = transcript banner keyed to the code. Rate/step limits are explicit "continue" states, never silent stalls.
+6. **Multi-agent:** stable per-agent identity (deterministic colors, not hashing), **explicit context-carrying hand-offs** rendered as labeled transitions, snapshot rehydration, live presence. AG-UI is becoming the glass-box rendering contract (LangGraph + CrewAI adopt it). No settled grammar yet for *N parallel agents* — **an opening to define the standard.**
+7. **Human-in-the-loop = Synap's home turf.** Canonical flow: propose → pause → persist state → human approve/reject/**edit** → resume from checkpoint. The biggest UX upgrade over binary approve/reject is **reject-with-edits** (mutate the args — "cap the discount at 10%"). Per-action granularity (don't batch consequential ops). One approval API across in-app/Slack/email/mobile.
+
+Full sources in the [best-practices appendix](#appendix-best-practice-sources).
+
+---
+
+## The scorecard
+
+Graded against the bar above. Each dimension cites the audit that verified it.
+
+| # | Dimension | Verdict | One-line |
+|---|---|---|---|
+| 1 | **Rich output rendering** | **Strong but capped** | Rich metadata→component dispatcher + inline proposal cards (approve/reject + doc diff) — but **the chat stream is the one surface where `CellRenderer` is never mounted inline**; views/charts/entities are chips that punt to a side panel. |
+| 2 | **Streaming quality** | **Basic** | Markdown-aware + cursor, but full AST re-parse **per chunk** (jank on long replies); no Streamdown-style unterminated-block handling; per-chunk smooth-scroll stutters. |
+| 3 | **Lifecycle legibility** | **Missing (plumbing 100% built)** | Generic "Thinking…"; `currentStep`/`streamingSteps` discarded; `ThinkingBlock` dead. Highest-ROI, near-zero cost. |
+| 4 | **Error & recovery** | **Missing (worst UX)** | `streamingError` computed then read by nobody → silent dead UI; only step-limit (in text) + a send-failure toast are visible. P0. |
+| 5 | **Presence & identity** | **Next-grade (real strength)** | One identity-color authority; orb=AI / square=human; honest "Orchestrator routed to…" cue; live "answering" presence. |
+| 6 | **Governance-in-surface** | **Partial — biggest upside** | Inline approve/reject ahead of the field; but the glass-box (`DecisionRow` diff+why+scope, reject-with-edits) is **built and unused**. |
+
+**Thesis-level gap = #1.** "Everything is a cell" — *except in chat*. The one place the homoiconic promise would be most visible is the one place it's unfulfilled. The fix *is* the universal-node/cell work, surfaced in the message stream.
+
+**One real correctness bug (#5):** `ChannelPanel.resolveAuthor` keys only on `m.userId`, not `metadata.agentId` (which `RoomView` correctly prefers). In `agent_collab`, two collaborating agents can render with a collapsed/identical identity — the #1 "who is who" defect in the glass-box.
+
+---
+
+## The plan — prioritized waves
+
+Sequenced by ROI and dependency. Waves A is days of work and unblocks the visible win; B is the thesis; D is the differentiator; E is the prerequisite that makes A–D land in *both* paradigms.
+
+### Wave A — Turn on what's already built *(days, ~zero backend)*
+- **A1 [P0]** Inline error bubble + **Retry/Regenerate.** Build `StreamErrorBubble` in `chat-ui`; read `useStreamingStore().getStream(channelId)?.error` in `CompanionCell` + Room; render recoverable codes (timeout/unavailable/fatal/+429). *The hook already produces it.*
+- **A2 [P0]** Surface the **current tool/step** ("Searching notes…", "Creating task…"): wire `currentStep` into the thinking row; wire `streamingSteps` into the already-built `ThinkingBlock`/`RoutedThinkingChip` for an expandable reasoning trace. *Pure consumption.*
+- **A3 [P0]** Fix `ChannelPanel.resolveAuthor` → prefer `metadata.agentId ?? m.userId` (glass-box identity bug).
+- **A4 [P1]** Progressive **tool-call cards** during a run (render `streamingSteps` of type tool_call/tool_result as running→done), instead of accumulate-and-discard.
+
+### Wave B — The inline-cell payoff *(the thesis)*
+- **B1** Mount `CellRenderer`/`ViewFrame`/`StructuredViewRenderer` **inline in messages** (collapsible, height-capped) for created views/widgets/charts/tables — live preview in-stream. Infra exists (`cellRegistry`; ai-chat already registers cells); it's simply never embedded.
+- **B2** Inline **entity-cards**: `@synap-core/entity-card` `EntityEmbedCard` on hover/expand for `entity://` refs instead of bare chips.
+- **B3** Evolve the metadata→component dispatcher toward the convergent **`parts[]` + type→component registry** model (= the universal-node/cell direction). Adopt `@synap-core/markdown-engine` in the chat body (it's currently bypassed for raw `react-markdown`).
+- **B4** Real before→after **diffs** for `update_entity` proposals (today: field pills; docs already get `DocumentDiffViewer`). Inline **citations** (claim → source chip).
+
+### Wave C — Streaming quality
+- **C1** Adopt Streamdown-class streaming markdown: unterminated-block styling, even-backtick code fences, O(n) incremental parse, rAF-batched chunk→state (kill the per-chunk full `Map` rewrite).
+- **C2** rAF-throttle the per-chunk smooth-scroll; stick-to-bottom *with intent detection* + "N new" pill (partly present); always-visible **Stop generating**.
+
+### Wave D — Define the bar on governance *(the differentiator)*
+- **D1** Wire **`DecisionRow`/`RProposal`** (diff + why + scope + "reversible") into the live Room + A2AI stream, replacing the bare `ProposalChip`. The premium primitive is built and unused — this is where Synap beats Slack/Discord (they have no agent-governance view at all).
+- **D2** **Reject-with-edits** — let the approver mutate proposal arguments before approving, not just binary. The single biggest HITL upgrade per the research; Synap's editable proposal cards can *lead* the field.
+- **D3** Make `agent_collab` a true reasoning pane ("Agent A → B asked · B working · B returned"), reusing the honest routed-cue discipline; surface the thinking chip for A2AI turns. Per-action granularity; one approval API across in-app/Relay/Slack.
+
+### Wave E — Consolidation *(deletion test; prerequisite for A–D landing everywhere)*
+- **E1** Extract one **shared headless streaming/render core.** `useStreamingMessage` (Companion) and `useRoomStreaming` (Room) re-implement the same untyped `chat:stream`/`ai:step` protocol by hand (circular-dep wall); the Room version is strictly weaker (no error handling, no `currentStep`). Unify so error/step/cell UX lands in both at once.
+- **E2** Reconcile the **two proposal-card families** (`chat-ui` `ProposalChip`/`ViewProposalCard`/`ArtifactCard` orphaned vs `ai-chat`-local live). Pick one; delete the other.
+- **E3** Migrate branch/persona cards (`BranchCard`, `BranchResultCard`, `RouteBreadcrumb`, `PersonaChip`) **off Tamagui** → spatial-ui; they currently risk crashing in the PRIMARY `browser/` app ("Can't find Tamagui configuration").
+- **E4** **Type the realtime contract** (`chat:stream`/`ai:step`/`chat:stream:error`) in `@synap-core/api-types`; retire the duplicate mock `RoomMentionMenu` and unify the two avatar impls.
+- **E5** Resolve Room vs Companion vs `ChannelsApp` overlap and the "Chat"-button-loads-Room naming trap.
+
+**Deletion scorecard for Wave E:** kill one of the two streaming consumers, one of the two proposal-card families, the mock mention menu, the duplicate avatar impl, the deprecated `chat-interface` imports, and the Tamagui dependency in branch/persona cards.
+
+---
+
+## How this connects to the substrate
+
+This is not a side quest. Wave B is the **universal-node/cell work made visible**: "agent emits a node → render the cell" is exactly `parts[] + type→component registry`, and the registry *is* the cell registry. Wave D is the **governance membrane made visible and actionable** (reject-with-edits is the membrane's "propose" path with a UI for mutation). The agent UI is the surface where the homoiconic substrate either visibly pays off or silently fails — and right now it mostly *silently fails to show what it already computed.*
+
+---
+
+## Appendix: audit source files
+
+Full audits: `01-surfaces`, `02-content-rendering`, `03-streaming-lifecycle`, `04-presence-identity`, `05-best-practices` (research run, June 2026). Load-bearing code:
+
+- **Room (live):** `synap-app/packages/core/channels/src/components/{RoomShell,RoomView}.tsx`, `hooks/{useRoomStreaming,useRoomMembers,useTeammateAnswering}.ts`, `room-adapters/message.ts`; browser `apps/GlobalRoomApp.tsx`.
+- **Companion:** `synap-app/packages/core/chat-ui/src/components/{MessageBubble,MessageContent,MessageList,AuthorAvatar,MentionMenu,Routed,chat-types}.tsx`; `chat-headless/src/hooks/{useStreamingMessage,useMessageProposals}.ts`, `streamingStore.ts`; browser `cells/CompanionCell.tsx`.
+- **Rich blocks / proposals:** `synap-app/packages/features/ai-chat/src/components/{ChatView,MessageExtraContent,ProposalInlineCard,ProposedActionRow,DocCreatedCard,BranchResultCard}.tsx`, `ai-steps/AIStepsPanel.tsx`.
+- **Glass-box primitives (built, mostly unused):** `synap-app/packages/core/room-ui/src/components/{primitives,message}.tsx` (`DecisionRow`, `RProposal`, `RThinking`, `Presence`).
+- **A2AI:** `synap-app/packages/core/channels/src/components/{AgentToAgentView,ChannelPanel/ChannelPanel}.tsx`.
+- **Stream producer:** `synap-intelligence-service/apps/intelligence-hub/src/agents/base/agent.ts` (`executeWithStream`); backend bridge `synap-backend/packages/api/src/routers/channels.ts`.
+
+### Appendix: best-practice sources
+Vercel AI SDK generative UI (ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces); assistant-ui (assistant-ui.com/docs/guides/tools); AG-UI events (docs.ag-ui.com/concepts/events) + HITL (learn.microsoft.com/agent-framework/integrations/ag-ui/human-in-the-loop); Streamdown (streamdown.ai); Stream-of-Thought pattern (shapeof.ai/patterns/stream-of-thought); reasoning-display comparison (digestibleux.com/p/how-ai-models-show-their-reasoning); MUI X Chat reasoning (mui.com/x/react-chat/ai-and-agents/reasoning); Claude Artifacts vs ChatGPT Canvas (shareduo.com/blog/claude-artifacts-vs-chatgpt-canvas); HITL best practices (permit.io, cloudflare agents, openai-agents-js).

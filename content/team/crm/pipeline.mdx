@@ -1,116 +1,48 @@
 ---
-title: 'Pipeline'
-description: 'Kanban pipeline view, deal progression, and future automation rules'
+title: 'Lead-first Pipeline'
+description: 'The CRM daily workbench for qualifying people and companies before handoff'
 section: crm
-last_updated: '2026-05-11'
-tags: [pipeline, kanban, automations, status]
+last_updated: '2026-07-19'
+tags: [pipeline, leads, commercial-proposals]
 toc: true
 ---
 
-# Pipeline
+# Lead-first Pipeline
 
-The pipeline is the central operational view of the CRM. It shows every person in the system as a card, grouped into columns by `crmStatus`, giving the team an instant read on deal distribution and momentum.
+Pipeline is the CRM's daily workbench. Its cards are people and companies with
+the workspace-local `crm-lead` facet—not deals. A lead can be researched and
+contacted without a commercial proposal. A deal is an optional proposal linked
+to one primary counterparty.
 
----
+## Lifecycle
 
-## Kanban Layout
-
-Six columns, one per status:
-
+```text
+crm-lead: new → researching → outreach → engaged → qualified
+                                     └→ nurturing | disqualified
+deal:     draft → proposed → negotiating → won | lost
+won deal: counterparty gains crm-client; lead becomes converted; handoff begins
 ```
-Lead → Contacted → Qualifying → Call Booked → Client → Churned
-```
 
-Each column shows:
-- Column header with status name, color, and contact count
-- Cards sorted by `nextFollowUpDate` ascending (most urgent first)
-- Quick-add button to create a new person directly in that column
+The CRM does not create client-delivery records. A won client remains visible in
+the Pipeline's compact **Clients won** section, then moves to the next system.
 
-### Card design
+## Daily interface
 
-Each card surfaces the minimum information needed to act:
+- **Next actions** shows due follow-ups and explicit next steps.
+- **Lead board** groups active leads by operational stage.
+- **Clients won** preserves handoff visibility without becoming a post-sale
+  workspace.
+- **Contacts** and **Companies** are research directories. They default to CRM
+  subjects and expose an intentional All escape hatch.
 
-| Field | Purpose |
-|---|---|
-| Person name | Identity |
-| Company name | Context |
-| ICP score | At-a-glance fit quality |
-| Next follow-up date | Urgency signal (highlighted red if overdue) |
-| Estimated value | Deal size |
-| Avatar / initials | Ownership (assigned team member) |
+## Data boundary
 
-Cards are **draggable between columns** — dragging a card to a new column updates `crmStatus` immediately (optimistic update, rollback on failure).
+The Business Developer template add-on composes onto a CRM workspace. It owns
+the workspace-scoped `crm-lead` and `crm-client` facets, commercial deal fields,
+commission-entitlement records, and proposal-first playbooks. Pod-wide `lead`
+and `client` roles remain generic vocabulary and must not be used as CRM
+lifecycle state.
 
-### Expanded card view
-
-Clicking a card opens an **expanded inline view** within the kanban — no navigation away from the pipeline. The expanded view shows:
-- All card fields plus email, source, LinkedIn
-- Last 3 activity items (notes, tasks, events)
-- Quick actions: log note, create task, set follow-up date, open full detail
-
-This keeps the salesperson in the pipeline context while acting on individual deals.
-
----
-
-## Filtering & Sorting
-
-The pipeline supports filters applied across all columns simultaneously:
-
-| Filter | Options |
-|---|---|
-| Owner | Filter by assigned team member |
-| ICP score | Minimum threshold |
-| Estimated value | Range |
-| Age in stage | Contacts stuck >N days in current status |
-| Company | Show only contacts from a specific company |
-| Source | Filter by lead source |
-
-Filters persist to the browser session. A "Reset filters" action clears all.
-
----
-
-## Stuck Deal Detection
-
-A contact is flagged as **stuck** when:
-- It has been in the same `crmStatus` for more than a configurable threshold (default: 14 days for `contacted`, 7 days for `qualifying`, 3 days for `call_booked`)
-- The card gets a visual indicator (subtle border color or icon)
-- The home dashboard "Needs Attention" widget lists stuck deals
-
----
-
-## Future: Automation Rules
-
-When a contact moves to a new status, **automation rules** can trigger actions automatically. This is built on the existing Synap automations system (pg-boss workers + the automations router in the backend).
-
-### Planned automation triggers
-
-| Trigger | Example actions |
-|---|---|
-| Status → `contacted` | Create follow-up task due in 3 days |
-| Status → `call_booked` | Create task "Prepare call brief", send calendar invite reminder |
-| Status → `client` | Generate onboarding checklist from template, create client channel |
-| Status → `churned` | Create task "Send churn feedback request", log churn reason prompt |
-| Stuck in stage >N days | Notify owner, flag on home dashboard |
-| `nextFollowUpDate` reached | Notify owner with contact context |
-
-### Automation configuration
-
-Automations are configured per workspace via the automations panel. Each rule has:
-- **Trigger**: event type + conditions
-- **Actions**: ordered list of steps (create entity, send notification, generate document, etc.)
-- **Enabled/disabled** toggle
-
-Rules are stored as `automation` entities in the workspace and executed by pg-boss workers on the backend.
-
-Phase 1 ships the pipeline UI without automations. Automations are a Phase 3 addition once the pipeline is stable.
-
----
-
-## Full Pipeline View
-
-Beyond the kanban, the pipeline offers a **full view** mode that shows all contacts in a dense table with all CRM properties visible — sortable, filterable, exportable. This is the `Contacts` table view scoped to non-churned persons, surfaced as a toggle on the pipeline page.
-
-| Mode | Best for |
-|---|---|
-| Kanban | Day-to-day deal movement, drag-and-drop status changes |
-| Table (full view) | Bulk review, sorting by value or ICP score, export |
+CRM reads generic entity/facet/relation APIs with an explicit workspace lens,
+rich facet overlays, and Pod-wide identity inclusion only where a directory
+needs it. The backend has no CRM-specific read model.

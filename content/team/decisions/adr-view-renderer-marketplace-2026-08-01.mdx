@@ -1,0 +1,110 @@
+---
+title: 'ADR: View-renderer marketplace (pod-bound renderers over a typed view contract)'
+description: Renderer choice becomes sovereign user data — the pod binds a stored typed view to a renderer, defaulting to the platform, extensible to a sandboxed third-party marketplace.
+section: general
+audience: users
+version: 1.0+
+last_updated: '2026-08-01'
+tags: [views, renderers, marketplace, architecture, sovereignty]
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# ADR: View-renderer marketplace
+
+## Metadata
+
+- ADR ID: adr-view-renderer-marketplace-2026-08-01
+- Title: View-renderer marketplace — pod-bound renderers over a typed view contract
+- Date: 2026-08-01
+- Status: Proposed
+- Owner: (platform)
+
+## Context
+
+Today, a stored view (`calendar`, `kanban`, `table`, …) is rendered by a component chosen **hardcoded, platform-side, keyed on the view type** — `viewAdapterRegistry.resolve(effectiveType)` (`synap-app/packages/core/view-renderer/src/components/StructuredViewRenderer.tsx:144`). A workspace cannot say "render *this* calendar with *that* renderer." Concretely: the Content OS space wants a **posts-focused content calendar**, but it gets whatever the platform ships, because renderer choice is not user data.
+
+This contradicts Synap's core stance (everything the user sees is sovereign, portable, governed data + a marketplace on top). It is also the deeper cause behind the recurring "the calendar still looks old" report — *separately*, that specific symptom was a stale packaged build (run `pnpm dev`; all uncommitted calendar work is source-transpiled and appears live), but the systemic truth stands: the renderer is not the user's to choose.
+
+We already ship exactly this pattern for **entity detail** (per-profile renderer overrides). This ADR generalizes it from per-profile-detail to per-view, and opens it to a third-party marketplace — the way Grafana/VS Code/Figma do, and *not* the way Obsidian/Salesforce did.
+
+**Key finding (reuse trace): ~80% of the substrate already exists.** This is mostly a wiring job, not a greenfield build.
+
+| Target piece | Existing primitive (file:line) | Verdict |
+|---|---|---|
+| Typed binding ref (`kind:"view" \| "view-adapter"`) | `renderer-runtime/src/index.ts:19-56`; zod `profiles.ts:71-102` | **reuse** — the view-binding shape is already in the union |
+| Pod store + 3-layer resolution + `source` | `getEffectiveRendererWithSource` `profile-resolution-service.ts:493-557` (workspace overlay → profile default → hardcoded fallback) | **extend** — add a view-type key space |
+| Governance (propose/apply) | `setProfileRendererOverride` `profiles.ts:1275-1338`; SSOT `set-profile-renderer.ts:49-139`; `action:"renderer.set"` | **reuse** |
+| FE resolve hook | `useSlotResolver` `profileSlotRenderer.tsx:103-148` | **reuse** |
+| FE dispatch on `ref.kind` | `renderCellTarget` `profileSlotRenderer.tsx:164-180` | **MISSING** — only handles `kind:"cell"`; a `view`/`view-adapter` ref **silently falls back** today |
+| Single render chokepoint | `StructuredViewRenderer.tsx:144` | **extend** — all 4 hosts funnel here |
+| Half-built client plumbing | `ViewRenderer.adapterKey` dead prop (`:210`); `ViewPage` fetches a binding then **discards** it (`ViewPage/index.tsx:104-173`) | **extend** — finish wiring the two dead seams |
+| Sandboxed renderer runtime | `WidgetRegistryProvider.tsx:79-231`; iframe `ViewFrame.tsx`/`IframeWidgetCell.tsx` (opaque origin, `sandbox="allow-scripts"`, CSP `connect-src:'none'`, postMessage-only) | **reuse** — this is the Figma model |
+| Marketplace packaging | `PACKAGE_TYPES` incl `view`,`cell` (`synap-control-plane-api/.../packages.ts:660`); `publishPackageCore`; `applyMarketInstall` | **extend** — declare renderer affinity; no `renderer` kind yet |
+| Contract versioning | — | **MISSING** — neither `RendererRef` nor `EntityDetailRendererProps` carries a version (`entity-types.ts:1-13` is hand-mirrored to `@eve/*`) |
+
+## Decision
+
+Renderer choice becomes **sovereign, governed user data**, resolved against a **versioned typed contract**, defaulting to the platform, and extensible to a **sandboxed** third-party marketplace. The backend stays presentation-agnostic (it stores a typed view + typed data); the pod stores the binding; renderers declare what they satisfy.
+
+Layers:
+
+1. **Backend stays typed-agnostic.** A view is a typed object (`calendar` + typed config: `dateField`, `colorField`, `scope`, `focusKind`). Unchanged.
+2. **Pod owns the binding** `view → rendererRef` (nullable; null ⇒ platform default), stored and resolved through the **existing 3-layer resolver + `renderer.set` governance**, extended to a view-type key space.
+3. **Versioned typed contract.** A `ViewRendererProps` contract (data seam + a narrow capability seam) with **semver + a per-binding `contractVersion` stamp + a host-owned config-migration hook** (Grafana model). Runtime-validated, not hand-mirrored.
+4. **Renderers declare affinity, never bind to a model.** A renderer's manifest declares the view-type + contract-version range + data-shape affinity it satisfies; the host matches installed renderers against a view's typed contract and always keeps the platform default as automatic fallback.
+5. **Third-party renders in the existing sandboxed iframe cell-frame** (opaque origin, no same-origin, CSP `connect-src:'none'`, postMessage bridge). It receives **only the granted data slice**; **every mutation routes through `checkPermissionOrPropose()`** (a renderer write is an agent-class proposal, never a bypass — this is the field-exfiltration/permission gap Notion refused to solve). `native` (unsandboxed host-tree) stays **first-party / signed-only**.
+6. **Capability seam is a narrow host-minted API** (`navigate`, `requestMutation`→proposal door, scoped `storage`, read of the granted slice), declared per-renderer in the manifest and approved at install (VS Code `contributes` + Figma membrane).
+
+Guardrails adopted from prior art (see References): a **stable vs "proposed/unstable" contract tier** (unstable barred from the marketplace); **no DOM / core-UI-style access** for third-party renderers; **signing tiers** (signed ⇒ wider caps; unsigned ⇒ opt-in + tightest scope); a **stable API membrane** so the sandbox engine is swappable; and a real **install/update/pin** story per surface.
+
+## Alternatives considered
+
+1. **Keep it hardcoded platform-side (status quo).** Rejected — renderer choice must be sovereign user data; blocks the marketplace and the ContentOS content-calendar.
+2. **Native (unsandboxed) third-party renderers by default.** Rejected — Obsidian's model; produced a 2026 RAT over user data with no exploited bug. Unacceptable over sovereign personal data. (`native` retained only for first-party/signed.)
+3. **Over-sandbox (hide ordinary language/library features).** Rejected — Salesforce LockerService; broke common libraries, made whole renderer classes impossible, forced a company-wide migration to LWS. We hide *capabilities* (I/O, globals, DOM), not language features.
+4. **Bind renderers to a concrete data model.** Rejected — renderers declare a *data-shape affinity* against the typed contract instead, which keeps the marketplace liquid (Grafana panels stay installable because they don't hardcode a table).
+5. **Ship the contract with no version stamp / migration hook.** Rejected — Grafana's `pluginVersion`-not-bumped bug and Notion's Data-Sources cutover both prove stored config silently rots without it.
+6. **A new, separate view-renderer store (parallel to the profile-renderer store).** Rejected for now — reuse the existing 3-layer resolver + governance by adding a view-type key space; a second concurrent store repeats a class of bug the codebase has fought before.
+7. **Notion's closed model (no third-party renderers).** Rejected — it buys migration/permission simplicity by refusing extensibility; contrary to Synap's marketplace stance. But it names our hard requirement: a third-party renderer must not read ungranted fields.
+
+## Trade-offs
+
+- **Benefits:** renderer choice becomes portable sovereign data; a real marketplace of views over a typed contract; the ContentOS content-calendar (and any per-space specialization) becomes a *binding*, not a fork; reuses ~80% of existing substrate (binding ref, resolver, governance, sandbox runtime, marketplace package types).
+- **Costs:** the net-new work is a `view`/`view-adapter` FE dispatch arm, finishing two dead seams, a view-type binding key space + cache invalidation, and — the real tax — a **versioned, validated contract + migration hook** (neither existing contract has versioning; the entity-detail contract is hand-mirrored today).
+- **Risks:** contract drift if versioning isn't formalized before third-party opens; sandbox-primitive risk (keep the API membrane stable so the engine is swappable — Figma had to rip out Realms after a CVE); the sandboxed frame's data-richness (a data-heavy view renderer must get entities/config/live updates through the postMessage bridge — validate the bridge is rich enough before Phase 2); api-types publish asymmetry (`browser/` source-aliased, `synap-app/` published npm).
+
+## Impact
+
+- **Services/repos affected:** `synap-app` (view-renderer resolve/dispatch, contract), `synap-backend` (view-binding resolver + governance + api-types regen), `browser/` (host wiring, sandbox frame), `synap-control-plane-api` (marketplace package `renderer` affinity), `synap-team-docs` (this ADR + contract spec).
+- **User impact:** a workspace can choose/install the renderer for a view; the ContentOS calendar can be a posts-tuned renderer; nothing changes for users who keep the default (automatic fallback).
+- **Operational impact:** a new binding query key needs cache invalidation; binding keys must be validated against `viewAdapterRegistry.list()` at write time (the `calendar`/`spatial-calendar` duality would otherwise resolve to "Unknown view type"); marketplace renderer signing + update/pin tracking.
+
+## Rollout plan
+
+Two tracks in **parallel once this ADR is accepted** (per decision). Track A is first-party-only and adds **zero new security surface**; Track B is internally ordered (versioned contract is a hard prerequisite for sandbox/marketplace).
+
+**Track A — first-party binding loop (no new security surface):**
+1. Add the `view`/`view-adapter` dispatch arm to `renderCellTarget` (`profileSlotRenderer.tsx:164-180`).
+2. Finish the two dead seams: `ViewPage` passes its already-fetched `adapterKey` → `ViewRenderer` destructures+forwards → `StructuredViewRenderer.tsx:144` honours it, falling back to `resolve(effectiveType)`.
+3. Extend the 3-layer resolver + `renderer.set` governance to a view-type key space; validate the bound key against the registry at write time; add cache invalidation.
+4. Payoff: Content OS binds its calendar to a first-party posts-tuned renderer. Whole resolve/bind/govern/fallback loop proven end-to-end.
+
+**Track B — versioned contract → sandbox → marketplace:**
+1. Formalize `ViewRendererProps` as a **versioned, runtime-validated** contract (kill the hand-mirrored drift); add per-binding `contractVersion` + a host-owned config-migration hook.
+2. Wire third-party execution through the **existing sandboxed iframe cell-frame** + the capability membrane (granted data slice; mutations via `checkPermissionOrPropose`); signing tiers; the stable-vs-proposed capability tier.
+3. Marketplace: renderer affinity manifest (view-type + contract-version + data shape); install→bind flow reusing `applyMarketInstall`; update/pin per surface.
+
+**Note:** do not ship a `synap-app` consumer of a new backend procedure in the same wave as the procedure (api-types is published-npm there; source-aliased only in `browser/`).
+
+## Validation
+
+- **Success metrics:** a pod-stored binding renders a non-default first-party renderer for a view, governed + with automatic fallback (Track A); a signed third-party renderer installs, binds, and renders inside the sandbox reading only its granted slice and proposing (never bypassing) writes (Track B); no stored binding resolves to "Unknown view type"; contract version drift triggers a host migration, not a silent break.
+- **Review date:** at Track A completion (re-confirm the contract shape before Track B sandbox work).
+
+## References
+
+- Reuse trace (this session): `StructuredViewRenderer.tsx:144`, `ViewRenderer.tsx:210/356-377`, `ViewPage/index.tsx:104-173`, `renderer-runtime/src/index.ts:19-56/104-156/597-623`, `profile-resolution-service.ts:493-557`, `profiles.ts:1183-1338`, `set-profile-renderer.ts:49-139`, `profileSlotRenderer.tsx:103-180`, `profile-renderer/src/entity-types.ts:216-257`, `viewAdapterRegistry.ts:29-104/228-236/416-424`, `WidgetRegistryProvider.tsx:79-231`, `synap-control-plane-api/.../packages.ts:660`, `marketplace-install.ts:199-552`.
+- Prior art: Grafana panel plugins (typed contract + `pluginVersion` stamp + migration handler + signature levels); VS Code extension API (stable vs proposed, `engines.vscode`, no DOM/core-style access); Figma plugins (null-origin iframe + membrane, swappable sandbox after a Realms CVE); Salesforce LockerService → LWS (over-sandbox retrospective); Obsidian community plugins (no sandbox → PHANTOMPULSE RAT, 2026); Airtable Blocks/Extensions (distribution/update problem); Notion (deliberate no third-party views; the field-exfiltration tradeoff).
+- Related: entity-detail renderer overrides (the precedent being generalized); `synap-team-docs/content/team/platform/profile-renderer.mdx`; `synap-team-docs/content/team/platform/cell-system.mdx`.

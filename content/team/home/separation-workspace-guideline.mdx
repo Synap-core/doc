@@ -115,7 +115,7 @@ Scoping Analysis: What Should Be Pod-Wide vs Workspace-Scoped
   automation-trigger-match → instant. No polling needed.                                                          
                                                                                                                     
   For cron-triggered automations: We need the scheduler because there's no event — it's time-based. pg-boss's       
-  schedule() IS the native approach. The 1-minute polling just checks nextRunAt <= now().
+  schedule() IS the native approach. The 1-minute polling just checks nextRunAt &lt;= now().
                                                                                                                     
   For manual-triggered automations: Direct API call → instant execution. No polling.                                
   

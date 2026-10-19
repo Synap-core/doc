@@ -257,13 +257,13 @@ POST /api/external/chat/stream
 
 Developers build custom applications (LLM pipelines, automation scripts, VS Code extensions) that read/write Synap pod data and inject it as context into their own AI calls.
 
-This uses existing infrastructure only — `@synap/sdk`, `@synap/react`, Hub Protocol REST. No new endpoints needed.
+This uses existing infrastructure only — `@synap-core/sdk`, `@synap-core/react`, Hub Protocol REST. No new endpoints needed.
 
 ### The three patterns
 
 **Pattern E1 — Read data, inject into LLM context**
 ```typescript
-import { createSynapClient } from '@synap/sdk';
+import { createSynapClient } from '@synap-core/sdk';
 import Anthropic from '@anthropic-ai/sdk';
 
 const synap = createSynapClient({
@@ -497,7 +497,7 @@ These things will NOT be built or changed:
 - `synap-backend/packages/api/src/routers/hub-protocol-rest.ts` — zero changes
 - `synap-backend/packages/api/src/routers/skills.ts` (execute procedure) — zero changes
 - All sandbox/isolate code in IS — zero changes
-- `@synap/sdk`, `@synap/react`, `@synap/agent-sdk` — zero changes
+- `@synap-core/sdk`, `@synap-core/react`, `@synap/agent-sdk` — zero changes
 
 ---
 

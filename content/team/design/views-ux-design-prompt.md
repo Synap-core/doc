@@ -32,8 +32,8 @@ Surface elevated:  #1E1810   (cards, panels)
 Surface border:    rgba(255,255,255,0.07)
 Accent:            #C28A4A   (amber-gold — primary interactive)
 Accent muted:      rgba(194,138,74,0.15)
-AI accent:         #10B981   (emerald — ONLY for AI-generated content)
-AI muted:          rgba(16,185,129,0.12)
+AI accent:         #FFDB23   (the logo yellow, --synap-ai — ONLY for AI-generated content; deep gold #756201 in light)
+AI muted:          rgba(255,219,35,0.14)
 Text primary:      rgba(255,255,255,0.92)
 Text secondary:    rgba(255,255,255,0.55)
 Text tertiary:     rgba(255,255,255,0.28)
@@ -187,7 +187,7 @@ User types in the "Describe a view" input and AI generates a complete view confi
   - Left: chat message from user: *"Build a pipeline dashboard with deals grouped by stage, showing amount and close date, sorted by close date ascending"*
   - Center: AI response stream — first a proposal card appears: "Creating view: Deal Pipeline" with a spinner, then transitions to a live kanban preview
   - Right: the generated config as collapsible JSON — showing `type: "kanban"`, `groupBy: "dealStage"`, `scopeProfileIds: ["deal-profile-id"]`, `sorts: [{ field: "closeDate", dir: "asc" }]`
-- The AI message has an emerald-green left border and `[[view:ID|Deal Pipeline]]` rendered as an interactive chip
+- The AI message has an AI-yellow (`--synap-ai`) left border and `[[view:ID|Deal Pipeline]]` rendered as an interactive chip
 - Clicking the chip opens the view in the main panel
 
 **Annotation callouts:**
@@ -272,13 +272,13 @@ A `bento` view — the most powerful lens. A 12-column drag-and-drop grid of wid
   - Block 3 (4×2): Embedded kanban view — tasks by status (mini, no header)
   - Block 4 (4×2): Embedded graph view — entity relation graph (capabilities → stories)
   - Block 5 (2×2): Calendar widget — upcoming due dates
-  - Block 6 (2×1): AI insight card (emerald border) — "3 tasks are overdue. Deal 'Acme Corp' closes in 2 days."
+  - Block 6 (2×1): AI insight card (AI-yellow border) — "3 tasks are overdue. Deal 'Acme Corp' closes in 2 days."
 - Edit mode overlay: dashed resize handles on blocks, drag-indicator on hover, "+" button between rows
 - Block picker drawer (slides up from bottom): 70+ cell types in a searchable grid
 
 **Annotation callouts:**
 - "Bento blocks reference cells by kind — no hardcoded rendering. AI can arrange this layout from a sentence."
-- "AI insight block uses emerald accent — the only place in the UI where AI-origin content gets a distinct color"
+- "AI insight block uses the AI-yellow accent — the only place in the UI where AI-origin content gets a distinct color"
 - "Every block is a cell running in its own host — the same cell renders in panel, page, or bento"
 
 ---
@@ -328,7 +328,7 @@ A fresh workspace with no views yet. The zero-state that teaches the mental mode
 
 2. **Config is always inspectable.** Every view has a "?" or settings icon that opens the raw config. Users who want to should always be able to see "what is this lens made of."
 
-3. **AI content is always emerald.** Any text, card, block, or chip that was AI-generated or AI-suggested has an emerald-green treatment (border, badge, or background tint). This is the only use of that color.
+3. **AI content is always the AI yellow (`--synap-ai`).** Any text, card, block, or chip that was AI-generated or AI-suggested has an AI-yellow treatment (border, badge, or background tint). This is the only use of that color.
 
 4. **The lens switcher is always present.** On any structured view, the current view type is shown as a chip in the header. Clicking it opens the type picker without navigating away.
 
@@ -349,7 +349,7 @@ When designing these screens, use the following component inventory:
 | View type chip | Icon (16px) + label, amber background 10% opacity, amber text, 6px radius, 5px 10px padding |
 | Profile dot | 8px circle, profile color, inline with entity title |
 | Entity card | Surface elevated bg (#1E1810), 12px radius, 1px border rgba(255,255,255,0.07), 16px padding |
-| AI insight card | Emerald left border (3px), emerald bg 8% opacity, emerald text for header |
+| AI insight card | `--synap-ai` left border (3px), `--synap-ai-light` bg, `--synap-ai-ink` text for header |
 | Proposal card | Amber left border (3px), amber bg 8% opacity, Approve/Reject buttons right-aligned |
 | Status chip | 5px 10px, 4px radius, bg = status color at 15% opacity, text = status color |
 | Filter pill | Amber border, amber text, × to remove, 9999 radius (pill) |

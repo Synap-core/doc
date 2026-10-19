@@ -1,106 +1,133 @@
 ---
 title: 'Connectors'
-description: 'External data integrations — current state, limitations, and the path to standalone connector support'
+description: 'External data integrations — the brokered connect + sync model, and what it means for CRM'
 section: crm
-last_updated: '2026-05-14'
-tags: [connectors, integrations, google-drive, nango, unipile, messaging]
+last_updated: '2026-09-13'
+tags: [connectors, integrations, google, nango, unipile, messaging, sync]
 toc: true
 ---
 
 # Connectors
 
-Connectors bring external data (Google Calendar, Google Drive, GitHub, Slack, etc.) into the Synap entity system. In the CRM context, the most relevant connectors are **Google Drive** (shared client files) and **Google Calendar** (meeting events linked to contacts).
+Connectors bring external data (Google Calendar, Gmail, Contacts, etc.) into the Synap
+entity system. In the CRM context, the most relevant connector is **Google** (Gmail +
+Calendar + Contacts, one OAuth connection) — meeting events and contacts synced as
+entities, and the people/companies you correspond with in Gmail linked into the graph
+(mail threads themselves are not synced).
+
+> **Superseded 2026-09-13.** This page previously described a CP-dependency problem
+> ("Current State") and a plan to remove the CP from the connector path entirely
+> ("Desired State" — self-hosted Nango per pod). That plan (`adr-nango-self-hosted.mdx`,
+> 2026-05-12) shipped, then was itself reversed by the **Connect & Mirror plan**
+> (`CONNECT-AND-MIRROR-PLAN.md`, decision D1, 2026-09-13): the CP is the sole Nango
+> broker for CP-managed pods again — but namespaced per pod
+> (`end_user.id = "<podId>:<podUserId>"`, filtered server-side), not a raw shared
+> dependency. Self-hosted pods keep their own Nango instance untouched. See
+> `synap-control-plane-api/CONNECTORS-NORTH-STAR.md` §4 for the full architecture.
 
 ---
 
-## Current State
-
-The Synap connector system is built on **Nango** — an OAuth connector platform. The current architecture routes all connector setup through the **Control Plane (CP)**:
+## Current state (2026-09-13)
 
 ```
-User → CP dashboard → Nango OAuth flow → credentials stored in CP
-                                        → synced to pod on request
+User → pod tRPC/Hub REST connectors.session → CP broker (CP-managed pod)
+                                             → pod-local Nango (self-hosted pod)
+     ↳ one connect door either way — the client never talks to Nango or the CP directly
 ```
 
-This means:
-- A user must have a CP account to connect any external service
-- Connector credentials live on the CP, not on the pod
-- Each pod fetches credentials from CP when needed
-- Self-hosted or standalone pod deployments (Eve network) cannot use connectors without CP access
+- **One connect door on every client.** Relay and browser call ONLY the pod's own
+  `connectors.session` (tRPC) / `POST /connectors/connect` (Hub REST) — never the CP
+  directly, never a raw Nango key. The pod resolves which broker to use
+  (`resolveBroker("nango")`) and the client just opens the returned `connectLink`.
+- **Provider id is `google`** — ONE Nango integration covering Gmail + Calendar +
+  Contacts through a single OAuth connection. There is no `google-calendar` /
+  `google-contacts` provider id; a UI or automation that still keys on those will never
+  match a real connection.
+- **CP-managed pods hold no Nango key.** The CP brokers session/list/proxy/revoke,
+  authenticated by the pod's own relay JWT, and filters every response to that pod's
+  namespace so one pod can never see or touch another's connection.
+- **Self-hosted pods** keep their own Nango instance and vault key, behind the same
+  `resolveBroker` seam — unaffected by any of the above.
 
-This is an architectural dependency that breaks the self-sovereignty model for standalone deployments.
-
----
-
-## Desired State
-
-Connectors should be configurable **directly on the pod**, without CP involvement. The target architecture:
+## Sync: one door, bounded first run, governed after that
 
 ```
-User → Pod settings → OAuth flow (Nango or equivalent, pod-local) → credentials stored on pod
-                                                                    → used directly by pod workers
+Connect  → template declares tools[google].metadata.sync.kinds = event, email.thread, contact
+Sync     → connection-sync.ts (the ONE trigger door): on-connect · cron · webhook poke
+             read (capability verb) → map (pure) → write (EntityUpsertService)
+First run  ⇒ ONE `import.graph` proposal for the user to review (not one proposal per record)
+Approve    ⇒ "keep syncing automatically" (default on) mints a per-connection governance rule
+Steady run ⇒ auto-applies under that rule until the user turns it off, OR is proposed again
 ```
 
-### What changes
+- **First sync of a connection never writes silently.** It produces exactly one grouped
+  `import.graph` proposal — review once, not once per calendar event or contact (this
+  replaces the old one-proposal-per-event behaviour).
+- **Sync writes carry `origin: "sync"`** on their side-effect payload. They index and
+  embed like any write, but do **not** fire event automations by default — an
+  automation opts in explicitly (`triggerConfig.includeSyncOrigin`). This is why a
+  synced contact does not, by default, trigger a lead-enrollment automation meant for
+  human-entered leads.
+- **Governance is per connection.** Approving the first import with "keep syncing" on
+  creates a `governance_target: "connection"` rule (`auto`, user-editable, floors
+  unchanged — it can never auto-approve a destructive write). Turning it off routes
+  future syncs back through a proposal.
+- **Synced entities carry a source link** where one exists, with an "Open in
+  Google Calendar" action on the entity for calendar events. A synced record is
+  a mirror, not a fork; it is never assumed to be pod-native-only. Mail threads
+  are not themselves synced or openable today (see Mail, below) — only the
+  people/companies you correspond with are.
 
-| Concern | Current | Desired |
-|---|---|---|
-| OAuth flow initiation | CP dashboard | Pod settings UI |
-| Credential storage | CP database | Pod (encrypted, workspace-scoped entity) |
-| Credential retrieval | CP API call | Pod-local lookup |
-| Setup requirement | CP account | None — any pod user with admin role |
-| Works offline/standalone | No | Yes |
+## CRM-relevant sync kinds
 
-### Implementation path
-
-1. **Nango self-hosted** — Nango supports self-hosted deployment. Running Nango as a service alongside the pod (in the Eve docker-compose stack) eliminates the CP dependency while keeping the same connector abstractions.
-2. **Pod-local credential entity** — Store connector tokens as encrypted entities in the `arch_config`-style singleton pattern, scoped to the workspace.
-3. **Settings UI on pod** — Connector setup lives in the pod's workspace settings, not CP.
-
-This is infrastructure work tracked as a separate initiative. It does not block CRM Phase 1–3 for users who have CP access. It is a prerequisite for standalone Eve deployments.
-
----
-
-## CRM-Relevant Connectors
-
-### Google Drive
-**Use case**: Attach Drive files to company or person entities. Show linked Drive documents in the client dashboard.
-
-**How it works** (when connected):
-- The Google Drive connector syncs files shared with a configured Drive folder into Synap as `file` entities
-- Files can be linked to a person or company via the relationship system
-- The client dashboard "Google Drive" section queries relationships of type `drive_file → person`
-- Files open directly in Drive (external link) or preview inline (PDF, Docs)
-
-**Setup**: One-time OAuth connection per workspace. Files to sync are configured by folder path or sharing label.
-
-### Google Calendar
+### Calendar (`event`)
 **Use case**: Pull meeting events linked to a contact into the activity timeline.
 
-**How it works**:
-- Calendar events that include a contact's email are automatically linked to that person entity
-- Events appear in the Activity timeline alongside manual notes and tasks
-- Upcoming meetings show in the contact detail header ("Next meeting: Tomorrow at 14:00")
+- Calendar events whose attendees include a contact's email are linked to that person
+  entity during mapping (identity resolution on email, the same strong-signal match
+  used everywhere else — never a second dedup path).
+- Events appear in the Activity timeline alongside manual notes and tasks.
+- Each synced event carries its Google Calendar URL as an external link — "open in
+  Calendar" opens the real event, not a Synap-side reconstruction of one.
+
+### Contacts (`contact`)
+**Use case**: Import Google contacts as `person` entities, resolved against existing
+people by email/phone before creating anything new (never a duplicate entity for an
+existing contact).
+
+### Mail (`email.thread`)
+**Use case**: Resolve the people and companies you correspond with in Gmail into
+`person`/`company` entities. The mail threads themselves are **not** stored as
+entities and do not open back in Gmail — only the correspondents are linked
+(whether/how threads become openable is an open product decision, not shipped).
 
 ### Slack (future)
-**Use case**: Post CRM notifications to a team Slack channel (new client, stuck deal, contract signed).
+**Use case**: Post CRM notifications to a team Slack channel (new client, stuck deal,
+contract signed). Not a sync source in the sense above — this is an outbound
+notification, unrelated to the read-and-mirror model this page describes.
 
-### Other connectors
-The platform supports 12 providers (GitHub, Notion, Linear, Dropbox, Todoist, etc.). CRM-specific use cases for these are not planned in the current roadmap but are available if team workflows require them.
-
----
+### Other providers
+Nango has 800+ integrations declared platform-wide; only `google` has a CRM-relevant
+sync mapping (`google-sync-kinds.ts`) today. A new sync source is config (a capability
+template's `tools[].metadata.sync` + a `registerSyncKind` handler), not a new pipeline —
+see the "Adding a sync source" dev guide.
 
 ---
 
 ## Messaging Connectors — Unipile
 
-Separate from Nango, the CRM has a **messaging layer** powered by Unipile. This covers real-time inbox access across LinkedIn DMs, WhatsApp, Telegram, Instagram, Messenger, Twitter/X, Gmail, and Slack.
+Separate from Nango/sync, the CRM has a **messaging layer** powered by Unipile. This
+covers real-time inbox access across LinkedIn DMs, WhatsApp, Telegram, Instagram,
+Messenger, Twitter/X, Gmail, and Slack.
 
-This is **not** a sync connector — it does not pull structured records. It maintains per-user connected accounts and receives push webhooks for incoming messages.
+This is **not** a sync connector — it does not pull structured records into the
+`import.graph` pipeline above. It maintains per-user connected accounts and receives
+push webhooks for incoming messages. Unaffected by the Connect & Mirror plan.
 
 **Setup**: CRM Settings → Integrations → Messaging Service (DSN + API key).
 
-**Connection flow**: User clicks "Connect Account" → Unipile hosted auth wizard → account auto-syncs via `notify_url` webhook → appears in Connected Accounts.
+**Connection flow**: User clicks "Connect Account" → Unipile hosted auth wizard →
+account auto-syncs via `notify_url` webhook → appears in Connected Accounts.
 
 Full design: [Messaging Layer — Unipile](./messaging-unipile.mdx)
 
@@ -108,6 +135,8 @@ Full design: [Messaging Layer — Unipile](./messaging-unipile.mdx)
 
 ## For Phase 1–3
 
-CRM features that depend on connectors (Google Drive section on client dashboard) are implemented but show a **"Connect Google Drive" prompt** when no connector is configured. The rest of the dashboard functions fully without connectors.
-
-Connector setup instructions are in the CRM settings page.
+CRM features that depend on the Google connector (the Calendar section on the client
+dashboard) show a **"Connect Google"** prompt when no connection exists. The rest of
+the dashboard functions fully without it. Google Drive is not part of the current sync
+kinds (`event`, `email.thread`, `contact`) — a Drive-file section, if built, needs its
+own sync-kind handler first.

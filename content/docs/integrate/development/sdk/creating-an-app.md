@@ -75,7 +75,7 @@ const entities = await synap.entities.list.query({ limit: 20 });
 
 Full walkthrough (React, TypeScript, cURL) → **[First queries](./first-query)**. Full API surface → **[API reference](../../reference/api-reference)**.
 
-If you're building an agent/CLI instead of an app — no bundler, no React — use [`@synap/hub-rest-client`](https://npmjs.com/package/@synap/hub-rest-client) (zero-dependency REST) instead of the tRPC SDK. See the [SDK overview](./overview) for the distinction.
+If you're building an agent/CLI instead of an app — no bundler, no React — use [`@synap-core/hub-rest-client`](https://npmjs.com/package/@synap-core/hub-rest-client) (zero-dependency REST) instead of the tRPC SDK. See the [SDK overview](./overview) for the distinction.
 
 ---
 

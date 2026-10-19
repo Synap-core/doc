@@ -1,126 +1,37 @@
 ---
-title: 'Data Model'
-description: 'Entity profiles, workspace-overlay properties, views, and the relationship between CRM and The Arch'
+title: 'CRM Business Developer Data Model'
+description: 'Composable CRM lead, commercial proposal, client handoff, and commission data'
 section: crm
-last_updated: '2026-05-11'
-tags: [data-model, profiles, properties, workspace]
+last_updated: '2026-07-19'
+tags: [data-model, crm, facets, commission]
 toc: true
 ---
 
-# Data Model
+# CRM Business Developer Data Model
 
-The CRM workspace is defined in `apps/crm/lib/crmWorkspaceDefinition.ts`. All entity types, properties, views, and layout configuration are provisioned from this definition on first launch via `trpc.workspaces.createFromDefinition`.
+The base CRM template is deliberately small. The **Business Developer** add-on
+composes onto it when a Pod needs a lead-first sales motion.
 
-> **Kind + Facets: `client` / `partner` / `contact` are role-facets, not entities.**
-> This page previously implied (and the workspace definition's `crmStatus` enum still models) relationship state as a property on the `person` entity directly. The canonical model is: `person` and `company` are pure identity **kinds**; `client`, `partner`, `prospect` and similar relationship states are **role-profiles** (`profileKind = 'role'`) attached via `entity_facets` — never a second entity, and increasingly not a bare status property either. The historical `contact` profile has been converted to a facet on `person` (see the conversion manifest below). **Org-keying rule:** a facet like `client` attaches to whichever entity is the actual counterparty — a `person` for an individual client, a `company` for an organizational one — never both, and never a synthetic third entity to represent "the relationship." Full model + the conversion mechanism: [Kind + Facets →](/docs/architecture/concepts/kind-and-facets). The manifest that tracks every kind/facet conversion (including `contact`, `client`, `partner`, `sponsor`, `competitor`) is `synap-backend/packages/database/src/conversions/manifest.ts` — the SSOT for this migration, never a hand-written migration.
+| Primitive | Meaning |
+|---|---|
+| Person / Company | Canonical CRM subject and commercial counterparty |
+| `crm-lead` facet | Workspace-local lifecycle, next action, qualification, and responsible user |
+| Deal | Optional commercial proposal; exactly one primary counterparty |
+| `crm-client` facet | Added when a deal is won; carries handoff context only |
+| Commission entitlement | Immutable record of 20% of Synap fee for a first win, then 10% for later wins |
 
-## Entity Profiles
+`crm-lead` and `crm-client` are workspace-scoped role facets. This is essential:
+a person can be a CRM lead in one workspace without becoming a lead throughout
+the Pod. Generic shared `lead` and `client` roles remain separate.
 
-The CRM uses **system-wide profiles** (scoped to `pod`) with **workspace-overlay properties** — properties specific to CRM sales context added on top of the base profile schema. No new profile slugs are created; the CRM enriches existing ones.
+## Visibility
 
-### Person
-The central entity. Represents a contact at any stage of the lifecycle.
+Business Developer creates operational people and companies workspace-scoped so
+all workspace members can read the same lead. CRM lifecycle facets are attached
+with the explicit CRM workspace lens. Pod-wide identities remain owner-private
+unless a future generic sharing policy grants access.
 
-**System base properties**: name, email, phone, avatar, company (relation), role  
-**CRM workspace-overlay properties**:
-
-| Property | Type | Purpose |
-|---|---|---|
-| `crmStatus` | enum | `lead \| contacted \| qualifying \| call_booked \| client \| churned` |
-| `source` | string | How we found this person (referral, LinkedIn, The Arch, inbound, etc.) |
-| `linkedinUrl` | url | LinkedIn profile |
-| `lastContactDate` | date | Last time we had meaningful contact |
-| `nextFollowUpDate` | date | Scheduled follow-up |
-| `estimatedValue` | number | Expected deal value (monthly or total) |
-| `icpScore` | number | Ideal customer profile fit score (0–100) |
-
-### Company
-Represents an organisation. Multiple persons can be linked to a company.
-
-**CRM workspace-overlay properties**:
-
-| Property | Type | Purpose |
-|---|---|---|
-| `icpFit` | boolean | Does this company match our ICP? |
-| `revenue` | string | Reported or estimated revenue |
-| `companySize` | enum | `startup \| smb \| mid-market \| enterprise` |
-
-### System profiles (referenced, not modified)
-The CRM also uses `event`, `task`, and `note` profiles from the pod-wide system. These are declared as stubs in the workspace definition so the provisioning validator accepts cross-references. Creation reuses the existing system profiles — no duplication.
-
-## Views
-
-| View | Type | Scope | Key config |
-|---|---|---|---|
-| Pipeline | kanban | person | grouped by `crmStatus` |
-| Contacts | table | person | columns: title, company, crmStatus, email, icpScore, nextFollowUpDate |
-| Companies | table | company | columns: title, industry, companySize, website, icpFit |
-| Activity | list | event + task + note | sorted by createdAt desc |
-
-## Layout
-
-The sidebar is configured via `layoutConfig.sidebarItems` in the workspace definition:
-
-```
-Pipeline        (view)
-Contacts        (view)
-Companies       (view)
-Activity        (view)
-Find Leads      (app: intelligence)
-```
-
-## crmStatus Lifecycle
-
-```
-lead → contacted → qualifying → call_booked → client → churned
-                                                    ↑
-                                            (can re-enter from churned)
-```
-
-Status colors are defined in `CRM_STATUS_COLORS` and used consistently across the pipeline kanban, status pills, and contact cards.
-
-## Property Scoping (Three-Layer Model)
-
-Properties follow the platform's three-scope model:
-- **Global (null/null)** — base system properties available everywhere
-- **Profile base (profileId/null)** — system-wide defaults for person, company, etc.
-- **Workspace overlay (profileId/workspaceId)** — CRM-specific properties above
-
-CRM properties are workspace-overlay. They exist only within the CRM workspace and don't bleed into other workspaces on the same pod. See [Property Def Scoping](/team/platform/property-def-scoping) for the full spec.
-
----
-
-## The Arch — Sibling Relationship
-
-The Arch (`/the-arch`) is a **separate Next.js app** (port 3040) that runs on the same pod as the CRM but in its own dedicated workspace (`"The Arch — Stellar Grants"`).
-
-### What The Arch does
-
-The Arch is an intelligence system specifically for **blockchain grant pipelines** — currently Stellar, extensible to others. It:
-- Accepts public lead submissions via a form
-- Runs an 8-stage AI scoring pipeline (5 capability scores → synthesis → fit band)
-- Stores leads as `arch_lead` entities and analyses as `arch_analysis` entities
-- Exposes an MCP server with 7 tools for AI agents to query lead data
-- Syncs with Airtable (source of historical grant data)
-
-Its entity profiles (`arch_lead`, `arch_analysis`, `arch_round`, etc.) are entirely separate from CRM profiles.
-
-### The relationship
-
-The Arch and CRM are **siblings on the same pod**, not integrated systems. They share the same Synap infrastructure (Hub Protocol, auth, entity system) but operate in independent workspaces.
-
-```
-Same pod
-├── CRM workspace          (persons, companies, tasks, notes, events)
-└── The Arch workspace     (arch_lead, arch_analysis, arch_round, arch_config…)
-```
-
-### When a lead crosses over
-
-When a high-scoring Arch lead is a good fit for a CRM engagement, a team member manually creates a `person` entity in the CRM workspace. This is intentional — the grant pipeline (The Arch) and the consulting/product pipeline (CRM) are different businesses with different qualification criteria. Automatic sync would create noise.
-
-The `source` property on the CRM person can be set to `"The Arch"` to track origin. The `arch_lead_id` property (future addition) can store the originating Arch lead ID for reference.
-
-### No tRPC coupling
-
-The Arch uses Hub Protocol REST exclusively. The CRM uses tRPC. They do not import from each other. Any future tooling that bridges them (e.g., a "Import from Arch" action in the CRM Find Leads page) would use Hub Protocol REST calls from a CRM server action — reading The Arch workspace's entities by workspace ID.
+Current CRM visibility is deliberately all-visible for workspace members.
+Assignment is responsibility and dashboard context, not record-level security.
+Assigned-only visibility requires a later platform-wide policy across entities,
+relations, search, graph, documents, and Hub APIs.

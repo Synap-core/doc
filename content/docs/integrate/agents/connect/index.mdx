@@ -74,8 +74,8 @@ Skills + MCP + API key = any AI can use Synap as its sovereign memory.
 
 Every write through any of the five surfaces above passes through the same proposal layer. Auto-approved actions go straight through; destructive or schema-shaping actions queue for your review.
 
-- Auto-approved by default: `entity.create`, `entity.update`, `relation.create`, `document.create`, `view.create`, `profile.create`, `property_def.create`, `memory.*`
-- Always proposal-gated: `entity.delete`, `entity.archive`, `workspace.create`, `view.update`
+- Auto-approved by default: `entity.create`, `entity.update`, `relation.create`, `document.create`, `view.create`, `property_def.create`, `memory.*`
+- Always proposal-gated: `entity.delete`, `entity.archive`, `workspace.create`, `view.update`, and an agent defining a kind or role (`profile.create`, which no governance rule can widen)
 
 Your AI never silently mutates your pod. See [governance](../../../architecture/security/governance) for the full model.
 

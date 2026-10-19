@@ -185,7 +185,7 @@ GET /api/hub/entities/{entityId}/connections?userId={userId}&workspaceId={wsId}
 # Returns: { connections: [...], counts: { total, graph, structural, threads } }
 ```
 
-The typed client wraps both paths — use `client.getConnections(entityId)` from `@synap/hub-rest-client`.
+The typed client wraps both paths — use `client.getConnections(entityId)` from `@synap-core/hub-rest-client`.
 
 Filtering patterns:
 

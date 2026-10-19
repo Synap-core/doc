@@ -61,14 +61,14 @@ Synap uses **event chains instead of CRUD**. Every data mutation is an immutable
 - Commits: conventional commits (`feat(events): add undo chain`)
 - PRs require: passing tests, type check, at least one review
 
-<important>
+`<important>`
 - NEVER write direct database mutations — ALL changes go through event chains
 - NEVER modify event chain handlers without considering downstream effects
 - Every new feature MUST be a separate package
 - Human-in-the-Loop must be preserved in all AI agent paths
 - Event chains are append-only — never delete or modify existing events
 - Always consider time-travel and undo implications of any data change
-</important>
+`</important>`
 
 ## Skills Reference
 - `/scaffold-package` — Create a new Synap package with proper structure

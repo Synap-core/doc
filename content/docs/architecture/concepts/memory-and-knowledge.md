@@ -7,7 +7,6 @@ audience: users
 version: 1.0+
 last_updated: '2026-04-23'
 tags: [memory, knowledge, ai, agents]
-sidebar_position: null
 hide_title: false
 toc: true
 ---

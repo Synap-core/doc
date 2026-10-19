@@ -25,6 +25,7 @@
     "trusted-issuers",
     "notifications",
     "proposals",
+    "focus-sessions",
     "---Data Model---",
     "property-def-scoping",
     "entity-profiles",

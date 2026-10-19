@@ -114,7 +114,7 @@ Auto-height. Top padding 48px from the pane body's top edge, bottom padding 32px
 | Element | Treatment |
 |---|---|
 | Brand glyph | Small mark to the left of (or above on mobile) the greeting line. Default: Lucide `Sparkles` at 24px, color `brand.agents` (emerald `#34D399`). When a logo SVG is dropped in, replaces the Lucide icon with the same bounding box. |
-| Greeting line | "Good {morning|afternoon|evening}, {firstName}" — `~32px`, `font-weight: 300` (light), letter-spacing `-0.01em`. Filled with the AI-to-violet gradient as a `background-clip: text` effect: `linear-gradient(135deg, #34D399 0%, #A78BFA 100%)`. The gradient is subtle — the text reads as a soft luminous tone, not a rainbow. |
+| Greeting line | `"Good {morning\|afternoon\|evening}, {firstName}"` — `~32px`, `font-weight: 300` (light), letter-spacing `-0.01em`. Filled with the AI-to-violet gradient as a `background-clip: text` effect: `linear-gradient(135deg, #34D399 0%, #A78BFA 100%)`. The gradient is subtle — the text reads as a soft luminous tone, not a rainbow. |
 | Date subtitle | One line below, `13px`, `neutral-400`, `font-weight: 400`. Format "Weekday · Month D" (e.g. "Tuesday · May 5"). |
 
 ### Time-of-day logic
@@ -227,7 +227,7 @@ padding: 8px 24px 32px;       /* the 32px bottom keeps clear of Zone D */
 align-items: start;
 ```
 
-Mobile (<640px): `minmax(96px, 1fr)`, gap `16px`. The auto-fill keeps the grid responsive at any pane width. Typical desktop pane fits 6–8 columns; mobile fits 3–4.
+Mobile (&lt;640px): `minmax(96px, 1fr)`, gap `16px`. The auto-fill keeps the grid responsive at any pane width. Typical desktop pane fits 6–8 columns; mobile fits 3–4.
 
 The grid does not enforce a row cap — it scrolls vertically when the user has many apps. The scrollbar is the pane body's, hidden until the user scrolls (standard `overflow-y: auto` on the pane body).
 

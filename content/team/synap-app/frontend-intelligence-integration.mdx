@@ -687,7 +687,7 @@ const { stats } = await fetch(
 | File                           | Purpose                                                                               |
 | ------------------------------ | ------------------------------------------------------------------------------------- |
 | `hooks/useSocket.ts`           | Socket.IO singleton, workspace room join, typed event emitter                         |
-| `store/chatStore.ts`           | Per-thread `ChatUIState` { isStreaming, content, aiSteps, proposals, branchDecision } |
+| `store/chatStore.ts`           | Per-thread `ChatUIState` &#123; isStreaming, content, aiSteps, proposals, branchDecision } |
 | `hooks/useChat.ts`             | `sendMessage()` → tRPC mutation + socket subscription                                 |
 | `hooks/useStreamingMessage.ts` | Accumulate `chat:stream` chunks + `ai:step` events                                    |
 | `hooks/useProposals.ts`        | Subscribe to `ai:proposal`, expose `approve/deny`                                     |

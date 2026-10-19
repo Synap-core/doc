@@ -1,0 +1,238 @@
+# AI Governance & Foundations Hardening Plan
+
+*Synap Technologies — Version 0.1, June 2026*
+*The do-now, backend-only slice extracted from the [Substrate Consolidation Plan](/team/platform/substrate-consolidation-plan). No frontend, no cell merge, no new features — only governance, cleanup, and hardening.*
+
+---
+
+## Execution status (2026-06-07) — what's done vs left
+
+**SHIPPED to `origin/main` (`60a5c8a4`), typecheck + tests verified; migrations verified on the live pod:**
+- ✅ **Wave A** — governance-policy unification (`@synap/governance-policy`; fork deleted).
+- ✅ **Wave F** — pre-existing tsc debt fixed (api + jobs typecheck clean).
+- ✅ **Wave B1** — auto-approve audit no longer silent (loud, non-blocking).
+- ✅ **Wave B2 correctness** — materialization-hook fix (`.validated`→singleton) + flip-after-validated + `auditLog` strict mode (the latent "approved-but-never-materialized" bug).
+- ✅ **Wave B2 / TX-1** — atomic proposal insert + `.requested` append.
+- ✅ **Wave B2-7** — materializer idempotency (side-effects out of retry region; deterministic view-doc ids; command effectively once-only).
+- ✅ **Wave B3 Phase 1** — provenance columns on entities/documents/relations (migration `0107`); entity create stamps provenance.
+
+**STILL TO DO (not shipped):**
+- ⬜ **Wave C remainder** — generic `revert(proposalId)`; surface auto-approve as an explicit per-workspace policy. *(TX-1 + B1, the other Wave-C pieces, are done.)*
+- ⬜ **Wave D** — agent identity cleanup: unify the two stores (`users`-row vs `agents` catalog), finish the `agentMetadata` dual-write, delete dead `agents/specialist/*` classes, collapse the 4-way `agentType` hand-sync. *(Not started.)*
+- ⬜ **Wave E** — channel/transport cleanup: migrate `agent_collab` `metadata.participants[]` → `channel_members`; fix the "6 types" doc drift (it's 7); make A2AI reply-trigger failures observable; add a REST↔tRPC contract test. *(Not started.)*
+- ⬜ **B2 tail** — `source_proposal_id` population on the materialized-from-proposal path (needs the proposal id on the materialize envelope); a strict persisted command once-only marker.
+- ⬜ **B3 tail** — Phase 2 (views/cells/widgets) + Phase 3 (channels/messages/proposals) provenance; relation/document call-site stamping beyond the repo wiring.
+- ❌ **TX-3** — dropped (infeasible: cross-abstraction + non-rollbackable storage upload; solved instead by idempotency).
+- 🔁 **Runtime dogfood** (post-deploy): approve an AI view → confirm it materializes; confirm provenance columns populate.
+
+---
+
+## Why this plan is separate
+
+The full [consolidation plan](/team/platform/substrate-consolidation-plan) is a multi-quarter program whose heavy phases touch the frontend (the cell/view/widget merge) and add new capability (behavior in the definition JSON). **This plan extracts only the parts that should be done right now regardless of whether the big refactor ever happens** — the governance and code-health work that:
+
+1. **Stands on its own** — a stronger proposal system, durable audit, and unified agent identity make the *current* product safer and cleaner today.
+2. **De-risks the refactor** — good foundations make the eventual Universal Node migration dramatically easier and safer.
+
+Explicitly **out of scope for now** (deferred to the big plan): the cell/view/widget table merge (Phase 2), behavior-into-definition-JSON (Phase 1), the atom registry's frontend half, durable agent *spawning* (new feature), and the reflective authoring UI (Phase 5). Frontend "everything is a cell" is a separate conversation.
+
+**The governing test stays the same — the Deletion Test:** a step is real only if it lets us delete a fork, a column, a dead class, or a silent code path.
+
+---
+
+## Invariants (unchanged from the big plan — do not violate)
+
+1. The governance membrane stays total — no AI write reaches the DB without `checkPermissionOrPropose()`.
+2. **Strict migration discipline** (`.claude/rules/backend-rules.md`): hand-written numbered `.sql`, defensive (`IF NOT EXISTS`); every new column also added to `0000_baseline_schema.sql` **and** registered in `schema-coherence.ts` or the pod won't boot. `drizzle-kit push/generate` forbidden.
+3. Hub Protocol `/api/hub/*` stays the only external boundary.
+4. `agentType` ⊥ `intelligenceServiceId` — no per-agent/per-channel IS routing.
+5. No data loss — backfill + dual-read + cutover + drop, never drop-then-recreate.
+6. Behavior-preserving refactors must prove equivalence (tests), not assume it.
+
+---
+
+## The waves
+
+Five waves. Each is independently shippable. Dependency order: **A → B → C**, with **D** and **E** parallelizable after A.
+
+```
+A  Governance policy unification  ──┐
+                                    ▼
+B  Provenance & audit hardening  ───┬──► C  Stronger proposal system
+                                    │
+D  Agent identity cleanup  ◄────────┤ (needs A)
+E  Channel & transport cleanup  ◄───┘ (needs A)
+```
+
+---
+
+### Wave A — Governance policy unification ✅ DONE *(verified 2026-06-07)*
+
+> **Shipped.** New package `@synap/governance-policy` (pure, zero-dependency) now holds the constants (`DEFAULT_AUTO_APPROVE`, `ADMIN_ACTIONS`, `DESTRUCTIVE_ACTIONS`, `BLOCKED_FILESYSTEM_PATHS`, `PROPOSAL_TTL_DAYS`) **and** the decision ladder (`decideAgentPolicy`) + helpers (`requiredPermissionFor`, `isAutoApproved`, `isPureReadAction`, `agentHasCapability`, `isBlockedFilesystemPath`, `resolveChannelCapabilityDecision`). Both `checkPermissionOrPropose` (`@synap/api`) and `checkAutomationWriteOrPropose` (`@synap/jobs`) now call it; the forked mirror is deleted. `permission-check.ts` re-exports the constants for back-compat. **Verified:** 27/27 new policy tests + 40/40 existing `permission-check.test.ts` pass; `permission-check.ts` + `governance-policy` typecheck clean (no new errors). One silent drift fixed: the jobs map omitted `"place"` → now uses the canonical superset. **Not yet committed.**
+>
+> *Discovered (pre-existing, NOT caused by this wave): `@synap/api` and `@synap/jobs` each carry ~3 pre-existing `tsc` errors in unrelated files (`webhooks-inbound.ts`, `external-registration.ts`, `proactive-post.ts`). Added as Wave F below.*
+
+**Problem (verified).** `checkPermissionOrPropose` in `@synap/api` is the canonical gate, but `@synap/jobs/src/utils/automation-governance.ts` is a **hand-copied mirror** of its `DEFAULT_AUTO_APPROVE` / `ADMIN_ACTIONS` / precedence ladder (it exists because `api → jobs`, so `jobs` can't import from `api` without a cycle). The file's own header flags the drift risk.
+
+**Target.** One source of truth for governance *policy* (the constants + the pure decision logic), imported by both `api` and `jobs`.
+
+**Steps.**
+1. Create a low-level package `@synap/governance-policy` (no DB, no `api`/`jobs` deps) holding: `DEFAULT_AUTO_APPROVE`, `ADMIN_ACTIONS`, `DESTRUCTIVE_ACTIONS`, the action→`read|write|delete|manage` map, and the **pure** agent-policy decision function (inputs: action, role, issuer trust, governanceMode, capabilities, channel grant, writesRequireProposal → output: `execute | propose | deny`). No I/O.
+2. `checkPermissionOrPropose` (in `api`) imports the pure decision + constants; keeps its DB/event/proposal side effects.
+3. `automation-governance.ts` (in `jobs`) imports the same; keeps its executor wiring.
+4. Delete the forked constants and the duplicated ladder from `automation-governance.ts`.
+
+**Delete.** ✅ The forked `DEFAULT_AUTO_APPROVE` / `ADMIN_ACTIONS` / ladder in `@synap/jobs`.
+
+**Gate.** A table-driven equivalence test: for a matrix of (action × role × issuer-trust × governanceMode × writesRequireProposal × channel-grant), the new pure function returns the *same* `execute/propose/deny` verdict that today's two implementations produce. Typecheck `@synap/governance-policy`, `@synap/api`, `@synap/jobs`.
+
+**Risk.** Low — behavior-preserving extraction. The equivalence test is the safety net.
+
+---
+
+### Wave B — Provenance & audit hardening *(governance slice of 0b + verified gaps D/E)*
+
+> **Status (2026-06-07): split into three after deep research (two read-only agents produced full specs).**
+>
+> - **B1 — audit observability ✅ DONE (verified).** The critical auto-approved audit-row insert in `permission-check.ts` no longer fails *silently* (`.catch(() => {})` → `logger.error`). It stays **non-blocking** by design: the **event spine is the primary durable audit** of auto-approved actions (the router still emits `{subject}.{action}.requested/.completed`), so this secondary row must be loud-on-failure but must not block a legitimate write. Verified: api `tsc` 0 errors + 40/40 `permission-check.test.ts` pass.
+> - **B2 — transactional audit + materializer idempotency ⏸ DESIGNED, DEFERRED.** The genuinely-correct fixes need **runtime/integration testing** (no DB in the authoring env — only typecheck + mocked unit tests) and carry decisions, so they are **not** blind-shipped onto the membrane. Precise change targets (from the audit-durability spec): (C2/TX-1) wrap the `.requested` append + proposal insert in one `db.transaction`; (C3/C4) make the approve path's `.validated` append + status-flip atomic and treat a swallowed `.validated` as a HARD failure (a swallowed `.validated` today = approval succeeds but the mutation may **never materialize** — a real silent bug); (C5/TX-3) the materialize-write + `.completed` append are **cross-layer** (Drizzle repos vs raw postgres-js `EventRepository`) so cannot share one tx — fix with **update/delete idempotency + at-least-once** + move `emitSideEffects` out of the retry-critical region, NOT a quick wrap. Canonical tx API = `db.transaction(async (tx) => …)` (11+ sites). **KEEP best-effort (do NOT touch): notifications, realtime broadcasts, `emitSideEffects` fan-out, IS telemetry, event hooks.**
+>   - **DECISION 1 (needs founder):** auto-approve audit failure — keep **non-blocking + loud** (B1, recommended; spine is the real audit) vs **deny-on-failure** (couples every AI write's availability to a secondary audit insert). *Default taken in B1: non-blocking + loud.*
+>   - **DECISION 2 (needs founder):** `auditLog` is **dual-use** (governance `.validated` must not swallow; pure audit elsewhere may). Add a `throwOnError`/strict mode used ONLY by the `.validated` caller — do NOT globally un-swallow `auditLog` (would turn benign audit failures elsewhere into hard errors).
+> - **B3 — provenance columns ⏸ DESIGNED, DEFERRED.** Adds a uniform `created_by_kind / created_by_user_id / agent_user_id / source_proposal_id / correlation_id` set across mutation-bearing tables (migration **`0106_provenance_columns.sql`** + `0000_baseline_schema.sql` + `schema-coherence.ts`; additive, all NULLABLE = zero risk to existing rows). The DDL is safe but the **value is in the TS write-threading** (stamping rows through the repos + both materializers — note the easily-missed second `sync-materializer.ts`), which is best done with runtime verification, and this column-set doubles as **NodeEnvelope groundwork** (the deferred big refactor). Vocab decision: adopt `{human, ai_agent, system}` for new columns; leave shipped `cell_instances.createdByKind` (`user/agent/system`) alone. Phase order if/when picked up: entities/documents/relations → views/cells/widgets → channels/messages/proposals; skip profiles.
+>
+> **Recommendation:** do B2 + B3 as their own runtime-verified wave (a DB-backed integration test or a dogfood pass), not on typecheck-only confidence. B1 captured the safe, immediate win.
+
+**Problem (verified).**
+
+**Problem (verified).**
+- Provenance is inconsistent: only `cell_instances` carries `createdByKind`; agent attribution (`agentUserId`), the originating `sourceProposalId`, and `correlationId` are not uniformly recorded on the rows a mutation produces.
+- The auto-approve audit-row insert is best-effort (`.catch(() => {})`), and `auditLog`/`logEvent`/spine-append are fire-and-forget. So "every proposal is traceable to its `.requested` event" and "every auto-approved write has an audit row" are *tendencies, not invariants*.
+
+**Target.**
+- A **uniform provenance column set** on mutation-bearing tables: `created_by_kind` (`human|ai_agent|system`), `created_by_user_id`, `agent_user_id`, `source_proposal_id`, `correlation_id` — added **additively and defensively**. (This is also the governance-relevant slice of the future `NodeEnvelope`, so it doubles as refactor groundwork — but its value here is *audit*.)
+- The **critical audit/event path becomes durable**: the proposal write and its `.requested` event append happen in one transaction; the `.completed` event on materialization is transactional with the write; an auto-approved write either records its audit row or fails loud. Remove silent `.catch(() => {})` on the *critical* path (non-critical side-effects like search indexing stay fire-and-forget — that distinction is correct and stays).
+
+**Steps.**
+1. Migration: add the provenance columns where missing (defensive `IF NOT EXISTS`), backfill `created_by_kind='human'` default; update `0000_baseline_schema.sql` + `schema-coherence.ts`.
+2. Thread `agentUserId`/`sourceProposalId`/`correlationId` through the write paths so they land on the produced rows (they already flow through the gate context — this is wiring them to the row, not inventing them).
+3. Wrap the proposal-create + `.requested`-append in one transaction (`sql.begin()`); same for materialize-write + `.completed`.
+4. Make the auto-approve audit-row write part of the mutation's transaction (or fail loud), so it can't silently vanish.
+
+**Delete.** ✅ The best-effort `.catch(() => {})` on the **critical** audit path (keep it on genuine side-effects).
+
+**Gate.** Forced-failure test: inject an audit-write failure → the mutation rolls back or surfaces an error, never silently succeeds unaudited. Replay test: every proposal in a sample has a resolvable `requested` → `validated` → `completed` chain. Pod boots (schema-coherence passes).
+
+**Risk.** Medium — transactional audit can affect write latency; measure before/after. Migration touches several tables (additive, low blast radius).
+
+---
+
+### Wave C — Stronger proposal system *(4b core — the heart of the ask)*
+
+**Problem (verified).**
+- Auto-approve is a **silent global default**: `DEFAULT_AUTO_APPROVE` lets routine agent creates/updates execute immediately. It's the widest opening in the membrane and it isn't surfaced as a deliberate per-workspace choice.
+- **No generic reversibility**: revert is per-subject-type ad hoc (document versioning, entity soft-delete); there is no "undo this proposal."
+- Intentional exceptions are **undocumented and untested**: `proactive_post` bypasses the proposal wall (rate-limited instead), and approval replays through a "human approver context [that] bypasses governance." Both are *correct by design* but currently implicit.
+
+**Target.** A proposal system that is explicit, reversible, and honest.
+
+**Steps.**
+1. **Auto-approve becomes explicit policy.** Surface `aiGovernance.autoApproveFor` (already exists in settings) with a clear, documented default and a workspace setting; `DEFAULT_AUTO_APPROVE` becomes the *fallback default*, not a silent global. Add `getEffectiveGovernance()` output to the proposal-review UI contract so a reviewer can see "this would auto-approve because X." (Backend/contract only — no new frontend build.)
+2. **Generic revert.** `revert(proposalId)`: read the stored replayable envelope, compute the inverse using soft-delete (creates) / version-restore (updates) / un-delete (deletes), execute as a *new* governed proposal (revert is itself auditable). Where a clean inverse isn't possible, fail loud with the reason — never a partial silent revert.
+3. **Codify the exceptions.** Document `proactive_post` (rate-limited, personal-feed-only, why it's safe) and the human-approver replay context (trust transferred at approval) in code comments + this doc, and add tests asserting their boundaries (e.g. `proactive_post` *cannot* write entities; the approver context only fires post-approval).
+
+**Delete.** Nothing structural — this *hardens*. (The deletion in this area is Wave B's `.catch`.)
+
+**Gate.** Revert test: revert of a create soft-deletes the node and leaves an audit trail; revert of an update restores the prior version; an impossible revert fails loud. Policy test: changing `autoApproveFor` changes the verdict; the default is documented and matches `DEFAULT_AUTO_APPROVE`.
+
+**Risk.** Medium — generic revert is the subtle part; scope it to the cases the envelope supports and fail loud elsewhere rather than faking completeness.
+
+---
+
+### Wave D — Agent identity cleanup *(cleanup slice of Phase 3 — NO durable spawn)*
+
+**Problem (verified).** Agent identity is split across the `users` row, a separate `agents` catalog table, and `agent_configs`; the migration that promoted agent fields to real `users` columns still **dual-writes** `agentMetadata` "for back-compat." Dead `agents/specialist/*.ts` classes exist but are never instantiated (the registry builds `MainAgent` from `AGENT_DEFINITIONS`). `agentType` requires a **4-way hand-sync** (`AGENT_TYPES`, `AGENT_DEFINITIONS`, the registry, the channels enum).
+
+**Target.** One clear agent identity story; no dead code; one `agentType` source.
+
+**Steps.**
+1. **Finish the dual-write migration**: pick the promoted `users` columns as the single source; stop writing `agentMetadata` duplicates; backfill any rows still relying on the JSONB; keep reads back-compatible during cutover, then drop the duplicate reads.
+2. **Remove dead specialist classes** (`agents/specialist/*.ts`) — or, if any are aspirational reference, move them to a clearly-marked `reference/` and delete the misleading README routing table.
+3. **Collapse the `agentType` hand-sync**: make `AGENT_DEFINITIONS` the single registry; derive `AGENT_TYPES` from it; add a build/test assertion that the channels enum and any other consumer match (no silent drift).
+4. *(Deferred to big plan, NOT here):* merging the `agents` catalog table into agent nodes, and durable `parentAgentId` spawning. Note them as deferred.
+
+**Delete.** ✅ The `agentMetadata` dual-write; dead `agents/specialist/*.ts`; the manual `AGENT_TYPES` list (derived instead).
+
+**Gate.** Existing agents authenticate and run unchanged; a test asserts `AGENT_DEFINITIONS`, derived `AGENT_TYPES`, and the channels enum agree; grep proves the specialist classes have no live callers before deletion.
+
+**Risk.** Medium — identity is security-sensitive; keep the `users` row (the auth anchor) and API-key references untouched; only consolidate the *config/metadata* side.
+
+---
+
+### Wave E — Channel & transport cleanup *(4a + verified channel gaps)*
+
+**Problem (verified).**
+- Membership is not uniform: `group` channels use the typed `channel_members` table; `agent_collab` still uses a legacy `metadata.participants: string[]` array.
+- Doc drift: schema header says "6 canonical types" but the enum/engine implement **7** (`group` added).
+- A2AI reply-trigger is **best-effort**: if `channel.workspaceId` is null or IS resolution throws, the responding-agent leg is silently skipped (try/catch logs and continues) — the post succeeds but no second agent responds.
+- The dual hub surface (REST wire + in-process tRPC `hubProtocolRouter` reached via `createCaller`) keeps two definitions per resource synced by hand.
+
+**Target.** Uniform channel membership; accurate docs; no silent A2AI drops; a guard against REST/tRPC drift.
+
+**Steps.**
+1. **Unify membership**: backfill `agent_collab` `metadata.participants[]` → `channel_members` rows (human/agent uniform); switch A2AI post/poll/join to read membership from the table; the membrane reads the same per-member `canDraft/canPropose/canAct` grants for all 7 types.
+2. **Fix the doc drift**: update the `channels.ts` header to 7 types; correct any "6 types" references.
+3. **A2AI reliability**: when the reply-trigger can't resolve an IS or the channel lacks a workspace, record an explicit, observable outcome (a failed-trigger event / DLQ entry), not a silent skip. Don't fake a response; make the failure *visible*.
+4. **Guard the dual hub surface**: add a contract test that each REST resource's Zod schema and its in-process tRPC procedure agree on shape, so the hand-sync can't silently drift until it's properly consolidated (consolidation itself is deferred to the big plan).
+
+**Delete.** ✅ The `metadata.participants` read path (after backfill).
+
+**Gate.** A2AI post/poll/join behavior identical pre/post on `channel_members`; a forced IS-resolution failure produces a visible outcome, not a silent drop; the REST↔tRPC contract test passes; "6 types" no longer appears.
+
+**Risk.** Low–medium. Membership backfill is the main data step; dual-read during cutover.
+
+---
+
+### Wave F — Pre-existing typecheck debt ✅ DONE *(verified 2026-06-07)*
+
+> **Shipped.** Fixed all pre-existing `tsc` errors so the gate is green: `proactive-post.ts` (exhaustive `switch` default → total `Promise<PostProactiveResult>`), `webhooks-inbound.ts` (typed `event` via `Awaited<ReturnType<…>>` + bound a `const` after the null-guard so narrowing holds inside the `.find` closure — the `any` had masked a real possibly-null bug), `external-registration.ts` (narrow `verified` before `.scope`). **Verified:** `@synap/api` and `@synap/jobs` both `tsc --noEmit` → **0 errors** (first time green). Not yet committed.
+
+**Problem (verified).** `@synap/api` and `@synap/jobs` do not currently pass `tsc` clean — independent of any governance work:
+- `packages/jobs/src/utils/proactive-post.ts` — a `switch` over channel surfaces with no exhaustive return (TS7030) + two `r.value` possibly-undefined (TS18048).
+- `packages/api/src/routers/webhooks-inbound.ts` — `event` implicitly `any` (TS7034/TS7005).
+- `packages/api/src/services/external-registration.ts` — `verified` possibly `null` (TS18047).
+
+**Target.** Both packages typecheck clean, so "the gate is green" is a real, enforceable bar for every future wave.
+
+**Steps.** Fix each with a minimal, correct annotation/guard (exhaustive switch default, non-null narrowing, explicit types). No behavior change.
+
+**Gate.** `pnpm --filter @synap/api typecheck` and the jobs `tsc --noEmit` both exit 0.
+
+**Risk.** Low. Tiny, local fixes. **Why it matters:** a package that doesn't typecheck means no future wave can claim a clean gate — this is foundational hygiene, exactly the spirit of this plan.
+
+---
+
+## Deletion scorecard (this plan's subset)
+
+Success = these no longer exist when the plan is done.
+
+| Deleted | Wave | Replaced by |
+|---|---|---|
+| ~~`@synap/jobs` forked governance policy (`DEFAULT_AUTO_APPROVE`/`ADMIN_ACTIONS`/ladder)~~ ✅ | A | `@synap/governance-policy` |
+| best-effort `.catch(()=>{})` on the **critical** audit path | B | transactional audit/event writes |
+| `agentMetadata` dual-write | D | promoted `users` columns (single source) |
+| dead `agents/specialist/*.ts` classes | D | `MainAgent` + `AGENT_DEFINITIONS` |
+| hand-maintained `AGENT_TYPES` list | D | derived from `AGENT_DEFINITIONS` |
+| `channel.metadata.participants` array path | E | `channel_members` rows |
+| "6 canonical types" doc drift | E | accurate "7 types" |
+
+New capability added (not a deletion, but net hardening): **generic `revert(proposalId)`**, **explicit per-workspace auto-approve policy**, **REST↔tRPC contract test**, **A2AI failure visibility**.
+
+---
+
+## Relationship to the big plan
+
+- These waves are the extracted **do-now foundation**. As each item lands, strike it through here **and** in the [Substrate Consolidation Plan](/team/platform/substrate-consolidation-plan), and flip the matching `[PARTIAL]` tag in the [white paper](/team/home/homoiconic-substrate) toward `[VERIFIED]`.
+- The heavy, frontend-touching, and new-feature phases (cell merge, behavior-into-JSON, atom-registry frontend, durable spawn, reflective UI) remain in the big plan, **deferred** and out of current scope.
+- Net effect: even if the big refactor never happens, the proposal system, audit trail, agent identity, and channel transport are materially stronger. If it does happen, Wave B's provenance columns and Wave A's shared policy are already the foundation it needs.
+
+*Living document. Strike items as they land; record the migration numbers and PRs next to each wave.*

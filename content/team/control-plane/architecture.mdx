@@ -526,7 +526,7 @@ Price IDs resolved to tier via:
    a. Canary: update first pod, 5-min health gate
    b. Fleet: parallel batches (batchSize=5, 30s between batches)
 6. Per pod:
-   a. Sign ES256 JWT (target version + callback URL + allowExec claim)
+   a. Sign ES256 JWT (target version + callback URL)
    b. POST /api/pod-agent/command on pod (pod verifies via JWKS)
    c. pod-agent runs update-pod.sh:
       - Pull new image (old backend still serving)
@@ -547,8 +547,9 @@ Price IDs resolved to tier via:
 | `restore` | Start all services, health check | ES256 JWT |
 | `configure` | Update .env vars, activate compose profiles | ES256 JWT |
 | `archive` | DB dump + volume tar → S3 presigned upload | ES256 JWT |
-| `exec` | Docker exec in container | ES256 JWT + `allowExec` claim |
 | `agent-update` | Rebuild pod-agent container | ES256 JWT |
+
+Pod-agent commands are a closed allowlist — every entry above invokes a **named script** in `deploy/pod-agent/` as `execFile("/bin/sh", [<script>, ...args])` (argv, not a shell string), so a hostile payload field can never be parsed as shell syntax. There used to be an eighth command, `exec`, which built `docker exec <container> sh -c <command>` from a free-form payload field — a full remote shell inside the pod's containers, gated only by an `allowExec` JWT claim that no signer ever set. It had zero legitimate callers and was deleted; a source-scan tripwire (`packages/api/src/__tripwires__/pod-agent-has-no-shell.test.ts` in synap-backend) now fails the build if any command in `server.js` ever constructs a shell string again.
 
 No SSH is used. All pod management goes through the pod-agent HTTP API with ES256 JWT authentication.
 
@@ -571,10 +572,9 @@ Routes require a valid Better Auth session (cookie or Bearer token) except:
 ### Pod Command Auth (ES256 JWT)
 
 The CP holds an ECDSA P-256 private key (`CP_EC_PRIVATE_KEY`). Pods verify commands by fetching the public key from `GET /.well-known/jwks.json` on the CP. JWT claims include:
-- `podId` — pod's unique identifier
+- `aud` — the pod's own public HTTPS origin (a Pod agent is addressed by its configured audience, never by a CP database `podId`)
 - `nonce` — UUID, rejected if seen within 10-min TTL
-- `exp` — short expiry (minutes)
-- `allowExec` — explicit claim required for `exec` commands
+- `exp` — capped at 30 minutes from issue (`signPodAgentCommand()` refuses to sign a longer-lived token)
 
 Pods never trust commands that don't pass JWKS verification.
 
@@ -615,7 +615,7 @@ See `.env.example` for the full list with descriptions. Key required variables:
 | `DATABASE_URL` | PostgreSQL connection string |
 | `BETTER_AUTH_SECRET` | Session signing secret (min 32 chars) |
 | `BETTER_AUTH_URL` | CP public URL (e.g. `https://api.synap.live`) |
-| `FRONTEND_URL` | Dashboard URL (e.g. `https://dashboard.synap.live`) |
+| `FRONTEND_URL` | User landing app URL (e.g. `https://synap.live`) |
 | `HETZNER_API_TOKEN` | Hetzner Cloud API key for VPS provisioning |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token (Zone DNS Edit scope) |
 | `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID |

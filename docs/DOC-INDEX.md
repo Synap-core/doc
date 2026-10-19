@@ -1,6 +1,6 @@
 # Documentation Index
 
-**Auto-generated on 2026-05-14** — 576 pages across 48 topic clusters.
+**Auto-generated on 2026-09-13** — 617 pages across 48 topic clusters.
 This index makes Synap documentation searchable and navigable for both humans and AI agents.
 
 **Canonical documentation surface:** `synap-team-docs/content/`
@@ -12,36 +12,37 @@ This index makes Synap documentation searchable and navigable for both humans an
 ---
 
 ## Quick Navigation
-- **compass Product Vision & Strategy** (80 pages): [agora-white.mdx](team/home/agora-white) & ['Strategic Analysis'](team/home/analysis) & [architecture-validation.mdx](team/home/architecture-validation)
-- **help-circle Unclassified** (64 pages): [ai-deprecated.mdx](team/backend/ai-deprecated) & [ai-embeddings-deprecated.mdx](team/backend/ai-embeddings-deprecated) & [backend-product.mdx](team/backend/backend-product)
+- **compass Product Vision & Strategy** (82 pages): [agora-white.mdx](team/home/agora-white) & ['Strategic Analysis'](team/home/analysis) & [architecture-validation.mdx](team/home/architecture-validation)
+- **help-circle Unclassified** (73 pages): [ai-deprecated.mdx](team/backend/ai-deprecated) & [ai-embeddings-deprecated.mdx](team/backend/ai-embeddings-deprecated) & [backend-product.mdx](team/backend/backend-product)
+- **layers Platform Engineering** (44 pages): ['Adding a sync source'](team/platform/adding-a-sync-source) & ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) & [agent-ux-state-and-plan.mdx](team/platform/agent-ux-state-and-plan)
 - **sparkles AI & Intelligence Service** (39 pages): ['Agent Service SDK'](team/intelligence/agent-sdk) & ['Agent System'](team/intelligence/agent-system) & ['Agents README'](team/intelligence/agents-readme)
 - **smartphone Relay Mobile** (35 pages): ['Android Plan'](team/relay/android-plan) & [app-store-guide.mdx](team/relay/app-store-guide) & ['App Store'](team/relay/app-store)
-- **layers Platform Engineering** (28 pages): ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) & ['Background Tasks'](team/platform/background-tasks) & ['Builder Workspace'](team/platform/builder-workspace)
 - **crown Control Plane** (23 pages): ['CP Architecture'](team/control-plane/architecture) & ['Security Audit'](team/control-plane/audit) & ['CP dashboard & pod update pipeline'](team/control-plane/cp-dashboard-updates)
+- **layout Architecture Concepts** (22 pages): ['Architecture'](docs/architecture/concepts/architecture) & ['Artificial Intelligence'](docs/architecture/concepts/artificial-intelligence) & ['Branching Conversations'](docs/architecture/concepts/branching-conversations)
 - **terminal DevOps & Infrastructure** (22 pages): ['AI Governance Audit'](team/devops/ai-governance) & ['Auth Consolidation Audit'](team/devops/auth-audit) & ['Backlink Strategy'](team/devops/backlink-strategy)
-- **layout Architecture Concepts** (21 pages): ['Architecture'](docs/architecture/concepts/architecture) & ['Artificial Intelligence'](docs/architecture/concepts/artificial-intelligence) & ['Branching Conversations'](docs/architecture/concepts/branching-conversations)
-- **grid Features Index** (19 pages): ['Workflows'](team/features/ai-workflows) & ['Capture'](team/features/capture) & ['Channels'](team/features/channels)
-- **terminal EVE CLI** (17 pages): ['Architecture'](team/eve-cli/architecture) & ['coder'](team/eve-cli/coder) & ['Eve OS Dashboard'](team/eve-cli/dashboard)
-- **message-square Communication & Feeds** (16 pages): ['Channel-Agent Flow'](team/platform/channel-agent-flow) & ['Channel System'](team/platform/channel-system) & ['Channels'](team/platform/channels)
+- **grid Features Index** (20 pages): ['Workflows'](team/features/ai-workflows) & ['Capture'](team/features/capture) & ['Channels'](team/features/channels)
+- **terminal EVE CLI** (18 pages): ['Architecture'](team/eve-cli/architecture) & ['coder'](team/eve-cli/coder) & ['Eve OS Dashboard'](team/eve-cli/dashboard)
+- **message-square Communication & Feeds** (17 pages): ['Channel-Agent Flow'](team/platform/channel-agent-flow) & ['Channel System'](team/platform/channel-system) & ['Channels'](team/platform/channels)
 - **clipboard-check Process & Reviews** (15 pages): ['Design Guidelines'](team/platform/design-guidelines) & ['Design System Audit'](team/platform/design-system-audit) & ['Onboarding analytics events'](team/platform/onboarding-analytics-events)
 - **heart Contributing Overview** (12 pages): [backend-contributing.mdx](docs/contributing/backend-contributing) & [browser-installation.mdx](docs/contributing/browser-installation) & [cli-contributing.mdx](docs/contributing/cli-contributing)
-- **terminal Development Guide** (11 pages): [Building Agents](docs/integrate/development/ai/building-agents) & [Direct Plugins](docs/integrate/development/extending/direct-plugins) & [Hybrid Plugins](docs/integrate/development/extending/hybrid-plugins)
+- **terminal Development Guide** (12 pages): [Building Agents](docs/integrate/development/ai/building-agents) & [Direct Plugins](docs/integrate/development/extending/direct-plugins) & [Hybrid Plugins](docs/integrate/development/extending/hybrid-plugins)
+- **monitor Browser Desktop** (12 pages): ['Architecture'](team/browser/architecture) & [browser-extensions-consolidation.mdx](team/browser/browser-extensions-consolidation) & ['Browser UX productization guidelines'](team/browser/browser-ux-productization-guidelines)
 - **monitor Synap App** (11 pages): [command-palette-doc.mdx](team/synap-app/command-palette-doc) & [design-guidelines.mdx](team/synap-app/design-guidelines) & [frontend-ai-reference.mdx](team/synap-app/frontend-ai-reference)
 - **wrench Contribution Guides** (9 pages): ['Cli And Compose Consolidation'](docs/contributing/guides/cli-and-compose-consolidation) & [Code Style](docs/contributing/guides/code-style) & ['Connection Sync Roadmap'](docs/contributing/guides/connection-sync-roadmap)
 - **puzzle Integration How-To** (9 pages): ['Api Keys'](docs/integrate/integrations/api-keys) & ['Automation Platforms'](docs/integrate/integrations/automation-platforms) & ['Chat Stream'](docs/integrate/integrations/chat-stream)
 - **server Deployment** (8 pages): [connect-control-plane.md](docs/architecture/deployment/data-pod/connect-control-plane) & ['Docker'](docs/architecture/deployment/data-pod/docker) & ['Production'](docs/architecture/deployment/data-pod/production)
-- **monitor Browser Desktop** (8 pages): ['Architecture'](team/browser/architecture) & [browser-extensions-consolidation.mdx](team/browser/browser-extensions-consolidation) & ['Capture and flows'](team/browser/capture-and-flows)
+- **trending-up Go-to-Market** (8 pages): [branding-brief-2026.md](team/go-to-market/branding-brief-2026) & ['Go-to-Market'](team/go-to-market) & ['Launch Operations'](team/go-to-market/launch-operations)
+- **bot OpenClaw & AI Integration** (8 pages): ['AI Companion Architecture'](team/platform/ai-companion) & ['AI Inline Command Syntax'](team/platform/ai-inline-patterns) & ['AI Interaction Architecture'](team/platform/ai-interaction)
 - **monitor Studio App** (8 pages): ['Architecture'](team/studio/architecture) & ['Channels'](team/studio/channels) & ['Data Flow'](team/studio/data-flow)
 - **zap Agent Skills** (7 pages): ['Skill: Automations'](team/intelligence/skill-automations) & ['Skill: Document Management'](team/intelligence/skill-documents) & ['Skill: Entity Management'](team/intelligence/skill-entities)
 - **bot Agent Integration** (6 pages): ['Channels and agents'](docs/integrate/agents/channels-and-agents) & ['Agents'](docs/integrate/agents) & ['MCP'](docs/integrate/agents/mcp)
 - **link-2 Agent Connect Guides** (6 pages): ['Claude Code'](docs/integrate/agents/connect/claude-code) & ['Claude Desktop'](docs/integrate/agents/connect/claude-desktop) & ['Cursor'](docs/integrate/agents/connect/cursor)
 - **rocket Getting Started** (6 pages): ['Concepts'](docs/start/concepts) & ['What is Synap?'](docs/start/concepts/what-is-synap) & ['AI agents & external tools'](docs/start/getting-started/ai-agents-and-tools)
-- **trending-up Go-to-Market** (6 pages): ['Go-to-Market'](team/go-to-market) & ['Launch Operations'](team/go-to-market/launch-operations) & ['Market and Analysis'](team/go-to-market/market-and-analysis)
-- **bot OpenClaw & AI Integration** (6 pages): ['AI Interaction Architecture'](team/platform/ai-interaction) & ['OpenClaw Channel Interactions'](team/platform/openclaw-channels) & ['OpenClaw Integration State'](team/platform/openclaw-integration)
-- **shield-check Auth & Security** (8 pages): ['API Keys'](team/platform/api-keys) & ['Auth Architecture'](team/platform/auth-architecture) & ['Authentication'](team/platform/authentication)
+- **shield-check Auth & Security** (6 pages): ['API Keys'](team/platform/api-keys) & ['Auth Architecture'](team/platform/auth-architecture) & ['Authentication'](team/platform/authentication)
 - **palette Feature Design & UX** (6 pages): ['Capture Pipeline'](team/platform/capture-pipeline) & ['Creating Apps'](team/platform/creating-apps) & ['Floating Container System'](team/platform/floating-containers)
 - **network Architecture Overview** (5 pages): ['Hub Protocol flow'](docs/architecture/hub-protocol-flow) & ['Architecture'](docs/architecture) & ['Permission model'](docs/architecture/permission-model)
 - **puzzle Integration** (5 pages): ['Build on the backend'](docs/integrate/build-on-backend) & ['External source integrations'](docs/integrate/external-sources) & ['Build & integrate'](docs/integrate)
+- **git-pull-request Decision Records** (5 pages): ['ADR — Realtime event naming convention'](team/decisions/adr-realtime-event-naming-2026-05-05) & ['ADR template'](team/decisions/adr-template) & ['ADR: View-renderer marketplace (pod-bound renderers over a typed view contract)'](team/decisions/adr-view-renderer-marketplace-2026-08-01)
 - **eye Agent Monitoring** (5 pages): ['Monitor: Agents'](team/intelligence/monitor-agents) & ['Monitor: Execution Cycles'](team/intelligence/monitor-execution) & ['Monitor: Memory'](team/intelligence/monitor-memory)
 - **megaphone Ops & Marketing** (5 pages): ['Enablement assets'](team/ops-marketing/enablement-assets) & ['Ops & marketing'](team/ops-marketing) & ['Launch playbook'](team/ops-marketing/launch-playbook)
 - **database Entity & View System** (5 pages): ['Cell System'](team/platform/cell-system) & ['Entity Profiles'](team/platform/entity-profiles) & ['Entity Relations'](team/platform/entity-relations)
@@ -49,7 +50,6 @@ This index makes Synap documentation searchable and navigable for both humans an
 - **terminal Dev Environment Setup** (5 pages): ['Claude Code Setup'](team/tech-matrix/claude-code-setup) & ['Code Anchors'](team/tech-matrix/code-anchors) & ['Tech Matrix'](team/tech-matrix)
 - **cpu Infrastructure Tech Stack** (5 pages): ['Docker & containers'](team/technologies/docker-and-containers) & ['Stack & tools'](team/technologies) & ['Ingress & tunnels'](team/technologies/ingress-and-tunnels)
 - **cloud Cloud & SaaS** (4 pages): ['Cloud & Intelligence'](docs/cloud) & ['Synap Intelligence'](docs/cloud/intelligence) & ['Pod updates & policies'](docs/cloud/pod-updates)
-- **git-pull-request Decision Records** (4 pages): ['ADR — Realtime event naming convention'](team/decisions/adr-realtime-event-naming-2026-05-05) & ['ADR template'](team/decisions/adr-template) & ['Decision log'](team/decisions/decision-log)
 - **layers Event Chain & Data Tier** (4 pages): ['Event Chain (Internal)'](team/platform/event-chain-internal) & ['Event Chain'](team/platform/event-chain) & ['Migration System'](team/platform/migrations)
 - **zap Raycast Extension** (4 pages): ['Commands and flows'](team/raycast/commands-and-flows) & ['Raycast'](team/raycast) & ['Integration model'](team/raycast/integration-model)
 - **book API Reference** (3 pages): ['Api Reference'](docs/integrate/reference/api-reference) & ['Event Catalog'](docs/integrate/reference/event-catalog) & ['Events Api'](docs/integrate/reference/events-api)
@@ -65,7 +65,7 @@ This index makes Synap documentation searchable and navigable for both humans an
 
 ## Full Index by Topic Cluster
 
-### compass Product Vision & Strategy (80)
+### compass Product Vision & Strategy (82)
 
 - [agora-white.mdx](team/home/agora-white) 
 - [architecture-validation.mdx](team/home/architecture-validation) 
@@ -100,6 +100,7 @@ This index makes Synap documentation searchable and navigable for both humans an
 - [hestia-package-architecture.mdx](team/home/hestia-package-architecture) 
 - [hestia-project-complete.mdx](team/home/hestia-project-complete) 
 - [hestia-quickstart.mdx](team/home/hestia-quickstart) 
+- [homoiconic-substrate.mdx](team/home/homoiconic-substrate) 
 - [idea.mdx](team/home/idea) 
 - [monohub-skill.mdx](team/home/monohub-skill)  &mdash; tags: monorepo, npm, publishing, dependencies, architecture, typescript
 - [north-star.mdx](team/home/north-star) 
@@ -125,6 +126,7 @@ This index makes Synap documentation searchable and navigable for both humans an
 - [synap-videos-remotion-mistakes.mdx](team/archive/synap-videos-remotion-mistakes) 
 - [synap-videos-script-death.mdx](team/archive/synap-videos-script-death) 
 - [team-spaces-consolidation-plan.mdx](team/home/team-spaces-consolidation-plan) 
+- [v0-north-star.mdx](team/home/v0-north-star) 
 - [v0-paper.mdx](team/home/v0-paper) 
 - [whitepaper-v1-original.mdx](team/home/whitepaper-v1-original) 
 - [whitepaper-v1.mdx](team/home/whitepaper-v1) 
@@ -148,7 +150,7 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Vision & Philosophy'](team/home/vision) _updated: '2026-04-20'_
 - ['Visual Assets'](team/home/visual-assets) _updated: '2026-04-20'_
 
-### help-circle Unclassified (64)
+### help-circle Unclassified (73)
 
 - [ai-deprecated.mdx](team/backend/ai-deprecated) 
 - [ai-embeddings-deprecated.mdx](team/backend/ai-embeddings-deprecated) 
@@ -175,6 +177,12 @@ This index makes Synap documentation searchable and navigable for both humans an
 - [litellm-migration.mdx](team/deploy/litellm-migration) 
 - [security.mdx](team/deploy/security) 
 - [troubleshooting.mdx](team/deploy/troubleshooting) 
+- [browser-daily-cockpit-ux-design-prompt.md](team/design/browser-daily-cockpit-ux-design-prompt) 
+- [focus-session-ux-design-prompt.md](team/design/focus-session-ux-design-prompt) 
+- [proposal-review-queue-design-prompt.md](team/design/proposal-review-queue-design-prompt) 
+- [view-redesign-prompt.md](team/design/view-redesign-prompt) 
+- [views-discoverability-design-prompt.md](team/design/views-discoverability-design-prompt) 
+- [views-ux-design-prompt.md](team/design/views-ux-design-prompt) 
 - [adr-nango-self-hosted.mdx](team/infrastructure/adr-nango-self-hosted) 
 - [bento-recipes.mdx](team/integrate/bento-recipes) 
 - [cli-bento-recipes.mdx](team/integrate/cli-bento-recipes) 
@@ -200,20 +208,70 @@ This index makes Synap documentation searchable and navigable for both humans an
 - [telegram-mini-app.mdx](team/integrate/telegram-mini-app) 
 - [view-types.mdx](team/integrate/view-types) 
 - [widget-catalog.mdx](team/integrate/widget-catalog) 
-- ['Connectors'](team/crm/connectors) _updated: '2026-05-11'_ &mdash; tags: connectors, integrations, google-drive, nango
-- ['Data Model'](team/crm/data-model) _updated: '2026-05-11'_ &mdash; tags: data-model, profiles, properties, workspace
+- ['Connectors'](team/crm/connectors) _updated: '2026-09-13'_ &mdash; tags: connectors, integrations, google, nango, unipile, messaging, sync
+- ['CRM Business Developer Data Model'](team/crm/data-model) _updated: '2026-07-19'_ &mdash; tags: data-model, crm, facets, commission
+- ['CRM'](team/crm) [all-teams] _updated: '2026-07-19'_ &mdash; tags: crm, leads, pipeline, business-development
+- ['Lead-first Pipeline'](team/crm/pipeline) _updated: '2026-07-19'_ &mdash; tags: pipeline, leads, commercial-proposals
+- [DevPlane North Star Graph](team/devplane/north-star-graph) [team] _updated: '2026-05-27'_ &mdash; tags: devplane, graph, north-star, relations, knowledge-graph
+- [DevPlane Current State & Roadmap](team/devplane/current-state) [team] _updated: '2026-05-17'_
+- [DevPlane](team/devplane) [team] _updated: '2026-05-17'_
+- ['Messaging Layer — Unipile'](team/crm/messaging-unipile) _updated: '2026-05-14'_ &mdash; tags: messaging, unipile, channels, webhooks, linkedin, whatsapp, telegram
 - ['Delivery Phases'](team/crm/delivery-phases) _updated: '2026-05-11'_ &mdash; tags: roadmap, phases, delivery
 - ['Document Templates'](team/crm/document-templates) _updated: '2026-05-11'_ &mdash; tags: documents, templates, contracts, proposals
 - ['Entity Dashboards'](team/crm/entity-dashboards) _updated: '2026-05-11'_ &mdash; tags: dashboards, bento, entity-panels, lead, client
-- ['CRM'](team/crm) [all-teams] _updated: '2026-05-11'_ &mdash; tags: crm, sales, pipeline, contacts, clients
-- ['Pipeline'](team/crm/pipeline) _updated: '2026-05-11'_ &mdash; tags: pipeline, kanban, automations, status
 - ['User Stories'](team/crm/user-stories) _updated: '2026-05-11'_ &mdash; tags: user-stories, personas, flows
 - [Architecture](team/devplane/architecture) [team] _updated: '2026-04-29'_
 - [Hooks reference](team/devplane/hooks) [team] _updated: '2026-04-29'_
-- [DevPlane](team/devplane) [team] _updated: '2026-04-29'_
 - [DevPlane North Star](team/devplane/north-star) [team] _updated: '2026-04-29'_
 - [Entity profiles](team/devplane/profiles) [team] _updated: '2026-04-29'_
 - [Startup flow](team/devplane/startup-flow) [team] _updated: '2026-04-29'_
+
+### layers Platform Engineering (44)
+
+- [agent-ux-state-and-plan.mdx](team/platform/agent-ux-state-and-plan) 
+- [Eve × Hermes Architecture](team/platform/eve-hermes-architecture) 
+- [external-agent-provisioning.mdx](team/platform/external-agent-provisioning) 
+- [external-sources-architecture.mdx](team/platform/external-sources-architecture) 
+- [governance-hardening-plan.mdx](team/platform/governance-hardening-plan) 
+- [governance-wave-b-decision-brief.mdx](team/platform/governance-wave-b-decision-brief) 
+- [Hermes × Synap — Integration Quality & Current State](team/platform/hermes-synap-integration) 
+- [Hermes × Synap — S-Tier Wiring Plan](team/platform/hermes-synap-wiring-plan) 
+- [substrate-consolidation-plan.mdx](team/platform/substrate-consolidation-plan) 
+- [universal-node-schema.mdx](team/platform/universal-node-schema) 
+- [view-system-plan.md](team/platform/view-system-plan) 
+- ['Adding a sync source'](team/platform/adding-a-sync-source) [developers] _updated: '2026-09-13'_ &mdash; tags: connectors, sync, nango, import
+- ['Connector Architecture'](team/platform/connector-architecture) _updated: '2026-09-13'_ &mdash; tags: connectors, nango, sync
+- ['Webhook Architecture'](team/platform/webhook-architecture) _updated: '2026-09-13'_ &mdash; tags: webhooks, events, connectors
+- ['Connections Architecture'](team/platform/connections) _updated: '2026-07-14'_
+- ['Eve &lt;-> Hub Auth Convergence'](team/platform/eve-hub-auth) [developers] _updated: '2026-07-14'_
+- ['Artboard Canvas Capability'](team/platform/artboard-canvas-capability) [internal] _updated: '2026-06-04'_ &mdash; tags: whiteboard, canvas, artboard, export, cells, ai, design
+- ['Focus Sessions'](team/platform/focus-sessions) [product] _updated: '2026-06-03'_ &mdash; tags: browser, 'workspace, 'focus-session, 'channels, 'cells, 'ux
+- ['Infrastructure Audit — May 2026'](team/platform/infrastructure-audit-2026-05) [team] _updated: '2026-05-28'_ &mdash; tags: architecture, infrastructure, reference
+- ['Browser V2 Spatial Shell'](team/platform/browser-v2-spatial-shell) [engineers] _updated: '2026-05-20'_ &mdash; tags: browser, 'surface-runtime, 'renderer-runtime, 'design-system
+- ['Browser V2 Surface Session Bridge'](team/platform/browser-v2-surface-session-bridge) [engineers] _updated: '2026-05-20'_ &mdash; tags: browser-v2, 'surface-session, 'surface-runtime, 'state
+- ['Surface Session Runtime'](team/platform/surface-session-runtime) [engineers] _updated: '2026-05-20'_ &mdash; tags: surface-runtime, 'surface-session, 'browser-v2, 'ai-context
+- ['Profile Renderer'](team/platform/profile-renderer) _updated: '2026-05-19'_
+- ['Invite Flow'](team/platform/invite-flow) [developers] _updated: '2026-05-18'_ &mdash; tags: auth, invite, workspace, crm, pod-admin
+- ['Workspace–App Binding'](team/platform/workspace-app-binding) [internal] _updated: '2026-05-18'_ &mdash; tags: workspace, architecture, apps, crm, studio, devplane, canvas
+- ['Proposals & Governance'](team/platform/proposals) _updated: '2026-05-14'_
+- ['Eve Credentials & the Two-Channel Rule'](team/platform/eve-credentials) _updated: '2026-05-10'_
+- ['Eve Agents — Design Spec'](team/platform/eve-agents-design) _updated: '2026-05-05'_
+- ['Eve OS Home — Design Spec'](team/platform/eve-os-home-design) _updated: '2026-05-05'_
+- ['Eve OS — Roadmap to Feels Complete'](team/platform/eve-os-roadmap) _updated: '2026-05-05'_
+- ['Eve OS Shell — Architecture & Design'](team/platform/eve-os-shell) _updated: '2026-05-05'_
+- ['Eve as a Personal AI OS'](team/platform/eve-os-vision) _updated: '2026-05-05'_
+- ['Marketplace Landing — Design & Wiring Plan'](team/platform/marketplace-landing-design) _updated: '2026-05-05'_
+- ['Background Tasks'](team/platform/background-tasks) _updated: '2026-05-04'_
+- ['Builder Workspace'](team/platform/builder-workspace) _updated: '2026-05-04'_
+- ['Eve — Per-Agent Hub Keys'](team/platform/eve-agent-keys) _updated: '2026-05-04'_
+- ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) _updated: '2026-04-20'_
+- ['External API'](team/platform/external-api) _updated: '2026-04-20'_
+- ['External Integrations'](team/platform/external-integrations) _updated: '2026-04-20'_
+- ['Platform'](team/platform) _updated: '2026-04-20'_
+- ['Intelligence UX & Capabilities'](team/platform/intelligence-ux) _updated: '2026-04-20'_
+- ['Release train & technical debt budget'](team/platform/release-train-and-debt-budget) _updated: '2026-04-20'_
+- ['System Completion Status'](team/platform/system-completion) _updated: '2026-04-20'_
+- ['Universal onboarding north star'](team/platform/universal-onboarding-north-star) _updated: '2026-04-20'_
 
 ### sparkles AI & Intelligence Service (39)
 
@@ -295,41 +353,10 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['User Flows'](team/relay/user-flows) _updated: '2026-04-20'_
 - ['User Stories'](team/relay/user-stories) _updated: '2026-04-20'_
 
-### layers Platform Engineering (28)
-
-- [connector-architecture.mdx](team/platform/connector-architecture) 
-- [Eve × Hermes Architecture](team/platform/eve-hermes-architecture) 
-- [external-agent-provisioning.mdx](team/platform/external-agent-provisioning) 
-- [external-sources-architecture.mdx](team/platform/external-sources-architecture) 
-- [Hermes × Synap — Integration Quality & Current State](team/platform/hermes-synap-integration) 
-- [Hermes × Synap — S-Tier Wiring Plan](team/platform/hermes-synap-wiring-plan) 
-- ['Proposals & Governance'](team/platform/proposals) _updated: '2026-05-14'_
-- ['Workspace–App Binding'](team/platform/workspace-app-binding) [internal] _updated: '2026-05-18'_ &mdash; tags: workspace, architecture, apps, crm, studio, devplane, canvas
-- ['Eve Credentials & the Two-Channel Rule'](team/platform/eve-credentials) _updated: '2026-05-10'_
-- ['Eve <-> Hub Auth Convergence'](team/platform/eve-hub-auth) [developers] _updated: '2026-05-18'_
-- ['Invite Flow'](team/platform/invite-flow) [developers] _updated: '2026-05-18'_
-- ['Eve Agents — Design Spec'](team/platform/eve-agents-design) _updated: '2026-05-05'_
-- ['Eve OS Home — Design Spec'](team/platform/eve-os-home-design) _updated: '2026-05-05'_
-- ['Eve OS — Roadmap to Feels Complete'](team/platform/eve-os-roadmap) _updated: '2026-05-05'_
-- ['Eve OS Shell — Architecture & Design'](team/platform/eve-os-shell) _updated: '2026-05-05'_
-- ['Eve as a Personal AI OS'](team/platform/eve-os-vision) _updated: '2026-05-05'_
-- ['Marketplace Landing — Design & Wiring Plan'](team/platform/marketplace-landing-design) _updated: '2026-05-05'_
-- ['Background Tasks'](team/platform/background-tasks) _updated: '2026-05-04'_
-- ['Builder Workspace'](team/platform/builder-workspace) _updated: '2026-05-04'_
-- ['Eve — Per-Agent Hub Keys'](team/platform/eve-agent-keys) _updated: '2026-05-04'_
-- ['ADR: Onboarding session & memory scope'](team/platform/adr-onboarding-session-memory) _updated: '2026-04-20'_
-- ['Connections Architecture'](team/platform/connections) _updated: '2026-04-20'_
-- ['External API'](team/platform/external-api) _updated: '2026-04-20'_
-- ['External Integrations'](team/platform/external-integrations) _updated: '2026-04-20'_
-- ['Platform'](team/platform) _updated: '2026-04-20'_
-- ['Intelligence UX & Capabilities'](team/platform/intelligence-ux) _updated: '2026-04-20'_
-- ['Release train & technical debt budget'](team/platform/release-train-and-debt-budget) _updated: '2026-04-20'_
-- ['System Completion Status'](team/platform/system-completion) _updated: '2026-04-20'_
-- ['Universal onboarding north star'](team/platform/universal-onboarding-north-star) _updated: '2026-04-20'_
-
 ### crown Control Plane (23)
 
-- [Pod ↔ Control Plane Trust Architecture](team/control-plane/pod-trust-architecture) 
+- [Pod Federation Boundary](team/control-plane/pod-trust-architecture) 
+- ['IS Provisioning — Retired CP Identity Flow'](team/control-plane/is-provisioning-fixes) _updated: '2026-07-14'_
 - ['CP Architecture'](team/control-plane/architecture) _updated: '2026-04-20'_
 - ['Security Audit'](team/control-plane/audit) _updated: '2026-04-20'_
 - ['CP dashboard & pod update pipeline'](team/control-plane/cp-dashboard-updates) _updated: '2026-04-20'_
@@ -339,7 +366,6 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Control Plane'](team/control-plane) _updated: '2026-04-20'_
 - ['Infrastructure Status'](team/control-plane/infrastructure-status) _updated: '2026-04-20'_
 - ['Infrastructure'](team/control-plane/infrastructure) _updated: '2026-04-20'_
-- ['IS Provisioning — Fix Status'](team/control-plane/is-provisioning-fixes) _updated: '2026-04-20'_
 - ['Operations Guide'](team/control-plane/operations-guide) _updated: '2026-04-20'_
 - ['Pod Backups'](team/control-plane/pod-backups) _updated: '2026-04-20'_
 - ['Build on Server'](team/control-plane/pod-build-server) _updated: '2026-04-20'_
@@ -352,6 +378,31 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Pod Troubleshooting'](team/control-plane/pod-troubleshooting) _updated: '2026-04-20'_
 - ['Signal Layer'](team/control-plane/signal-layer) _updated: '2026-04-20'_
 - ['SLOs'](team/control-plane/slos) _updated: '2026-04-20'_
+
+### layout Architecture Concepts (22)
+
+- ['Kind + Facets'](docs/architecture/concepts/kind-and-facets) _updated: '2026-07-11'_
+- ['Views System'](docs/architecture/concepts/views) _updated: '2026-05-27'_
+- ['Memory & Knowledge'](docs/architecture/concepts/memory-and-knowledge) _updated: '2026-04-23'_ &mdash; tags: memory, knowledge, ai, agents
+- ['Architecture'](docs/architecture/concepts/architecture) _updated: '2026-04-20'_
+- ['Artificial Intelligence'](docs/architecture/concepts/artificial-intelligence) _updated: '2026-04-20'_
+- ['Branching Conversations'](docs/architecture/concepts/branching-conversations) _updated: '2026-04-20'_
+- ['Building Blocks'](docs/architecture/concepts/building-blocks) _updated: '2026-04-20'_
+- ['Channels'](docs/architecture/concepts/channels) _updated: '2026-04-20'_
+- ['Composable Architecture'](docs/architecture/concepts/composable-architecture) _updated: '2026-04-20'_
+- ['Contagious Layers'](docs/architecture/concepts/contagious-layers) _updated: '2026-04-20'_
+- ['Data Sovereignty'](docs/architecture/concepts/data-sovereignty) _updated: '2026-04-20'_
+- ['Universal Entity Model'](docs/architecture/concepts/entities) _updated: '2026-04-20'_
+- ['Entity Connections'](docs/architecture/concepts/entity-connections) _updated: '2026-04-20'_
+- ['Event Sourcing Explained'](docs/architecture/concepts/event-sourcing-explained) _updated: '2026-04-20'_
+- ['Hub And Spoke'](docs/architecture/concepts/hub-and-spoke) _updated: '2026-04-20'_
+- ['System concepts'](docs/architecture/concepts) _updated: '2026-04-20'_
+- ['Knowledge Graph'](docs/architecture/concepts/knowledge-graph) _updated: '2026-04-20'_
+- ['Multi Agent System'](docs/architecture/concepts/multi-agent-system) _updated: '2026-04-20'_
+- ['Pod replication & pairing'](docs/architecture/concepts/pod-replication) _updated: '2026-04-20'_
+- ['Profile Schemas'](docs/architecture/concepts/profile-schemas) _updated: '2026-04-20'_
+- ['Why Events'](docs/architecture/concepts/why-events) _updated: '2026-04-20'_
+- ['Workspace As A Service'](docs/architecture/concepts/workspace-as-a-service) _updated: '2026-04-20'_
 
 ### terminal DevOps & Infrastructure (22)
 
@@ -378,38 +429,15 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Start Here'](team/devops/start-here) _updated: '2026-04-20'_
 - ['Unified Setup'](team/devops/unified-setup) _updated: '2026-04-20'_
 
-### layout Architecture Concepts (21)
-
-- ['Memory & Knowledge'](docs/architecture/concepts/memory-and-knowledge) _updated: '2026-04-23'_ &mdash; tags: memory, knowledge, ai, agents
-- ['Architecture'](docs/architecture/concepts/architecture) _updated: '2026-04-20'_
-- ['Artificial Intelligence'](docs/architecture/concepts/artificial-intelligence) _updated: '2026-04-20'_
-- ['Branching Conversations'](docs/architecture/concepts/branching-conversations) _updated: '2026-04-20'_
-- ['Building Blocks'](docs/architecture/concepts/building-blocks) _updated: '2026-04-20'_
-- ['Channels'](docs/architecture/concepts/channels) _updated: '2026-04-20'_
-- ['Composable Architecture'](docs/architecture/concepts/composable-architecture) _updated: '2026-04-20'_
-- ['Contagious Layers'](docs/architecture/concepts/contagious-layers) _updated: '2026-04-20'_
-- ['Data Sovereignty'](docs/architecture/concepts/data-sovereignty) _updated: '2026-04-20'_
-- ['Universal Entity Model'](docs/architecture/concepts/entities) _updated: '2026-04-20'_
-- ['Entity Connections'](docs/architecture/concepts/entity-connections) _updated: '2026-04-20'_
-- ['Event Sourcing Explained'](docs/architecture/concepts/event-sourcing-explained) _updated: '2026-04-20'_
-- ['Hub And Spoke'](docs/architecture/concepts/hub-and-spoke) _updated: '2026-04-20'_
-- ['System concepts'](docs/architecture/concepts) _updated: '2026-04-20'_
-- ['Knowledge Graph'](docs/architecture/concepts/knowledge-graph) _updated: '2026-04-20'_
-- ['Multi Agent System'](docs/architecture/concepts/multi-agent-system) _updated: '2026-04-20'_
-- ['Pod replication & pairing'](docs/architecture/concepts/pod-replication) _updated: '2026-04-20'_
-- ['Profile Schemas'](docs/architecture/concepts/profile-schemas) _updated: '2026-04-20'_
-- ['Views System'](docs/architecture/concepts/views) _updated: '2026-04-20'_
-- ['Why Events'](docs/architecture/concepts/why-events) _updated: '2026-04-20'_
-- ['Workspace As A Service'](docs/architecture/concepts/workspace-as-a-service) _updated: '2026-04-20'_
-
-### grid Features Index (19)
+### grid Features Index (20)
 
 - [External Source Integration](team/features/external-sources) [developers|platform-engineers] _updated: 2026-04-20_ &mdash; tags: feature, integration, external-sources, control-plane, data-pod
+- ['Processes Experience — Implementation Handoff'](team/features/workflows/processes-experience-handoff) _updated: '2026-07-31'_
+- ['Chat'](team/features/chat) _updated: '2026-05-27'_
 - ['Proposals & governance'](team/features/proposals-governance) _updated: '2026-05-14'_
 - ['Workflows'](team/features/ai-workflows) _updated: '2026-04-20'_
 - ['Capture'](team/features/capture) _updated: '2026-04-20'_
 - ['Channels'](team/features/channels) _updated: '2026-04-20'_
-- ['Chat'](team/features/chat) _updated: '2026-04-20'_
 - ['Entity profiles'](team/features/entities-profiles) _updated: '2026-04-20'_
 - ['Entity creation'](team/features/entity-creation) _updated: '2026-04-20'_
 - ['Feeds'](team/features/feeds) _updated: '2026-04-20'_
@@ -424,8 +452,9 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Views'](team/features/views) _updated: '2026-04-20'_
 - ['Automations'](team/features/workflows) _updated: '2026-04-20'_
 
-### terminal EVE CLI (17)
+### terminal EVE CLI (18)
 
+- ['Hermes ↔ Synap MCP Architecture'](team/eve-cli/hermes-synap-mcp) [internal] _updated: '2026-05-19'_ &mdash; tags: hermes, mcp, devplane, agents
 - ['Hermes Plugins'](team/eve-cli/plugins) _updated: '2026-05-13'_
 - ['Hermes Agent'](team/eve-cli/hermes-agent) _updated: '2026-05-11'_
 - ['Open WebUI'](team/eve-cli/open-webui) _updated: '2026-05-11'_
@@ -444,8 +473,9 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['User flows'](team/eve-cli/user-flows) _updated: '2026-04-21'_
 - ['Vision & principles'](team/eve-cli/vision) _updated: '2026-04-21'_
 
-### message-square Communication & Feeds (16)
+### message-square Communication & Feeds (17)
 
+- [chat-architecture-consolidation.mdx](team/platform/chat-architecture-consolidation) 
 - ['Realtime Integration'](team/platform/realtime) _updated: '2026-05-05'_
 - ['Hub Protocol'](team/platform/hub-protocol) _updated: '2026-05-03'_
 - ['Channel-Agent Flow'](team/platform/channel-agent-flow) _updated: '2026-04-20'_
@@ -496,8 +526,9 @@ This index makes Synap documentation searchable and navigable for both humans an
 - [synap-videos-quickstart.mdx](team/archive/synap-videos-quickstart) 
 - ['Contributing'](docs/contributing) _updated: '2026-04-20'_
 
-### terminal Development Guide (11)
+### terminal Development Guide (12)
 
+- [Creating an app](docs/integrate/development/sdk/creating-an-app) _updated: '2026-07-24'_
 - [Building Agents](docs/integrate/development/ai/building-agents) _updated: '2026-04-20'_
 - [Direct Plugins](docs/integrate/development/extending/direct-plugins) _updated: '2026-04-20'_
 - [Hybrid Plugins](docs/integrate/development/extending/hybrid-plugins) _updated: '2026-04-20'_
@@ -509,6 +540,21 @@ This index makes Synap documentation searchable and navigable for both humans an
 - [Development Setup](docs/integrate/development/setup) _updated: '2026-04-20'_
 - [Testing Guide](docs/integrate/development/testing-guide) _updated: '2026-04-20'_
 - [Type Packages](docs/integrate/development/type-packages) _updated: '2026-04-20'_
+
+### monitor Browser Desktop (12)
+
+- [CRM Workspace Browser Experience — Engineering Handoff](team/browser/crm-workspace-browser-experience-handoff) _updated: 2026-08-04_
+- [browser-extensions-consolidation.mdx](team/browser/browser-extensions-consolidation) 
+- [extension-doc.mdx](team/browser/extension-doc) 
+- [implementation-plan.mdx](team/browser/implementation-plan) 
+- ['Browser UX productization guidelines'](team/browser/browser-ux-productization-guidelines) [product-design] _updated: '2026-06-19'_ &mdash; tags: browser, 'ux, 'product, 'design, 'implementation
+- ['Browser UX transformation research plan'](team/browser/browser-ux-transformation-research-plan) [product-design] _updated: '2026-06-19'_ &mdash; tags: browser, 'ux, 'product, 'implementation, 'research
+- ['Browser daily cockpit UX proposal'](team/browser/daily-cockpit-ux-proposal) [product-design] _updated: '2026-06-19'_ &mdash; tags: browser, 'ux, 'product, 'design
+- ['Architecture'](team/browser/architecture) _updated: '2026-04-20'_
+- ['Capture and flows'](team/browser/capture-and-flows) _updated: '2026-04-20'_
+- ['Browser & Extensions'](team/browser) _updated: '2026-04-20'_
+- ['Operations and release'](team/browser/operations-and-release) _updated: '2026-04-20'_
+- ['Security'](team/browser/security) _updated: '2026-04-20'_
 
 ### monitor Synap App (11)
 
@@ -559,16 +605,27 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Storage'](docs/architecture/deployment/infrastructure/storage) _updated: '2026-04-20'_
 - [Overview](docs/architecture/deployment/overview) _updated: '2026-04-20'_
 
-### monitor Browser Desktop (8)
+### trending-up Go-to-Market (8)
 
-- [browser-extensions-consolidation.mdx](team/browser/browser-extensions-consolidation) 
-- [extension-doc.mdx](team/browser/extension-doc) 
-- [implementation-plan.mdx](team/browser/implementation-plan) 
-- ['Architecture'](team/browser/architecture) _updated: '2026-04-20'_
-- ['Capture and flows'](team/browser/capture-and-flows) _updated: '2026-04-20'_
-- ['Browser & Extensions'](team/browser) _updated: '2026-04-20'_
-- ['Operations and release'](team/browser/operations-and-release) _updated: '2026-04-20'_
-- ['Security'](team/browser/security) _updated: '2026-04-20'_
+- [branding-brief-2026.md](team/go-to-market/branding-brief-2026) 
+- [living-graph-concept.md](team/go-to-market/living-graph-concept) 
+- ['Go-to-Market'](team/go-to-market) [team] _updated: '2026-04-20'_ &mdash; tags: gtm, marketing, launches, positioning, pricing
+- ['Launch Operations'](team/go-to-market/launch-operations) _updated: '2026-04-20'_
+- ['Market and Analysis'](team/go-to-market/market-and-analysis) _updated: '2026-04-20'_
+- ['OpenClaw GTM'](team/go-to-market/openclaw-gtm) _updated: '2026-04-20'_
+- ['Planning Assets'](team/go-to-market/planning-assets) _updated: '2026-04-20'_
+- ['Roadmap'](team/go-to-market/roadmap) _updated: '2026-04-20'_
+
+### bot OpenClaw & AI Integration (8)
+
+- ['AI Companion Architecture'](team/platform/ai-companion) [team] _updated: '2026-05-27'_
+- ['AI Inline Command Syntax'](team/platform/ai-inline-patterns) [team] _updated: '2026-05-27'_
+- ['AI Interaction Architecture'](team/platform/ai-interaction) _updated: '2026-04-20'_
+- ['OpenClaw Channel Interactions'](team/platform/openclaw-channels) _updated: '2026-04-20'_
+- ['OpenClaw Integration State'](team/platform/openclaw-integration) _updated: '2026-04-20'_
+- ['OpenClaw Skill Setup'](team/platform/openclaw-skill-readme) _updated: '2026-04-20'_
+- ['Openclaw Skill'](team/platform/openclaw-skill) _updated: '2026-04-20'_
+- ['Session-Scoped Memory'](team/platform/session-memory) _updated: '2026-04-20'_
 
 ### monitor Studio App (8)
 
@@ -593,10 +650,10 @@ This index makes Synap documentation searchable and navigable for both humans an
 
 ### bot Agent Integration (6)
 
+- ['MCP'](docs/integrate/agents/mcp) _updated: '2026-05-19'_
 - ['OpenClaw'](docs/integrate/agents/openclaw) _updated: '2026-05-03'_
 - ['Channels and agents'](docs/integrate/agents/channels-and-agents) _updated: '2026-04-20'_
 - ['Agents'](docs/integrate/agents) _updated: '2026-04-20'_
-- ['MCP'](docs/integrate/agents/mcp) _updated: '2026-04-20'_
 - ['Skills'](docs/integrate/agents/skills) _updated: '2026-04-20'_
 - ['Synap AI'](docs/integrate/agents/synap-ai) _updated: '2026-04-20'_
 
@@ -611,41 +668,21 @@ This index makes Synap documentation searchable and navigable for both humans an
 
 ### rocket Getting Started (6)
 
+- ['What is Synap?'](docs/start/concepts/what-is-synap) _updated: '2026-05-27'_
 - ['Getting Started'](docs/start/getting-started/getting-started) _updated: '2026-04-21'_
 - ['Concepts'](docs/start/concepts) _updated: '2026-04-20'_
-- ['What is Synap?'](docs/start/concepts/what-is-synap) _updated: '2026-04-20'_
 - ['AI agents & external tools'](docs/start/getting-started/ai-agents-and-tools) _updated: '2026-04-20'_
 - ['Next Steps'](docs/start/getting-started/next-steps) _updated: '2026-04-20'_
 - ['Use Synap'](docs/start) _updated: '2026-04-01'_
 
-### trending-up Go-to-Market (6)
+### shield-check Auth & Security (6)
 
-- ['Go-to-Market'](team/go-to-market) [team] _updated: '2026-04-20'_ &mdash; tags: gtm, marketing, launches, positioning, pricing
-- ['Launch Operations'](team/go-to-market/launch-operations) _updated: '2026-04-20'_
-- ['Market and Analysis'](team/go-to-market/market-and-analysis) _updated: '2026-04-20'_
-- ['OpenClaw GTM'](team/go-to-market/openclaw-gtm) _updated: '2026-04-20'_
-- ['Planning Assets'](team/go-to-market/planning-assets) _updated: '2026-04-20'_
-- ['Roadmap'](team/go-to-market/roadmap) _updated: '2026-04-20'_
-
-### bot OpenClaw & AI Integration (6)
-
-- ['AI Interaction Architecture'](team/platform/ai-interaction) _updated: '2026-04-20'_
-- ['OpenClaw Channel Interactions'](team/platform/openclaw-channels) _updated: '2026-04-20'_
-- ['OpenClaw Integration State'](team/platform/openclaw-integration) _updated: '2026-04-20'_
-- ['OpenClaw Skill Setup'](team/platform/openclaw-skill-readme) _updated: '2026-04-20'_
-- ['Openclaw Skill'](team/platform/openclaw-skill) _updated: '2026-04-20'_
-- ['Session-Scoped Memory'](team/platform/session-memory) _updated: '2026-04-20'_
-
-### shield-check Auth & Security (8)
-
-- ['Auth Architecture'](team/platform/auth-architecture) _updated: '2026-05-10'_
+- ['Auth Architecture'](team/platform/auth-architecture) _updated: '2026-07-14'_
+- ['Trusted Issuers'](team/platform/trusted-issuers) _updated: '2026-07-14'_
 - ['Authentication'](team/platform/authentication) _updated: '2026-05-18'_
-- ['Eve ↔ Hub Auth Convergence'](team/platform/eve-hub-auth) _updated: '2026-05-18'_
-- ['Invite Flow'](team/platform/invite-flow) _updated: '2026-05-18'_
 - ['API Keys'](team/platform/api-keys) _updated: '2026-04-20'_
 - ['Permissions'](team/platform/permissions) _updated: '2026-04-20'_
 - ['Security & Permissions'](team/platform/security) _updated: '2026-04-20'_
-- ['Trusted Issuers'](team/platform/trusted-issuers) _updated: '2026-04-20'_
 
 ### palette Feature Design & UX (6)
 
@@ -671,6 +708,14 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Build & integrate'](docs/integrate) _updated: '2026-04-20'_
 - ['Integration fundamentals'](docs/integrate/integrate-core) _updated: '2026-04-20'_
 - ['Website and app integrations'](docs/integrate/websites) _updated: '2026-04-20'_
+
+### git-pull-request Decision Records (5)
+
+- ['ADR: View-renderer marketplace (pod-bound renderers over a typed view contract)'](team/decisions/adr-view-renderer-marketplace-2026-08-01) _updated: '2026-08-01'_ &mdash; tags: views, renderers, marketplace, architecture, sovereignty
+- ['ADR — Realtime event naming convention'](team/decisions/adr-realtime-event-naming-2026-05-05) _updated: '2026-05-05'_ &mdash; tags: adr, events, realtime, architecture
+- ['Decision log'](team/decisions/decision-log) _updated: '2026-05-05'_
+- ['ADR template'](team/decisions/adr-template) _updated: '2026-04-20'_
+- ['Decisions'](team/decisions) [team] _updated: '2026-04-20'_ &mdash; tags: decisions, adr, architecture, governance
 
 ### eye Agent Monitoring (5)
 
@@ -726,13 +771,6 @@ This index makes Synap documentation searchable and navigable for both humans an
 - ['Synap Intelligence'](docs/cloud/intelligence) _updated: '2026-04-20'_
 - ['Pod updates & policies'](docs/cloud/pod-updates) _updated: '2026-04-20'_
 - ['Synap Cloud'](docs/cloud/synap-cloud) _updated: '2026-04-20'_
-
-### git-pull-request Decision Records (4)
-
-- ['ADR — Realtime event naming convention'](team/decisions/adr-realtime-event-naming-2026-05-05) _updated: '2026-05-05'_ &mdash; tags: adr, events, realtime, architecture
-- ['Decision log'](team/decisions/decision-log) _updated: '2026-05-05'_
-- ['ADR template'](team/decisions/adr-template) _updated: '2026-04-20'_
-- ['Decisions'](team/decisions) [team] _updated: '2026-04-20'_ &mdash; tags: decisions, adr, architecture, governance
 
 ### layers Event Chain & Data Tier (4)
 
@@ -796,14 +834,31 @@ Pages that span multiple subject areas.
 
 | Page | Overlaps |
 |------|----------|
-| **DevOps** (6 relevant) |
+| **AI & Agents** (6 relevant) |
+| &mdash; |
+| ['Memory & Knowledge'](docs/architecture/concepts/memory-and-knowledge) |
+| ['User Stories'](team/crm/user-stories) |
+| ['Hermes ↔ Synap MCP Architecture'](team/eve-cli/hermes-synap-mcp) |
+| ['Artboard Canvas Capability'](team/platform/artboard-canvas-capability) |
+| ['Surface Session Runtime'](team/platform/surface-session-runtime) |
+| &hellip; (1 more) |
+
+| **Events & Proposals** (5 relevant) |
+| &mdash; |
+| ['Document Templates'](team/crm/document-templates) |
+| ['Lead-first Pipeline'](team/crm/pipeline) |
+| ['ADR — Realtime event naming convention'](team/decisions/adr-realtime-event-naming-2026-05-05) |
+| ['Decisions'](team/decisions) |
+| ['Webhook Architecture'](team/platform/webhook-architecture) |
+
+| **DevOps** (7 relevant) |
 | &mdash; |
 | ['Eve CLI Transports'](team/devops/eve-cli-transports) |
 | ['DevOps'](team/devops) |
 | ['Infrastructure Architecture'](team/devops/infrastructure-architecture) |
 | ['Operations Runbook'](team/devops/operations-runbook) |
-| ['Tech Matrix'](team/tech-matrix) |
-| &hellip; (1 more) |
+| ['Infrastructure Audit — May 2026'](team/platform/infrastructure-audit-2026-05) |
+| &hellip; (2 more) |
 
 ---
 

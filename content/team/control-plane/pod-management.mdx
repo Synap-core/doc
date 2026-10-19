@@ -101,9 +101,11 @@ Duplicating an insert in an admin route **before** the job runs produced orphan 
 
 Operational detail: which routes refresh, how `GET /admin/pods/:id/update-status` is built, and failure triage — see **[CP dashboard & pod update pipeline](/team/control-plane/cp-dashboard-updates)**.
 
-### External connect / provision connect
+### External account and operations connections
 
-Provisioning may call **`/api/provision/connect`** on the pod so the Data Pod can verify control-plane JWTs for other flows. That work is **orthogonal** to rolling updates: the update trigger still targets **`https://{customDomain}`** or **`https://{subdomain}.{APP_DOMAIN}`** for `pod-agent`, not a separate “external connection URL” field.
+`/api/provision/connect` is retired and must not be used by provisioning or rolling-update work. Account-service access uses the generic federation routes directly with the Pod; it is separate from lifecycle operations. The update trigger still targets **`https://{customDomain}`** or **`https://{subdomain}.{APP_DOMAIN}`** for the opt-in `pod-agent`, not a separate “external connection URL” field.
+
+The Pod-agent's generic issuer/audience configuration grants operational command verification only. It does not trust an issuer for human login or establish Pod membership.
 
 ## Provisioning Flow
 

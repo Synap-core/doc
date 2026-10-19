@@ -1,7 +1,39 @@
 # ADR: Self-Hosted Nango on Eve
 
-**Status**: Accepted  
+**Status**: SUPERSEDED (2026-09-13) — see below  
 **Date**: 2026-05-12
+
+---
+
+## Superseded 2026-09-13 — CP is now the sole Nango broker
+
+The **Connect & Mirror plan** (`CONNECT-AND-MIRROR-PLAN.md`, decision D1) reverses this
+ADR: for CP-managed pods, **the Control Plane is the sole Nango broker again** — pods
+hold no Nango key, and every session/proxy/revoke call is authenticated pod → CP over
+the existing **CP-issued ES256 `pod_relay` JWT** (claims `type:"pod_relay"`, `podId`),
+never a shared global secret. The CP stamps Nango `end_user.id = "<podId>:<podUserId>"`
+and filters every list/proxy/revoke server-side by that namespace, so one pod can never
+see another pod's connections — that filter is the fix for the cross-pod breach class
+this ADR was originally trying to close by a different means (per-pod isolation via
+per-pod Nango instances instead of per-pod namespacing in one shared broker).
+**Self-hosted pods are unaffected** — they keep the vault-key path this ADR describes,
+behind the same `resolveBroker()` seam (`synap-backend/packages/api/src/connectors/index.ts`).
+
+**Why reverse a self-hosting decision:** the per-pod-Nango-instance approach never
+shipped (`NANGO_CONNECTORS_ENABLED` was `false` everywhere, per the original context
+below) and, on inspection, closes the breach class at the wrong layer — the isolation
+CP-managed pods actually need is a namespace filter on ONE broker, not a second broker
+process per pod. Running a broker per managed pod is the sovereignty-purist path but
+was never load-bearing (managed pods already trust the CP for provisioning, billing,
+and relay routing); namespacing the shared broker gets the same isolation guarantee
+for CP-managed pods with none of the per-pod Docker/OAuth-app operational cost this
+ADR documents below (§Negative). That operational cost is the trade-off being accepted
+knowingly, not overlooked.
+
+Current architecture, deploy order, and the pod↔CP trust rail are documented in
+`synap-control-plane-api/CONNECTORS-NORTH-STAR.md` §4. The sections below are kept for
+history — the self-hosted vault-key path they describe is still correct for
+self-hosted pods, but a CP-managed pod no longer runs its own Nango instance.
 
 ---
 

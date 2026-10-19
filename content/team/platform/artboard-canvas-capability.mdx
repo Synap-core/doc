@@ -1,0 +1,602 @@
+---
+title: 'Artboard Canvas Capability'
+description: Fixed-size output canvases on top of Synap whiteboards for decks, wireframes, banners, carousels, reports, and AI-generated visual deliverables.
+section: general
+audience: internal
+version: 0.1
+last_updated: '2026-06-04'
+tags: [whiteboard, canvas, artboard, export, cells, ai, design]
+toc: true
+---
+
+# Artboard Canvas Capability
+
+**Status:** Product and architecture proposal.  
+**Decision:** Add a first-class **Artboard** capability to whiteboards. Do not merge it with Sections.
+
+Artboards are fixed-size production surfaces embedded inside the infinite whiteboard. They let Synap turn captured knowledge, entities, views, cells, and AI synthesis into concrete outputs: wireframes, pitch decks, banners, carousels, reports, one-pagers, and shareable assets.
+
+The whiteboard remains the place to think. The artboard is the place to produce.
+
+---
+
+## Market Read
+
+The market is converging around four patterns.
+
+### 1. Infinite canvas for thinking, fixed pages for output
+
+Canva Whiteboards, Miro, FigJam, and similar tools use infinite canvas for ideation, workshops, flows, stickies, and diagrams. The strong products then provide a way to turn canvas material into fixed deliverables: downloadable selections, presentations, decks, docs, or resized design formats.
+
+User preference: people want the freedom of messy spatial thinking, but they judge the product by the quality and reliability of the final output.
+
+Synap implication: keep the whiteboard freeform, but introduce fixed-size artboards with export guarantees.
+
+### 2. AI helps structure first, not finish perfectly
+
+Figma AI can turn FigJam material into a Figma Slides draft. Beautiful.ai guides users through prompt, supporting files, outline, and slide generation. Pitch, Gamma, Adobe Express, and Decktopus position AI as a first-draft accelerator with templates, brand control, and manual refinement afterward.
+
+User preference: AI can produce the first version, but users still expect editability, brand control, and a clear way to correct the result.
+
+Synap implication: AI should generate artboards as proposals or drafts. It should not hide the structure. The user should see pages, narrative, source data, and editable cells.
+
+### 3. Brand and format consistency are product trust
+
+Pitch emphasizes team templates and brand libraries. Adobe Express emphasizes editable templates and commercial-safe brandable assets. Canva and Gamma normalize export to several formats. Users complain when AI presentation tools produce generic visuals, weak brand fidelity, or poor PowerPoint export.
+
+User preference: output must look like the team, not like a generic AI template.
+
+Synap implication: artboards need presets, template packs, brand tokens, page masters, and export checks. This is not just a drawing feature.
+
+### 4. Export is a core capability, not a footer action
+
+Miro has explicit board export flows. Canva supports downloads and design transformations. tldraw provides image export APIs, but its export pipeline depends on shapes having SVG/image export behavior.
+
+User preference: export quality is where the tool becomes credible. Low-quality export breaks trust immediately.
+
+Synap implication: V1 should start with a reliable PNG/PDF path for artboards, then add PPTX/HTML/carousel variants only after the export contract is stable.
+
+---
+
+## Product Positioning
+
+Synap should not try to become "another Canva" or "another Pitch." Its angle is different:
+
+> Synap turns your private knowledge graph into visual deliverables.
+
+Competitors start from a prompt, blank page, or template. Synap starts from owned data: research, entities, channels, documents, imports, views, cells, and AI synthesis. The output is grounded in the user's workspace rather than hallucinated from a short prompt.
+
+### Primary user stories
+
+1. **Research to deck**
+   - Select research notes, entities, decisions, and a whiteboard cluster.
+   - Ask AI to create a 6-slide briefing.
+   - AI proposes artboards, each with source-linked cells and editable copy.
+   - User refines, exports PDF or PNG.
+
+2. **Workspace to wireframe**
+   - Start from a product idea or selected entities.
+   - Create a desktop or mobile artboard sequence.
+   - Add generated UI cells, flow views, annotations, and relation diagrams.
+   - Export images or keep live inside the workspace.
+
+3. **Data to social carousel**
+   - Select a report, channel summary, or entity view.
+   - Choose "LinkedIn carousel" or "Instagram square."
+   - AI creates ordered artboards with title, insight, chart, and CTA variants.
+   - User applies brand, exports PNG sequence.
+
+4. **Dashboard to executive one-pager**
+   - Place existing cells, stats, charts, and entity cards into a fixed page.
+   - Artboard remains live in Synap but exports as a static summary.
+
+---
+
+## Concept Model
+
+### Board
+
+Infinite collaborative spatial surface. Stores loose thinking, drawings, entities, views, cells, comments, and connections.
+
+### Section
+
+Loose organizer inside the board. A section groups thinking. It may have a title, sub-board, or presentation region, but it has no strict output contract.
+
+### Artboard
+
+Fixed output surface inside a board. It has a size, ratio, preset, background, export settings, safe area, optional bleed, and page order.
+
+### Page Set
+
+Ordered group of artboards for multi-page outputs such as pitch decks, carousels, reports, and PDF exports.
+
+### Template
+
+Reusable layout and style contract. Templates can define page masters, slots, typography, brand tokens, and recommended cell placements.
+
+---
+
+## Why Not Merge Section and Artboard?
+
+Sections and artboards have different jobs.
+
+| Object | User meaning | Constraints | Export role |
+| --- | --- | --- | --- |
+| Section | Organize a spatial area | Loose, flexible | Optional |
+| Artboard | Produce a designed output | Fixed size, safe area, page metadata | Primary |
+
+Merging them would overload the section mental model. Instead:
+
+- A section can contain artboards.
+- An artboard can be grouped inside a section.
+- "Convert section to artboard" can exist as an action.
+- "Create page set from selected sections" can exist as an AI/action flow.
+
+---
+
+## Tldraw vs Custom Canvas
+
+### Recommendation
+
+Use **tldraw for editing and collaboration**, and build a **Synap-owned artboard/export layer** on top.
+
+### Use tldraw for
+
+- Infinite board navigation.
+- Selection, moving, resizing, grouping.
+- Drawing, shapes, arrows, text, frames.
+- Yjs-backed collaboration.
+- Existing custom shapes for entities, views, and cells.
+- Placement of artboards inside the whiteboard.
+
+### Own ourselves
+
+- Artboard shape contract.
+- Preset catalog.
+- Page ordering.
+- Safe area and bleed overlays.
+- Export queue and export options.
+- Cell/view export snapshots.
+- AI artboard generation proposals.
+- Template and brand application.
+
+### Why this hybrid
+
+Building a full custom canvas would duplicate years of interaction work: selection, pan/zoom, transforms, keyboard controls, collaboration, shape lifecycle, and basic export. tldraw is already in the product and fits the whiteboard.
+
+But artboard output has product-specific constraints. We need deterministic export, workspace data links, cell snapshots, brand tokens, and AI proposal governance. That should be Synap code.
+
+### Export warning
+
+tldraw can export shapes to SVG and raster formats, but custom shapes need reliable export behavior. Synap cells and views often render as DOM, iframes, or fetched data. They cannot be treated as ordinary vector shapes.
+
+Therefore artboard export must include a **Renderable Export Contract**:
+
+- Native tldraw shapes export through tldraw.
+- Images export as media assets.
+- Entity cards export through a deterministic SVG/HTML snapshot.
+- Views export through a read-only snapshot renderer.
+- Cells export through a cell-level `export()` capability or a rendered bitmap snapshot.
+- Iframe/HTML cells export as static previews in V1 unless the cell exposes a trusted export renderer.
+
+---
+
+## OpenDesigner Reuse Stance
+
+OpenDesigner is strategically interesting, but it should not become the foundation of Synap's canvas.
+
+OpenDesigner is closer to an agent-driven artifact factory than a whiteboard-native artboard system: prompt, design-system/skill selection, sandboxed HTML artifact, export. This is useful for generation workflows, but its app model, daemon, local project store, CLI adapters, and artifact workspace would conflict with Synap's source of truth.
+
+### Reuse as patterns
+
+- Skill/task packaging for repeatable design generation.
+- `DESIGN.md`-style design system contracts.
+- Question-form and direction-picker preflight.
+- Agent plan streaming and critique gates.
+- Sandboxed HTML artifact preview.
+- Deck/carousel/export prompt structures.
+
+### Avoid direct product integration
+
+- Do not embed the OpenDesigner app inside Synap.
+- Do not adopt its project/database model.
+- Do not make its artifact folder the source of truth.
+- Do not bypass Synap proposals for AI-created resources.
+- Do not fork its UI as the artboard editor.
+
+### Possible integration later
+
+- Import selected OpenDesigner skills/templates into Synap's AI skill library.
+- Let Synap generate OpenDesigner-like HTML artifacts as `html-embed` or custom cells.
+- Convert compatible `DESIGN.md` files into Synap brand/template settings.
+- Use selected export/rendering techniques as references after legal and technical review.
+
+The rule: OpenDesigner may inform **generation**, **templates**, and **skills**. Synap owns **workspace data**, **cells**, **whiteboards**, **artboards**, **proposals**, and **exports**.
+
+---
+
+## Single Source of Truth
+
+The artboard capability should preserve existing Synap primitives.
+
+| Truth | Owner |
+| --- | --- |
+| Workspace data | entities, relations, documents |
+| Query/lens | views.config and views.query |
+| Reusable renderables | cell_instances |
+| Spatial placement | whiteboard Yjs/tldraw document |
+| Fixed output surface | artboard shape props inside whiteboard document |
+| Multi-page output | page set metadata in view config or artboard collection metadata |
+| Brand/template | workspace/app settings and reusable templates |
+| Export artifacts | documents/files created from export jobs |
+
+Artboards are placements plus output metadata. They must not duplicate entity data or cell definitions.
+
+---
+
+## Public Product Flow
+
+### Entry points
+
+- Toolbar: `Create -> Artboard`.
+- Context menu: `Create artboard here`.
+- Selection action: `Create artboard from selection`.
+- AI action: `Generate artboards from selected context`.
+- Home/dashboard action: `Create deliverable`.
+
+### Create artboard flow
+
+1. User chooses preset:
+   - Slide 16:9
+   - Slide 4:3
+   - A4
+   - Letter
+   - Social square
+   - Story/Reel
+   - LinkedIn carousel
+   - Website hero/banner
+   - Custom size
+2. Artboard appears on the board with a visible boundary.
+3. User drags existing entities, views, cells, images, and text into it.
+4. Inspector shows size, background, safe area, page number, and export options.
+5. Export button offers PNG first, then PDF/PPTX/HTML when supported.
+
+### AI generation flow
+
+1. User selects board material or workspace data.
+2. User picks output intent: deck, carousel, wireframe, report, banner.
+3. AI proposes outline/page plan.
+4. User accepts or edits plan.
+5. AI creates artboards and places resources/cells.
+6. AI suggests exports and follow-up variants.
+
+AI placement and resource creation should remain proposal-gated when it mutates shared workspace state.
+
+---
+
+## Implementation Plan
+
+### Phase 0: Product prototype and high-fidelity screens
+
+- Produce high-fidelity mockups for the core flows in this doc.
+- Validate whether users understand Board vs Section vs Artboard.
+- Validate whether "Use existing data" is visually stronger than generic prompt-to-deck.
+
+Verify:
+
+- Designers can produce screens from the prompt below.
+- Product team can point to one default flow: "selected research -> generated deck."
+
+### Phase 0A: OpenDesigner audit
+
+Repos:
+
+- External: `nexu-io/open-design`
+- Internal docs: `synap-team-docs`
+
+Tasks:
+
+- Audit OpenDesigner architecture: skills, design systems, artifact generation, preview, export, MCP/CLI layer.
+- Identify reusable ideas vs incompatible app-model assumptions.
+- Review license and attribution requirements before copying any templates, prompts, or code.
+- Select 3 to 5 patterns to adapt into Synap:
+  - AI designer preflight question form.
+  - Design direction picker.
+  - Design-system contract.
+  - Artifact/deck skill structure.
+  - Critique/export checklist.
+- Produce an "OpenDesigner adaptation note" with accepted, rejected, and deferred ideas.
+
+Verify:
+
+- No product dependency on OpenDesigner runtime.
+- No source-of-truth conflict with Synap entities/views/cells/whiteboard.
+- Clear decision on whether any code or only concepts/templates are reused.
+
+### Phase 0B: Synap design-generation package sketch
+
+Repos:
+
+- `synap-intelligence-service`
+- `synap-backend`
+- `synap-app/packages/apps/whiteboard`
+- Optional new package: `synap-app/packages/features/design-generation`
+
+Tasks:
+
+- Define a Synap-native design-generation flow inspired by OpenDesigner:
+  - `intent` = deck, carousel, wireframe, banner, report.
+  - `sourceRefs` = entities, views, cells, documents, selected board shapes.
+  - `brandRef` = workspace brand/template settings.
+  - `outputPlan` = ordered artboards/pages.
+  - `artifactRefs` = generated cells, HTML artifacts, images, exports.
+- Draft the AI skill contract for creating artboard plans and renderer cells.
+- Decide whether design prompts live as Synap skills, templates, or both.
+- Define how generated HTML artifacts become `cell_instances` or inline HTML cells.
+- Define how proposal review displays the generated page plan before board mutation.
+
+Verify:
+
+- AI designer screens can show the preflight and generated plan without fake product concepts.
+- Generated outputs still land in Synap primitives: artboards, cells, views, documents, events.
+- OpenDesigner inspiration is transformed into Synap-native architecture.
+
+### Phase 1: Artboard shape V1
+
+Repos:
+
+- `synap-app/packages/apps/whiteboard`
+
+Tasks:
+
+- Add `ArtboardShapeUtil` with fixed `w`, `h`, `preset`, `title`, `background`, `safeArea`, `bleed`, `pageIndex`.
+- Add toolbar menu item `Create -> Artboard`.
+- Add preset picker.
+- Add inspector controls for size, preset, background, and page index.
+- Support grouping/reparenting existing shapes into artboards.
+- Keep drawing tools, entities, views, and cells working inside artboards.
+
+Verify:
+
+- User can create custom artboards without breaking normal drawing.
+- Existing cell/view/entity placements still work.
+- Artboards persist across reload.
+
+### Phase 2: Page set and navigation
+
+Repos:
+
+- `synap-app/packages/apps/whiteboard`
+- Possibly `synap-app/packages/core/view-renderer`
+
+Tasks:
+
+- Add artboard list/filmstrip for current board.
+- Allow reorder, duplicate, rename, and select page.
+- Add `Create page set from selected artboards`.
+- Store page-set metadata in whiteboard view config or Yjs document metadata.
+
+Verify:
+
+- Multi-artboard deck/carousel order is stable after reload.
+- Duplicate creates independent placement objects but preserves resource references.
+
+### Phase 3: Export V1
+
+Repos:
+
+- `synap-app/packages/apps/whiteboard`
+- `synap-app/packages/core/cell-runtime`
+- Later `synap-backend/packages/jobs`
+
+Tasks:
+
+- Add `Export artboard as PNG`.
+- Use tldraw export for native shapes.
+- Add export snapshots for custom entity/view/cell shapes.
+- Add degraded states for unsupported live embeds.
+- Create export preview before download.
+- Store export as a document/file when requested.
+
+Verify:
+
+- PNG output matches artboard bounds.
+- No extra board UI appears in export.
+- Cells/views have explicit unsupported or snapshot state.
+
+### Phase 4: AI artboard generation
+
+Repos:
+
+- `synap-backend`
+- `synap-intelligence-service`
+- `synap-app/packages/apps/whiteboard`
+
+Tasks:
+
+- Add Hub Protocol route for artboard proposals.
+- Add AI skill: create page plan, create artboards, place resources, create cells.
+- Add proposal type: `whiteboard.artboard.create` and/or reuse `whiteboard.place` with artboard resources.
+- Add "Generate artboards from selected context" action.
+
+Verify:
+
+- AI never mutates board silently.
+- User can inspect source material for each generated page.
+- Rejected proposal leaves board unchanged.
+
+### Phase 5: Templates and brand kits
+
+Repos:
+
+- `synap-app/packages/apps/whiteboard`
+- `synap-app/packages/views/bento` or new artboard template package
+- `synap-backend`
+
+Tasks:
+
+- Add template object model.
+- Add workspace brand tokens: logo, colors, fonts, tone.
+- Add page master slots.
+- Add template application to selected artboards.
+- Add "regenerate layout but keep content" action.
+
+Verify:
+
+- Same data can be rendered in multiple output styles.
+- Brand application is reversible.
+
+### Phase 6: Advanced export
+
+Tasks:
+
+- PDF multi-page export.
+- PNG sequence export for carousels.
+- PPTX export with static image fallback first.
+- HTML export for interactive deliverables.
+- Server-side export worker for reliable rendering and large outputs.
+
+Verify:
+
+- Large exports do not freeze the browser.
+- Export jobs are resumable and visible in activity/events.
+
+---
+
+## Product Risks
+
+### Risk: It becomes a generic design tool
+
+Mitigation: Lead with data-grounded deliverables, not blank-canvas decoration. The first flow should start from Synap context.
+
+### Risk: Export quality disappoints users
+
+Mitigation: Start with PNG/PDF. Add PPTX only when the static and editable fallback story is clear.
+
+### Risk: Cells/views do not export reliably
+
+Mitigation: Add explicit export contracts and visible unsupported states. Do not silently export blank boxes.
+
+### Risk: Too many tools on the whiteboard
+
+Mitigation: Progressive disclosure. Create menu gets "Artboard"; detailed layout/export controls appear only when an artboard is selected.
+
+### Risk: AI creates generic output
+
+Mitigation: Require source context, page plan, template, and brand tokens. Show source links on generated pages.
+
+---
+
+## AI Designer Brief
+
+Use this brief to generate high-fidelity screens using the existing Synap visual system.
+
+### Product story
+
+Design the Synap whiteboard evolving into a production canvas. The user has research notes, entities, views, and AI chat on an infinite board. They create fixed-size artboards from selected context, generate a short deck or carousel with AI, refine it visually, and export.
+
+### Design principles
+
+- The first impression must be the working product, not a landing page.
+- Keep the whiteboard quiet and operational, not decorative.
+- Use existing Synap spatial UI language: dense toolbars, right-docked panels, compact menus, subtle glass overlays.
+- Preserve the browser/workspace feeling: this is a sovereign data workspace, not a generic design playground.
+- Make Board, Section, and Artboard visually distinct:
+  - Board: infinite spatial background.
+  - Section: loose organizer/region.
+  - Artboard: fixed output surface with boundary, size label, page number, and export affordance.
+- Artboards should look precise and output-ready.
+- Cells, entities, views, charts, and generated HTML should feel reusable and live.
+- AI should appear as a collaborator that proposes page plans and layout variants, not as a magic modal that hides structure.
+
+### Core screens to generate
+
+1. **Whiteboard with artboard creation**
+   - Infinite whiteboard with existing entities, sticky notes, a flow view, and an AI chat dock.
+   - Bottom toolbar open on `Create`.
+   - Menu shows Note, Sticky note, Section, New entity, New cell, Artboard, Add existing.
+   - Artboard preset popover shows Slide 16:9, A4, Social square, Story, LinkedIn carousel, Custom.
+
+2. **Selected artboard inspector**
+   - One slide artboard selected on the board.
+   - Right inspector shows size, preset, background, safe area, page index, template, export.
+   - Artboard contains a title, entity card, chart cell, and source-linked research snippets.
+
+3. **AI generate deck from selection**
+   - User selected a cluster of research entities and notes.
+   - AI side panel proposes a 6-page outline with source references.
+   - Buttons: Create artboards, Edit outline, Change format.
+   - Show generated artboards ghost-previewed on the board.
+
+4. **Carousel/page set filmstrip**
+   - Board contains five social carousel artboards in a row.
+   - Left or bottom filmstrip shows page thumbnails, reorder controls, duplicate, export sequence.
+   - Right panel shows brand/template controls.
+
+5. **Export preview**
+   - Modal or docked panel showing selected artboards.
+   - Options: PNG, PDF, PNG sequence, store in Vault.
+   - Warning state for live embeds that will export as static preview.
+   - Export summary with dimensions and file count.
+
+6. **Wireframe mode**
+   - Mobile app artboards with UI blocks and flow arrows.
+   - Existing entities/views appear as data-driven components inside a mock interface.
+   - Inspector shows layout grid and device preset.
+
+### Visual variants
+
+Generate these variants:
+
+- Default dark workspace.
+- Light workspace.
+- Deck creation from research.
+- Social carousel generation.
+- Product wireframe generation.
+- Export warning state with unsupported live iframe.
+
+### Important UI details
+
+- Artboard boundary should be crisp, with subtle shadow only when selected.
+- Page label should be small: `Slide 1 - 1920 x 1080`.
+- Safe areas should be visible only when selected or hovering.
+- Export should be attached to the selected artboard/page-set, not buried in settings.
+- Do not use oversized marketing hero layouts.
+- Do not use decorative gradient blobs.
+- Use icon buttons for tools and compact text labels only where clarity requires it.
+- Avoid cards inside cards.
+
+### Example prompt for an AI designer
+
+```
+Create high-fidelity Synap browser UI screens for an Artboard capability inside the existing whiteboard app.
+
+The product is a sovereign AI workspace where entities, views, cells, channels, and whiteboards compose into workflows. The whiteboard is an infinite spatial surface. The new Artboard object is a fixed-size output canvas for decks, wireframes, banners, carousels, and reports.
+
+Show a real working interface, not a landing page. Use the existing Synap spatial UI language: dense bottom toolbar, compact icon controls, right-docked inspector, subtle glass panels, calm professional surfaces, and strong information hierarchy.
+
+Create the following screens:
+1. Whiteboard with Create menu open and Artboard preset picker.
+2. Selected slide artboard with right inspector for size, safe area, template, and export.
+3. AI side panel generating a 6-slide deck from selected research entities and notes.
+4. LinkedIn carousel page set with filmstrip and export sequence controls.
+5. Export preview with PNG/PDF options and warning for live iframe cells.
+6. Mobile wireframe artboards generated from workspace data.
+
+Keep Board, Section, and Artboard visually distinct. Board is infinite and freeform. Section is a loose organizer. Artboard is fixed, precise, output-ready, and exportable.
+
+Use realistic Synap objects: entity cards, chart cells, HTML cells, flow views, notes, research snippets, and AI proposal messages. The output should feel like private workspace data becoming a polished deliverable.
+```
+
+---
+
+## Source Notes
+
+- Canva Whiteboards: infinite canvas, templates, AI sort/summarize, download selections, convert designs to whiteboards.
+- Figma/FigJam: generate Figma Slides decks from FigJam boards with AI.
+- Miro: export boards/frames to image, PDF, CSV depending on context and plan.
+- Pitch: AI presentation workspace with templates, brand library, collaboration, analytics.
+- Beautiful.ai: AI deck creation uses prompt, supporting files, outline, and editable generated slides.
+- Adobe Express: prompt-to-editable templates for social posts, posters, presentations, cards, and more.
+- tldraw: image export pipeline supports SVG/raster output, but custom shapes need export behavior.
+- OpenDesigner/Open Design: open-source agent-driven artifact factory with skills, design systems, sandboxed HTML preview, and HTML/PDF/PPTX/MP4 export. Useful as inspiration for Synap design-generation skills, not as the whiteboard/artboard foundation.

@@ -21,9 +21,32 @@ Entity mutations may require user approval depending on workspace governance set
 An entity is a structured record — a task, contact, project, document reference, product, etc.
 Each entity has:
 
-- A `name` (required)
-- A `profileSlug` linking it to a profile type (required — use `list_profiles` to find available types)
+- A `title` (required)
+- A `profileSlug` linking it to a profile type (required)
 - `properties` JSONB object containing field values
+- Optional long-form `content`, stored as a linked versioned document
+- Optional project filing, role facets, and provenance when they are known
+
+## Schema-first creation
+
+`create_entity({ title, content })` is only suitable for a simple note-like
+record. Before creating a task, person, event, question, or custom kind, use
+the live schema rather than guessing property names:
+
+1. Use `orient` or `list_profiles` to identify the candidate kind.
+2. Search or resolve identity when the request may refer to something that
+   already exists. A title match alone is never a reason to merge records.
+3. Use `discover` for the selected profile. It returns the live property model,
+   including required fields and allowed values.
+4. Submit every fact already known in one governed write: `properties`,
+   `content`, existing `projectId`, and applicable facets.
+5. Read the write receipt. A `proposed` result is waiting for review, not a
+   created entity. Only propose a follow-up update when new information is
+   actually available.
+
+Do not silently select a workspace. A discovery without an explicit workspace
+uses the base/pod schema. A workspace supplied explicitly may add only that
+workspace's overlays.
 
 ## Kind vs. Facet — before you create
 
@@ -60,9 +83,10 @@ create_entity({
 
 **Workflow:**
 
-1. Call `list_profiles` to find the right profile type.
-2. If no suitable profile exists, create one with `create_profile` (auto-approved), then create the entity.
-3. Pass `profileSlug` so the entity is typed and validates against the profile schema.
+1. Call `orient` or `list_profiles` to find the right profile type.
+2. Call `discover` for the selected profile before sending non-trivial properties.
+3. If no suitable profile exists, create one with `create_profile`, then repeat discovery.
+4. Pass `profileSlug` and only keys returned by the live schema.
 
 ## When to create a new profile vs use an existing one
 
@@ -73,11 +97,12 @@ create_entity({
 
 ## Proactive entity creation
 
-When the user mentions trackable items in conversation, create them proactively:
+When the user mentions trackable items in conversation, capture them proactively:
 
-- Entities are auto-approved — no need to ask permission.
-- After creating, briefly inform the user: "I've captured Sarah as a contact and the Q3 Launch as a project."
-- Link related entities with `create_relation` when connections are obvious.
+- Use one complete write when all known fields concern one entity.
+- Use a composite graph proposal for several entities, roles, or explicit
+  relationships that should be reviewed together.
+- State the actual receipt outcome: created, reused, proposed, or partial.
 
 ## Updating an entity
 
@@ -120,7 +145,7 @@ This helps the user navigate to the entity directly from the chat.
 - Never create duplicate entities — search first.
 - Never create a second entity to express a role or relationship state — attach a facet instead.
 - Always use `profileSlug` (not the deprecated `type` field).
-- Batch related entities into one agent run when creating multiple (e.g. a project + its tasks).
+- Batch related entities into one composite proposal when creating multiple (e.g. a project + its tasks).
 - For large bulk imports, use `create_branch` to process in a separate branch.
 - Entity creation and update are subject to workspace governance (may create proposals).
 

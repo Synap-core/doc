@@ -1,13 +1,20 @@
 {
-  "name": "synap-team-docs",
+  "name": "synap-docs",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/check-frontmatter.mjs && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check": "node scripts/check.mjs",
+    "check:frontmatter": "node scripts/check-frontmatter.mjs",
+    "check:links": "node scripts/check-links.mjs",
+    "check:retired": "node scripts/check-retired-names.mjs"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.2",
@@ -26,7 +33,9 @@
     "@types/node": "^22.19.17",
     "@types/react": "^19.2.3",
     "@types/react-dom": "^19.2.3",
+    "js-yaml": "^4.1.1",
     "tailwindcss": "^3.4.19",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "^4.3.6"
   }
 }

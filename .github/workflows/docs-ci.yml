@@ -1,0 +1,43 @@
+name: docs-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Each check is a small script in scripts/, runnable locally with `npm run check`.
+      - name: Frontmatter schema
+        run: npm run check:frontmatter
+
+      - name: Internal links and navigation
+        run: npm run check:links
+
+      - name: Retired package names and domains
+        run: npm run check:retired
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'

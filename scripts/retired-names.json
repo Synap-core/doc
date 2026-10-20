@@ -1,0 +1,487 @@
+{
+  "$comment": "Names that must not appear in the docs. `packages` is a vendored copy of scripts/architecture/removed-packages.json from the private Synap-core/app-bases repository (copied 2026-10-20 at commit 4e017e685): package names retired by the 2026-10 layer consolidation, mapped to where their code lives now. `extra` lists names and domains that never existed or were retired elsewhere. Refresh `packages` from app-bases when it changes; scripts/check-retired-names.mjs reads this file.",
+  "source": {
+    "repository": "Synap-core/app-bases",
+    "path": "scripts/architecture/removed-packages.json",
+    "commit": "4e017e685",
+    "copied": "2026-10-20"
+  },
+  "extra": {
+    "@synap/cli": "@synap-core/cli",
+    "@synap/sdk": "@synap-core/sdk",
+    "@synap/react": "@synap-core/react",
+    "@synap-core/auth-bootstrap": "not published on npm",
+    "create-synap-app": "not published on npm; copy apps/base instead",
+    "api.synap.ai": "the Control Plane is api.synap.live; a pod is reached at its own URL",
+    "synap-labs/synap-backend": "github.com/Synap-core/backend"
+  },
+  "packages": {
+    "@synap-core/account-setup": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/agent-service": [
+      "@synap-core/web/agent-service"
+    ],
+    "@synap-core/agents-headless": [
+      "@synap-core/hooks/agents-headless"
+    ],
+    "@synap-core/agents-ui": [
+      "@synap-core/web/agents-ui"
+    ],
+    "@synap-core/ai-chat": [
+      "@synap-core/web/ai-chat"
+    ],
+    "@synap-core/app-sdk": [
+      "@synap-core/headless/app-sdk"
+    ],
+    "@synap-core/app-shell-heroui": [
+      "apps/base/lib/kit/app-shell-heroui (app-local)"
+    ],
+    "@synap-core/artboards": [
+      "@synap-core/web/artboards"
+    ],
+    "@synap-core/atlas": [
+      "@synap-core/web/atlas"
+    ],
+    "@synap-core/auth": [
+      "@synap-core/headless/auth"
+    ],
+    "@synap-core/auth-hooks": [
+      "apps/base/lib/kit/auth-hooks (app-local)"
+    ],
+    "@synap-core/auth-ui": [
+      "apps/base/lib/kit/auth-ui (app-local)"
+    ],
+    "@synap-core/automation-intent": [
+      "@synap-core/headless/automation-intent"
+    ],
+    "@synap-core/automations-heroui": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/bento-view": [
+      "@synap-core/web/bento-view"
+    ],
+    "@synap-core/billing": [
+      "@synap-core/web/billing"
+    ],
+    "@synap-core/brand": [
+      "apps/base/lib/kit/brand (app-local)"
+    ],
+    "@synap-core/brand-library": [
+      "@synap-core/web/brand-library"
+    ],
+    "@synap-core/bulk-review": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/calendar-view": [
+      "@synap-core/web/calendar-view"
+    ],
+    "@synap-core/capabilities": [
+      "@synap-core/headless/capabilities"
+    ],
+    "@synap-core/capture": [
+      "@synap-core/web/capture"
+    ],
+    "@synap-core/capture-pipeline": [
+      "@synap-core/headless/capture-pipeline",
+      "@synap-core/hooks/capture-pipeline"
+    ],
+    "@synap-core/cell-registry": [
+      "@synap-core/headless/cell-registry"
+    ],
+    "@synap-core/cell-runtime": [
+      "@synap-core/hooks/cell-runtime",
+      "@synap-core/web/cell-runtime"
+    ],
+    "@synap-core/cells": [
+      "@synap-core/web/cells"
+    ],
+    "@synap-core/channels": [
+      "@synap-core/headless/channels",
+      "@synap-core/hooks/channels",
+      "@synap-core/web/channels"
+    ],
+    "@synap-core/charts": [
+      "@synap-core/web/charts"
+    ],
+    "@synap-core/chat-headless": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/chat-interface": [
+      "@synap-core/web/chat-interface"
+    ],
+    "@synap-core/chat-surface": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/chat-ui": [
+      "@synap-core/web/chat-ui"
+    ],
+    "@synap-core/client": [
+      "@synap-core/headless/client",
+      "@synap-core/hooks/client",
+      "@synap-core/web/client"
+    ],
+    "@synap-core/command-palette": [
+      "@synap-core/web/command-palette"
+    ],
+    "@synap-core/command-template": [
+      "@synap-core/headless/command-template"
+    ],
+    "@synap-core/composer": [
+      "@synap-core/web/composer"
+    ],
+    "@synap-core/connectors": [
+      "@synap-core/web/connectors"
+    ],
+    "@synap-core/control-plane-types": [
+      "@synap-core/headless/control-plane-types"
+    ],
+    "@synap-core/crm-views": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/data-app": [
+      "@synap-core/web/data-app"
+    ],
+    "@synap-core/data-structure": [
+      "@synap-core/web/data-structure"
+    ],
+    "@synap-core/data-utils": [
+      "@synap-core/headless/data-utils"
+    ],
+    "@synap-core/database": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/deep-link-constants": [
+      "@synap-core/headless/deep-link-constants"
+    ],
+    "@synap-core/detail-placement": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/document": [
+      "@synap-core/web/document"
+    ],
+    "@synap-core/entity-card": [
+      "@synap-core/web/entity-card"
+    ],
+    "@synap-core/entity-links": [
+      "@synap-core/web/entity-links"
+    ],
+    "@synap-core/entity-mappers": [
+      "@synap-core/headless/entity-mappers"
+    ],
+    "@synap-core/entity-views": [
+      "@synap-core/web/entity-views"
+    ],
+    "@synap-core/event-renderer": [
+      "@synap-core/web/event-renderer"
+    ],
+    "@synap-core/external-connect-client": [
+      "@synap-core/headless/external-connect-client"
+    ],
+    "@synap-core/feed": [
+      "@synap-core/web/feed"
+    ],
+    "@synap-core/feed-core": [
+      "@synap-core/hooks/feed-core"
+    ],
+    "@synap-core/file-hub": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/floating-panels": [
+      "@synap-core/web/floating-panels"
+    ],
+    "@synap-core/flow-view": [
+      "@synap-core/web/flow-view"
+    ],
+    "@synap-core/focus-sessions": [
+      "@synap-core/web/focus-sessions"
+    ],
+    "@synap-core/gantt-view": [
+      "@synap-core/web/gantt-view"
+    ],
+    "@synap-core/grant-selector": [
+      "@synap-core/web/grant-selector"
+    ],
+    "@synap-core/graph-layout": [
+      "@synap-core/headless/graph-layout"
+    ],
+    "@synap-core/graph-view": [
+      "@synap-core/web/graph-view"
+    ],
+    "@synap-core/grid-view": [
+      "@synap-core/web/grid-view"
+    ],
+    "@synap-core/hydration": [
+      "@synap-core/headless/hydration"
+    ],
+    "@synap-core/icons": [
+      "@synap-core/web/icons"
+    ],
+    "@synap-core/import-core": [
+      "@synap-core/headless/import-core"
+    ],
+    "@synap-core/import-parsers": [
+      "@synap-core/headless/import-parsers"
+    ],
+    "@synap-core/import-review": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/intake-core": [
+      "@synap-core/headless/intake-core"
+    ],
+    "@synap-core/intake-room": [
+      "@synap-core/headless/intake-room",
+      "@synap-core/web/intake-room"
+    ],
+    "@synap-core/intake-ui": [
+      "@synap-core/web/intake-ui"
+    ],
+    "@synap-core/intelligence": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/intelligence-connect": [
+      "@synap-core/hooks/intelligence-connect"
+    ],
+    "@synap-core/ipc-contract": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/kanban-ui": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/kanban-view": [
+      "@synap-core/web/kanban-view"
+    ],
+    "@synap-core/lens": [
+      "@synap-core/hooks/lens"
+    ],
+    "@synap-core/lens-page": [
+      "@synap-core/web/lens-page"
+    ],
+    "@synap-core/library": [
+      "@synap-core/web/library"
+    ],
+    "@synap-core/list-view": [
+      "@synap-core/web/list-view"
+    ],
+    "@synap-core/map-view": [
+      "@synap-core/web/map-view"
+    ],
+    "@synap-core/markdown-engine": [
+      "@synap-core/headless/markdown-engine",
+      "@synap-core/hooks/markdown-engine",
+      "@synap-core/web/markdown-engine"
+    ],
+    "@synap-core/marketplace": [
+      "@synap-core/web/marketplace"
+    ],
+    "@synap-core/masonry-view": [
+      "@synap-core/web/masonry-view"
+    ],
+    "@synap-core/mcp-app-cells": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/message-parser": [
+      "@synap-core/headless/message-parser"
+    ],
+    "@synap-core/motion": [
+      "@synap-core/web/motion"
+    ],
+    "@synap-core/native-os": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/native-os-intents": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/native-os-live-updates": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/native-os-share": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/native-os-shared-storage": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/native-os-spotlight": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/native-os-vision": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/native-os-widgets": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/next-middleware": [
+      "apps/base/lib/kit/next-middleware (app-local)"
+    ],
+    "@synap-core/notifications": [
+      "@synap-core/headless/notifications",
+      "@synap-core/web/notifications"
+    ],
+    "@synap-core/object-embed": [
+      "@synap-core/web/object-embed"
+    ],
+    "@synap-core/object-registry": [
+      "@synap-core/web/object-registry"
+    ],
+    "@synap-core/object-surface": [
+      "@synap-core/web/object-surface"
+    ],
+    "@synap-core/onboarding": [
+      "@synap-core/web/onboarding"
+    ],
+    "@synap-core/onboarding-core": [
+      "@synap-core/headless/onboarding-core"
+    ],
+    "@synap-core/overlay-protocol": [
+      "@synap-core/headless/overlay-protocol"
+    ],
+    "@synap-core/platform": [
+      "@synap-core/hooks/platform"
+    ],
+    "@synap-core/platform-auth": [
+      "@synap-core/web/platform-auth"
+    ],
+    "@synap-core/platform-flow": [
+      "@synap-core/headless/platform-flow"
+    ],
+    "@synap-core/platform-sdk": [
+      "@synap-core/hooks/platform-sdk"
+    ],
+    "@synap-core/playbooks-ui": [
+      "@synap-core/web/playbooks-ui"
+    ],
+    "@synap-core/pod-client": [
+      "@synap-core/hooks/pod-client"
+    ],
+    "@synap-core/pod-connect": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/pod-failover": [
+      "@synap-core/hooks/pod-failover"
+    ],
+    "@synap-core/presenter": [
+      "@synap-core/web/presenter"
+    ],
+    "@synap-core/profile-management": [
+      "@synap-core/web/profile-management"
+    ],
+    "@synap-core/profile-renderer": [
+      "@synap-core/hooks/profile-renderer"
+    ],
+    "@synap-core/property-renderer": [
+      "@synap-core/headless/property-renderer",
+      "@synap-core/hooks/property-renderer",
+      "@synap-core/web/property-renderer",
+      "@synap-core/native/property-renderer"
+    ],
+    "@synap-core/proposal-renderer": [
+      "@synap-core/hooks/proposal-renderer"
+    ],
+    "@synap-core/proposal-types": [
+      "@synap-core/headless/proposal-types",
+      "@synap-core/hooks/proposal-types"
+    ],
+    "@synap-core/proposal-ui": [
+      "@synap-core/web/proposal-ui"
+    ],
+    "@synap-core/proposals": [
+      "@synap-core/web/proposals"
+    ],
+    "@synap-core/reactions-headless": [
+      "@synap-core/hooks/reactions-headless"
+    ],
+    "@synap-core/reactions-kit": [
+      "@synap-core/web/reactions-kit"
+    ],
+    "@synap-core/relay": [
+      "@synap-core/hooks/relay"
+    ],
+    "@synap-core/renderer-runtime": [
+      "@synap-core/headless/renderer-runtime"
+    ],
+    "@synap-core/room-ui": [
+      "@synap-core/web/room-ui"
+    ],
+    "@synap-core/run-detail": [
+      "@synap-core/web/run-detail"
+    ],
+    "@synap-core/session-continuation": [
+      "@synap-core/headless/session-continuation"
+    ],
+    "@synap-core/sheet-grid": [
+      "@synap-core/headless/sheet-grid"
+    ],
+    "@synap-core/sheet-view": [
+      "@synap-core/web/sheet-view"
+    ],
+    "@synap-core/sidebar": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/sidebar-heroui": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/spatial-shell": [
+      "@synap-core/web/spatial-shell"
+    ],
+    "@synap-core/spatial-ui": [
+      "@synap-core/web/spatial-ui"
+    ],
+    "@synap-core/stores": [
+      "@synap-core/hooks/stores"
+    ],
+    "@synap-core/surface-runtime": [
+      "@synap-core/headless/surface-runtime"
+    ],
+    "@synap-core/surface-session": [
+      "@synap-core/headless/surface-session"
+    ],
+    "@synap-core/synap-bridge": [
+      "@synap-core/hooks/synap-bridge"
+    ],
+    "@synap-core/table-view": [
+      "@synap-core/web/table-view"
+    ],
+    "@synap-core/template-engine": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/theme": [
+      "@synap-core/headless/theme"
+    ],
+    "@synap-core/timeline-view": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/toast-utils": [
+      "@synap-core/headless/toast-utils"
+    ],
+    "@synap-core/unified-search": [
+      "@synap-core/web/unified-search"
+    ],
+    "@synap-core/view-renderer": [
+      "@synap-core/web/view-renderer"
+    ],
+    "@synap-core/views-management": [
+      "@synap-core/hooks/views-management"
+    ],
+    "@synap-core/whiteboard": [
+      "@synap-core/web/whiteboard"
+    ],
+    "@synap-core/workflows": [
+      "@synap-core/web/workflows"
+    ],
+    "@synap-core/workspace": [
+      "@synap-core/web/workspace"
+    ],
+    "@synap-core/workspace-directory": [
+      "@synap-core/headless/workspace-directory"
+    ],
+    "@synap-core/workspace-settings": [
+      "(deleted — had no importers)"
+    ],
+    "@synap-core/workspace-state": [
+      "@synap-core/hooks/workspace-state"
+    ],
+    "@synap/vault": [
+      "(deleted — had no importers)"
+    ]
+  }
+}

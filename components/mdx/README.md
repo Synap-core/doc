@@ -12,7 +12,6 @@ Wrapper around **[@xyflow/react](https://reactflow.dev/)** for zoom/pan flow fig
 
 | Component | Use |
 |-----------|-----|
-| `PodReplicationPublicDiagram` | Public `/docs` — CP + primary + replica |
-| `PodReplicationTeamDiagram` | Team `/team` — workers + realtime + receive |
+| `PodReplicationPublicDiagram` | Control Plane + primary + replica |
 
 Source data: `presets/pod-replication-flow.ts`.

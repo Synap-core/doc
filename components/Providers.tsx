@@ -1,7 +1,6 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { AuthProvider } from './AuthProvider';
 import { SearchDialogRecovery } from './SearchDialogRecovery';
 import { SearchProvider } from './SearchProvider';
 
@@ -11,11 +10,9 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <AuthProvider>
+    <>
       <SearchDialogRecovery />
-      <SearchProvider>
-        {children}
-      </SearchProvider>
-    </AuthProvider>
+      <SearchProvider>{children}</SearchProvider>
+    </>
   );
 }

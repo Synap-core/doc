@@ -1,4 +1,4 @@
-import { docs, team } from '../.source';
+import { docs } from '../.source';
 import { loader } from 'fumadocs-core/source';
 
 export const docsSource = loader({
@@ -6,10 +6,5 @@ export const docsSource = loader({
   source: docs.toFumadocsSource(),
 });
 
-/** Search + legacy imports */
+/** Search index source. */
 export const source = docsSource;
-
-export const teamSource = loader({
-  baseUrl: '/team',
-  source: team.toFumadocsSource(),
-});

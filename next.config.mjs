@@ -40,15 +40,6 @@ const config = {
       { source: '/docs', destination: '/docs/start', permanent: true },
       { source: '/docs/overview', destination: '/docs/start', permanent: true },
       { source: '/docs/overview/:path*', destination: '/docs/start', permanent: true },
-      { source: '/team', destination: '/team/home', permanent: true },
-      { source: '/team/overview', destination: '/team/home', permanent: true },
-
-      // Legacy team paths under /docs → /team
-      { source: '/docs/home/:path*', destination: '/team/home/:path*', permanent: true },
-      { source: '/docs/platform/:path*', destination: '/team/platform/:path*', permanent: true },
-      { source: '/docs/control-plane/:path*', destination: '/team/control-plane/:path*', permanent: true },
-      { source: '/docs/relay/:path*', destination: '/team/relay/:path*', permanent: true },
-      { source: '/docs/devops/:path*', destination: '/team/devops/:path*', permanent: true },
 
       // Old flat public URLs → journey-based IA
       { source: '/docs/getting-started/:path*', destination: '/docs/start/getting-started/:path*', permanent: true },

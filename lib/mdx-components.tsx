@@ -1,9 +1,6 @@
 /**
- * MDX component map for docs + team collections.
- * - `SynapFlowDiagram` — generic React Flow canvas (pass `nodes` / `edges`).
- * - `PodReplicationPublicDiagram` / `PodReplicationTeamDiagram` — preset topology for pod replication.
- * - `EveStackDiagram` — Synap + Eve sidecars topology (team / Eve CLI).
+ * MDX component map for the docs collection. Empty for now: pages use the
+ * default fumadocs components (Callout, Cards, Tabs, Steps are imported in the
+ * page itself when needed).
  */
-export const mdxComponents = {
-  // Temporarily disabled due to build errors
-};
+export const mdxComponents = {};

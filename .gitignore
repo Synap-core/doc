@@ -28,3 +28,6 @@ build/
 *.zip
 .vercel
 .env*.local
+
+# Agent session state
+.omc/

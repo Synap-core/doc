@@ -46,7 +46,8 @@ const intro = `# Synap Documentation
 - AI clients: the pod's MCP endpoint at \`/mcp\`. Connect with \`npx @synap-core/cli init\` or
   \`synap connect <client>\`; do not hand-write MCP configuration.
 - Being told about changes: webhooks, or \`@synap-core/sdk-realtime\`.
-- Reading a pod through MCP: start with \`synap_ask\` (natural-language recall across the pod).
+- Working with a pod through MCP: call \`synap_orient\` first in a session (the briefing), then \`synap_ask\` to
+  recall anything from the pod in natural language.
 - Writes: expect a proposal rather than an applied change. An agent's key can never approve a proposal.
 - The CLI package is \`@synap-core/cli\` (command \`synap\`). Self-hosting starts from \`install.sh\` in the
   backend's GitHub releases.

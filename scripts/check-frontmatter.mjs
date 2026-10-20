@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Every page must carry the frontmatter described in community/docs-style-guide.
 // The vocabulary comes from lib/page-meta.ts, the same lists source.config.ts
-// validates against at build time. Run: npm run check:frontmatter
+// validates against at build time (fumadocs-mdx fails the build on a bad page).
+// This script stays as a fast CI check: it needs no build, reports every page at
+// once, and adds rules a schema cannot express (last_reviewed age, owner handle).
+// Run: npm run check:frontmatter
 import { listPages, readPage, rel, report } from './lib.mjs';
 import { AUDIENCES, AVAILABILITY, PAGE_TYPES, STATUSES } from '../lib/page-meta.ts';
 
 const REQUIRED = ['title', 'description', 'type', 'audience', 'availability', 'status', 'owner'];
-const OPTIONAL = ['last_reviewed', 'icon', 'full'];
+const OPTIONAL = ['last_reviewed', 'icon', 'full', 'generated_from'];
 const ALLOWED = new Set([...REQUIRED, ...OPTIONAL]);
 const MAX_REVIEW_AGE_DAYS = 183; // flag pages not reviewed for six months
 

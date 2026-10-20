@@ -1,5 +1,10 @@
 import { docsSource } from '@/lib/source';
-import { DocsPage, DocsBody, DocsTitle, DocsDescription } from 'fumadocs-ui/page';
+import {
+  DocsBody,
+  DocsDescription,
+  DocsPage,
+  DocsTitle,
+} from 'fumadocs-ui/layouts/docs/page';
 import { Callout } from 'fumadocs-ui/components/callout';
 import { notFound } from 'next/navigation';
 import { mdxComponents } from '@/lib/mdx-components';
@@ -49,6 +54,9 @@ export default async function Page({ params }: Props) {
         ))}
         {data.status !== 'current' ? <Badge tone="warn">{data.status}</Badge> : null}
         {reviewed ? <span className="text-xs text-fd-muted-foreground">Reviewed {reviewed}</span> : null}
+        {data.generated_from ? (
+          <span className="text-xs text-fd-muted-foreground">Generated from {data.generated_from}</span>
+        ) : null}
       </div>
       {data.status === 'beta' && !reviewed ? (
         <Callout type="warn" title="Not yet re-verified">

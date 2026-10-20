@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <DocsLayout
-      tree={docsSource.pageTree}
+      tree={docsSource.getPageTree()}
       nav={{
         title: (
           <span className="flex items-center gap-2">
@@ -17,9 +17,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         ),
         url: '/',
       }}
-      links={[
-        { text: 'GitHub', url: 'https://github.com/Synap-core', external: true },
-      ]}
+      links={[{ text: 'GitHub', url: 'https://github.com/Synap-core', external: true }]}
       sidebar={{
         collapsible: true,
         defaultOpenLevel: 0,

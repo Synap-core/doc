@@ -1,21 +1,17 @@
-import { defineDocs, defineConfig, frontmatterSchema } from 'fumadocs-mdx/config';
+import { defineDocs, defineConfig } from 'fumadocs-mdx/config';
+import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { z } from 'zod';
-import {
-  AUDIENCES,
-  AVAILABILITY,
-  PAGE_TYPES,
-  STATUSES,
-} from './lib/page-meta';
+import { AUDIENCES, AVAILABILITY, PAGE_TYPES, STATUSES } from './lib/page-meta';
 
 /**
- * Every page carries the same frontmatter; this schema types it for the app
- * (page.data.audience, .availability, …).
+ * Every page carries the same frontmatter. fumadocs-mdx validates each page
+ * against this schema when it compiles the page, so `npm run build` (and
+ * `npm run dev`) fail on a page with a missing or unknown value, e.g.
+ * `type: guide`. The vocabulary lives in lib/page-meta.ts.
  *
- * Enforcement is scripts/check-frontmatter.mjs (same vocabulary, from
- * lib/page-meta.ts), which `npm run build` runs first. Do not rely on this
- * schema alone: fumadocs-mdx 11.10.1 under Next 15 parses the webpack resource
- * query as `{ "?collection": "docs" }`, finds no collection, and skips schema
- * validation entirely (verified 2026-10-20). Re-test after the framework upgrade.
+ * scripts/check-frontmatter.mjs checks the same rules without a build (plus
+ * rules a schema cannot express, such as the six-month review age); CI runs it
+ * first because it is fast and reports every page at once.
  */
 const isoDate = z.preprocess(
   (value) => (value instanceof Date ? value.toISOString().slice(0, 10) : value),
@@ -25,15 +21,26 @@ const isoDate = z.preprocess(
 export const docs = defineDocs({
   dir: 'content/docs',
   docs: {
-    schema: frontmatterSchema.extend({
-      description: z.string().min(1),
-      type: z.enum(PAGE_TYPES),
-      audience: z.enum(AUDIENCES),
-      availability: z.array(z.enum(AVAILABILITY)).min(1),
-      status: z.enum(STATUSES),
-      owner: z.string().min(1),
-      last_reviewed: isoDate.optional(),
-    }),
+    schema: pageSchema
+      .extend({
+        description: z.string().min(1),
+        type: z.enum(PAGE_TYPES),
+        audience: z.enum(AUDIENCES),
+        availability: z.array(z.enum(AVAILABILITY)).min(1),
+        status: z.enum(STATUSES),
+        owner: z.string().min(1),
+        last_reviewed: isoDate.optional(),
+        /** Set on generated pages: the repository and ref the page was generated from. */
+        generated_from: z.string().min(1).optional(),
+      })
+      .strict(),
+    postprocess: {
+      // The Markdown of each page (served at /docs/<page>.md, llms-full.txt and the docs MCP).
+      includeProcessedMarkdown: { headingIds: false },
+    },
+  },
+  meta: {
+    schema: metaSchema.strict(),
   },
 });
 

@@ -1,16 +1,12 @@
-import { docs } from '../.source';
+import { docs } from 'collections/server';
 import { loader } from 'fumadocs-core/source';
-import { icons } from 'lucide-react';
-import { createElement } from 'react';
+import { lucideIconsPlugin } from 'fumadocs-core/source/plugins/lucide-icons';
 
 export const docsSource = loader({
   baseUrl: '/docs',
   source: docs.toFumadocsSource(),
   // `icon` in meta.json / frontmatter names a lucide-react icon (e.g. "Rocket").
-  icon(name) {
-    if (name && name in icons) return createElement(icons[name as keyof typeof icons]);
-    return undefined;
-  },
+  plugins: [lucideIconsPlugin()],
 });
 
 /** Search index source. */

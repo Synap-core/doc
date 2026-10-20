@@ -5,7 +5,8 @@ source of truth.
 
 ## What this repository is
 
-The **public** Synap documentation site (Synap-core/doc), built with Fumadocs 14 on Next.js 15. Everything here is
+The **public** Synap documentation site (Synap-core/doc), built with Fumadocs 16 (fumadocs-mdx 15) on Next.js 16 and
+Tailwind CSS 4. Everything here is
 public: anyone can read the repository on GitHub.
 
 | Knowledge | Where it goes |
@@ -48,10 +49,10 @@ owner: Antoinesrvt                 # GitHub handle
 last_reviewed: YYYY-MM-DD          # ONLY if you verified the page against the code that day
 ```
 
-The vocabulary lives in `lib/page-meta.ts`. `scripts/check-frontmatter.mjs` enforces it, and `npm run build` runs
-that check first. `source.config.ts` declares the same schema for typing, but fumadocs-mdx 11.10.1 skips its
-validation (see the comment there), so the script is what actually fails a bad page. Quote a description that
-contains `: `.
+The vocabulary lives in `lib/page-meta.ts`. `source.config.ts` turns it into a strict schema that fumadocs-mdx
+applies to every page when it compiles it, so `npm run build` and `npm run dev` fail on a bad or unknown value.
+`scripts/check-frontmatter.mjs` checks the same rules without a build (CI runs it first) and adds the six-month
+`last_reviewed` limit. Quote a description that contains `: `.
 
 ## The verification rule
 
@@ -76,7 +77,7 @@ that may not exist yet.
 npm ci                # install (Node >= 22.18; the checks import lib/page-meta.ts directly)
 npm run dev           # local site on http://localhost:3000
 npm run check         # frontmatter, internal links + navigation, retired names
-npm run build         # frontmatter check, then the production build
+npm run build         # production build (fails on invalid frontmatter)
 ```
 
 CI (`.github/workflows/docs-ci.yml`) runs the three checks and the build on every pull request and push to main.

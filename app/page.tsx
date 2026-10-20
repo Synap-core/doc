@@ -1,6 +1,6 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { Card, Cards } from 'fumadocs-ui/components/card';
-import { AppWindow, ArrowRight, BookOpen, Code2, Library, Rocket, Server, Users } from 'lucide-react';
+import { AppWindow, ArrowRight, BookOpen, CodeXml, Library, Rocket, Server, Users } from 'lucide-react';
 import Link from 'next/link';
 import { SynapLogoMark } from '@/components/SynapLogoMark';
 import { homeUi } from '@/lib/home-ui';
@@ -19,7 +19,7 @@ const sections = [
     href: '/docs/use',
   },
   {
-    icon: <Code2 className="size-5" />,
+    icon: <CodeXml className="size-5" />,
     title: 'Build',
     description: 'The SDK, API keys, webhooks, MCP and agent skills: build on your pod or connect an agent to it.',
     href: '/docs/build',

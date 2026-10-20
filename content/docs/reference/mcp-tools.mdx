@@ -1,0 +1,28 @@
+---
+title: MCP tools
+description: Where the list of MCP tools a pod exposes is defined, and how to read it.
+type: reference
+audience: builder
+availability: [pod-oss, cloud]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+The tools a pod exposes over [MCP](/docs/build/agents/mcp) are declared in one file in the backend repository:
+[`packages/api/src/routers/mcp/tools/mcp-tools.manifest.json`](https://github.com/Synap-core/backend/blob/main/packages/api/src/routers/mcp/tools/mcp-tools.manifest.json).
+
+Each entry has:
+
+| Field | Meaning |
+|---|---|
+| `name` | The tool name. Every name starts with `synap_`. |
+| `description` | What the tool does and when an agent should use it. |
+| `inputSchema` | The JSON Schema of its arguments. |
+| `annotations` | Hints for the client: a title, and whether the tool only reads (`readOnlyHint`). |
+
+A generated reference page, built from this manifest, is planned. Until then, the manifest is the reference, and an MCP
+client lists the same tools with `tools/list`.
+
+What a key can call depends on its scopes and grant: see [MCP scopes](/docs/build/agents/mcp#scopes). Every write tool
+goes through the pod's governance, so most writes become proposals.

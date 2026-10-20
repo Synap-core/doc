@@ -1,0 +1,106 @@
+---
+title: Self-host quickstart
+description: Install the open-source pod on your own Linux server, create the first admin and connect your laptop.
+type: tutorial
+audience: self-host
+availability: [pod-oss, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+This installs a Synap pod from a published release: pre-built container images pulled by digest, behind Caddy with
+automatic HTTPS. Nothing is built on your server. The [Run](/docs/run) section covers each step in depth.
+
+## What you need
+
+- A Linux server you can reach as root (`sudo`), with ports 80 and 443 open to the internet.
+- A domain you control. The pod uses two host names, for example:
+  - `pod.example.com` for the pod itself (API, sign-in, MCP),
+  - `pod-admin.example.com` for the pod's admin console.
+
+  Point a DNS `A` (or `AAAA`) record for **both** names at the server before you install, so the certificates can be
+  issued.
+- An email address for Let's Encrypt.
+
+The installer installs Docker (from `get.docker.com`) if it is missing, and `curl`, `tar`, `jq` and `openssl` through
+`apt-get` if they are missing. On a distribution without `apt-get`, install those yourself first. Docker Compose v2 is
+required.
+
+## 1. Install
+
+```bash
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo bash -s -- --domain pod.example.com --email you@example.com
+```
+
+What this does:
+
+1. Resolves the latest **stable** release and downloads its release manifest (`release.json`).
+2. Downloads that release's deploy bundle, checks it against the manifest's SHA-256, and unpacks it into `/opt/synap`.
+3. Links the server CLI to `/usr/local/bin/synap`.
+4. Runs `synap install --non-interactive` with your flags: writes `/opt/synap/deploy/.env` with generated secrets,
+   pulls the images and starts the stack.
+
+The admin console host name is derived from `--domain`: `pod.example.com` gives `pod-admin.example.com`.
+
+<Callout title="Two tools called synap">
+  The installer puts a **server CLI** named `synap` on the server (`/usr/local/bin/synap`). It installs, updates and
+  backs up the pod. The **user CLI**, `@synap-core/cli`, also runs as `synap`, but on your laptop: it connects
+  your computer and your agents to a pod. Keep the user CLI off the server.
+</Callout>
+
+## 2. Check the pod
+
+The server CLI works on the deploy directory. Run it from there:
+
+```bash
+cd /opt/synap/deploy
+sudo synap health
+curl -fsS https://pod.example.com/health
+```
+
+If a certificate is not issued yet, check that both DNS records point at the server, then look at Caddy's logs with
+`sudo synap logs caddy`.
+
+## 3. Create the first admin
+
+Mint a one-hour sign-up link for the first admin, and open it in your browser:
+
+```bash
+cd /opt/synap/deploy
+sudo synap setup admin --email you@example.com --magic-link
+```
+
+The command prints a link to `https://pod.example.com/setup?token=…`. Open it and choose your password.
+
+To create the admin directly instead, without a link:
+
+```bash
+sudo synap setup admin --email you@example.com --password '<a strong password>'
+```
+
+`sudo synap setup admin --status` prints `needed` while the pod has no admin, and `ready` once it has one.
+
+## 4. Connect your laptop and agents
+
+On your laptop (not on the server):
+
+```bash
+npx @synap-core/cli init --pod-url https://pod.example.com
+```
+
+It asks you to approve your laptop with a code (sign in to your pod in the browser to approve), connects the AI agents
+it finds (Claude Code, Codex, Cursor), and offers a pairing link for Relay on your phone. See the
+[Cloud quickstart](/docs/start/cloud-quickstart) for each step; they are the same against your own pod.
+
+## 5. Set up off-host backups
+
+The pod dumps its databases every hour on the server, but a copy on the same disk does not survive losing the
+server. Configure an off-host repository and keep the recovery kit it prints: [Backups](/docs/run/backups).
+
+## Next
+
+- [Configuration](/docs/run/configuration): change a setting with `synap config`.
+- [Upgrades](/docs/run/upgrades): `synap update`, release channels and automatic updates.
+- [Operations](/docs/run/operations): health, logs and troubleshooting.

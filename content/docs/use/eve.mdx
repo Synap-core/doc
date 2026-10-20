@@ -1,0 +1,29 @@
+---
+title: Eve
+description: How a Synap pod runs inside an Eve-managed server stack.
+type: explanation
+audience: self-host
+availability: [eve, pod-oss]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Eve is an operator command-line tool (`eve`) that manages a self-hosted server stack, and can run a Synap pod as part
+of it. Its source is in the `hestia-cli` repository. This page covers only how a Synap pod behaves when Eve manages
+it; Eve's own commands are documented with Eve.
+
+## What changes on an Eve-managed pod
+
+- **The edge is Traefik, not Caddy.** Eve runs Traefik in front of the pod. The pod is installed with
+  `synap install --edge traefik`, and `SYNAP_EDGE=traefik` is pinned in `deploy/.env`. Caddy cannot bind port 80 next
+  to Traefik, so a pod with Eve's override and no pinned edge is refused by `synap update` until you run
+  `synap config set SYNAP_EDGE=traefik`.
+- **A compose override marks it.** Eve writes a `docker-compose.override.yml` carrying an `eve-managed` marker in the
+  deploy directory. `synap doctor` reports it.
+- **Eve calls the same engine.** Eve updates the pod through the same `synap` update engine, so the same data-safety
+  guard runs first: a database that is not on its volume is rescued before anything is recreated.
+- **AI providers.** Changing the AI providers a pod uses needs the `providers.write` key scope, which is intended for
+  an operator tool such as Eve and is not part of an ordinary agent key.
+
+For everything else, the [Run](/docs/run) section applies to an Eve-managed pod as it does to any other.

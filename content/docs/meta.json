@@ -1,11 +1,4 @@
 {
   "title": "Documentation",
-  "pages": [
-    "start",
-    "integrate",
-    "contributing",
-    "cloud",
-    "architecture",
-    "api"
-  ]
+  "pages": ["start", "use", "build", "run", "reference", "community"]
 }

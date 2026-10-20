@@ -1,0 +1,7 @@
+{
+  "title": "Use",
+  "description": "The apps, and Synap Cloud or your own pod",
+  "root": true,
+  "icon": "AppWindow",
+  "pages": ["index", "browser", "relay", "raycast", "eve", "cloud-vs-self-hosted"]
+}

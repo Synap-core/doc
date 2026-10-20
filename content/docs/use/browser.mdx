@@ -1,0 +1,40 @@
+---
+title: Browser (desktop)
+description: The Synap desktop app for macOS, Windows and Linux.
+type: explanation
+audience: user
+availability: [browser]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Browser is the Synap desktop app. It is where you do deliberate, heads-down work on your pod: building views and
+dashboards, writing documents, working on whiteboards, changing your schema and reviewing longer pieces of agent work.
+For quick approvals away from your desk, use [Relay](/docs/use/relay).
+
+## Platforms
+
+| Platform | Packages |
+|---|---|
+| macOS | `.dmg` and `.zip`, for Apple silicon (arm64) and Intel (x64) |
+| Windows | Installer (`.exe`, NSIS) and `.zip`, x64 |
+| Linux | AppImage and `.deb`, x64 |
+
+Builds are published as GitHub releases. `https://api.synap.live/download/latest` redirects to the right file for a
+platform and architecture, for example `?platform=linux&arch=x64` (`platform` is `mac`, `win` or `linux`; `arch` is
+`arm64` or `x64`). The app updates itself from the same releases.
+
+## Connecting to your pod
+
+Browser connects to your pod, hosted or self-hosted. Sign in with the account you use on that pod.
+
+## Things to know
+
+- **Quick capture**: `Cmd+Shift+Space` on macOS, `Ctrl+Shift+Space` on Windows and Linux, opens a capture window from
+  anywhere.
+- **Links**: the app registers the `synap://` link scheme, so links from the CLI or other apps (for example
+  `synap open proposal <id>`) open in it.
+- **Dictation**: the microphone is used only when you dictate into a composer or record a voice memo.
+
+Browser is not open source. Its feature set changes often; this page lists only what is stable enough to document.

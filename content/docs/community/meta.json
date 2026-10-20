@@ -1,0 +1,7 @@
+{
+  "title": "Community",
+  "description": "Contribute, report a vulnerability, write docs",
+  "root": true,
+  "icon": "Users",
+  "pages": ["index", "code-of-conduct", "security", "marketplace-policy", "docs-style-guide"]
+}

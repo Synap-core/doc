@@ -1,0 +1,100 @@
+---
+title: What is Synap?
+description: A data pod you own, with a governed place for AI agents to work on your records.
+type: explanation
+audience: user
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Synap is a **data pod**: a backend that holds your records in your own PostgreSQL database. You connect the AI agents
+you already use (Claude Code, Codex, Cursor, or anything that speaks MCP), and they work on those records under
+permissions you grant. Their changes are governed: most reach your data as **proposals** you approve, and every
+change is written to an append-only event log.
+
+You can run the pod yourself (it is open source, MIT-licensed) or let Synap run it for you on Synap Cloud. Both run
+the same code.
+
+## Two layers
+
+Synap has two layers. Keeping them apart is the easiest way to understand it.
+
+| Layer | What it is |
+|---|---|
+| **The data model** | Kinds, roles, views and events. It makes your pod queryable. |
+| **The unit of work** | Projects, tracks and sessions, plus playbooks and automations. It gives agent work a shape. |
+
+## The data model
+
+| Concept | What it is | Example |
+|---|---|---|
+| **Kind** | What an entity *is*. Every entity has exactly one kind. | `person`, `task`, `event`, `note`, `article`, `decision` |
+| **Role** (also called a **facet**) | A context an entity plays. It is attached to the entity, not a second entity. An entity has zero or more roles. | `client`, `partner`, `blocker`, `milestone` |
+| **View** | A projection over the same records, never a copy. | A board of tasks that carry the `blocker` role |
+| **Event** | Every write, appended to the event log. | The audit trail of a change |
+
+The rule that trips people up: if something has its own identity and fields, it is a **kind**. If it is a context the
+same thing can be in, it is a **role**. Anna is one `person`. She can be a `client` in your business workspace and a
+`friend` in your personal one, and there is still only one Anna. A CRM view reads the `client` role, a personal view
+reads the `friend` role, and nothing is copied or synced between them.
+
+[Kind and facets](/docs/build/concepts/kind-and-facets) goes deeper.
+
+## The unit of work
+
+```
+Project   long-lived intent: a thing you are actually doing, over months
+  └── Track     a method running inside one project ("Content", "Build")
+        └── Session   a bounded piece of work toward one goal
+
+Or a session on its own. Most sessions are.
+```
+
+- A **project** is long-lived intent. Its progress is derived from the work it contains, never stored as a percentage.
+- A **track** is a reusable method running inside one project. It keeps the definition it started from, so editing
+  the method later does not rewrite a track that is already running. Tracks are started by a person or an agent; a
+  project does not get tracks automatically.
+- A **session** is a bounded unit of work toward one goal, with a scope you accept before it runs. A session can be
+  filed at a track and stage, or stand on its own in a workspace with no project at all.
+- A session has a **channel**: a room where you and your agents work on the same goal, with proposals and outputs
+  visible in the conversation.
+
+Two things make work repeatable:
+
+- A **playbook** is a session shape you can run again. A playbook is either a template for one kind of work, or a
+  method a project runs as a track.
+- An **automation** binds a playbook to a trigger: an event, a schedule (cron), a webhook, or a manual start.
+
+## Governance: proposals and approval
+
+When an agent wants to change your data, the pod decides between two outcomes:
+
+- **Propose**: the change becomes a proposal. You review it, then approve or reject it. This is the default.
+- **Apply automatically**: only where you granted a rule that allows it. The change is applied and leaves a record.
+
+Some changes can never be applied automatically, whatever rule you set: deletes and other destructive actions,
+admin actions, and changes of scope always become proposals. An agent's own key can never approve a proposal;
+approval is a human step.
+
+Either way, every change is on the event log, which is append-only. That log is the audit trail: you can see what
+changed, who or what changed it, and when.
+
+## Where your data lives
+
+A pod is a set of containers: PostgreSQL (with TimescaleDB for the event log), Typesense for full-text search, MinIO
+for files, Redis, and Ory Kratos for sign-in, all behind a Caddy web server with automatic HTTPS. Your records are in
+PostgreSQL, so you can export them with standard tools.
+
+## Bring your own agent
+
+Synap does not sell or meter inference. An agent connects to your pod over MCP or the Hub REST API with its own
+identity and key, and works on the same records you do. Changing agents does not lose your context, because the
+context is in your pod. See [Connect an agent](/docs/build/agents).
+
+## Next
+
+- [Cloud quickstart](/docs/start/cloud-quickstart): a hosted pod, connected in one command.
+- [Self-host quickstart](/docs/start/self-host-quickstart): your own pod on your own server.
+- [Glossary](/docs/start/glossary): every term on one page.

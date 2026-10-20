@@ -1,0 +1,121 @@
+---
+title: Backups and restore
+description: Where a pod's data lives, the backups it takes on its own, off-host snapshots, and how to restore.
+type: how-to
+audience: self-host
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A pod backs itself up to its own disk every hour. That protects you from mistakes with Docker, not from losing the
+server. Set up **off-host** snapshots as soon as the pod holds anything you care about.
+
+All commands run from the deploy directory:
+
+```bash
+cd /opt/synap/deploy
+```
+
+## Where the data lives
+
+| Data | Where | Survives `docker compose down -v`? |
+|---|---|---|
+| PostgreSQL (your data, and Kratos accounts) | Docker volume `<project>_postgres_data` | No. That is why the dumps exist. |
+| Hourly dumps | `deploy/backups/postgres/<UTC time>-auto/<database>.dump` on the host | Yes |
+| Pre-update and manual dumps | `deploy/backups/postgres/<UTC time>-pre-update/…` and `-<label>/…` | Yes |
+| Files (MinIO) | Docker volume `minio_data`; included in off-host snapshots | No, unless you have a snapshot |
+| Search index (Typesense) | Docker volume `typesense_data` | No; it is rebuilt from PostgreSQL |
+
+## What the pod does on its own
+
+The `postgres-backup` service:
+
+- dumps every database every hour (`PG_BACKUP_INTERVAL_SECONDS`, default `3600`), reading each dump back before
+  keeping it;
+- keeps the newest 6 dumps (`PG_BACKUP_KEEP`) plus one per day for 7 days (`PG_BACKUP_KEEP_DAILY`);
+- sets aside a dump of a database that suddenly became empty, marked `SUSPECT`, and raises an alarm instead of
+  pruning or pushing anything;
+- pushes good dumps off-host once a repository is set up, and runs a restore drill every week;
+- reports itself **unhealthy** when there is no fresh dump or an alarm, a failed push or a failed drill.
+
+Every `synap update` also takes a verified `pre-update` dump of every database before it runs migrations.
+
+## Set up off-host snapshots
+
+Snapshots are encrypted on the pod with [restic](https://restic.net) and sent to a repository you choose. Each
+snapshot holds every database dump, the files in MinIO, `.env` and the pod's `state/` directory.
+
+1. Set the repository and its credentials:
+
+   ```bash
+   sudo synap config set BACKUP_REPOSITORY=rest:https://vault.example.com:8000/my-pod
+   sudo synap config set BACKUP_RESTIC_REST_USERNAME=my-pod
+   printf 'BACKUP_RESTIC_REST_PASSWORD=%s\n' '<password>' | sudo synap config set --stdin
+   ```
+
+   `BACKUP_REPOSITORY` also accepts `s3:…`, `b2:<bucket>:<path>` or a local path such as `/mnt/backup`. For S3 use
+   `BACKUP_AWS_ACCESS_KEY_ID`, `BACKUP_AWS_SECRET_ACCESS_KEY` and `BACKUP_AWS_DEFAULT_REGION`; for Backblaze B2,
+   `BACKUP_B2_ACCOUNT_ID` and `BACKUP_B2_ACCOUNT_KEY`. `BACKUP_HEARTBEAT_URL` is pinged after each successful push.
+
+2. Create the repository:
+
+   ```bash
+   sudo synap backup init
+   ```
+
+   It prints a **recovery kit** with the repository password, **once**, and asks you to type back its last six
+   characters. Keep the kit in two places you control. Synap never has it, and without it the snapshots cannot be
+   decrypted.
+
+3. Check it:
+
+   ```bash
+   sudo synap backup push      # take a snapshot now
+   sudo synap backup status    # repository, last runs, alarms
+   ```
+
+The pod only ever **adds** snapshots; it never deletes them. Give it append-only credentials (a restic REST server
+with `--append-only`, or an S3 or B2 key without delete permission) and run retention where the delete-capable
+credentials live, for example:
+
+```bash
+restic forget --keep-hourly 24 --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune
+```
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `synap backup [label]` | Dumps every database now, to `backups/postgres/<time>-<label>/` (local only). |
+| `synap backup init` | Creates the off-host repository and prints the recovery kit. |
+| `synap backup push` | Dumps and pushes an encrypted snapshot now. |
+| `synap backup drill [snapshot]` | Restores a snapshot into a throwaway PostgreSQL and compares fingerprints. |
+| `synap backup status` | Repository, last runs and alarms. |
+| `synap restore <backups/postgres/<dir>>` | Restores a local dump set. Stops writers first; replaces every database. |
+| `synap restore --from-snapshot <id\|latest>` | Restores `.env`, state, databases and files from an off-host snapshot. Asks for the recovery-kit password, or takes `--password-file <file>`. |
+
+Both restore commands ask you to type `yes` before replacing anything.
+
+## Restore onto a new server
+
+1. Point the pod's DNS records at the new server, and install the pod there with the same `--domain`
+   ([self-host quickstart](/docs/start/self-host-quickstart)). The restore replaces its `.env` with the one in the
+   snapshot.
+2. Set the same `BACKUP_REPOSITORY` and credentials with `synap config set`.
+3. Restore the latest snapshot:
+
+   ```bash
+   sudo synap restore --from-snapshot latest
+   ```
+
+4. If the stack does not start because the server has no images yet, run `sudo synap update`; it keeps the restored
+   `.env`. Then check with `sudo synap health`.
+
+## Large file uploads
+
+Large files are uploaded to storage in parts. If the pod is stopped in the middle of an upload, the parts already sent
+stay in the bucket. The bundled MinIO removes stale parts by itself after 24 hours. On AWS S3, add a lifecycle rule
+`AbortIncompleteMultipartUpload` (for example after one day) to the bucket, or you pay for the leftovers; on other
+S3-compatible stores, check their lifecycle settings.

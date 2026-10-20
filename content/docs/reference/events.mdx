@@ -1,0 +1,85 @@
+---
+title: Event catalog
+description: The event types a pod records and sends to automations and webhooks, and how to read the event log.
+type: reference
+audience: builder
+availability: [pod-oss, cloud]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Every change on a pod is recorded as an event. This page lists the event types the pod defines in
+`packages/events` of the [backend repository](https://github.com/Synap-core/backend/tree/main/packages/events).
+A generated version of this page is planned.
+
+There are two families with different naming patterns. Use the first for automations and webhooks.
+
+## Automation events
+
+Pattern: `<subject>.<action>.completed`. These are the events automations can trigger on, that webhooks deliver, and
+that the event log returns.
+
+| Event type | Domain | When |
+|---|---|---|
+| `entity.create.completed` | Entity | An entity was created. |
+| `entity.update.completed` | Entity | An entity's fields or properties were updated. |
+| `entity.transition.completed` | Entity | An entity's lifecycle status moved (its kind's own status, or a role's). |
+| `entity.delete.completed` | Entity | An entity was permanently deleted. |
+| `focus_session.stage_changed.completed` | Sessions | A session moved to a different playbook stage. |
+| `track.stage_changed.completed` | Tracks | A project's track moved to a different stage. |
+| `proposal.created.completed` | Proposals | A new proposal is waiting for review. |
+| `proposal.approved.completed` | Proposals | A proposal was approved and applied. |
+| `proposal.rejected.completed` | Proposals | A proposal was rejected. |
+| `relation.create.completed` | Relations | Two entities were linked. |
+| `relation.delete.completed` | Relations | A link between entities was removed. |
+| `link.create.completed` | Links | A unit of work was marked as blocked by, or replacing, another. |
+| `link.delete.completed` | Links | Such a blocked-by or replaces link was removed. |
+| `document.create.completed` | Documents | A document was created. |
+| `document.update.completed` | Documents | A document was updated. |
+| `capture.complete.completed` | Capture | A capture finished processing. |
+| `command.execute.completed` | Commands | A command finished. |
+| `connector_sync.complete.completed` | Connectors | A connected account finished a sync run (once per connection per run). |
+| `proactive.post.completed` | Intelligence | The pod's AI posted a message into your channel on its own initiative. |
+| `notification.created.completed` | Notifications | A notification was raised. |
+| `channel_message.created.completed` | Messaging | A message was posted in a Synap channel. |
+| `feed.new_item.completed` | Feed | A new item appeared in the intelligence feed. |
+| `external_message.received.completed` | Messaging | A message arrived on a connected external channel. |
+| `messaging_account.created.completed` | Messaging | A messaging account was connected. |
+| `messaging_account.reconnection_required.completed` | Messaging | A messaging account needs to be reconnected. |
+| `messaging_account.disconnected.completed` | Messaging | A messaging account was disconnected. |
+| `inbox_item.received.completed` | Inbox | An item arrived from an external integration. |
+| `inbox_item.analyzed.completed` | Inbox | An inbox item was analyzed by the Intelligence Service. |
+| `user.updated.completed` | Identity | A user identity was updated. |
+
+That is 29 event types. Some carry filter keys that automation triggers can match on; the pod's trigger picker shows
+them.
+
+## Table events
+
+Pattern: `<table>.<action>.<phase>`, with actions `create`, `update` and `delete`, and the three phases of a
+governed write: `requested`, `approved` and `validated`. They describe writes to 13 core tables:
+
+`entities`, `documents`, `documentVersions`, `chatThreads`, `conversationMessages`, `webhookSubscriptions`, `apiKeys`,
+`tags`, `agents`, `workspaces`, `workspaceMembers`, `views`, `userPreferences`.
+
+13 tables × 3 actions × 3 phases = 117 event types, for example `entities.create.requested` or
+`documents.update.validated`. They are used for schema documentation and admin introspection. Automation triggers do
+**not** match these strings: use the automation events above.
+
+## System event
+
+`webhooks.deliver.requested` is the internal event that starts a webhook delivery.
+
+## Reading the event log
+
+The Hub REST API returns events from the log:
+
+```bash
+curl "https://pod.example.com/api/hub/events?type=entity.create.completed&limit=50" \
+  -H "Authorization: Bearer $SYNAP_API_KEY"
+```
+
+You can filter by `type`, `subjectType`, `subjectId` and `fromDate`, and by who produced the event (`agentUserId`,
+`isAgent`) or one request chain (`correlationId`). The default window is 7 days; `limit` defaults to 50 and is capped
+at 200. The response is `{ "events": [ … ] }`. The exact parameters are in the pod's `/api/hub/openapi.json`.

@@ -1,0 +1,78 @@
+---
+title: CLI
+description: The commands of @synap-core/cli you will use most, and where the full reference lives.
+type: reference
+audience: builder
+availability: [cli]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+`@synap-core/cli` (command `synap`) connects computers and AI agents to a pod and works with the pod from a terminal.
+It needs Node.js 20 or later.
+
+```bash
+npm install -g @synap-core/cli    # or run it once with: npx @synap-core/cli <command>
+synap --help
+synap <command> --help
+```
+
+A generated reference of every command is coming. Until then, `synap <command> --help` is authoritative.
+
+## Global option
+
+`--pod <name>` runs one command against a saved pod profile instead of the active pod.
+
+## Setup and connection
+
+| Command | What it does |
+|---|---|
+| `synap init` | Find or create a pod, approve this computer, connect the agents found here, pair your phone. `--pod-url`, `--api-key`, `--agents claude-code,codex,cursor`, `--yes`, `--json`. |
+| `synap connect [thing]` | Connect an agent (`claude-code`, `cursor`, `codex`, …) or a tool or account (`gmail`, `github`, …). `--list`, `--workspace <id>`, `--project <id>`. |
+| `synap login` | Connect your Synap account and its pods. `--reconnect [name]` re-authenticates a saved pod. |
+| `synap pods list` / `add` / `use <name>` / `update <name> [url]` / `remove <name>` / `reconnect [name]` | Manage saved pod profiles. |
+| `synap switch [name]` | Switch the active pod. |
+
+## Checking things
+
+| Command | What it does |
+|---|---|
+| `synap status` | Pod health and API status. `--json`. |
+| `synap doctor` | Does the pod resolve, does the key work, do the workspace and project exist on this pod. `--fix`, `--json`, `--verbose`. |
+| `synap whoami` | Who the key acts as, and its scopes. |
+| `synap versions` | Version drift between the CLI, npm, the Control Plane and the pod. |
+| `synap update` | Shows how to update the CLI itself. |
+
+## Agents and MCP
+
+| Command | What it does |
+|---|---|
+| `synap agents list` / `add [kind]` | Your agents on this pod; bring a new one in. `add --name <name>` creates your own agent and prints a URL and key. |
+| `synap mcp url` | A ready-to-paste MCP connection (URL, key, snippets) for clients configured in a web UI. |
+| `synap mcp verify` | Is `/mcp` reachable and the key valid. |
+| `synap mcp connect-claude` | The steps to connect claude.ai. |
+| `synap mcp ui-setup <client>` | The form fields to fill in a client's MCP settings. |
+| `synap keys rotate` | Rotate the CLI's own key. |
+
+## Working with the pod
+
+| Command | What it does |
+|---|---|
+| `synap orient` | Who you are, your projects and your workspaces. |
+| `synap open <kind-or-id> [id]` | Open something in the Browser desktop app. |
+| `synap playbook run <name-or-id>` | Start a playbook. Agent runs usually come back as a proposal to review. |
+
+## Files
+
+| File | Contents |
+|---|---|
+| `~/.synap/credentials.json` | Your Synap account token. |
+| `~/.synap/config.json` | Saved pods: URL, workspace, agent identity and key. (Older versions used `pod-config.json`.) |
+
+Never commit them.
+
+| Variable | Default |
+|---|---|
+| `SYNAP_CP_URL` | `https://api.synap.live` |
+| `SYNAP_LANDING_URL` | `https://synap.live` |

@@ -1,0 +1,22 @@
+---
+title: Reference
+description: Lookup pages for the CLI, the event catalog, the Hub REST API and the MCP tools.
+type: reference
+audience: builder
+availability: [pod-oss, cloud, cli]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Reference pages are moving to generation from source, so that they cannot drift from the code. Until each one is
+generated, the pages here are kept by hand, marked **beta**, and point at the source of truth in the code.
+
+| Reference | Source of truth | Here |
+|---|---|---|
+| CLI (`@synap-core/cli`) | The command definitions in the `synap-cli` repository | [CLI](/docs/reference/cli) |
+| Events | `packages/events` in the backend repository | [Event catalog](/docs/reference/events) |
+| Hub REST API | `/api/hub/openapi.json`, served by every pod | [Hub REST API](/docs/reference/hub-rest) |
+| MCP tools | `mcp-tools.manifest.json` in the backend repository | [MCP tools](/docs/reference/mcp-tools) |
+| Pod configuration | `deploy/env.schema` in the backend repository | [Configuration](/docs/run/configuration) |
+| Server CLI (`synap` on a pod host) | `synap help` and `synap <command> --help` on the server | [Run](/docs/run) |

@@ -1,0 +1,82 @@
+---
+title: Self-hosted pod or Synap Cloud
+description: What is the same, what Synap Cloud runs for you, and what you take on when you run your own pod.
+type: explanation
+audience: user
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A self-hosted pod and a Synap Cloud pod run the same open-source code, from the same published releases. The
+difference is who operates the server and which Synap services the pod is connected to.
+
+## What is the same
+
+- The data model, the governance rules and the event log.
+- The doors into your pod: the SDK, the Hub REST API, MCP and the CLI. Agents connect the same way to both.
+- The apps: Browser, Relay and the CLI work against either kind of pod.
+- Your data is in the pod's own PostgreSQL database in both cases.
+
+## What Synap Cloud runs for you
+
+Synap Cloud is operated by the Synap Control Plane (`api.synap.live`). For a hosted pod it handles:
+
+| Area | What happens |
+|---|---|
+| **Creating the pod** | The pod is created from synap.live, or from `synap init` with **Create in browser**. |
+| **Your account and sign-in** | You sign in to your pod with your Synap account. |
+| **Updates** | New releases are applied to your pod according to its update setting (see below). |
+| **Email** | Recovery codes and verification emails are sent through a mail relay the Control Plane provisions. |
+| **Billing** | Plans and subscriptions for hosted pods. |
+| **Connected accounts** | A managed OAuth flow for connecting external accounts (for example Gmail or GitHub) to your pod. |
+| **AI service** | The Intelligence Service behind the pod's built-in AI features. |
+
+### Updates on a hosted pod
+
+Each pod stores its owner's update setting: `auto` (on by default) and a `channel`: `stable` (tagged releases, the
+default) or `fast` (every successful build of the main branch). The pod is the source of truth; the Control Plane only
+reads it. When automatic updates are off, the Control Plane sends an "update available" email instead of applying the
+release. A pod admin changes the setting with `PUT /api/pod-updates/settings`, for example `{ "auto": false }`.
+
+### Email privacy on a hosted pod
+
+The mail relay the Control Plane provisions sends through Resend, from the Control Plane's domain. Mail sent through
+it, recovery codes included, passes through Resend and is visible to whoever operates the Control Plane's Resend
+account. Setting your own SMTP server replaces the relay; the Control Plane never overrides a mail server configured
+elsewhere.
+
+## What you take on when you self-host
+
+| Area | On a self-hosted pod |
+|---|---|
+| **Server** | You provide a Linux server with Docker, a domain and DNS. See the [self-host quickstart](/docs/start/self-host-quickstart). |
+| **TLS** | Caddy obtains and renews certificates automatically from Let's Encrypt. |
+| **Sign-in** | Email and password on the pod by default. You can also let people sign in with a Synap account (`synap federation connect-cloud`). |
+| **Updates** | You run `synap update`, or turn on automatic updates with `synap units install --enable-auto-update`. See [Upgrades](/docs/run/upgrades). |
+| **Backups** | The pod dumps its databases hourly on the server. Off-host copies need a repository you configure. See [Backups](/docs/run/backups). |
+| **Email** | Set your own SMTP (`SMTP_CONNECTION_URI`). Without it, mail is not delivered and the "Email me a code" recovery option stays hidden. |
+| **AI features** | The pod's built-in AI features call an Intelligence Service, which you configure (`INTELLIGENCE_HUB_URL`). Your own agents connected over MCP need none: they bring their own model. |
+
+### What a self-hosted pod still contacts
+
+By default, every pod reads the Synap marketplace catalog every 10 minutes (and once at start), from
+`CONTROL_PLANE_URL` when set, otherwise anonymously from `https://api.synap.live`. No cookie, key or identity is sent.
+To turn it off:
+
+```bash
+cd /opt/synap/deploy
+sudo synap config set SYNAP_CATALOG_SOURCE=off && sudo synap apply
+```
+
+The pod then stops fetching Synap's catalog, and the admin console cannot switch it back on.
+
+## Moving between them
+
+A self-hosted pod can be registered with the Control Plane with a registration code (`--register-token spr_…` at
+install time); the person the code was created for becomes the pod's owner. See
+[Connect to the Control Plane](/docs/run/connect-control-plane).
+
+To move a self-hosted pod to a new server, restore its off-host backup snapshot there with
+`synap restore --from-snapshot`. See [Backups](/docs/run/backups).

@@ -1,0 +1,39 @@
+---
+title: Memory
+description: The Memory operations of the Hub REST API (7 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/memory
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Stores a user-scoped episodic fact. The embedding is optional — when
+          omitted, a zero vector is used so agents without embedding access can
+          still write facts. Supports `Idempotency-Key`.
+      - content: Requires pgvector — disabled on shared pods.
+      - content: Stores user/assistant/system turns grouped by sessionId. Each turn is
+          persisted as a tagged fact for semantic retrieval plus a summary fact.
+      - content: Stores session metadata as a high-confidence fact for list/dedup
+          purposes.
+      - content: Batch write of structured memory entries (remember/update/forget).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/memory" webhooks={[]} operations={[{"path":"/memory","method":"get"},{"path":"/memory","method":"post"},{"path":"/memory/search","method":"post"},{"path":"/memory/{id}","method":"delete"},{"path":"/memory/turns","method":"post"},{"path":"/memory/sessions","method":"post"},{"path":"/memory/writes","method":"post"}]} showTitle />
+    </>
+  );
+}

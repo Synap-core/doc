@@ -1,0 +1,60 @@
+---
+title: Discord
+description: The Discord operations of the Hub REST API (8 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/discord
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Dedup-records the inbound message and fires external_message.received.
+          Does NOT dispatch the orchestrator. Use this for pure automation
+          pipelines where no AI reply is needed.
+      - content: Resolves-or-creates the Discord-bound channel, records the inbound
+          message, runs ONE Intelligence Service orchestrator turn via streaming
+          accumulation (external actions stay proposal-gated), and returns the
+          agent's reply text synchronously. On pod deadline, returns
+          partial:true with steps collected so far.
+      - content: Invokes the mail-feed runner in-process (gmail_search → triage → post
+          into the Discord-bound channel) and returns the run summary. No-ops
+          when the Discord tool's mailFeed is disabled. Idempotent via the
+          watermark.
+      - content: Flips workspace-pinned, UNBOUND bridge channels (external_source in
+          discord/telegram, no context binding) to pod-wide (workspace_id NULL,
+          scope 'pod') for the acting user. Dry-run unless `apply:true`.
+          Client-BOUND channels are intentionally excluded (client-isolation
+          firewall). Idempotent.
+      - content: Invokes the event-sync runner in-process (event entities + stellar
+          deadlines + calendar_list → native Discord scheduled events) and
+          returns the run summary. No-ops when the Discord tool's eventSync is
+          disabled. Idempotent via the dedup map.
+      - content: Returns whether the given Discord user is linked to a Synap user under
+          the calling operator key. NEVER auto-creates a link.
+      - content: Returns the human members of the acting (operator) workspace that a
+          Discord user can be linked to via the onboarding picker.
+      - content: Creates the Discord→Synap mapping. mode='existing' maps onto an
+          existing workspace member (impersonation — admin-only). mode='new'
+          provisions a fresh Synap user + team membership (account creation —
+          admin-only). Authorized by the acting context's workspace role
+          (owner/admin), never a caller-supplied flag.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/discord" webhooks={[]} operations={[{"path":"/discord/ingest","method":"post"},{"path":"/discord/agent-turn","method":"post"},{"path":"/discord/mail-feed/run","method":"post"},{"path":"/discord/reconcile-podwide","method":"post"},{"path":"/discord/event-sync/run","method":"post"},{"path":"/discord/identity","method":"get"},{"path":"/discord/identity/members","method":"get"},{"path":"/discord/identity/link","method":"post"}]} showTitle />
+    </>
+  );
+}

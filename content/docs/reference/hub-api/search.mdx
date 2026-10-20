@@ -1,0 +1,39 @@
+---
+title: Search
+description: The Search operations of the Hub REST API (4 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/search
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: DEPRECATED — prefer POST /knowledge/ask, which routes across all
+          substrates. Still functional for existing integrations.
+      - content: DEPRECATED — prefer POST /knowledge/ask, which routes across all
+          substrates. Still functional for existing integrations.
+      - content: DEPRECATED — prefer POST /knowledge/ask, which routes across all
+          substrates. Still functional for existing integrations.
+      - content: DEPRECATED — prefer POST /knowledge/ask (the SRE already uses pgvector
+          internally as one signal). Disabled on shared pods (returns empty /
+          503 when VECTOR_SEARCH_ENABLED=false).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/search" webhooks={[]} operations={[{"path":"/search/collection","method":"get"},{"path":"/search","method":"get"},{"path":"/search/documents","method":"get"},{"path":"/vector-search","method":"get"}]} showTitle />
+    </>
+  );
+}

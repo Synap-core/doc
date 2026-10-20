@@ -38,7 +38,8 @@ const moved = [
   ['/docs/integrate/reference/event-catalog', '/docs/reference/events'],
   ['/docs/integrate/reference/:path*', '/docs/reference'],
   ['/docs/integrate/:path*', '/docs/build'],
-  ['/docs/api', '/docs/reference/hub-rest'],
+  ['/docs/api', '/docs/reference/hub-api'],
+  ['/docs/reference/hub-rest', '/docs/reference/hub-api'],
   // Architecture
   ['/docs/architecture/concepts/kind-and-facets', '/docs/build/concepts/kind-and-facets'],
   ['/docs/architecture/concepts/entity-connections', '/docs/build/concepts/entity-connections'],
@@ -62,7 +63,7 @@ const moved = [
   ['/docs/deployment/:path*', '/docs/run'],
   ['/docs/development/:path*', '/docs/build'],
   ['/docs/integrations/:path*', '/docs/build'],
-  ['/docs/reference/api-reference', '/docs/reference/hub-rest'],
+  ['/docs/reference/api-reference', '/docs/reference/hub-api'],
   ['/docs/open-source/:path*', '/docs/community'],
   ['/docs/overview/:path*', '/docs/start'],
   // The internal section was removed

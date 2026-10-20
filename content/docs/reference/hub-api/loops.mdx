@@ -1,0 +1,37 @@
+---
+title: Loops
+description: The Loops operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/loops
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Instantiates an autonomy loop ({playbooks · triggers}) from a config
+          descriptor (inline `definition` or a seed `templateKey`) + `params`.
+          `{{param}}` placeholders are interpolated; each playbook/trigger is
+          created through the governed routers (proposal-gated — proposal ids
+          are surfaced in `proposals`). A playbook's inline `schedule`
+          materializes its backing cron automation for free. Requires
+          hub-protocol.write scope.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/loops" webhooks={[]} operations={[{"path":"/loops/apply","method":"post"}]} showTitle />
+    </>
+  );
+}

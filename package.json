@@ -14,7 +14,11 @@
     "check:frontmatter": "node scripts/check-frontmatter.mjs",
     "check:links": "node scripts/check-links.mjs",
     "check:retired": "node scripts/check-retired-names.mjs",
-    "check:markdown": "node scripts/check-markdown.mjs"
+    "check:generated": "node scripts/generate-reference.mjs --check",
+    "check:markdown": "node scripts/check-markdown.mjs",
+    "reference:sync": "node scripts/sync-reference.mjs",
+    "reference:generate": "node scripts/generate-reference.mjs",
+    "reference:check": "node scripts/sync-reference.mjs --check"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.1",

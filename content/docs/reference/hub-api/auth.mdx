@@ -1,0 +1,40 @@
+---
+title: Auth
+description: The Auth operations of the Hub REST API (2 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/auth
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns metadata about the API key that authenticated this request —
+          id, owning user, scopes, expiry, last-used-at. Used by Eve CLI and
+          external operators to verify their credential without making
+          privileged calls. Returns 401 if no valid bearer was supplied.
+      - content: 'Answers the HOLDER of the bearer key — valid or not — with its state:
+          `active`, `awaiting_approval` (+ the approval page), `revoked` (+
+          when, why, and when/where a replacing connection was created),
+          `expired`, or `unknown` for a secret this pod never issued. Looked up
+          by the secret only; reveals nothing about any key the caller does not
+          hold.'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/auth" webhooks={[]} operations={[{"path":"/auth/status","method":"get"},{"path":"/auth/key-state","method":"get"}]} showTitle />
+    </>
+  );
+}

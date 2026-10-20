@@ -1,0 +1,41 @@
+---
+title: Threads
+description: The Threads operations of the Hub REST API (10 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/threads
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns threads owned by `userId`, scoped to either the requested
+          `workspaceId` or all of the user's accessible workspaces (plus
+          pod-wide personal/feed channels).
+      - content: Creates a new thread, OR upserts on (externalSource, externalId) when
+          both are provided. Race-safe via partial unique index. Supports
+          `Idempotency-Key`.
+      - content: Inserts one message. When `autoRespond=true` and `role=user`, schedules
+          an A2AI agent reply via pg-boss. Supports `Idempotency-Key`.
+      - content: All inserts run in a single Drizzle transaction. autoRespond fires for
+          AT MOST ONE message — the LAST user message in the batch. Supports
+          `Idempotency-Key`.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/threads" webhooks={[]} operations={[{"path":"/threads","method":"get"},{"path":"/threads","method":"post"},{"path":"/threads/{threadId}/context","method":"get"},{"path":"/threads/{threadId}/context","method":"patch"},{"path":"/threads/{threadId}/link-entity","method":"post"},{"path":"/threads/{threadId}/link-document","method":"post"},{"path":"/threads/{threadId}/branches","method":"get"},{"path":"/threads/{threadId}/messages","method":"get"},{"path":"/threads/{threadId}/messages","method":"post"},{"path":"/threads/{threadId}/messages.batch","method":"post"}]} showTitle />
+    </>
+  );
+}

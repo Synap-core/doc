@@ -1,0 +1,36 @@
+---
+title: Messaging
+description: The Messaging operations of the Hub REST API (17 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/messaging
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Provider-agnostic inbound sensor door. Resolves-or-creates the EXTERNAL
+          channel and dedup-records the inbound message (folding a subject line
+          into the body and resolving a participant email to an existing entity
+          when no externalId is given), then fires external_message.received.
+          NON-governed (a sensor write). Used by external bridges (Discord,
+          Proton, …).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/messaging" webhooks={[]} operations={[{"path":"/messaging/inbound","method":"post"},{"path":"/messaging/accounts","method":"get"},{"path":"/messaging/auth-url","method":"get"},{"path":"/messaging/accounts/sync","method":"post"},{"path":"/messaging/service-config","method":"get"},{"path":"/messaging/service-config","method":"post"},{"path":"/messaging/service-config/migrate","method":"post"},{"path":"/messaging/accounts/{accountId}","method":"delete"},{"path":"/messaging/conversations","method":"get"},{"path":"/messaging/channels/connect","method":"post"},{"path":"/messaging/channels/{channelId}","method":"delete"},{"path":"/messaging/channels/{channelId}/mark-read","method":"post"},{"path":"/messaging/linked-unread","method":"get"},{"path":"/messaging/conversations/{threadId}/messages","method":"get"},{"path":"/messaging/conversations/{threadId}/import","method":"post"},{"path":"/messaging/conversations/{threadId}/send","method":"post"},{"path":"/messaging/channels","method":"get"}]} showTitle />
+    </>
+  );
+}

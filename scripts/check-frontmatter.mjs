@@ -9,7 +9,7 @@ import { listPages, readPage, rel, report } from './lib.mjs';
 import { AUDIENCES, AVAILABILITY, PAGE_TYPES, STATUSES } from '../lib/page-meta.ts';
 
 const REQUIRED = ['title', 'description', 'type', 'audience', 'availability', 'status', 'owner'];
-const OPTIONAL = ['last_reviewed', 'icon', 'full', 'generated_from'];
+const OPTIONAL = ['last_reviewed', 'icon', 'full', 'generated_from', '_openapi'];
 const ALLOWED = new Set([...REQUIRED, ...OPTIONAL]);
 const MAX_REVIEW_AGE_DAYS = 183; // flag pages not reviewed for six months
 

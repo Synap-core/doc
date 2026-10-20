@@ -1,0 +1,47 @@
+---
+title: Vault
+description: The Vault operations of the Hub REST API (6 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/vault
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: AI requests access to a vault secret — creates a pending proposal and
+          emits an urgent notification for user approval.
+      - content: Returns the proposal status (pending/approved/rejected) and, once
+          approved, the vault:// reference granted by the user.
+      - content: Resolves a vault:// reference the authenticated agent has an active
+          grant for, consuming one grant use. 403 if no redeemable grant exists
+          for this principal.
+      - content: Returns metadata for secrets owned by the acting user in scope. NEVER
+          returns decrypted values — reading a value requires the request →
+          proposal → grant flow.
+      - content: Server-encrypts and stores a secret owned by the resolved acting user.
+          Writes a secret_audit_log row recording the agent actor. Does NOT
+          return the value.
+      - content: Soft-deletes a vault secret (sets deletedAt/deletedBy). Write-gated on
+          the secret's own workspace (editor+) or its owner for a pod-wide
+          secret. Never hard-deletes — grants and audit rows reference it.
+          Requires hub-protocol.write.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/vault" webhooks={[]} operations={[{"path":"/vault/request","method":"post"},{"path":"/vault/request/{proposalId}","method":"get"},{"path":"/vault/redeem","method":"post"},{"path":"/vault/secrets","method":"get"},{"path":"/vault/secrets","method":"post"},{"path":"/vault/secrets/{id}","method":"delete"}]} showTitle />
+    </>
+  );
+}

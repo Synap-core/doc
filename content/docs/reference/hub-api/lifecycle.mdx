@@ -1,0 +1,43 @@
+---
+title: Lifecycle
+description: The Lifecycle operations of the Hub REST API (4 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/lifecycle
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Things of `profileSlug` grouped by their declared lifecycle status, in
+          option order (`lifecycle.board`). `workedBy=true` adds who is on each
+          card.
+      - content: 'The goal line of a kind or role (`lifecycle.throughput`): every
+          bucket, zeros included, oldest first.'
+      - content: Every space the caller sees with its intent (`settings.intent`, else
+          inferred) and, per produced kind, the pipeline in one line, needs-you,
+          being-worked and a headline thing (`lifecycle.home`). `projectId`
+          lists only the project's spaces (the ones it uses + its home; 404 when
+          the caller cannot see it) and narrows every count.
+      - content: 'Things with open work on them (a session, an in-flight worker, a
+          scheduled prep), most urgent first, plus `unattached`: open work
+          sessions on no thing (`lifecycle.moving`).'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/lifecycle" webhooks={[]} operations={[{"path":"/lifecycle/board","method":"get"},{"path":"/lifecycle/throughput","method":"get"},{"path":"/lifecycle/home","method":"get"},{"path":"/lifecycle/moving","method":"get"}]} showTitle />
+    </>
+  );
+}

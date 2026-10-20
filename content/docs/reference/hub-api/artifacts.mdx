@@ -1,0 +1,39 @@
+---
+title: Artifacts
+description: The Artifacts operations of the Hub REST API (3 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/artifacts
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Workspace rows follow membership; NULL-workspace (pod-personal) rows
+          keep the caller's owner floor. `workspaceId` NARROWS the lens — omit
+          it to list every artifact the caller can see, which is the only way to
+          reach a pod-personal session's outputs.
+      - content: "IS/agent creates an artifact. originKind defaults to 'agent' for
+          hub-authenticated requests. Goes through the governance membrane — may
+          return { status: 'proposed', proposalId } for agent callers."
+      - content: Loads the row by id, verifies the caller's workspace membership against
+          the row's workspace, then gates through the governance membrane.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/artifacts" webhooks={[]} operations={[{"path":"/artifacts","method":"get"},{"path":"/artifacts","method":"post"},{"path":"/artifacts/:id","method":"patch"}]} showTitle />
+    </>
+  );
+}

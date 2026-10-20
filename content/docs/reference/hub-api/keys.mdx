@@ -1,0 +1,34 @@
+---
+title: Keys
+description: The Keys operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/keys
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Revokes the current key and issues a new one with the full
+          INTEGRATION_HUB_SCOPES.cli scope set, keeping its expiry. Only an
+          agent/CLI key that already holds hub-protocol.read and
+          hub-protocol.write qualifies; sub-tokens and probe keys are refused.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/keys" webhooks={[]} operations={[{"path":"/keys/rotate-cli","method":"post"}]} showTitle />
+    </>
+  );
+}

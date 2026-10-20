@@ -1,18 +1,8 @@
----
-title: Hub REST API
-description: The pod's HTTP API for agents, scripts and integrations, and where to get its full description.
-type: reference
-audience: builder
-availability: [pod-oss, cloud]
-status: beta
-owner: Antoinesrvt
-last_reviewed: 2026-10-20
----
-
 The Hub REST API is the pod's HTTP API for anything that is not a TypeScript app: agents, scripts, automation tools and
-integrations in any language. It is served under `/api/hub` on every pod.
+integrations in any language. It is served under `/api/hub` on every pod. The pages in this section are rendered from
+its OpenAPI description, grouped by tag.
 
-## The full description: OpenAPI
+## The OpenAPI description
 
 Every pod publishes the OpenAPI description of its Hub REST API, without authentication:
 
@@ -20,8 +10,8 @@ Every pod publishes the OpenAPI description of its Hub REST API, without authent
 curl https://pod.example.com/api/hub/openapi.json
 ```
 
-It matches the pod's exact version, so use it (or a client generated from it) as the reference. A rendered version of
-this description on this site is planned.
+It matches the pod's exact version, so use it (or a client generated from it) when your pod runs a different version
+from the one these pages were generated from.
 
 ## Authentication
 
@@ -42,16 +32,8 @@ Requests can name a workspace with the `X-Workspace-Id` header (or in the body o
 ## Writes and proposals
 
 Writes go through the pod's governance: a write is applied directly where a rule allows it, and otherwise returns a
-proposal. Proposals are under `/api/hub/proposals`:
-
-| Request | Purpose |
-|---|---|
-| `GET /api/hub/proposals` | List proposals. |
-| `GET /api/hub/proposals/{id}` | One proposal. |
-| `PATCH /api/hub/proposals/{id}` | The proposing agent revises its pending proposal. |
-| `POST /api/hub/proposals/{id}/approve` | Approve. Refused for an agent's key: approval is a human step. |
-| `POST /api/hub/proposals/{id}/reject` | Reject. |
-| `POST /api/hub/proposals/{id}/revert` | Undo an applied proposal, where supported. |
+proposal. Approving a proposal is refused for an agent's key: approval is a human step. See
+[Proposals](/docs/reference/hub-api/proposals).
 
 ## Clients
 

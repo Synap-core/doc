@@ -1,0 +1,38 @@
+---
+title: Packages
+description: The Packages operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/packages
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: "Unions the install ledgers that already exist — workspaces
+          (package_slug + version stamp), capability containers (template_key +
+          contentHash), the marketSource-linked view/skill/automation rows, and
+          package cells (cell:<pkg>:<key> + version). Cheap by default: no
+          network. Pass `drift=true` to additionally run the standalone dry-run
+          reconcile, which costs one Control-Plane fetch per distinct package
+          slug. `drift: null` on a row means NOT COMPUTED, never 'up to date'.
+          Requires hub-protocol.read scope."
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/packages" webhooks={[]} operations={[{"path":"/installed","method":"get"}]} showTitle />
+    </>
+  );
+}

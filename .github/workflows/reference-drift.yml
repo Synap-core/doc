@@ -1,0 +1,28 @@
+name: reference-drift
+
+# Weekly: has a source repository changed its reference data since it was last synced?
+# A failure is a reminder to run `npm run reference:sync && npm run reference:generate`, not a broken site.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - run: npm ci
+
+      - name: Compare with the tip of each recorded ref
+        run: node scripts/sync-reference.mjs --check --latest

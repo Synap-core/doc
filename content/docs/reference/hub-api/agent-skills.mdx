@@ -1,0 +1,34 @@
+---
+title: Agent Skills
+description: The Agent Skills operations of the Hub REST API (9 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/agent-skills
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: 'Accepts a JSON body with skill metadata and an array of reference
+          documents. Creates a pod-wide instruction skill and linked document
+          rows. TODO: support ZIP (.skill file) upload with YAML frontmatter
+          parsing.'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/agent-skills" webhooks={[]} operations={[{"path":"/agent-skills/list","method":"get"},{"path":"/agent-skills/get","method":"get"},{"path":"/agent-skills/create","method":"post"},{"path":"/agent-skills/update","method":"patch"},{"path":"/agent-skills/delete","method":"delete"},{"path":"/agent-skills/executable","method":"get"},{"path":"/agent-skills/executable","method":"post"},{"path":"/agent-skills/executable/{id}","method":"get"},{"path":"/agent-skills/import","method":"post"}]} showTitle />
+    </>
+  );
+}

@@ -1,0 +1,73 @@
+---
+title: Proposals
+description: The Proposals operations of the Hub REST API (9 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/proposals
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: "A full replacement — one `replace_all` op through the document patch
+          door (see POST /documents/{documentId}/patch). Governed: an agent's
+          full replacement is always a proposal, and it may not change a
+          person's section or drop an embed."
+      - content: Returns proposals for the authenticated user / a workspace. Default
+          status filter is `pending`; `auto_approved` lists the audit receipts
+          of agent writes that executed immediately under governance.
+          `view=basic` returns the summary representation (identity +
+          provenance, no `data`); the default `view=full` returns the detailed
+          representation unchanged.
+      - content: Creates a pending proposal on behalf of an agent. Returns the new
+          proposal id with status `pending`.
+      - content: Fetches one proposal's full current state — including `data` (e.g. a
+          capability.run proposal's `runResult` once approved). Callers
+          previously had no single-lookup door and had to page through GET
+          /proposals to find one by id.
+      - content: Replaces a pending proposal's payload (e.g. AI revising its proposal
+          after user feedback). Does NOT re-run the event pipeline.
+      - content: 'Undoes the effect of an approved/auto-approved proposal. A create:
+          deletes the entities/relations/documents the approval created. An
+          entity update: restores each field and property from the record
+          stamped when it applied, compare-and-set — a key edited since is kept
+          and reported in `skipped`. An entity delete: restores the soft-deleted
+          entity. An update with no apply-time record (applied before undo
+          existed, or a non-entity update), and a delete of anything but an
+          entity (a hard delete), cannot be reverted and return 501.'
+      - content: Approves a pending proposal, executing its effect immediately.
+          Delegates to the canonical `proposals.approve` tRPC mutation, then
+          re-fetches the proposal so the response carries its post-execution
+          state (e.g. a capability.run's `data.runResult` — success + returned
+          data, or the exact denial reason on failure) in the SAME round trip
+          instead of requiring a separate GET.
+      - content: Rejects a pending proposal. Delegates to the canonical
+          `proposals.reject` tRPC mutation.
+      - content: "The typed door for the server-side dev loop's two stops:
+          `dev.plan_approval` before the agent writes code,
+          `dev.deploy_approval` before it ships a verified commit. Files a
+          normal governed proposal against the FOCUS SESSION, so it inherits the
+          `proposal.created` push (with its `synap://open/proposal/<id>` deep
+          link), the `sessionId` provenance FK and every review surface.
+          APPROVAL ONLY RECORDS THE DECISION on the session — the pod never runs
+          `gateCommand` / `deployCommand`; the agent polls and acts on its own
+          machine."
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/proposals" webhooks={[]} operations={[{"path":"/documents/proposals","method":"post"},{"path":"/proposals","method":"get"},{"path":"/proposals","method":"post"},{"path":"/proposals/{id}","method":"get"},{"path":"/proposals/{id}","method":"patch"},{"path":"/proposals/{id}/revert","method":"post"},{"path":"/proposals/{id}/approve","method":"post"},{"path":"/proposals/{id}/reject","method":"post"},{"path":"/proposals/dev-approval","method":"post"}]} showTitle />
+    </>
+  );
+}

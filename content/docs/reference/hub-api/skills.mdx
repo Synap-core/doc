@@ -1,0 +1,64 @@
+---
+title: Skills
+description: The Skills operations of the Hub REST API (7 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/skills
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns static SKILL.md documentation for the built-in skill packages
+          listed in skills/manifest.json (baseline + workflow). Called by
+          ensureEveSkillsLayout() to populate ~/.eve/skills/ for Claude Code and
+          other text-based agents. Requires hub-protocol.read scope.
+      - content: 'Returns a composed teaching brief per requested name — teaching core
+          (seeded system skills), a live governance verdict (auto/propose), and
+          per-kind posture emphases. A name may be an MCP `synap_*` tool or a
+          runnable-action `verbId` from GET /capabilities/actions: a verbId
+          resolves its teaching through the MCP tools that teach it and, with
+          `workspaceId`, states its run posture (runs now / files a review).
+          Names with no brief content are omitted. Requires hub-protocol.read
+          scope.'
+      - content: Lists skills visible to the caller across the three-tier scope (pod ∪
+          user-owned ∪ workspace). Requires hub-protocol.read scope.
+      - content: "Seeds a `skills` row — AI know-how. Documentation (`body`) + OPTIONAL
+          executable (`code`); `kind` is DERIVED from code presence, so
+          prose-only is an 'instruction' skill and needs a `slug` (the ref
+          load_skill resolves). kind='instruction' injects into the agent
+          prompt; kind='code' is sandbox-executed. Proposal-gated: returns
+          status='proposed' with a proposalId when governance requires review.
+          Optional `requires` writes `skill → requires → tool` links. Requires
+          hub-protocol.write scope."
+      - content: Sets the `approved` flag on a skill — the draft→approve→run gate.
+          Owner-gated (workspace owner, or pod-admin for pod-wide skills) via
+          the governed skillsRouter.setApproved. Requires hub-protocol.write
+          scope.
+      - content: Executes a skill with external writes/sends STUBBED and reads kept
+          real, returning the side effects it intended to perform — a safe
+          preview before approval. Proxies to the Intelligence Service dry-run
+          executor (it owns the sandbox); the acting identity is server-derived.
+          Requires hub-protocol.write scope.
+      - content: "Deletes a `skills` row. Proposal-gated: returns status='proposed' with
+          a proposalId when governance requires review (AI-initiated deletes
+          propose, human deletes execute). Requires hub-protocol.write scope."
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/skills" webhooks={[]} operations={[{"path":"/skills/system","method":"get"},{"path":"/briefs","method":"get"},{"path":"/skills","method":"get"},{"path":"/skills","method":"post"},{"path":"/skills/{id}/approve","method":"post"},{"path":"/skills/{id}/dry-run","method":"post"},{"path":"/skills/{id}","method":"delete"}]} showTitle />
+    </>
+  );
+}

@@ -1,0 +1,92 @@
+---
+title: System
+description: The System operations of the Hub REST API (13 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/system
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Public, no-auth health endpoint.
+      - content: Static orientation document for AI agents. Returns view types, bento
+          block kinds, AI inline pattern syntax, browser-native cell keys, and
+          pointers to live discovery endpoints. No DB queries — safe to cache
+          for the duration of an agent session.
+      - content: Returns entity profiles with property schemas and the CLI command tree.
+          AI agents call this once at session start for ground-truth schema
+          instead of relying on static skill descriptions. Pass ?summary=true
+          for a lighter tier (no property schemas; rows ranked by usage with
+          entityCount / lastActivityAt / rank / origin; ?sort=name for
+          alphabetical; ?groups=origin adds top-level groups), then pass
+          ?profileSlugs=task,person to load schemas only for the profiles you
+          need.
+      - content: Canonical session-bootstrap orientation. Returns the user's workspaces
+          (operational domains), projects (cross-cutting initiatives), a profile
+          sample, and identity. Pass ?detail=full for descriptions + full
+          onboarding + per-workspace profiles.
+      - content: "Read-only DTO powering the CLI's unified pod-configuration view: every
+          workspace the caller belongs to (including unstamped orphans, with
+          inferred provenance), pod-wide + workspace-scoped
+          capabilities/automations/playbooks, and the workspace-to-workspace
+          `feeds` graph."
+      - content: "Stamps the workspace's marketplace identity
+          (packageSlug/packageVersion) and additively reconciles it to the
+          template's definition — never destructive, never a second workspace.
+          Governed: owner/editor floor + agent-governance ladder (grant or
+          propose)."
+      - content: Persists the control-plane-minted OIDC client (inside a CP-signed
+          assertion) into pod_settings.settings.federationOidcClient so the
+          pod's Kratos can federate sign-in through the CP. Authenticated by the
+          CP's issuer signature (approved issuer, aud = this pod), not the Hub
+          key. Idempotent.
+      - content: Given any UUID, returns the browser-routable type of the thing it names
+          (see `type`), or `unknown` when nothing the caller can see has that
+          id. AI agents use this before opening something in the browser — they
+          don't need to know the type upfront.
+      - content: Find objects of a given kind by name — the navigable-by-name half of
+          the graph. Returns every match (names aren't unique) + `unique`. Pass
+          `subtype` to narrow (entity profileSlug, view type, tool/skill kind).
+      - content: 'Returns ANY object (entity, view, channel, session, playbook, tool,
+          skill, automation, project, document) plus everything it is linked to
+          — typed as { kind, subtype, name } per neighbour, across the config
+          (links) and data (relations/property/channel) graphs. Graph by
+          default: never fetch a thing without its place in the pod.'
+      - content: 'Reports whether the Phase-3 PageRank centrality has populated the
+          `entity_centrality` table for the calling user: row count, freshness
+          (last/oldest computedAt), and the top entities by score. Tolerates the
+          table being absent (migration pending) — returns `computed:false`
+          rather than erroring.'
+      - content: Enqueues the global PageRank job (same queue the Phase-3 worker + cron
+          use). The job runs in the background and UPSERTs `entity_centrality`.
+          Returns `triggered:true` on enqueue, or `triggered:false` with a note
+          if the job queue is unavailable.
+      - content: "Reports whether the pod's downstream dependencies are reachable —
+          currently the Intelligence Service. Separate from GET /health, which
+          is an unauthenticated liveness probe and deliberately performs no
+          network I/O. The IS URL is resolved through the SAME resolution real
+          requests use (capability-first → workspace → user → pod default → env
+          fallback), so the probe cannot check a URL requests never touch.
+          Always returns 200 with a reported state: an unreachable dependency is
+          data, not an error. `state` distinguishes `unreachable` (URL known,
+          probe failed) from `unresolved` (resolution itself failed)."
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/system" webhooks={[]} operations={[{"path":"/health","method":"get"},{"path":"/manifest","method":"get"},{"path":"/discover","method":"get"},{"path":"/orient","method":"get"},{"path":"/pod/config","method":"get"},{"path":"/pod/adopt","method":"post"},{"path":"/federation/oidc-config","method":"post"},{"path":"/resolve/{id}","method":"get"},{"path":"/resolve","method":"get"},{"path":"/graph/{type}/{id}","method":"get"},{"path":"/centrality/status","method":"get"},{"path":"/centrality/recompute","method":"post"},{"path":"/health/dependencies","method":"get"}]} showTitle />
+    </>
+  );
+}

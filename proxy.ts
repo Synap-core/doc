@@ -26,7 +26,7 @@ export default function proxy(request: NextRequest) {
 
   // Next.js drops `Vary` on App Router page responses (tested with Next 16.4: neither this proxy
   // nor next.config `headers()` can add it), so the HTML answer goes out without `Vary: Accept`.
-  // A shared cache in front of the site must add it for /docs/*; see docs/AI-READABLE.md.
+  // A shared cache in front of the site must add it for /docs/* (see CLAUDE.md, "Markdown for agents").
   return NextResponse.next();
 }
 

@@ -62,11 +62,9 @@ with an agent's key.
 
 ## Tools
 
-The pod's tools are declared in
-[`mcp-tools.manifest.json`](https://github.com/Synap-core/backend/blob/main/packages/api/src/routers/mcp/tools/mcp-tools.manifest.json)
-in the backend repository: each tool's name, description, input schema and hints (read-only or not). All tool names
-start with `synap_`, for example `synap_ask` to ask the pod a question in natural language. A generated tool
-reference is planned; see [MCP tools](/docs/reference/mcp-tools).
+All tool names start with `synap_`, for example `synap_ask` to ask the pod a question in natural language. A new
+agent key lists a small entry set of tools and loads the others in groups. [MCP tools](/docs/reference/mcp-tools)
+lists every tool with its parameters, generated from the backend's tool definitions.
 
 ## Test the endpoint
 

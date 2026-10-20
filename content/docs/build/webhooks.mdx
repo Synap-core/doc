@@ -25,7 +25,7 @@ const { subscription, secret } = await synap.webhooks.create.mutate({
 });
 ```
 
-- `eventTypes` needs at least one event type. Pick them from the [event catalog](/docs/reference/events#automation-events).
+- `eventTypes` needs at least one event type. Pick them from the [event catalog](/docs/reference/events#catalog).
 - The `secret` is returned **once**, at creation. `webhooks.list` never returns it. Store it to verify signatures.
 - `webhooks.update` changes `name`, `url`, `eventTypes` or `active`; `webhooks.delete` removes the subscription.
 - A subscription created with `webhooks.createForWorkspace` receives only that workspace's events.
@@ -80,7 +80,7 @@ quickly and do the work afterwards.
 
 The pod sends a webhook for each change recorded with a subject and an action, as
 `<subject>.<action>.completed`: `entity.create.completed`, `document.update.completed`,
-`proposal.approved.completed` and so on. The [event catalog](/docs/reference/events#automation-events) lists the
+`proposal.approved.completed` and so on. The [event catalog](/docs/reference/events#catalog) lists the
 event types the pod defines. A subscription receives an event only if its type is listed in `eventTypes`.
 
 Changes that arrive through pod-to-pod sync are not sent again as webhooks.

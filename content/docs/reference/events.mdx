@@ -1,85 +1,154 @@
 ---
-title: Event catalog
-description: The event types a pod records and sends to automations and webhooks, and how to read the event log.
-type: reference
-audience: builder
+title: "Event catalog"
+description: "The event types automations can trigger on and webhooks deliver, generated from the event definitions."
 availability: [pod-oss, cloud]
-status: beta
-owner: Antoinesrvt
-last_reviewed: 2026-10-20
+type: "reference"
+audience: "builder"
+status: "current"
+owner: "Antoinesrvt"
+generated_from: "Synap-core/backend@5762cfae8 (claude/docs-front-door)"
 ---
 
-Every change on a pod is recorded as an event. This page lists the event types the pod defines in
-`packages/events` of the [backend repository](https://github.com/Synap-core/backend/tree/main/packages/events).
-A generated version of this page is planned.
+Generated from [Synap-core/backend@5762cfae8](https://github.com/Synap-core/backend/tree/5762cfae86e8c6f98e0b99d086966919eeffcd93) (`claude/docs-front-door`): [`docs/reference/events.json`](https://github.com/Synap-core/backend/blob/5762cfae86e8c6f98e0b99d086966919eeffcd93/docs/reference/events.json). Do not edit this page; see `scripts/generate-reference.mjs`.
 
-There are two families with different naming patterns. Use the first for automations and webhooks.
+Every change on a pod is recorded as an event. This page lists the event types an automation trigger can name, which
+webhooks deliver and the event log returns.
 
-## Automation events
-
-Pattern: `<subject>.<action>.completed`. These are the events automations can trigger on, that webhooks deliver, and
-that the event log returns.
-
-| Event type | Domain | When |
-|---|---|---|
-| `entity.create.completed` | Entity | An entity was created. |
-| `entity.update.completed` | Entity | An entity's fields or properties were updated. |
-| `entity.transition.completed` | Entity | An entity's lifecycle status moved (its kind's own status, or a role's). |
-| `entity.delete.completed` | Entity | An entity was permanently deleted. |
-| `focus_session.stage_changed.completed` | Sessions | A session moved to a different playbook stage. |
-| `track.stage_changed.completed` | Tracks | A project's track moved to a different stage. |
-| `proposal.created.completed` | Proposals | A new proposal is waiting for review. |
-| `proposal.approved.completed` | Proposals | A proposal was approved and applied. |
-| `proposal.rejected.completed` | Proposals | A proposal was rejected. |
-| `relation.create.completed` | Relations | Two entities were linked. |
-| `relation.delete.completed` | Relations | A link between entities was removed. |
-| `link.create.completed` | Links | A unit of work was marked as blocked by, or replacing, another. |
-| `link.delete.completed` | Links | Such a blocked-by or replaces link was removed. |
-| `document.create.completed` | Documents | A document was created. |
-| `document.update.completed` | Documents | A document was updated. |
-| `capture.complete.completed` | Capture | A capture finished processing. |
-| `command.execute.completed` | Commands | A command finished. |
-| `connector_sync.complete.completed` | Connectors | A connected account finished a sync run (once per connection per run). |
-| `proactive.post.completed` | Intelligence | The pod's AI posted a message into your channel on its own initiative. |
-| `notification.created.completed` | Notifications | A notification was raised. |
-| `channel_message.created.completed` | Messaging | A message was posted in a Synap channel. |
-| `feed.new_item.completed` | Feed | A new item appeared in the intelligence feed. |
-| `external_message.received.completed` | Messaging | A message arrived on a connected external channel. |
-| `messaging_account.created.completed` | Messaging | A messaging account was connected. |
-| `messaging_account.reconnection_required.completed` | Messaging | A messaging account needs to be reconnected. |
-| `messaging_account.disconnected.completed` | Messaging | A messaging account was disconnected. |
-| `inbox_item.received.completed` | Inbox | An item arrived from an external integration. |
-| `inbox_item.analyzed.completed` | Inbox | An inbox item was analyzed by the Intelligence Service. |
-| `user.updated.completed` | Identity | A user identity was updated. |
-
-That is 29 event types. Some carry filter keys that automation triggers can match on; the pod's trigger picker shows
+Automation trigger patterns accept an exact type (`entity.create.completed`), an action wildcard (`entity.create.*`)
+or a subject wildcard (`entity.*`). Filter keys are the fields a trigger can match on; the pod's trigger picker shows
 them.
 
-## Table events
+The backend also generates table-level event names (`{table}.{action}.{phase}`, for example
+`entities.create.requested`) for schema documentation and admin introspection. Automation triggers do not match
+those strings: use the types below.
 
-Pattern: `<table>.<action>.<phase>`, with actions `create`, `update` and `delete`, and the three phases of a
-governed write: `requested`, `approved` and `validated`. They describe writes to 13 core tables:
+29 event types in 16 domains.
 
-`entities`, `documents`, `documentVersions`, `chatThreads`, `conversationMessages`, `webhookSubscriptions`, `apiKeys`,
-`tags`, `agents`, `workspaces`, `workspaceMembers`, `views`, `userPreferences`.
+## Catalog
 
-13 tables × 3 actions × 3 phases = 117 event types, for example `entities.create.requested` or
-`documents.update.validated`. They are used for schema documentation and admin introspection. Automation triggers do
-**not** match these strings: use the automation events above.
+### Entity
 
-## System event
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `entity.create.completed` | Entity created | Fires after any entity is successfully created. | `profileSlug` |
+| `entity.update.completed` | Entity updated | Fires after any entity field or property is updated. | `profileSlug`, `changedKeys`, `changed.<fieldName>`, `previous.<fieldName>`, `<fieldName>` |
+| `entity.transition.completed` | Status changed | Fires when a thing's lifecycle status moves (the kind's own, or a role's), through the one moveStatus door. | `lifecycleProfile`, `profileSlug`, `role`, `property`, `from`, `to`, `fromCategory`, `category`, `actorKind` |
+| `entity.delete.completed` | Entity deleted | Fires after an entity is permanently deleted. | `profileSlug` |
 
-`webhooks.deliver.requested` is the internal event that starts a webhook delivery.
+### Focus sessions
 
-## Reading the event log
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `focus_session.stage_changed.completed` | Playbook stage changed | Fires when a focus session advances to a different playbook stage. | `toStage`, `fromStage`, `playbookId` |
 
-The Hub REST API returns events from the log:
+### Tracks
 
-```bash
-curl "https://pod.example.com/api/hub/events?type=entity.create.completed&limit=50" \
-  -H "Authorization: Bearer $SYNAP_API_KEY"
-```
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `track.stage_changed.completed` | Track stage changed | Fires when a project's track (a method it runs) moves to a different stage. | `toStage`, `fromStage`, `playbookId`, `projectId`, `trackId` |
 
-You can filter by `type`, `subjectType`, `subjectId` and `fromDate`, and by who produced the event (`agentUserId`,
-`isAgent`) or one request chain (`correlationId`). The default window is 7 days; `limit` defaults to 50 and is capped
-at 200. The response is `{ "events": [ … ] }`. The exact parameters are in the pod's `/api/hub/openapi.json`.
+### Proposals
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `proposal.created.completed` | Proposal created | A new AI proposal is pending review. | `proposalStatus`, `targetType`, `changeType` |
+| `proposal.approved.completed` | Proposal approved | An AI proposal was approved and applied. | `proposalStatus`, `targetType` |
+| `proposal.rejected.completed` | Proposal rejected | An AI proposal was rejected. | `proposalStatus`, `targetType` |
+
+### Relations
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `relation.create.completed` | Relation created | Two entities were linked. | `relationType` |
+| `relation.delete.completed` | Relation deleted | A relation between entities was removed. | `relationType` |
+
+### Links
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `link.create.completed` | Dependency declared | A unit of work was marked as blocked by (or replacing) another. | `linkType`, `fromType`, `toType` |
+| `link.delete.completed` | Dependency removed | A blocked-by (or replaces) edge was removed. | `linkType`, `fromType`, `toType` |
+
+### Documents
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `document.create.completed` | Document created | Fires after a document is created. | `profileSlug` |
+| `document.update.completed` | Document updated | Fires after a document is updated. | `profileSlug` |
+
+### Capture
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `capture.complete.completed` | Capture completed | A capture finished processing. | `profileSlug` |
+
+### Commands
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `command.execute.completed` | Command executed | Fires after a command finishes execution. | `commandSlug` |
+
+### Connectors
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `connector_sync.complete.completed` | Connector synced | A connection finished a sync run — once per connection per run. Data: provider, connectionId, syncStatus ('success' \| 'error'), kinds (phase per kind), counts \{fetched, created, merged, skipped\}, proposalIds when the run filed an import for review. | `provider`, `syncStatus` |
+
+### Intelligence
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `proactive.post.completed` | Proactive post | The proactive AI posted a message into your channel. | `proactiveType` |
+
+### Notifications
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `notification.created.completed` | Notification created | A notification was raised. | `notificationType`, `category` |
+
+### Messaging
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `channel_message.created.completed` | Channel message created | A new message was posted into a Synap channel. | `channelId`, `messageRole` |
+| `external_message.received.completed` | External message received | An inbound message arrived on a connected external channel. | `provider`, `channelId` |
+| `messaging_account.created.completed` | Messaging account connected | A messaging account was connected. | `provider` |
+| `messaging_account.reconnection_required.completed` | Messaging account needs reconnection | A messaging account requires reconnection. | `provider` |
+| `messaging_account.disconnected.completed` | Messaging account disconnected | A messaging account was disconnected. | `provider` |
+
+### Feed
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `feed.new_item.completed` | Feed new item | A new item appeared in the intelligence feed. | `feedArchetype`, `feedMinRelevanceScore` |
+
+### Inbox
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `inbox_item.received.completed` | Inbox item received | A new item arrived from an external integration. | `sourceType` |
+| `inbox_item.analyzed.completed` | Inbox item analyzed | An inbox item was analyzed by the intelligence service. | `sourceType` |
+
+### Identity
+
+| Event type | Name | Description | Filter keys |
+|---|---|---|---|
+| `user.updated.completed` | User updated | A user identity was updated. |  |
+
+## System events
+
+Internal events that are not automation triggers.
+
+- `webhooks.deliver.requested`
+
+## Naming grammar
+
+Event types follow `{subject}.{action}.{phase}`.
+
+- Subjects (record changes): `entity`, `document`, `workspace`, `view`, `relation`, `link`, `tag`, `project`, `proposal`, `message`, `user`, `role`, `apiKey`, `skill`, `agent`, `agentRun`, `chatThread`, `template`, `inboxItem`, `sharing`, `workspaceMember`, `projectMember`
+- Actions: `create`, `update`, `delete`, `archive`, `restore`
+- Phases: `requested`, `validated`, `completed`, `denied`
+- Subjects whose action is a domain verb: `command`, `external_channel`, `external_webhook`, `focus_session`, `hydration`, `inbox_item`, `messaging_account`, `notification`, `tool`, `connection_sync`, `track`, `entity_facet`
+- Connector and system families: `external_message`, `channel_message`, `connector_sync`, `capture`, `proactive`, `feed`
+- Message alias patterns: `message.received`, `message.received.*`, `message.sent`, `message.sent.*`, `message.*`
+- Observation namespaces: `dev`, `ci`

@@ -1,0 +1,52 @@
+---
+title: Import
+description: The Import operations of the Hub REST API (4 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/import
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: AI/deterministic structure of markdown/obsidian/csv/bookmark items into
+          composite operations + a governed import.graph proposal. Pair with
+          POST /import/apply (proposalId is SSOT for ops).
+      - content: Creates entities + relations from /import/analyze. When proposalId is
+          set the stored proposal ops are SSOT (HITL); otherwise client
+          operations (min 1) are required.
+      - content: 'Background door onto ImportOrchestrator.analyzeLarge: enqueues the
+          corpus on the `import-corpus` pg-boss queue and returns immediately
+          with a jobId. The worker chunks the items (cross-chunk dedup
+          preserved) and produces ONE governed import.graph proposal — so a
+          many-file corpus is a single background job instead of N synchronous
+          /import/analyze calls racing the request timeout. Poll GET
+          /import/corpus-job/{jobId}; on completion the result is the
+          import.graph proposal in the review inbox.'
+      - content: Returns the pg-boss state of a job created by POST
+          /import/enqueue-corpus. Only the job's own submitter may read it.
+          `completed` means the governed import.graph proposal has been written
+          — fetch it from the proposals inbox. `output` carries the run's
+          file-level outcome (proposalId, filesProcessed/filesFailed,
+          warn+blocker findings); it is null while the job is unfinished and on
+          pods older than the worker that returns it — treat null as UNKNOWN,
+          never as success.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/import" webhooks={[]} operations={[{"path":"/import/analyze","method":"post"},{"path":"/import/apply","method":"post"},{"path":"/import/enqueue-corpus","method":"post"},{"path":"/import/corpus-job/{jobId}","method":"get"}]} showTitle />
+    </>
+  );
+}

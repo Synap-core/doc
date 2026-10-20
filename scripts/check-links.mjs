@@ -47,7 +47,8 @@ for (const file of pages) {
 }
 
 const problems = [];
-const LINK_RE = /\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)|\bhref=["']([^"']+)["']/g;
+// `(?<!\\)`: an escaped \[ is literal text (generated pages escape brackets from source descriptions).
+const LINK_RE = /(?<!\\)\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)|\bhref=["']([^"']+)["']/g;
 
 for (const file of pages) {
   const { text, body, bodyOffset } = readPage(file);

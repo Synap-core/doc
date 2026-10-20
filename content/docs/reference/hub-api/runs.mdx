@@ -1,0 +1,44 @@
+---
+title: Runs
+description: The Runs operations of the Hub REST API (3 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/runs
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: "Newest-first run feed across automation / playbook / capture /
+          capability / session / chat. Filter to one ledger with flowType, or
+          one flow with flowId. This is the AI/CLI diagnose door: a capture
+          run's activity (via GET /runs/{id}) is its correlationId-keyed
+          decision + trace events — what happened and why."
+      - content: "Returns the run and its flow-agnostic activity: automation steps, or a
+          capture's decision/trace events (component/reason/fixHint — the
+          diagnose story). Requires flowType (the id space differs per ledger)."
+      - content: "The THIRD door (alongside ask + capture): mode is derived from payload
+          shape, not a caller-chosen endpoint. {} → whole-pod health · {type} →
+          a diagnosable class as a surface · {id} → auto-detect the object's
+          kind and explain its state + why · {agentId} → agent behavioural
+          scorecard · {runId,flowType} / {flowType,flowId} → today's
+          run-detail/run-feed grammar."
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/runs" webhooks={[]} operations={[{"path":"/runs","method":"get"},{"path":"/runs/{id}","method":"get"},{"path":"/diagnose","method":"post"}]} showTitle />
+    </>
+  );
+}

@@ -1,0 +1,32 @@
+---
+title: Governance
+description: The Governance operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/governance
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns the effective RBAC + auto-approve list for the workspace.
+          Membership required.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/governance" webhooks={[]} operations={[{"path":"/workspaces/{workspaceId}/governance","method":"get"}]} showTitle />
+    </>
+  );
+}

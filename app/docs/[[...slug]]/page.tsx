@@ -12,6 +12,8 @@ import { notFound } from 'next/navigation';
 import { mdxComponents } from '@/lib/mdx-components';
 import { AUDIENCE_LABELS, AVAILABILITY_LABELS } from '@/lib/page-meta';
 import { getPublicMarkdownUrl, gitConfig } from '@/lib/shared';
+import { openapi } from '@/lib/openapi';
+import { OpenAPIPage } from '@/components/api-page';
 import type { Metadata } from 'next';
 
 /** YAML turns 2026-10-20 into a Date before the schema sees it; show it as written. */
@@ -81,7 +83,15 @@ export default async function Page({ params }: Props) {
         </Callout>
       ) : null}
       <DocsBody>
-        <MDX components={mdxComponents} />
+        <MDX
+          components={{
+            ...mdxComponents,
+            // Generated Hub REST API pages (content/docs/reference/hub-api) render their operations with this.
+            OpenAPIPage: async (props: React.ComponentProps<typeof OpenAPIPage>) => (
+              <OpenAPIPage {...await openapi.preloadOpenAPIPage(page)} {...props} />
+            ),
+          }}
+        />
       </DocsBody>
     </DocsPage>
   );

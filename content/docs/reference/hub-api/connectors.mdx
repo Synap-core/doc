@@ -1,0 +1,30 @@
+---
+title: Connectors
+description: The Connectors operations of the Hub REST API (9 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/connectors
+  toc: []
+  structuredData:
+    headings: []
+    contents: []
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/connectors" webhooks={[]} operations={[{"path":"/connectors/providers","method":"get"},{"path":"/connectors/broker-diagnostics","method":"get"},{"path":"/connectors/sync-status","method":"get"},{"path":"/connectors/connect","method":"post"},{"path":"/connectors/session","method":"post"},{"path":"/connectors/connections/{connectionId}","method":"delete"},{"path":"/connectors/disconnect","method":"post"},{"path":"/connectors/connections/{provider}","method":"get"},{"path":"/connectors/tool-execute","method":"post"}]} showTitle />
+    </>
+  );
+}

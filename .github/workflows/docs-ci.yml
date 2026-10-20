@@ -37,6 +37,14 @@ jobs:
       - name: Retired package names and domains
         run: npm run check:retired
 
+      # The generated reference pages match content/reference-data/ (offline).
+      - name: Generated reference pages are up to date
+        run: npm run check:generated
+
+      # content/reference-data/ matches the source repositories at the commits recorded in sources.json.
+      - name: Reference data matches its sources
+        run: npm run reference:check
+
       # Also validates every page's frontmatter (source.config.ts).
       - name: Build
         run: npm run build

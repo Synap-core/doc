@@ -1,0 +1,55 @@
+---
+title: FocusSessions
+description: The FocusSessions operations of the Hub REST API (8 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/focus-sessions
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Scope by `workspaceId` (membership-checked), `projectId` (the project
+          must be visible to the caller — `loadVisibleProject`, the same floor
+          every project read and filing write uses), or both. At least one is
+          required. Rows are always floored at the sessions the caller can read.
+      - content: Lifecycle close via completeFocusSession — stamps closed, finishes any
+          running playbook_run, returns pendingProposals + counts + warnings.
+          Distinct from POST .../complete-run (playbook run only).
+      - content: Writes one `artifacts` provenance row attributing an already-existing
+          view/cell/document/entity/url to this session. `expectedLabel` claims
+          a declared deliverable slot for the join; it never stamps it done.
+      - content: Posts one ask in the session room, starts an agent turn for it, and
+          stamps `delegatedTo`/`delegatedAt` on the named slot. Never stamps
+          `status` — only an approval may do that.
+      - content: Clears `owner`, `blockedReason`, `why` and `owedSince` together. The
+          deliverable itself is unchanged and still owed.
+      - content: "Returns as soon as an answer newer than `since` exists (`status:
+          'answered'`, the same page shape as GET /answers), or after
+          `timeoutSeconds` (default 50, max 90) with `status: 'timeout'` and
+          `nextSince` to wait on again. Without `since`, only UNREAD answers:
+          slot answers not yet picked up, and room answers newer than the call.
+          An agent key's read stamps the slot answer's `answerPickedUpAt`
+          receipt."
+      - content: Answers the owner gave to agent questions and owed slots, `answeredAt >
+          since`, oldest first, id-stable. Pass `nextSince` back as `since`. For
+          agents the pod cannot wake (Claude Code, claude.ai, Raycast).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/focus-sessions" webhooks={[]} operations={[{"path":"/focus-sessions","method":"get"},{"path":"/focus-sessions/:id","method":"get"},{"path":"/focus-sessions/:id/complete","method":"post"},{"path":"/focus-sessions/:id/outputs","method":"post"},{"path":"/focus-sessions/:id/outputs/delegate","method":"post"},{"path":"/focus-sessions/:id/outputs/unblock","method":"post"},{"path":"/focus-sessions/:id/answers/wait","method":"get"},{"path":"/focus-sessions/:id/answers","method":"get"}]} showTitle />
+    </>
+  );
+}

@@ -1,0 +1,39 @@
+---
+title: Identity
+description: The Identity operations of the Hub REST API (3 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/identity
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns whether the given Discord user is linked to a Synap user under
+          the calling operator key. NEVER auto-creates a link.
+      - content: Returns the human members of the acting (operator) workspace that a
+          Discord user can be linked to via the onboarding picker.
+      - content: Creates the Discord→Synap mapping. mode='existing' maps onto an
+          existing workspace member (impersonation — admin-only). mode='new'
+          provisions a fresh Synap user + team membership (account creation —
+          admin-only). Authorized by the acting context's workspace role
+          (owner/admin), never a caller-supplied flag.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/identity" webhooks={[]} operations={[{"path":"/discord/identity","method":"get"},{"path":"/discord/identity/members","method":"get"},{"path":"/discord/identity/link","method":"post"}]} showTitle />
+    </>
+  );
+}

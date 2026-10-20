@@ -1,0 +1,36 @@
+---
+title: Views
+description: The Views operations of the Hub REST API (4 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@5762cfae8 (claude/docs-front-door)
+_openapi:
+  preload:
+    - hub-api/views
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns the user's views in a workspace, optionally filtered by view
+          type or profile.
+      - content: Creates a view (table, kanban, bento, etc.) over the entity store.
+      - content: Patch view name, config, or metadata.
+      - content: Replaces the widget arrangement for a bento-type view. Widget IDs must
+          reference existing cell instances in the view.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/views" webhooks={[]} operations={[{"path":"/views","method":"get"},{"path":"/views","method":"post"},{"path":"/views/{viewId}","method":"patch"},{"path":"/views/{viewId}/arrange","method":"post"}]} showTitle />
+    </>
+  );
+}

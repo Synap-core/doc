@@ -15,8 +15,9 @@ Run every command from the deploy directory, as root:
 cd /opt/synap/deploy
 ```
 
-From anywhere else the server CLI stops with "Not in Synap installation directory". Set
-`SYNAP_DEPLOY_DIR=/opt/synap/deploy` if you prefer not to `cd`.
+From anywhere else the server CLI stops with "Not in Synap installation directory". If you prefer not to `cd`, set
+`SYNAP_DEPLOY_DIR` on the `sudo` command itself (`sudo` drops variables exported in your shell):
+`sudo SYNAP_DEPLOY_DIR=/opt/synap/deploy synap health`.
 
 ## Health
 

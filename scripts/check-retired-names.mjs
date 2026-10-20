@@ -15,12 +15,13 @@ for (const [name, to] of Object.entries(list.extra ?? {})) names.set(name, Strin
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // A name matches only as a whole name: "@synap-core/sdk" must not match inside
 // "@synap-core/sdk-realtime", but "@synap-core/client/foo" is still the retired package.
+// A name that ends in "/" is a path prefix: "content/team/" matches "content/team/platform/x.mdx".
 const patterns = [...names.keys()].map((name) => ({
   name,
-  re: new RegExp(`(?<![A-Za-z0-9_.-])${escape(name)}(?![A-Za-z0-9_-])`, 'g'),
+  re: new RegExp(`(?<![A-Za-z0-9_.-])${escape(name)}${name.endsWith('/') ? '' : '(?![A-Za-z0-9_-])'}`, 'g'),
 }));
 
-const extraFiles = ['README.md', 'CLAUDE.md'].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
+const extraFiles = ['README.md', 'CLAUDE.md', 'AGENTS.md'].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
 const problems = [];
 for (const file of [...listPages(), ...extraFiles]) {
   const text = fs.readFileSync(file, 'utf8');

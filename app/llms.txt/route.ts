@@ -21,9 +21,10 @@ const intro = `# Synap Documentation
 
 - Every page is also Markdown: add \`.md\` to its URL (${siteUrl}/docs/build/agents/mcp.md), or request the page
   with \`Accept: text/markdown\`. The Markdown is built from the same source as the HTML.
-- [All pages in one file](${siteUrl}/llms-full.txt)
+- [All hand-written pages in one file](${siteUrl}/llms-full.txt). The generated reference is not in it; it links
+  to each reference page's Markdown.
 - Docs MCP server: \`${siteUrl}/api/mcp\` (Streamable HTTP, no auth) with the tools \`list_pages\`, \`get_page\`
-  and \`search\`. It serves these docs only; it is not a pod.
+  (a page path, its \`.md\` URL or its full URL) and \`search\`. It serves these docs only; it is not a pod.
 - Reference pages (CLI, MCP tools, events, Hub REST API) are generated from the source repositories. Prefer them
   over prose for names, flags and parameters.
 - [Coding with agents](${siteUrl}/docs/build/coding-with-agents): how to point Claude Code, Cursor and other agents
@@ -40,9 +41,11 @@ const intro = `# Synap Documentation
 
 ## Preferred interfaces
 
-- TypeScript and React apps: \`@synap-core/sdk\` (typed tRPC client) and \`@synap-core/react\`.
-- Scripts, agents and integrations in any language: the Hub REST API under \`/api/hub\` on the pod. Its OpenAPI
-  description is served at \`/api/hub/openapi.json\`; \`@synap-core/hub-rest-client\` is a zero-dependency client.
+- TypeScript and React apps that act as a signed-in person: \`@synap-core/sdk\` (typed tRPC client) and
+  \`@synap-core/react\`. They authenticate with a sign-in session (cookie or session token), never an API key.
+- Scripts, agents and integrations in any language, with an API key: the Hub REST API under \`/api/hub\` on the pod.
+  Its OpenAPI description is served at \`/api/hub/openapi.json\`; \`@synap-core/hub-rest-client\` is a
+  zero-dependency TypeScript client.
 - AI clients: the pod's MCP endpoint at \`/mcp\`. Connect with \`npx @synap-core/cli init\` or
   \`synap connect <client>\`; do not hand-write MCP configuration.
 - Being told about changes: webhooks, or \`@synap-core/sdk-realtime\`.

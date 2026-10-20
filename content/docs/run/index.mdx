@@ -46,7 +46,8 @@ Optional services are behind Compose profiles: `monitoring` (Dozzle, Prometheus,
 ## The server CLI
 
 The installer puts the operator CLI at `/usr/local/bin/synap`. It is a shell script that ships with each release, in
-`/opt/synap`. It works on the deploy directory, so run it from there (or set `SYNAP_DEPLOY_DIR`):
+`/opt/synap`. It works on the deploy directory, so run it from there (or set `SYNAP_DEPLOY_DIR` on the `sudo` command:
+`sudo SYNAP_DEPLOY_DIR=/opt/synap/deploy synap …`):
 
 ```bash
 cd /opt/synap/deploy

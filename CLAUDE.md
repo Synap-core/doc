@@ -90,12 +90,28 @@ Commit both the JSON and the pages. `content/reference-data/sources.json` record
 file came from. CI checks that the data matches those commits (`npm run reference:check`) and that the pages match
 the data (`npm run check:generated`); a weekly workflow (`reference-drift.yml`) reports when a source ref has moved.
 
+### Reference data: merge order
+
+The reference JSON is currently pinned to unmerged branches: `claude/docs-front-door` in Synap-core/backend and
+`claude/cli-reference` in Synap-core/synap-cli (see `sources.json`), because the exporters live there. Once both
+branches are merged, sync from `main` and commit the result:
+
+```bash
+npm run reference:sync     # SYNAP_CLI_REF and SYNAP_BACKEND_REF default to main
+npm run reference:generate
+```
+
+Until then, the weekly drift job follows the pinned refs (the `ref` in `sources.json`), so it reports changes on
+those branches, not on `main`.
+
 ## Markdown for agents
 
 Every page is served as Markdown from the same compiled MDX: `/docs/<page>.md`, or `/docs/<page>` with
 `Accept: text/markdown` (proxy.ts). `/llms.txt` is curated in `app/llms.txt/route.ts` (keep it short and verified;
-its section index and "do not use" list are generated). `/llms-full.txt` has every page, and `/api/mcp` is a docs MCP
-server (list_pages, get_page, search). `npm run check:markdown` checks all of it against a build.
+its section index and "do not use" list are generated). `/llms-full.txt` has every hand-written page and links the
+generated reference pages instead of inlining them. `/api/mcp` is a docs MCP server (list_pages, get_page, search);
+`get_page` accepts a page path, its `.md` URL or its full URL (`lib/docs-url.ts`, tested by
+`scripts/docs-url.test.mjs`). `npm run check:markdown` checks all of it against a build.
 
 Next.js drops `Vary` on App Router page responses, so the HTML answer at `/docs/<page>` goes out without
 `Vary: Accept` (the Markdown answer has it). If a shared cache sits in front of the site, configure it to vary
@@ -111,7 +127,7 @@ that may not exist yet.
 ```bash
 npm ci                # install (Node >= 22.18; the checks import lib/page-meta.ts directly)
 npm run dev           # local site on http://localhost:3000
-npm run check         # frontmatter, internal links + navigation, retired names, generated pages up to date
+npm run check         # frontmatter, internal links + navigation, retired names, generated pages up to date, unit tests
 npm run build         # production build (fails on invalid frontmatter)
 npm run check:markdown  # after a build: every page's Markdown, llms.txt, llms-full.txt
 npm run reference:check # content/reference-data matches its source commits (network)
@@ -119,8 +135,10 @@ npm run reference:check # content/reference-data matches its source commits (net
 
 CI (`.github/workflows/docs-ci.yml`) runs all of them on every pull request and push to main.
 
-`scripts/retired-names.json` vendors the retired package list from Synap-core/app-bases
-(`scripts/architecture/removed-packages.json`); refresh it from there when it changes.
+`scripts/retired-names.json` vendors the retired package list from the private frontend repository
+(`scripts/architecture/removed-packages.json`); refresh it from there when it changes. Its `extra` list also holds
+names and paths that must never appear here, such as the old clone name and content path of the removed internal
+section. A name that ends in `/` matches as a path prefix.
 
 ## Writing
 

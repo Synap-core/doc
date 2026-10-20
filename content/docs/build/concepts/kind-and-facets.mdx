@@ -40,9 +40,9 @@ Kind + Facets fixes this at the storage layer: **one entity per real-world thing
 
 Not every recurring "role" stays a facet forever. The test: **does it accrue its own independent life — its own timeline, its own relations to other things, its own state machine that outlives any single parent?** If yes, it earns kind-hood.
 
-The canonical precedent is `deal`. A deal isn't just "a person in the `won` state" — it's a relationship-THING with its own buyer × seller × stage lifecycle, its own close date, its own linked contacts and documents. `deal` was kept as a primary kind (`w3c.keep.deal` in the conversion manifest), never folded into a facet, precisely because it has that independent life. `event` is the same case — a time-bound container, not a role someone plays.
+The canonical precedent is `deal`. A deal isn't just "a person in the `won` state" — it's a relationship-THING with its own buyer × seller × stage lifecycle, its own close date, its own linked contacts and documents. `deal` was kept as a primary kind (a `keep` entry in the conversion manifest), never folded into a facet, precisely because it has that independent life. `event` is the same case — a time-bound container, not a role someone plays.
 
-Contrast with `client` / `partner` / `prospect` / `sponsor` / `competitor`: these describe a *stance* a person or company has, with no independent existence outside that person or company. They were converted to facets (`w3c.convertToFacet.*` entries). A facet is inherently subordinate — detach it, and the parent entity is untouched; delete the parent, and the facet cascades away with it (`entityId` references `entities.id` with `onDelete: 'cascade'`).
+Contrast with `client` / `partner` / `prospect` / `sponsor` / `competitor`: these describe a *stance* a person or company has, with no independent existence outside that person or company. They were converted to facets (`convertToFacet` entries in the manifest). A facet is inherently subordinate — detach it, and the parent entity is untouched; delete the parent, and the facet cascades away with it (`entityId` references `entities.id` with `onDelete: 'cascade'`).
 
 **Rule of thumb:** if you can imagine the "role" outliving or being shared across multiple parents with its own graph of relations, it's probably a kind. If it's inseparable from one specific entity and just toggles that entity's stance, it's a facet.
 
@@ -80,7 +80,7 @@ Before this model, there were **six independent "is this the same subject?" impl
 
 This is why resolve-identity-first matters for facets specifically: attaching a `client` facet to the wrong `person` entity because two people share a name is a worse failure than asking the user to disambiguate. The strong path exists so that "this is clearly the same person" (same email) resolves without asking, and everything else asks.
 
-## The conversion story — the manifest as SSOT
+## The conversion story: the manifest is the record
 
 Migrating a profile from a primary kind into an attachable role is not a hand-written SQL migration. It's a declarative entry in `packages/database/src/conversions/manifest.ts`, interpreted by `runConversions()` (`conversions/engine.ts`) against the live database. Each op carries a stable `opKey`, recorded in a `_conversions` ledger so re-running the manifest is idempotent — an already-applied op is skipped.
 
@@ -93,7 +93,7 @@ The manifest is a versioned, ordered list of `ConversionOp`s:
 - **`keep`** — explicit "stays a kind" with a reasoning note (this is where `deal` and `event` live).
 - **`extractNonEntity`** — pull something out of the entity model entirely.
 
-Ops are append-only and immutable once shipped — later waves append new `opKey`s rather than editing old ones, so the manifest doubles as an audit trail of every kind/facet decision made.
+Ops are append-only and immutable once shipped: a later change appends new `opKey`s rather than editing old ones, so the manifest doubles as an audit trail of every kind/facet decision made.
 
 ## API surface
 
@@ -110,7 +110,7 @@ Backend (`packages/api/src/routers/entities.ts`, Hub Protocol REST under `/api/h
 
 All reads share one visibility predicate: `facetVisibilityConditions()` (`utils/facet-visibility.ts`) — workspace-scoped facets are visible to the workspace's members, pod-wide (null-workspace) facets carry an owner floor. The access-layer `VisibilityRule` registered for `entityFacets` in `packages/api/src/access/registry.ts` mirrors this predicate; the two are kept in sync by convention, not by shared code, so changing one requires changing the other.
 
-Intelligence Service side: the `attach_facet` tool (`synap-intelligence-service/apps/intelligence-hub/src/tools/actions/attach-facet.ts`) is how agents attach a role instead of creating a second entity — governed the same way entity creation is (may return `status: 'proposed'`, awaiting review, which is success-pending-review, not an error). `update_facet` is its counterpart for status transitions.
+Intelligence Service side: the `attach_facet` tool is how agents attach a role instead of creating a second entity — governed the same way entity creation is (may return `status: 'proposed'`, awaiting review, which is success-pending-review, not an error). `update_facet` is its counterpart for status transitions.
 
 ## Open questions
 

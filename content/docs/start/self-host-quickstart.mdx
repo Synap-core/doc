@@ -65,6 +65,11 @@ If a certificate is not issued yet, check that both DNS records point at the ser
 
 ## 3. Create the first admin
 
+<Callout type="warn" title="Ignore the installer's /admin/bootstrap line">
+  The installer of current releases (v1.1.3 and earlier) ends with "Open: https://pod.example.com/admin/bootstrap"
+  and a token. That page does not exist. Ignore those lines and create the admin with the command below.
+</Callout>
+
 Mint a one-hour sign-up link for the first admin, and open it in your browser:
 
 ```bash

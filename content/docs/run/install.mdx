@@ -103,10 +103,19 @@ installer (and `synap update`) does with it:
 | `enforce` | Any of those refuses the install. |
 | `off` | No check, for a private mirror. |
 
-Install `cosign` and set `SYNAP_RELEASE_VERIFY=enforce` to refuse unsigned or tampered releases.
+Install `cosign` and set `SYNAP_RELEASE_VERIFY=enforce` to refuse unsigned or tampered releases. Set it on the `sudo`
+command, because `sudo` drops variables exported in your shell:
+
+```bash
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo SYNAP_RELEASE_VERIFY=enforce bash -s -- --domain pod.example.com --email you@example.com
+sudo SYNAP_RELEASE_VERIFY=enforce synap update
+```
+
+A manual `synap update` also reads `SYNAP_RELEASE_VERIFY` from `deploy/.env`.
 
 ## Installing from a checkout
 
 Developers can run `./synap install --from-source --domain localhost` in a clone of the backend repository to build
-the images locally. This is a development path, not a way to run a production pod; see the backend repository's
-contributing guide.
+the images locally. This is a development path, not a way to run a production pod; see the contributing guide in the
+[backend repository](https://github.com/Synap-core/backend).

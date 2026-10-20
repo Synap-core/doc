@@ -17,7 +17,7 @@ approval rules.
 
 | Door | Path on the pod | Use it for | Auth |
 |---|---|---|---|
-| **tRPC API**, through the SDK | `/trpc` | TypeScript and React apps | API key or sign-in session |
+| **tRPC API**, through the SDK | `/trpc` | TypeScript and React apps that act as a signed-in person | Sign-in session (cookie or session token); no API keys |
 | **Hub REST API** | `/api/hub/*` | Scripts, agents, integrations in any language | API key (`hub-protocol.read` / `.write`) |
 | **MCP** | `/mcp` | AI clients: Claude Code, Codex, Cursor, ChatGPT and others | API key or OAuth |
 | **Webhooks** | your URL | Being told when something changes | HMAC signature |
@@ -30,9 +30,9 @@ Every pod publishes the OpenAPI description of its Hub REST API at `/api/hub/ope
 
 | Package | What it is |
 |---|---|
-| [`@synap-core/sdk`](https://www.npmjs.com/package/@synap-core/sdk) | Typed tRPC client for apps. See [SDK](/docs/build/sdk). |
+| [`@synap-core/sdk`](https://www.npmjs.com/package/@synap-core/sdk) | Typed tRPC client for apps where a person signs in. See [SDK](/docs/build/sdk). |
 | [`@synap-core/react`](https://www.npmjs.com/package/@synap-core/react) | React provider and hooks over the SDK (TanStack Query). |
-| [`@synap-core/hub-rest-client`](https://www.npmjs.com/package/@synap-core/hub-rest-client) | Zero-dependency client for the Hub REST API, for agents and scripts. |
+| [`@synap-core/hub-rest-client`](https://www.npmjs.com/package/@synap-core/hub-rest-client) | Zero-dependency client for the Hub REST API, for agents and scripts that hold an API key. |
 | [`@synap-core/sdk-realtime`](https://www.npmjs.com/package/@synap-core/sdk-realtime) | Socket.IO client for change notifications. |
 | [`@synap-core/api-types`](https://www.npmjs.com/package/@synap-core/api-types) | The pod's tRPC `AppRouter` type. |
 | [`@synap-core/types`](https://www.npmjs.com/package/@synap-core/types) | Domain types and schemas. |
@@ -40,8 +40,9 @@ Every pod publishes the OpenAPI description of its Hub REST API at `/api/hub/ope
 
 ## Where to start
 
-- An app in TypeScript: [SDK first query](/docs/build/sdk).
-- A key for a script, a site or an integration: [API keys](/docs/build/api-keys).
+- An app in TypeScript where a person signs in: [SDK first query](/docs/build/sdk).
+- A script, a site or an integration: an [API key](/docs/build/api-keys) and the
+  [Hub REST API](/docs/reference/hub-api).
 - React to changes in another system: [Webhooks](/docs/build/webhooks).
 - A coding agent that writes code against Synap: [Coding with agents](/docs/build/coding-with-agents).
 - An AI agent: [Connect an agent](/docs/build/agents), then [MCP](/docs/build/agents/mcp) and

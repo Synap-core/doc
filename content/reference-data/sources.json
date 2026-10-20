@@ -3,7 +3,7 @@
   "cli": {
     "repo": "Synap-core/synap-cli",
     "ref": "claude/cli-reference",
-    "commit": "63d52a0ffcdfaf44310686feeb10d7dfe5d2dbd1",
+    "commit": "1956ce76f9bfbad176b41b5ed20007637563f476",
     "files": {
       "cli.json": {
         "path": "docs/reference/cli.json",
@@ -14,7 +14,7 @@
   "backend": {
     "repo": "Synap-core/backend",
     "ref": "claude/docs-front-door",
-    "commit": "5762cfae86e8c6f98e0b99d086966919eeffcd93",
+    "commit": "1e43fc3efe1e45831f1ff632188f0fab3b317f05",
     "files": {
       "mcp-tools.json": {
         "path": "docs/reference/mcp-tools.json",
@@ -26,7 +26,7 @@
       },
       "hub-openapi.json": {
         "path": "docs/reference/hub-openapi.json",
-        "sha256": "e5639a8099f946bacf63ec5ce7c294653b295b6541b5650bc8acd38bd25fabe0"
+        "sha256": "77006ae2fe7939f8696dc043b0abcab3dce3ff31e66cb70714adbf38698348e8"
       }
     }
   }

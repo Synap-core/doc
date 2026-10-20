@@ -1,7 +1,7 @@
 {
-  "$comment": "Names that must not appear in the docs. `packages` is a vendored copy of scripts/architecture/removed-packages.json from the private Synap-core/app-bases repository (copied 2026-10-20 at commit 4e017e685): package names retired by the 2026-10 layer consolidation, mapped to where their code lives now. `extra` lists names and domains that never existed or were retired elsewhere. Refresh `packages` from app-bases when it changes; scripts/check-retired-names.mjs reads this file.",
+  "$comment": "Names that must not appear in the docs. `packages` is a vendored copy of scripts/architecture/removed-packages.json from the private frontend repository (copied 2026-10-20 at commit 4e017e685): package names retired by the 2026-10 layer consolidation, mapped to where their code lives now. `extra` lists names, domains and paths that never existed or were retired elsewhere. Refresh `packages` from the frontend repository when it changes; scripts/check-retired-names.mjs reads this file.",
   "source": {
-    "repository": "Synap-core/app-bases",
+    "repository": "the private frontend repository",
     "path": "scripts/architecture/removed-packages.json",
     "commit": "4e017e685",
     "copied": "2026-10-20"
@@ -11,9 +11,11 @@
     "@synap/sdk": "@synap-core/sdk",
     "@synap/react": "@synap-core/react",
     "@synap-core/auth-bootstrap": "not published on npm",
-    "create-synap-app": "not published on npm; copy apps/base instead",
+    "create-synap-app": "not published on npm; start from @synap-core/sdk",
     "api.synap.ai": "the Control Plane is api.synap.live; a pod is reached at its own URL",
-    "synap-labs/synap-backend": "github.com/Synap-core/backend"
+    "synap-labs/synap-backend": "github.com/Synap-core/backend",
+    "synap-team-docs": "the internal team section was removed: company knowledge lives in the Synap pod, engineering notes in each repository's docs/ folder",
+    "content/team/": "the internal team section was removed: company knowledge lives in the Synap pod, engineering notes in each repository's docs/ folder"
   },
   "packages": {
     "@synap-core/account-setup": [

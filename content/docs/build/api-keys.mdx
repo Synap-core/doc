@@ -89,15 +89,27 @@ How it is enforced:
 
 ### Doors a scoped key can read through
 
-A key whose grant is narrower than `*` can only **read** through doors whose reads the grant actually bounds. Every other read door answers `403 GRANT_DOOR_UNSUPPORTED`; doors are added as they are migrated. Writes are always allowed through to the governance gate, which applies the grant.
+A key whose grant is narrower than `*` can only **read** through doors whose reads the grant actually bounds. Every other read door answers `403 GRANT_DOOR_UNSUPPORTED`;
+doors are added as they are migrated.
 
 | Surface | Read doors open to scoped keys |
 |---|---|
-| Hub REST | `GET /users/{id}/entities`, `/entities/{id}`, `/entities/{id}/connections`, `/entities/{id}/facets`, `/documents/{id}`, `/documents/{id}/raw`, `/relations`, `/projects`, `/projects/{id}`, `/projects/{id}/digest`, `/projects/{id}/outputs`, `/tracks`, `/tracks/{id}`, `/views`, `/proposals`, `/channels`, `/threads`, `/threads/{id}/messages`, `/threads/{id}/branches`, `/messaging/channels`, `/messaging/linked-unread`, `/focus-sessions`, `/artifacts`, `/commands`, `/commands/{id}`, `/brand/kit` |
+| Hub REST (`/api/hub`) | `GET /users/me`, `/auth/status`, `/entities` (listing; a full-text `q` search is refused), `/users/{id}/entities`, `/entities/{id}`, `/entities/{id}/connections`, `/entities/{id}/facets`, `/documents/{id}`, `/documents/{id}/raw`, `/relations`, `/projects`, `/projects/{id}`, `/projects/{id}/digest`, `/projects/{id}/outputs`, `/tracks`, `/tracks/{id}`, `/views`, `/proposals`, `/channels`, `/threads`, `/threads/{id}/messages`, `/threads/{id}/branches`, `/messaging/channels`, `/messaging/linked-unread`, `/focus-sessions`, `/artifacts`, `/commands`, `/commands/{id}`, `/brand/kit`, and `/webhooks` (the key's own subscriptions) |
 | MCP | `synap_get_entities`, `synap_get_document`, `synap_get_relations`, `synap_list_tracks`, `synap_resolve_identity`, `synap_get_project`, `synap_list_projects`, `synap_list_views` |
-| tRPC | `entities.getEntities`, `documents.getDocument`, `relations.listRelations`, `relations.listRelationsPodWide`, `automations.listRuns`, `automations.getRun`, `commands.listCommands`, `commands.getCommand`, `views.listViews`, `proposals.listProposals` |
+| tRPC bridge (`/api/hub/trpc`) | `entities.getEntities`, `documents.getDocument`, `relations.listRelations`, `relations.listRelationsPodWide`, `automations.listRuns`, `automations.getRun`, `commands.listCommands`, `commands.getCommand`, `views.listViews`, `proposals.listProposals` |
 
-Search, `ask`, knowledge and memory, the object graph, events and runs are not open to scoped keys yet. A key that needs them must use the full-access `*` grant for now.
+`GET /entities` without `q` and `GET /webhooks` are open to scoped keys on releases after v1.1.3.
+
+Doors that combine several kinds of record (`POST /knowledge/search`, `/knowledge/ask`, `/knowledge/answer`,
+`/entities/retrieve` and `/memory/search`, and MCP read tools such as `synap_ask`, `synap_orient` and `synap_find`)
+cannot filter row by row yet. A scoped key passes one only when its grant reads every kind of record the door reads,
+with no workspace, project or object limit. Every other read door (for example the REST graph, events and runs)
+needs a key with the full-access `*` grant.
+
+Writes go through to the governance gate, which applies the grant. On releases after v1.1.3, two kinds of write
+need a key with unrestricted `*` (no workspace, project or object limit): doors that act on everything the person
+owns and that no grant can narrow (for example the calendar feed URL, connector credentials and disconnection, and
+deleting a vault secret), and, on the tRPC bridge, mutations the gate cannot bound yet.
 
 ### Access roles: reusable grants
 
@@ -141,7 +153,7 @@ The prefix tells you what kind of key it is:
 
 | Scope | Gate |
 |---|---|
-| `hub-protocol.read` / `hub-protocol.write` | the Hub REST API (`/api/hub/*`) and API-key tRPC calls |
+| `hub-protocol.read` / `hub-protocol.write` | the Hub REST API (`/api/hub/*`), including its tRPC bridge (`/api/hub/trpc`) |
 | `hub-protocol.admin` | treated as `hub-protocol.write` by every door; it only marks the key as privileged when it is created |
 | `mcp.read` / `mcp.write` | the MCP endpoint (`/mcp`) |
 | `data.read` / `data.write` | aliases of `hub-protocol.*`, honoured on `/mcp` only |
@@ -172,6 +184,9 @@ curl https://pod.example.com/api/hub/entities \
   -H "Authorization: Bearer synap_user_..."
 ```
 
+A key works on the Hub REST API, MCP and the other doors its scopes name. It does not work on `/trpc`, the endpoint
+the SDK calls: that endpoint accepts only a sign-in session. See [SDK first query](/docs/build/sdk).
+
 ---
 
 ## Seeing and revoking keys
@@ -190,6 +205,7 @@ curl https://pod.example.com/api/hub/entities \
 
 ## Next steps
 
-- [SDK first query](/docs/build/sdk)
+- [Hub REST API reference](/docs/reference/hub-api): every route a key can call
+- [Scripts and agents with an API key](/docs/build/sdk#scripts-and-agents-with-an-api-key): the TypeScript client
 - [Webhooks](/docs/build/webhooks)
 - [Connect an agent](/docs/build/agents)

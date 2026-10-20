@@ -16,6 +16,7 @@
     "check:retired": "node scripts/check-retired-names.mjs",
     "check:generated": "node scripts/generate-reference.mjs --check",
     "check:markdown": "node scripts/check-markdown.mjs",
+    "test": "node --test scripts/*.test.mjs",
     "reference:sync": "node scripts/sync-reference.mjs",
     "reference:generate": "node scripts/generate-reference.mjs",
     "reference:check": "node scripts/sync-reference.mjs --check"

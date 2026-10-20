@@ -66,10 +66,12 @@ sudo synap units install --enable-auto-update
 sudo synap units status
 ```
 
-This installs three things:
+This installs:
 
 - `synap-heal.timer`: every 2 minutes, restarts this pod's unhealthy containers, within a budget (never PostgreSQL).
 - `synap-update.path`: applies update requests written to `deploy/state/requests/update.json`.
+- `synap-compose.path` (releases after v1.1.3): applies service requests from the pod agent, written to
+  `deploy/state/requests/compose.json`.
 - `synap-update.timer` (only with `--enable-auto-update`): once a night, from 03:00, applies the latest release of the
   pod's channel within the update window.
 

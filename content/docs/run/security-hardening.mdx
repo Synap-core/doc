@@ -28,6 +28,7 @@ Everything else that publishes a port binds it to `127.0.0.1`:
 | `minio` | `9000`, `9001` |
 | `typesense` | `8108` |
 | `kratos` | `4433`, `4434` |
+| `rsshub` profile: RSSHub, browserless | `1200`, `3000` |
 | `monitoring` profile: Dozzle, Prometheus, Grafana, Alertmanager | `8888`, `9090`, `3333`, `9093` |
 
 The backend publishes no port: it is reached only through the edge proxy (Caddy, unless you installed with
@@ -73,13 +74,17 @@ password never lands in your shell history. See [Install](/docs/run/install#the-
 
 ## Releases you install
 
-Install `cosign` and refuse unsigned or tampered releases, for `install.sh` and for every `synap update`:
+Install `cosign` and refuse unsigned or tampered releases, for `install.sh` and for every `synap update`. `sudo`
+drops variables exported in your shell, so set the variable on the `sudo` command itself:
 
 ```bash
-export SYNAP_RELEASE_VERIFY=enforce
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo SYNAP_RELEASE_VERIFY=enforce bash -s -- --domain pod.example.com --email you@example.com
+sudo SYNAP_RELEASE_VERIFY=enforce synap update
 ```
 
-Automatic updates always run with `enforce`. See [Verifying releases](/docs/run/install#verifying-releases).
+A manual `synap update` also reads `SYNAP_RELEASE_VERIFY` from `deploy/.env`. Automatic updates always run with
+`enforce`. See [Verifying releases](/docs/run/install#verifying-releases).
 
 ## Backups
 

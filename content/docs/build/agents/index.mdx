@@ -29,8 +29,8 @@ Codex, Cursor). See the [Cloud quickstart](/docs/start/cloud-quickstart).
 ```bash
 synap connect claude-code
 synap connect --list                          # everything that can be connected
-synap connect cursor --workspace <id>         # limit the agent to one workspace
-synap connect codex --project <id>            # focus the agent on one project
+synap connect cursor --workspace <id>         # focus on one workspace (default: pod-wide)
+synap connect codex --project <id>            # focus on one project
 ```
 
 `connect` creates the agent's identity on your pod, gives it a key, and writes the client's configuration. For

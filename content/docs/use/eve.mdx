@@ -80,7 +80,8 @@ Traefik and the Eve dashboard are always installed. A few of the components you 
 | `/opt/synap-backend` | The pod, when Eve installed it: a checkout of the backend repository (`SYNAP_REPO_ROOT` moves it) |
 | `/opt/synap-backend/deploy` | The pod's deploy directory |
 
-Run `synap` commands for an Eve-installed pod from `/opt/synap-backend/deploy` (or set `SYNAP_DEPLOY_DIR` to it), not
+Run `synap` commands for an Eve-installed pod from `/opt/synap-backend/deploy` (or pass `SYNAP_DEPLOY_DIR` to it on
+the `sudo` command: `sudo SYNAP_DEPLOY_DIR=/opt/synap-backend/deploy synap …`), not
 from `/opt/synap/deploy` as on a pod installed with `install.sh`. Run `docker compose` for the pod from that directory
 too; from Eve's directory you reach a different Compose project.
 

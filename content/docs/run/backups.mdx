@@ -25,8 +25,11 @@ cd /opt/synap/deploy
 | PostgreSQL (your data, and Kratos accounts) | Docker volume `<project>_postgres_data` | No. That is why the dumps exist. |
 | Hourly dumps | `deploy/backups/postgres/<UTC time>-auto/<database>.dump` on the host | Yes |
 | Pre-update and manual dumps | `deploy/backups/postgres/<UTC time>-pre-update/…` and `-<label>/…` | Yes |
-| Files (MinIO) | Docker volume `minio_data`; included in off-host snapshots | No, unless you have a snapshot |
-| Search index (Typesense) | Docker volume `typesense_data` | No; it is rebuilt from PostgreSQL |
+| Files (MinIO) | Docker volume `<project>_minio_data`; included in off-host snapshots | No, unless you have a snapshot |
+| Search index (Typesense) | Docker volume `<project>_typesense_data` | No; it is rebuilt from PostgreSQL |
+
+`<project>` is the Compose project name, pinned as `COMPOSE_PROJECT_NAME` in `deploy/.env`. `docker volume ls` lists
+the volumes.
 
 ## What the pod does on its own
 

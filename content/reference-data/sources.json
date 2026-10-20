@@ -2,19 +2,19 @@
   "$comment": "Written by scripts/sync-reference.mjs. Where each file in this folder was copied from. Do not edit; run `npm run reference:sync`.",
   "cli": {
     "repo": "Synap-core/synap-cli",
-    "ref": "claude/cli-reference",
-    "commit": "1956ce76f9bfbad176b41b5ed20007637563f476",
+    "ref": "main",
+    "commit": "7562355c125f5a67d938d9c651e4761cfb7aba08",
     "files": {
       "cli.json": {
         "path": "docs/reference/cli.json",
-        "sha256": "8c5af423e7b79233fc47ff6e9cd08e97cb6efe20f6ad298d5da2d0ca2abe0148"
+        "sha256": "79712a337cd96649885fda22671d31187f02b42697d65e2cce72dbf921d75a01"
       }
     }
   },
   "backend": {
     "repo": "Synap-core/backend",
-    "ref": "claude/docs-night",
-    "commit": "8dfcee47b1954271534bb824ec07e58aa8fb77e2",
+    "ref": "main",
+    "commit": "c31e261ab53490de5b2e4de79fdf8bfd8191e01d",
     "files": {
       "mcp-tools.json": {
         "path": "docs/reference/mcp-tools.json",

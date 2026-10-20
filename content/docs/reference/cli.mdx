@@ -6,10 +6,10 @@ type: "reference"
 audience: "builder"
 status: "current"
 owner: "Antoinesrvt"
-generated_from: "Synap-core/synap-cli@1956ce76f (claude/cli-reference)"
+generated_from: "Synap-core/synap-cli@7562355c1 (main)"
 ---
 
-Generated from [Synap-core/synap-cli@1956ce76f](https://github.com/Synap-core/synap-cli/tree/1956ce76f9bfbad176b41b5ed20007637563f476) (`claude/cli-reference`): [`docs/reference/cli.json`](https://github.com/Synap-core/synap-cli/blob/1956ce76f9bfbad176b41b5ed20007637563f476/docs/reference/cli.json). Do not edit this page; see `scripts/generate-reference.mjs`.
+Generated from [Synap-core/synap-cli@7562355c1](https://github.com/Synap-core/synap-cli/tree/7562355c125f5a67d938d9c651e4761cfb7aba08) (`main`): [`docs/reference/cli.json`](https://github.com/Synap-core/synap-cli/blob/7562355c125f5a67d938d9c651e4761cfb7aba08/docs/reference/cli.json). Do not edit this page; see `scripts/generate-reference.mjs`.
 
 `@synap-core/cli` (command `synap`) connects computers and AI agents to a pod and works with the pod from a terminal.
 It needs Node.js 20 or later.
@@ -1131,7 +1131,6 @@ synap worker [options]
 | `--max-parallel <n>` | Runs at the same time Default: `"1"`. |
 | `--claude-bin <path>` | The claude binary Default: `"claude"`. |
 | `--claude-config-dir <dir>` | CLAUDE_CONFIG_DIR for launched runs — picks which Claude subscription they use |
-| `--mcp-server <name>` | Claude Code MCP server name for this pod (detected from ~/.claude.json by default) |
 | `--allowed-tools <list>` | Comma-separated Claude tools allowed without asking (the pod MCP server is always added) |
 | `--skip-permissions` | Launch with --dangerously-skip-permissions instead of an allow-list |
 | `--dry-run` | Claim and log what would launch, without launching Claude |

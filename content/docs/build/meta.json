@@ -5,6 +5,7 @@
   "icon": "CodeXml",
   "pages": [
     "index",
+    "coding-with-agents",
     "---Your app---",
     "sdk",
     "api-keys",

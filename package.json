@@ -13,7 +13,8 @@
     "check": "node scripts/check.mjs",
     "check:frontmatter": "node scripts/check-frontmatter.mjs",
     "check:links": "node scripts/check-links.mjs",
-    "check:retired": "node scripts/check-retired-names.mjs"
+    "check:retired": "node scripts/check-retired-names.mjs",
+    "check:markdown": "node scripts/check-markdown.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.1",

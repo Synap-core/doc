@@ -4,11 +4,14 @@ import {
   DocsDescription,
   DocsPage,
   DocsTitle,
+  MarkdownCopyButton,
+  ViewOptionsPopover,
 } from 'fumadocs-ui/layouts/docs/page';
 import { Callout } from 'fumadocs-ui/components/callout';
 import { notFound } from 'next/navigation';
 import { mdxComponents } from '@/lib/mdx-components';
 import { AUDIENCE_LABELS, AVAILABILITY_LABELS } from '@/lib/page-meta';
+import { getPublicMarkdownUrl, gitConfig } from '@/lib/shared';
 import type { Metadata } from 'next';
 
 /** YAML turns 2026-10-20 into a Date before the schema sees it; show it as written. */
@@ -42,12 +45,13 @@ export default async function Page({ params }: Props) {
   const data = page.data;
   const MDX = data.body;
   const reviewed = formatReviewed(data.last_reviewed);
+  const markdownUrl = getPublicMarkdownUrl(page);
 
   return (
     <DocsPage toc={data.toc} full={data.full}>
       <DocsTitle>{data.title}</DocsTitle>
-      <DocsDescription>{data.description}</DocsDescription>
-      <div className="-mt-4 mb-6 flex flex-wrap items-center gap-1.5" aria-label="Page metadata">
+      <DocsDescription className="mb-0">{data.description}</DocsDescription>
+      <div className="flex flex-wrap items-center gap-1.5" aria-label="Page metadata">
         <Badge>For {AUDIENCE_LABELS[data.audience]}</Badge>
         {data.availability.map((a) => (
           <Badge key={a}>{AVAILABILITY_LABELS[a]}</Badge>
@@ -57,6 +61,13 @@ export default async function Page({ params }: Props) {
         {data.generated_from ? (
           <span className="text-xs text-fd-muted-foreground">Generated from {data.generated_from}</span>
         ) : null}
+      </div>
+      <div className="flex flex-row items-center gap-2 border-b pb-6">
+        <MarkdownCopyButton markdownUrl={markdownUrl} />
+        <ViewOptionsPopover
+          markdownUrl={markdownUrl}
+          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
+        />
       </div>
       {data.status === 'beta' && !reviewed ? (
         <Callout type="warn" title="Not yet re-verified">
@@ -88,5 +99,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: page.data.title,
     description: page.data.description,
+    alternates: {
+      types: { 'text/markdown': getPublicMarkdownUrl(page) },
+    },
   };
 }

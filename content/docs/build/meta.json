@@ -1,0 +1,19 @@
+{
+  "title": "Build",
+  "description": "SDK, API keys, webhooks, MCP and agent skills",
+  "root": true,
+  "icon": "Code2",
+  "pages": [
+    "index",
+    "---Your app---",
+    "sdk",
+    "api-keys",
+    "webhooks",
+    "chat-stream",
+    "skill-invocation",
+    "---Agents---",
+    "agents",
+    "---Concepts---",
+    "concepts"
+  ]
+}

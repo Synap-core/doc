@@ -1,0 +1,90 @@
+---
+title: Connect an agent
+description: Give Claude Code, Codex, Cursor, ChatGPT or any MCP client its own governed access to your pod.
+type: how-to
+audience: builder
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+An agent connects to your pod with its **own identity and key**. What it writes goes through the pod's governance
+like any other write, so most of its changes reach your data as proposals you approve, and you can see and revoke
+each agent separately.
+
+The user CLI, `@synap-core/cli`, does the wiring for you.
+
+## The short path
+
+```bash
+npx @synap-core/cli init
+```
+
+`init` finds or creates your pod, approves this computer, and connects the agents it detects on it (Claude Code,
+Codex, Cursor). See the [Cloud quickstart](/docs/start/cloud-quickstart).
+
+## Connect one agent
+
+```bash
+synap connect claude-code
+synap connect --list                          # everything that can be connected
+synap connect cursor --workspace <id>         # limit the agent to one workspace
+synap connect codex --project <id>            # focus the agent on one project
+```
+
+`connect` creates the agent's identity on your pod, gives it a key, and writes the client's configuration. For
+clients that read skill folders, it also installs the [Synap skills](/docs/build/agents/skills).
+
+| Target | Client |
+|---|---|
+| `claude-code` | Claude Code (MCP and skills) |
+| `codex` | OpenAI Codex (MCP and skills) |
+| `cursor` | Cursor |
+| `claude-desktop` | Claude Desktop |
+| `chatgpt` | ChatGPT, with an API-key connector |
+| `chatgpt-oauth` | ChatGPT, through Control Plane OAuth (no key to paste) |
+| `raycast` | Raycast. See [Raycast](/docs/use/raycast). |
+| `windsurf`, `zed`, `goose`, `opencode`, `openwebui`, `grok` | Those clients' MCP configuration |
+| `vscode` | VS Code MCP extensions (Kilo Code, Cline, Continue, Copilot) |
+| `aider` | aider |
+| `generic` | Any other MCP client: prints a URL and key to paste |
+
+## Clients you configure in a web UI
+
+For ChatGPT, claude.ai and other clients configured in a browser:
+
+```bash
+synap mcp url --client chatgpt     # a dedicated key plus the URL and ready-to-paste snippets
+synap mcp ui-setup cursor          # the exact form fields to fill in for a client
+synap mcp connect-claude           # the claude.ai steps: paste a URL, approve in the browser
+```
+
+## Your own agent
+
+For an agent you wrote yourself:
+
+```bash
+synap agents add --name researcher
+```
+
+prints an MCP URL and a key for a new agent identity named `researcher`. `--role admin|editor|viewer` sets its
+workspace role (default `editor`).
+
+## Check the connection
+
+```bash
+synap mcp verify    # is /mcp reachable, and is the key valid
+synap doctor        # does each configured key work, and why or why not
+synap whoami        # who the key acts as, and its scopes
+synap agents list   # your agents on this pod
+```
+
+## What an agent can and cannot do
+
+- It works through MCP or the Hub REST API, with the scopes and grant of its key. See
+  [API keys](/docs/build/api-keys#limiting-an-agent) to limit what it may change.
+- Its writes are proposals unless a rule you set lets that kind of write apply automatically. Deletes, admin actions
+  and scope changes are always proposals.
+- It can never approve a proposal, its own or anyone else's.
+- It cannot create keys for other agents, widen its own approval rules, or give itself vault access.

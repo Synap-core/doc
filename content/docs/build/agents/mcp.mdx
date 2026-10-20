@@ -1,0 +1,77 @@
+---
+title: MCP
+description: The MCP endpoint every pod serves, how clients authenticate to it, and what it exposes.
+type: reference
+audience: builder
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Every pod serves a Model Context Protocol (MCP) server at `/mcp`, for example `https://pod.example.com/mcp`. AI
+clients use it to read your pod and to propose changes to it, under the permissions of their key.
+
+Most people never configure it by hand: `synap connect <client>` writes the client's MCP configuration. See
+[Connect an agent](/docs/build/agents).
+
+## Transport
+
+MCP Streamable HTTP:
+
+| Request | Purpose |
+|---|---|
+| `POST /mcp` | A JSON-RPC 2.0 request. The answer is JSON or an SSE stream. |
+| `GET /mcp` | An SSE stream for messages the server initiates. |
+| `DELETE /mcp` | Ends the session. |
+
+The server negotiates the protocol version with the client; it is not pinned to one revision.
+
+## Authentication
+
+Send a key as a bearer token:
+
+```
+Authorization: Bearer <key>
+```
+
+- A request without a valid key gets `401` with a `WWW-Authenticate: Bearer resource_metadata="…"` header pointing at
+  the pod's OAuth metadata (`/.well-known/oauth-protected-resource`). Clients such as claude.ai use it to sign in
+  through the pod's own OAuth server and obtain a key, with no key to paste.
+- Too many requests get `429`.
+
+## Scopes
+
+The tools a key can call depend on its scopes:
+
+| Key scope | MCP access |
+|---|---|
+| `mcp.read`, `hub-protocol.read` or `data.read` | read tools |
+| `mcp.write`, `hub-protocol.write` or `data.write` | read and write tools |
+| `hub-protocol.admin` | read and write tools |
+
+A key with none of these can call no tool. A key whose grant is narrower than full access can read only through the
+tools whose reads its grant bounds; other read tools answer `GRANT_DOOR_UNSUPPORTED`. See
+[API keys](/docs/build/api-keys#doors-a-scoped-key-can-read-through).
+
+## Governance
+
+Every write tool goes through the same permission check as any other write to the pod: the change is applied only
+where a rule allows it, and otherwise becomes a proposal that a person approves. No MCP tool can approve a proposal
+with an agent's key.
+
+## Tools
+
+The pod's tools are declared in
+[`mcp-tools.manifest.json`](https://github.com/Synap-core/backend/blob/main/packages/api/src/routers/mcp/tools/mcp-tools.manifest.json)
+in the backend repository: each tool's name, description, input schema and hints (read-only or not). All tool names
+start with `synap_`, for example `synap_ask` to ask the pod a question in natural language. A generated tool
+reference is planned; see [MCP tools](/docs/reference/mcp-tools).
+
+## Test the endpoint
+
+```bash
+synap mcp verify
+```
+
+checks that `/mcp` answers and that your key is valid.

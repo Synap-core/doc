@@ -1,0 +1,76 @@
+---
+title: Chat stream
+description: Stream an AI conversation backed by your pod, from any script or app, with one API key.
+type: how-to
+audience: builder
+availability: [pod-oss, cloud]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+`POST /api/external/chat/stream` sends a message to your pod's AI and streams the answer back as Server-Sent Events.
+The pod forwards the conversation to its **Intelligence Service** and records every turn. It needs an Intelligence
+Service configured on the pod: on Synap Cloud it is; on a self-hosted pod see
+[Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted#what-you-take-on-when-you-self-host).
+
+To connect your own agent to your pod instead, use [MCP](/docs/build/agents/mcp).
+
+## Before you start
+
+Create an [API key](/docs/build/api-keys) with the `chat.stream` scope.
+
+## List the channels you can chat in
+
+```bash
+curl https://pod.example.com/api/external/chat/channels \
+  -H "Authorization: Bearer $SYNAP_API_KEY"
+```
+
+## Send a message
+
+```bash
+curl -N -X POST https://pod.example.com/api/external/chat/stream \
+  -H "Authorization: Bearer $SYNAP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "query": "What did I decide about the launch date?" }'
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `query` | yes | Your message. |
+| `channelId` | no | A channel from `/channels`. Without it, your personal AI channel is used. |
+| `workspaceId` | no | The workspace to work in. |
+| `agentType` | no | Which agent should answer. |
+| `requestId` | no | A UUID you choose, to make a retry idempotent. Also accepted as the `X-Request-Id` header. |
+
+## The response
+
+The response is `text/event-stream`. Every turn is recorded on the pod:
+
+- The `X-Synap-Turn-Id` response header carries the turn's ID.
+- The first frame is always the turn frame:
+
+  ```
+  data: {"type":"turn","turnId":"…","requestId":"…"}
+  ```
+
+- The frames after it are the Intelligence Service's own stream, passed through unchanged. Their format is not
+  documented here yet.
+
+If the Intelligence Service cannot be reached or fails, the endpoint answers `502` with a JSON body
+`{ "error": "…", "turnId": "…" }` instead of a stream. Service URLs and keys are never included in a response.
+
+## Approving what the AI proposes
+
+When the AI wants to change your data, the change becomes a **proposal**. A person approves it, for example in Relay
+or the Browser app, or through the Hub REST API:
+
+```bash
+curl -X POST https://pod.example.com/api/hub/proposals/<proposalId>/approve \
+  -H "Authorization: Bearer $SYNAP_API_KEY"
+```
+
+This needs a key with `hub-protocol.write` that belongs to a person. An agent's key is always refused here:
+approving is a human step. `POST /api/hub/proposals/<proposalId>/reject` rejects a proposal, and
+`GET /api/hub/proposals` lists them.

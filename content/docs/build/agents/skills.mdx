@@ -1,0 +1,71 @@
+---
+title: Agent skills
+description: The skill packages that teach an agent how to work with a Synap pod, and how they are installed.
+type: explanation
+audience: builder
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A skill is a folder an agent reads to learn a job: a `SKILL.md` with a short description that tells the agent when to
+use it, plus reference files it reads only when the task needs them. Synap's skills teach an agent how to work with
+your pod: what to store where, how to extend the schema, how to build views, and how proposals work.
+
+The skills are open source, in the [`skills/`](https://github.com/Synap-core/backend/tree/main/skills) folder of the
+backend repository. `skills/manifest.json` is the list of packages and says which are installed by default.
+
+## Baseline skills
+
+Installed by default for every agent that reads skill folders.
+
+| Skill | Use it for |
+|---|---|
+| `synap` | Core data work: capture, remember, find and link things in your pod. "Save this", "Find my notes on X", "Who is Y". |
+| `synap-schema` | Extending the data model: a new kind of thing, or new fields on an existing kind. |
+| `synap-ui` | Building interface over your data: views, dashboards, bento layouts and whole workspaces. |
+| `synap-design` | Designing and reviewing user interface for Synap or for a UI over your pod. |
+
+## Workflow skills
+
+Installed only when you or the client asks for them, because each is for one kind of task.
+
+| Skill | Use it for |
+|---|---|
+| `onboard` | Setting up a workspace or project that has little or no data yet. |
+| `agent-os` | Provisioning workspaces from templates, for example "add a CRM". |
+| `synap-app` | Building your own app on Synap with the SDK. |
+| `synap-market` | Finding, installing, authoring and publishing marketplace templates, capabilities, automations and cells. |
+
+## How skills are installed
+
+`synap connect <client>` and `synap init` install the baseline skills for clients that read skill folders, such as
+Claude Code (`~/.claude/skills/`) and Codex. The CLI takes the skills from your pod
+(`/api/hub/skills/system`), so they match the pod's version.
+
+Clients that do not read skill folders, such as Cursor, still get the pod's tools over [MCP](/docs/build/agents/mcp).
+
+## What a skill needs
+
+The skills call your pod over HTTP with the agent's key:
+
+```
+Authorization: Bearer <SYNAP_HUB_API_KEY>
+X-Workspace-Id: <workspace id>        optional
+```
+
+Reads need the `hub-protocol.read` scope and writes need `hub-protocol.write`. `synap connect` sets this up.
+
+## How a skill loads
+
+An agent always sees each installed skill's name and description, which costs a few dozen tokens per skill. It reads
+the skill's `SKILL.md` only when the task matches the description, and the reference files only when it needs them.
+Installing all the baseline skills is therefore cheap.
+
+## Contributing a skill
+
+Some packages are split into topic files: when a package has a `_skill.yaml` (its front matter) and an `_order.txt`
+(the order of its topic files), its `SKILL.md` is generated from them by `skills/build.mjs`. In those packages, edit
+the topic files, not `SKILL.md`. See
+[Contributing](/docs/community).

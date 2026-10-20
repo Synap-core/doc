@@ -1,0 +1,48 @@
+---
+title: Build on your pod
+description: The doors into a Synap pod, and which one to use for an app, a script, an integration or an agent.
+type: explanation
+audience: builder
+availability: [pod-oss, cloud, sdk, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A pod is a backend first. Everything the apps do goes through the same doors you can use: the same records, the same
+permissions and the same governance. An agent or an app that writes through any door gets the same proposal and
+approval rules.
+
+## The doors
+
+| Door | Path on the pod | Use it for | Auth |
+|---|---|---|---|
+| **tRPC API**, through the SDK | `/trpc` | TypeScript and React apps | API key or sign-in session |
+| **Hub REST API** | `/api/hub/*` | Scripts, agents, integrations in any language | API key (`hub-protocol.read` / `.write`) |
+| **MCP** | `/mcp` | AI clients: Claude Code, Codex, Cursor, ChatGPT and others | API key or OAuth |
+| **Webhooks** | your URL | Being told when something changes | HMAC signature |
+| **External chat** | `/api/external/chat/*` | Streaming an AI conversation backed by your pod | API key (`chat.stream`) |
+| **External skills** | `/api/external/skills/*` | Listing and invoking skills | API key (`skills.invoke`) |
+
+Every pod publishes the OpenAPI description of its Hub REST API at `/api/hub/openapi.json`.
+
+## The packages
+
+| Package | What it is |
+|---|---|
+| [`@synap-core/sdk`](https://www.npmjs.com/package/@synap-core/sdk) | Typed tRPC client for apps. See [SDK](/docs/build/sdk). |
+| [`@synap-core/react`](https://www.npmjs.com/package/@synap-core/react) | React provider and hooks over the SDK (TanStack Query). |
+| [`@synap-core/hub-rest-client`](https://www.npmjs.com/package/@synap-core/hub-rest-client) | Zero-dependency client for the Hub REST API, for agents and scripts. |
+| [`@synap-core/sdk-realtime`](https://www.npmjs.com/package/@synap-core/sdk-realtime) | Socket.IO client for change notifications. |
+| [`@synap-core/api-types`](https://www.npmjs.com/package/@synap-core/api-types) | The pod's tRPC `AppRouter` type. |
+| [`@synap-core/types`](https://www.npmjs.com/package/@synap-core/types) | Domain types and schemas. |
+| [`@synap-core/cli`](https://www.npmjs.com/package/@synap-core/cli) | The user CLI: connects computers and agents to a pod. |
+
+## Where to start
+
+- An app in TypeScript: [SDK first query](/docs/build/sdk).
+- A key for a script, a site or an integration: [API keys](/docs/build/api-keys).
+- React to changes in another system: [Webhooks](/docs/build/webhooks).
+- An AI agent: [Connect an agent](/docs/build/agents), then [MCP](/docs/build/agents/mcp) and
+  [agent skills](/docs/build/agents/skills).
+- How the data model works: [Kind and facets](/docs/build/concepts/kind-and-facets).

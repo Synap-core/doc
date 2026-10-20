@@ -1,0 +1,86 @@
+---
+title: Webhooks
+description: Have your pod POST a signed request to your URL when something changes.
+type: how-to
+audience: builder
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A webhook subscription tells your pod to send an HTTP `POST` to a URL you own whenever an event you chose happens:
+an entity was created, a proposal was approved, a document was updated, and so on.
+
+## Create a subscription
+
+Webhooks are managed through the tRPC router `webhooks` (with the [SDK](/docs/build/sdk) or a signed-in session):
+
+```ts
+const { subscription, secret } = await synap.webhooks.create.mutate({
+  name: "CRM sync",
+  url: "https://example.com/hooks/synap",
+  eventTypes: ["entity.create.completed", "proposal.approved.completed"],
+  // secret: "…"   optional; generated (32 random bytes, hex) when omitted
+});
+```
+
+- `eventTypes` needs at least one event type. Pick them from the [event catalog](/docs/reference/events#automation-events).
+- The `secret` is returned **once**, at creation. `webhooks.list` never returns it. Store it to verify signatures.
+- `webhooks.update` changes `name`, `url`, `eventTypes` or `active`; `webhooks.delete` removes the subscription.
+- A subscription created with `webhooks.createForWorkspace` receives only that workspace's events.
+
+The Hub REST API also exposes webhooks under `/api/hub/webhooks` for API-key callers. See the pod's
+`/api/hub/openapi.json` for the exact shapes.
+
+## What your endpoint receives
+
+Most deliveries use the `event.v1` format:
+
+```http
+POST /hooks/synap HTTP/1.1
+Content-Type: application/json
+User-Agent: Synap-Webhook/1.0
+X-Synap-Webhook-Format: event.v1
+X-Synap-Delivery-Id: 6f1c…
+X-Synap-Event-Type: entity.create.completed
+X-Synap-Event-Id: <id of the subject, for example the entity>
+X-Synap-Signature: <hex HMAC-SHA256 of the body>
+
+{ "type": "entity.create.completed", "subjectId": "…", "userId": "…", "data": { … }, "timestamp": "…" }
+```
+
+Chat events and entity property updates use the `chat.v1` format instead: body `{ event, data, timestamp }`, header
+`X-Synap-Event` instead of `X-Synap-Event-Type`, and the signature prefixed with `sha256=`. Read
+`X-Synap-Webhook-Format` to tell them apart.
+
+## Verify the signature
+
+The signature is the HMAC-SHA256 of the raw request body, keyed with the subscription's secret, in hex. Compute it over
+the bytes you received, before parsing the JSON:
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export function isValidSynapSignature(rawBody: Buffer, header: string | undefined, secret: string): boolean {
+  if (!header) return false;
+  const received = header.startsWith("sha256=") ? header.slice(7) : header; // chat.v1 adds the prefix
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  return received.length === expected.length && timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+}
+```
+
+## Retries and duplicates
+
+A delivery that fails is retried with backoff. Every retry sends the **same body** with the **same signature** and the
+same `X-Synap-Delivery-Id`, so use that ID to ignore a delivery you already processed. Answer with a `2xx` status
+quickly and do the work afterwards.
+
+## Which events are sent
+
+The pod sends a webhook for each change recorded with a subject and an action, as
+`<subject>.<action>.completed`: `entity.create.completed`, `document.update.completed`,
+`proposal.approved.completed` and so on. The [event catalog](/docs/reference/events#automation-events) lists the
+event types the pod defines. A subscription receives an event only if its type is listed in `eventTypes`.
+
+Changes that arrive through pod-to-pod sync are not sent again as webhooks.

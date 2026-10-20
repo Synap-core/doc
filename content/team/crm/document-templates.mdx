@@ -9,6 +9,8 @@ toc: true
 
 # Document Templates
 
+> **Status (2026-09-25): design only.** `generateFromTemplate` was never built, and the client-side `{{variable}}` template engine (`MarkdownParser` / `Evaluator` in `@synap-core/markdown-engine`, plus the unmounted CRM `GenerateFromTemplateModal`) was deleted by the documents-centerpiece plan (§4: no procedural authoring in documents). If template generation is built, it fills variables server-side and writes plain markdown through the one document write door; it does not revive an in-document template language.
+
 The CRM document system has two layers:
 1. **Collaborative documents** — freeform notes and shared files linked to contacts and companies, using the Synap document system (TipTap + Yjs) directly
 2. **Templates** — structured documents with variable slots that can be instantiated in one click for a specific client

@@ -1,0 +1,3 @@
+{"t":0,"agent":"a3154c0","agent_type":"unknown","event":"agent_stop","success":true}
+{"t":0,"agent":"system","event":"keyword_detected","keyword":"ai-slop-cleaner"}
+{"t":0,"agent":"af18e34","agent_type":"unknown","event":"agent_stop","success":true}

@@ -60,7 +60,7 @@ Three problems solved:
 | `chrome.storage.session` | In-memory, cleared on browser restart | CP session (token, userId, email), pod session tokens — all managed by `@synap-core/auth` |
 | `chrome.storage.local` | On-disk, persistent | `podUrl` (last connected pod), `cpUrl` (dev override), `onboardingComplete` |
 
-The Kratos session token lives in session storage and is re-issued via the CP handshake on every browser restart. `podUrl` is the only pod reference stored on disk.
+Control Plane and Pod sessions restore independently. On a browser restart the extension restores the Control Plane session, reads its Pod relationship ledger, then reconnects to a selected Pod with either a direct federation exchange or the Pod's own login flow. `podUrl` is the only pod reference stored on disk.
 
 ### Build
 
@@ -91,16 +91,16 @@ The extension has a **6-phase auth state machine**:
      ▼                                                      │
      ├──── 0 pods ──────────────► [no-pod]                  │
      │                                                      │
-     ├──── 1 pod ───────────────► auto-handshake ─────────► │
+     ├──── 1 pod ───────────────► auto-connect ───────────► │
      │                            (silent)         │        │
      │                                             │        │
      └──── 2+ pods ─────────────► [cp-pods] ───────┘        │
                                   (user picks)    │         │
                                                   │         │
-                                     handshake fails        │
+                              federation exchange fails     │
                                                   ▼         │
                                           [pod-login] ──────┤
-                                     (direct Kratos login)  │
+                                (direct Pod login; CP kept) │
                                                   │         │
                                                   ▼         │
                                            [connected] ─────┘
@@ -115,23 +115,23 @@ The extension has a **6-phase auth state machine**:
 | `cp-signin` | `SignInView` | Email + password form (sign in or sign up) |
 | `cp-pods` | `PodSelectView` | Pick which pod to connect; colored status dots |
 | `no-pod` | `NoPodView` | "Create a pod" CTA → synap.live |
-| `pod-login` | `PodLoginView` | Direct Kratos login — fallback when CP handshake fails |
+| `pod-login` | `PodLoginView` | Direct Pod login when federated entry is unavailable or not desired |
 | `connected` | `HomeView` + nav | Normal app |
 
-### CP → Pod handshake (auto-connect)
+### Account service → Pod federation entry (auto-connect)
 
 When a pod is selected (or auto-selected because only one exists):
 
-1. Calls `POST /pods/handshake` on the CP → gets a short-lived ES256 JWT. Falls back to `POST /pods/shared-handshake` if the pod is on the free shared tier.
-2. Calls `POST ${podUrl}/api/handshake` with that JWT → pod verifies via JWKS, returns a **Kratos session token**
-3. Session stored in `chrome.storage.session` via the `createChromeSessionStorage` adapter
-4. `podUrl` persisted to `chrome.storage.local` for reconnection after SW restart
+1. Reads the signed-in account's Pod relationship ledger and selects the eligible Pod.
+2. Obtains a short-lived `user-exchange` assertion for that exact Pod origin from the account service.
+3. Calls `POST ${podUrl}/api/federation/exchange` with the assertion. The Pod verifies an owner-approved issuer, resolves the generic issuer-subject link, checks local membership, and returns a **Pod session**.
+4. Stores the Pod session in `chrome.storage.session` through the `createChromeSessionStorage` adapter; persists only `podUrl` in `chrome.storage.local`.
 
-The Kratos session token is the single credential for all subsequent pod API calls.
+The account service never receives the Pod session. The Pod session is the credential for all subsequent Pod API calls.
 
 ### Direct Kratos login fallback (`pod-login`)
 
-If `connectViaCPHandshake` fails (self-hosted pod, pod offline during handshake, shared-tier mismatch), the auth machine transitions to `pod-login`. The user enters their pod email + password directly. On submit, `auth.connectDirectLogin(podUrl, email, password)` runs the full Kratos API flow (init flow → submit credentials → get session token) and stores the resulting session.
+If federation exchange fails (an unlinked subject, inaccessible Pod, offline Pod, or self-hosted Pod), the auth machine preserves the account session and offers another Pod or direct login. On direct login, `auth.connectDirectLogin(podUrl, email, password)` runs the Pod's Kratos flow and stores its resulting session.
 
 ### Auth library
 
@@ -185,7 +185,7 @@ Install extension
   → New account → [no-pod] "You need a pod"
   → Click "Create a pod" → synap.live/pods/new opens
   → Pod provisioned → click "I already have a pod" (re-fetches pod list)
-  → Auto-connects via handshake → [connected] HomeView
+  → Auto-connects through a direct federation exchange → [connected] HomeView
   → Onboarding prompt: "Import your open tabs"
 ```
 
@@ -194,7 +194,7 @@ Install extension
 ```
 Install extension
   → [cp-signin] Enter email + password
-  → 1 pod found → silent handshake → [connected] HomeView
+  → 1 pod found → silent federation exchange → [connected] HomeView
   → Onboarding prompt: "Import your open tabs"
 ```
 
@@ -204,18 +204,18 @@ Install extension
 Install extension
   → [cp-signin] Sign in
   → [cp-pods] Pick a pod (green = running, amber = starting, red = error)
-  → Handshake → [connected] HomeView
+  → Direct federation exchange → [connected] HomeView
 ```
 
-### Self-hosted pod (handshake fails)
+### Self-hosted or direct Pod access
 
 ```
 [cp-pods] Select pod
-  → Handshake fails (pod not managed by CP, or offline)
+  → Federation exchange is unavailable or denied
   → [pod-login] "Sign in to your pod"
     Pod URL pre-filled. Email pre-filled from CP account.
   → Enter pod password → Kratos login → [connected]
-  → Or: "Retry automatic connection" to re-attempt handshake
+  → Or: return to the Pod picker and select another known Pod
 ```
 
 ### Tab import onboarding
@@ -409,9 +409,9 @@ Two context menu items are registered on install:
 | Feature | Notes |
 |---------|-------|
 | CP sign-in + sign-up | Better Auth (email/password), friendly error messages |
-| Automatic pod connection | CP handshake → Kratos session token, no API key entry |
+| Automatic pod connection | Account-service assertion → direct Pod session, no API key entry |
 | Multi-pod picker | Status dots: green=running, amber=starting, red=error |
-| Self-hosted pod login | `pod-login` phase: direct Kratos login with retry handshake option |
+| Self-hosted pod login | `pod-login` phase: direct Kratos login while preserving account state |
 | No-pod state | CTA → synap.live, "I already have a pod" re-polls CP |
 | Session persistence | Pod URL on disk; session token in memory, re-issued on restart |
 | CP session caching | 5-minute in-memory TTL — avoids CP round-trip on repeated panel opens |
@@ -482,7 +482,7 @@ connect-src 'self' https://api.synap.live https://*.synap.live http://localhost:
 
 The inline script in `side-panel.html` (theme detector) uses no eval — it reads `matchMedia` and sets a `data-*` attribute, which is allowed under `script-src 'self'` when inlined in the HTML file itself (Chrome extension pages permit this).
 
-**Pod URL injection:** All Hub Protocol URLs are constructed as `${podUrl}/api/hub/…` where `podUrl` comes from `chrome.storage.local` (set only on successful CP handshake or validated direct login). No user-supplied URLs are used without prior authentication.
+**Pod URL injection:** All Hub Protocol URLs are constructed as `${podUrl}/api/hub/…` where `podUrl` comes from `chrome.storage.local` after a successful federation exchange or validated direct login. No user-supplied URLs are used for Hub Protocol calls before that validation.
 
 ## Related
 

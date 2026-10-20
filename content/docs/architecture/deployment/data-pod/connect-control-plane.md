@@ -1,212 +1,90 @@
-# Connecting a Control Plane to Your Data Pod
+# Connecting an Account Service to Your Data Pod
 
-Your Data Pod is a fully independent server — it works without any control plane. But if you want remote management, monitoring, automated updates, or to use the Synap Cloud dashboard, you can connect a control plane (CP) to your pod.
+A Data Pod remains a complete, independent server. It owns its local users, memberships, workspaces, projects, and sessions. Connecting Synap Cloud or another account service must not put that provider's user IDs, Pod IDs, or configuration into the Pod's identity model.
 
-This page covers both options:
-- **Synap Cloud CP** — managed, zero-config
-- **Your own CP** — full sovereignty, requires a bit of setup
+An account service can help a person discover and enter a Pod only after the Pod owner has trusted it as a generic **issuer**.
 
----
+## What each side owns
 
-## Option 1: Synap Cloud (Managed Pods)
-
-If you signed up at [synap.live](https://synap.live) and provisioned your pod through the dashboard, the trust relationship is established automatically during provisioning. Nothing to configure.
-
-Your pod has `CONTROL_PLANE_URL=https://api.synap.live` in `/opt/synap/deploy/.env`.
-
-**Re-establishing trust** (if you migrated your pod or something went wrong):
-1. Open the CP dashboard → **Your Pod** → **Re-establish Trust**
-2. The CP sends a new signed JWT to your pod's `/api/provision/seed-trust` endpoint
-3. Trust is re-established in seconds — no restart required
-
----
-
-## Option 2: Your Own Control Plane
-
-This is for advanced users running a self-hosted Synap stack who want to connect their own CP (e.g. a custom management plane, a fork of `synap-control-plane-api`, or any HTTPS service that can issue ES256 JWTs).
-
-### How It Works
-
-Your pod verifies every CP request using **asymmetric cryptography (ES256)**:
-
-1. Your CP generates an ECDSA P-256 key pair
-2. Your CP publishes its public key at `https://your-cp.example.com/.well-known/jwks.json`
-3. Your pod fetches that public key and verifies every JWT your CP sends
-
-No shared secret is ever transmitted. Your CP's private key never leaves your CP server.
-
-### Step 1 — Generate a Key Pair on Your CP
-
-```bash
-# Generate ECDSA P-256 private key
-openssl ecparam -name prime256v1 -genkey -noout -out cp-private-key.pem
-
-# Extract the public key
-openssl ec -in cp-private-key.pem -pubout -out cp-public-key.pem
-```
-
-Keep `cp-private-key.pem` secret and on your CP server only.
-
-### Step 2 — Publish Your JWKS Endpoint
-
-Your CP must serve the public key at `/.well-known/jwks.json`. The response format is standard OIDC JWKS:
-
-```json
-{
-  "keys": [
-    {
-      "kty": "EC",
-      "crv": "P-256",
-      "alg": "ES256",
-      "use": "sig",
-      "kid": "cp-key-1",
-      "x": "<base64url-encoded x coordinate>",
-      "y": "<base64url-encoded y coordinate>"
-    }
-  ]
-}
-```
-
-You can generate the JWKS JSON from your PEM key with any JWT library, or with `openssl`:
-
-```bash
-# Get key parameters (x, y as hex, then base64url-encode them)
-openssl ec -in cp-private-key.pem -text -noout 2>/dev/null
-```
-
-The endpoint must be served over **HTTPS** (self-signed certificates are not accepted).
-
-### Step 3 — Configure Your Pod
-
-Set `CONTROL_PLANE_URL` in your pod's environment file:
-
-```bash
-# On your pod server
-echo "CONTROL_PLANE_URL=https://your-cp.example.com" >> /opt/synap/deploy/.env
-```
-
-Then restart the pod backend:
-
-```bash
-cd /opt/synap/deploy && docker compose restart api
-```
-
-If you leave `CONTROL_PLANE_URL` unset, your pod will accept JWTs from any HTTPS issuer that passes signature verification (OIDC-style discovery). Setting it explicitly restricts your pod to only trust your specific CP.
-
-### Step 4 — Call seed-trust
-
-Your CP must call your pod's `seed-trust` endpoint to register itself. This is the bootstrap step — it adds your CP to the pod's trusted issuer list.
-
-```bash
-# Your CP generates a seed-trust JWT (valid for 5 minutes)
-# Claims: { type: "seed-trust", iss: "https://your-cp.example.com", aud: "https://your-pod.example.com", jti: "<uuid>", exp: <now+5min> }
-SEED_JWT="<your ES256 JWT>"
-
-curl -X POST https://your-pod.example.com/api/provision/seed-trust \
-  -H "Authorization: Bearer $SEED_JWT" \
-  -H "Content-Type: application/json" \
-  -d '{"issuerUrl": "https://your-cp.example.com"}'
-```
-
-Expected response:
-```json
-{ "success": true, "issuerUrl": "https://your-cp.example.com" }
-```
-
-After this call, your CP is registered in the pod's `trusted_issuers` table and can call any other provision endpoint.
-
-### Step 5 — Provision the Pod
-
-Once trust is established, your CP can call `POST /api/provision/connect` to push credentials:
-
-```bash
-# JWT claims: { type: "provision", podId: "<uuid>", controlPlaneUrl: "https://your-cp.example.com",
-#               iss: "https://your-cp.example.com", aud: "https://your-pod.example.com", jti, exp }
-PROVISION_JWT="<your ES256 JWT>"
-
-curl -X POST https://your-pod.example.com/api/provision/connect \
-  -H "Content-Type: application/json" \
-  -d "{\"token\": \"$PROVISION_JWT\"}"
-```
-
----
-
-## Token Requirements
-
-All CP→Pod JWTs must:
-
-| Claim | Value |
+| Layer | Responsibility |
 |---|---|
-| `alg` (header) | `ES256` |
-| `iss` | Your CP's base URL (e.g. `https://your-cp.example.com`) |
-| `aud` | Your pod's public URL (e.g. `https://your-pod.example.com`) |
-| `jti` | A unique UUID — prevents replay attacks |
-| `exp` | Short-lived — recommended 5–10 minutes |
-| `type` | Specific to each endpoint (see below) |
+| Account service (including Synap Control Plane) | Its accounts, passwords, sessions, invitations, and its ledger of people related to Pods |
+| Data Pod | Trusted-issuer approval, local identities, local membership/access decisions, workspaces, projects, and Pod sessions |
+| Browser or app | Talks directly to the account service and the Pod; transports only short-lived assertions or opaque receipts |
 
-The `aud` (audience) check is mandatory. A JWT minted for one pod cannot be replayed against another.
+The account service never receives a raw Pod session token. A Pod does not trust any issuer by default.
 
-### Token Types by Endpoint
+## Connect a fresh managed Pod
 
-| Endpoint | `type` claim |
-|---|---|
-| `POST /api/provision/seed-trust` | `seed-trust` |
-| `POST /api/provision/connect` | `provision` |
-| `POST /api/provision/seed-admin` | `seed-admin` |
-| `POST /api/provision/register-intelligence` | `provision` |
-| `POST /api/provision/reset-intelligence` | `provision` |
-| `POST /api/provision/trigger-update` | `provision` |
-| `POST /api/provision/disconnect` | `provision` |
+A newly installed managed Pod has no human owner and no trusted issuer. Its installer provides a Pod-local bootstrap secret. The orchestrator may create the first local owner with one short-lived ES256 assertion:
 
----
-
-## Checking Trust Status
-
-```bash
-curl https://your-pod.example.com/api/provision/status
+```text
+orchestrator -> POST https://your-pod.example.com/api/federation/bootstrap
+  X-Pod-Bootstrap-Token: <local installation secret>
+  body: { assertion }
 ```
 
-```json
-{
-  "connected": true,
-  "connectionState": "connected",
-  "controlPlane": {
-    "url": "https://your-cp.example.com",
-    "connectedAt": "2026-04-29T12:00:00.000Z"
-  }
-}
+The `initial-owner-bootstrap` assertion is addressed to the exact public Pod origin and contains a generic issuer subject, email, and name. It contains no external Pod ID, Control Plane user ID, stored issuer URL, or Pod session. The Pod verifies the assertion, creates its first local owner, links that owner to `(issuer, opaque subject)`, and approves the issuer locally. A second owner cannot be bootstrapped through this route.
+
+For a self-hosted Pod, a local owner can instead use the Pod's direct setup/login flow and approve an issuer in Pod administration. No Control Plane is required.
+
+## Connect an existing Pod to an account
+
+Use the following flow when a person who already has access to a Pod wants it listed in an account service:
+
+```text
+1. Browser -> account service: create a link intent
+2. Account service -> browser: short-lived identity-link assertion
+3. Browser (direct Pod session) -> Pod: POST /api/federation/identity-links
+4. Pod -> browser: one-time opaque receipt
+5. Browser -> account service: submit intent + receipt only
+6. Account service -> Pod: consume the receipt server-to-server
+7. Account service: records the Pod-authoritative relationship in its ledger
 ```
 
-`connectionState` values:
-- `connected` — CP registered + Intelligence Service active
-- `partial` — CP registered but IS not yet registered
-- `disconnected` — no CP connection
+The direct Pod session proves the person already has local access. The receipt, rather than the session token, is what crosses back to the account service.
 
----
+## Sign in through an approved issuer
 
-## Revoking a Control Plane
+Once the Pod owner has approved the issuer and a generic identity link exists, a client can exchange a short-lived `user-exchange` assertion directly with the Pod:
 
-To remove CP access from your pod:
-
-```bash
-# Requires a "provision" type JWT
-curl -X POST https://your-pod.example.com/api/provision/disconnect \
-  -H "Content-Type: application/json" \
-  -d "{\"token\": \"$PROVISION_JWT\"}"
+```text
+Browser -> POST https://your-pod.example.com/api/federation/exchange
+  body: { assertion }
 ```
 
-Or directly via the pod admin CLI (no JWT required — authenticated via local session):
+The Pod verifies the issuer, exact audience, expiry, purpose, and one-time identifier; resolves `(issuer, opaque subject)` to its local user; checks local membership; then creates its own Kratos session. If the user has no local access, the exchange is rejected even when the account service knows the user.
 
-```bash
-# From inside the pod server
-synap pod disconnect
-```
+## Invite or grant scoped access
 
----
+Account-service invitations are ledger records until the recipient has an account. To apply an accepted invitation, the issuer sends a short-lived `access-grant` assertion to `POST /api/federation/access-grants`. The assertion must name one exact Pod-local workspace or project. The Pod verifies that the issuer has the `membership:grant` capability and that the target is active before creating or updating its own local membership.
 
-## Security Notes
+Direct Pod invitations continue to work without an account-service session. They are a local Pod feature.
 
-- The pod never stores your CP's private key
-- Each token has a `jti` claim that prevents replay — the same token cannot be used twice
-- Setting `CONTROL_PLANE_URL` pins JWKS to a specific URL and prevents OIDC-style discovery from an unverified `iss` claim
-- Pod-agent (the update sidecar) always derives the JWKS URL from `CONTROL_PLANE_URL` — it ignores any URL passed in request headers
+## Issuer requirements
+
+An issuer must:
+
+- publish an ES256 JWKS at a canonical HTTPS origin;
+- sign assertions with its own private key and use the exact Pod public origin as `aud`;
+- include an issuer URL, opaque `sub`, unique `jti`, short expiry, and purpose appropriate to the route;
+- accept that the Pod is the authority for local membership and session issuance.
+
+The Pod uses durable replay protection for federation assertions and rejects issuer/JWKS locations that resolve to private or local network addresses.
+
+## Retired endpoints
+
+`/api/handshake` and the legacy identity-provisioning endpoints below are retired and return an explicit retirement response. Do not use them as a fallback:
+
+- `POST /api/provision/connect`
+- `POST /api/provision/seed-trust`
+- `POST /api/provision/seed-admin`
+
+They have been replaced by `/api/federation/bootstrap`, `/identity-links`, `/identity-links/consume`, `/access-grants`, and `/exchange`.
+
+Optional external-service settings used by marketplace, lifecycle, or intelligence operations are separate from this identity boundary. They do not establish issuer trust or grant Pod membership.
+
+## Related
+
+- [Trusted issuers](/team/platform/trusted-issuers)
+- [Pod Federation Boundary](/team/control-plane/pod-trust-architecture)

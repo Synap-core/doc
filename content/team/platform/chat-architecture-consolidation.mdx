@@ -1,0 +1,157 @@
+# Chat / Channels / Room / Agents — Architecture & Consolidation
+
+*Synap Technologies — Version 0.1, June 2026*
+*Grounded in a read-only inventory of the live tree (4 audits: packages, components, data-layer, agents+threads). Companion to [Agent UX — State of the Room & Plan](/team/platform/agent-ux-state-and-plan). Supersedes the April 2026 [Chat Architecture](/team/platform/chat-architecture) doc (which predates the de-Tamagui direction).*
+
+---
+
+## The thesis
+
+The chat domain is **~95% the right shape already, buried under duplication and a packaging tangle.** The fix is overwhelmingly **deletion + repackaging**, not a rebuild. The target maps cleanly to a four-layer model that matches the intended mental model: a separate **data/adjoint layer**, a reusable **base chat interface**, a **Room composition** on top, and **agents/AI as composable add-ons**.
+
+One caveat is *not* cosmetic: the **realtime message-delivery wiring has real latent bugs** (two independent audits found them). They must be fixed as part of the data-layer consolidation, because the "single source of truth" we want to build sits directly on top of them.
+
+---
+
+## 1. Current state — the tangle
+
+### 1.1 Packages (9 in-domain)
+
+| Package | Role | Status |
+|---|---|---|
+| `@synap-core/chat-ui` | Plain-CSS, `--synap-*` presentational primitives (MessageList/Bubble/Content, CompanionInput, Stream*, identity SSOT, family-A rich blocks) | **CANONICAL — the de-facto base interface** |
+| `@synap-core/channels` | Data hooks + Zustand store + streaming engine (`src/streaming`) + **Room components** (RoomShell/RoomView/ChannelPanel) + channel cells | **CANONICAL but OVERLOADED — mixes data + UI in one package** |
+| `@synap-core/chat-headless` | Chat hooks/stores/types; mostly **re-exports** channels' streaming engine | **CANONICAL but mostly a re-export shell** |
+| `@synap-core/room-ui` | "Room kit" — but **only its atoms** (`MemberRow`, `DecisionRow`, `Routed`, `ThreadStarted`, `RoomAv`, `Party`) are used live; its shell/screens/message/composer are **DEAD mock** | **MIXED — live atoms + dead gallery** |
+| `@synap-core/agents-headless` | Pure data hooks for agents (zero UI) | **CANONICAL — textbook composable add-on** |
+| `@synap-core/agents-ui` | Agent components (AgentDetailPanel, CapabilityMatrix, GovernancePanel) | **CANONICAL** |
+| `@synap-core/ai-chat` | Whole package `@deprecated`; the **ai-steps subtree** + Tamagui proposal/branch/persona families; `AIChatCell` still registered | **DEPRECATED — but load-bearing** |
+| `@synap-core/chat-interface` | Old Tamagui chat components; warns on import; live only via `/native` (relay) | **DEPRECATED** |
+| `@synap-app/chat` | Standalone Claude-style app | **DEAD** |
+
+**Dependency direction (verified):** `chat-headless` → `channels` (channels is *lower*). `chat-ui` is the agnostic base. The streaming engine lives in `channels/src/streaming` (single store singleton; chat-headless re-exports).
+
+### 1.2 The headline duplications (what "one place" must collapse)
+
+- **THREE live message-stream paths:** `RoomView` (channels, canonical), `ChannelPanel` (channels, near-identical to RoomView minus room dialect), `AIChannelView→ChatView` (ai-chat, **Tamagui**, only the dead `apps/intelligence` mounts it).
+- **TWO proposal-card families:** family A = `chat-ui` (`ProposalChip`/`ViewProposalCard`/`ActionCard`/`ArtifactCard`, plain-CSS, canonical) vs family B = `ai-chat` (`ProposalInlineCard`/`WorkspaceProposalCard`/`ProposedActionRow`/`DocCreatedCard`, Tamagui/spatial-ui). Plus `RProposal` (room-ui, dead).
+- **Proposal inbox 3×:** `DecisionInbox` (channels, canonical) vs `ProposalInbox` (ai-chat) vs `ProposalsTab` (×2).
+- **Composer 3×:** `CompanionInput` (chat-ui, canonical) vs `ChatInput`+pickers (ai-chat, Tamagui) vs `RComposer` (room-ui, dead mock).
+- **Avatar/orb/cluster 2×:** chat-ui (`AuthorAvatar`/`Orbs`/`OrbCluster`/`Routed`) vs room-ui (`RoomAv`/`Party`/`OrbCluster`/`Presence`/`Routed`). `OrbCluster` and `Routed` literally exist in both.
+- **The ai-steps subtree** (`AIStepsPanel` + 5 step renderers + 6 inline result renderers) is the **richest UI with no chat-ui equivalent** — stranded in the deprecated Tamagui package.
+- **TWO identity palettes:** chat-ui's 7-slot `--synap-identity-*` (canonical, token-correct) vs agents-headless `deriveAgentColor` (8 hardcoded hex). The *same agent* is colored differently in the Room vs the Agents app.
+- **Tamagui = browser-crash-risk:** the entire ai-chat branch/parallel/persona/breadcrumb family (`BranchCard`, `BranchResultCard`, `ParallelChatView`, `RouteBreadcrumb`, `PersonaChip`) imports `@synap-core/ui-system`; `browser/` has no TamaguiProvider → these throw if mounted there.
+
+### 1.3 The data layer is already ~95% headless — the problem is *packaging*
+
+Every data hook (`useMessages`, `useSendMessage`, `useChannelChat`, `useChannelStream`, `useMentionables`, `useRoomMembers`, `useTeammateAnswering`, `useBranches`, the `room-adapters` DTO mappers, the stores) is **pure tRPC + Zustand, no JSX**. They are simply **co-located with heavy UI inside `channels`**, so a consumer can't take the data without the components. Two hooks (`useMentionables`, `useRoomMembers`) import `chat-ui` only for the identity *types/util* — a fixable type-coupling.
+
+### 1.4 ⚠️ Realtime delivery has latent bugs (found independently by two audits — needs dogfood)
+
+Suspected (static analysis; confirm via runtime) but corroborated by two separate passes:
+
+- **BUG-1 — the `chat:message` bus path is dead.** `socket-io-manager.ts:259` rewrites the raw `chat:message` socket event to bus `type:"message.new"`, but `useRealtimeSync`'s entire optimistic-swap/dedup/prepend cache-patch lives under `case "chat:message"`; `case "message.new"` is a warn-only no-op. So persisted messages are **not delivered to the reader cache via the bus** — only the *sender's own* message lands (via `useSendMessage.onSettled` invalidate). **Messages from other users / agent replies likely appear only on the next refetch, not in realtime.** This contradicts every "useRealtimeSync patches the cache in the same tick" comment in the code, and it's the wiring the reverted E1b Room fold-in tripped on.
+- **BUG-2 — `useChannelStream`'s optimistic promotion writes to a phantom cache key.** It calls `setInfiniteData({ threadId }, …)` with **no `limit`**, while every reader keys on `{threadId, limit:50}`. The engine's "bridge the gap between stream-end and persist" step lands in a cache nobody renders — silently ineffective. Its own sibling `useSendMessage` documents this exact trap.
+- **BUG-3 — `StreamingBridge` (studio) + studio-local streaming store are dead code.** The manager never bridges `chat:stream`/`ai:step` to the bus, so the bridge's `subscribe("message")` switch never fires. Live streaming works only because the hooks read the *raw* socket directly.
+- **Lower severity:** optimistic user-echo dedup matches on content-equality only (collision risk); three token accumulators / two streaming stores coexist; `staleTime` mismatch (`useMessages` Infinity vs `useChatMessages` 30s) on the same query key.
+
+**Why this matters for the architecture:** the SSOT data layer we're about to build sits on this wiring. Fix BUG-1/2 and delete the dead bridge (BUG-3) as the *first* step — otherwise we centralize on a broken foundation.
+
+---
+
+## 2. Target architecture — four layers
+
+Matches the intended model: *a separate adjoint/data layer; a reusable base chat interface; the Discord-like Room on top; agents/AI as composable add-ons.*
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ APPS  (browser CompanionCell · GlobalRoomApp · ChannelsApp · relay)  │
+└───────────────▲─────────────────────────────▲───────────────────────┘
+                │ composes                     │ composes
+┌───────────────┴───────────┐   ┌─────────────┴────────────────────────┐
+│ L2  ROOM-UI (composition)  │   │  ADD-ONS (composable, optional)       │
+│ Discord-like shell:        │   │  • agents  (agents-headless+ui)       │
+│ RoomShell/RoomView/        │◄──┤  • AI-channel overrides (proposals,   │
+│ ChannelPanel/Renderer,     │   │    ai-steps, governance glass-box)    │
+│ ServerRail/Sidebar/        │   │  • threads = recursive sub_thread     │
+│ ThreadPanel/DecisionInbox  │   │    channel (NOT a layer)              │
+└───────────────▲────────────┘   └──────────────────▲────────────────────┘
+                │ consumes BOTH                      │
+┌───────────────┴───────────┐         ┌──────────────┴───────────────────┐
+│ L1  CHAT-INTERFACE (base)  │ ──uses─▶│ L0  CHAT-DATA (adjoint/headless) │
+│ reusable rendering bricks  │         │ hooks · stores · streaming       │
+│ (messages, composer,       │         │ engine · realtime · adapters     │
+│  stream status, identity,  │         │ (NO JSX). The "kept separate"    │
+│  rich blocks, ai-steps)    │         │ data layer.                      │
+└────────────────────────────┘         └──────────────────────────────────┘
+```
+
+### L0 — `chat-data` (the adjoint/data layer, headless)
+**Owns:** every data hook (`useMessages`, `useSendMessage`, `useChannel`/`useChannelChat`/`useChannelContext`, `useMentionables`, `useRoomMembers`, `useTeammateAnswering`, `useBranches`, `useCommentChannel`), the streaming engine (`useChannelStream` + `streamingStore` + `streaming-types`), `room-adapters` (DTO mappers), the stores (`useChannelStore`, `useChatUIStore`), and the realtime layer (`useRealtimeSync`, `useSocketEvent`, `socket-io-manager`, `SocketIOProvider`). **No JSX.** This is the "complexity with fetching / integrations / providers" kept separate. The identity *types* (`ChatParticipant`, `identitySlotForId`) move here so data hooks stop importing `chat-ui`.
+*Today:* split across `channels` + `chat-headless` + `synap-hooks` + `synap-client`. *Move:* extract the data half of `channels`; `chat-headless` collapses to near-nothing.
+
+### L1 — `chat-interface` (the base presentational chat kit — "for normal use")
+**Owns:** `MessageList`/`MessageBubble`/`MessageContent`, `CompanionInput`/`MentionMenu`/`AttachMenu`, `StreamStatus`/`StreamDots`/`StreamCursor`/`StreamError`/`ThinkingBlock`/`RoutedThinkingChip`, the identity SSOT (`resolveIdentityColor`/`AuthorAvatar`/`Orbs`/`OrbCluster`/`Routed`), family-A rich blocks (`ProposalChip`/`ViewProposalCard`/`ActionCard`/`ArtifactCard`/chips), `BranchesPanel`, `ConversationTimelinePanel`. Plain CSS + `--synap-*`, surface-agnostic. **This is today's `@synap-core/chat-ui`, promoted to the canonical base.** **Must absorb** the ai-steps subtree (migrated off Tamagui) — the one real gap.
+
+### L2 — `room-ui` (the Discord-like composition, on top)
+**Owns:** `RoomShell`/`RoomView`/`ChannelPanel`/`ChannelRenderer` + per-type views, `RoomServerRail`/`RoomSidebarLive`/`ChannelsSidebar`, `RoomThreadPanel`/`CommentThread`, `DecisionInbox`, members rail, `RoomThemeBridge`, and the surviving **room atoms** (`MemberRow`/`DecisionRow`/`Routed`/`ThreadStarted`). Composes L1 (rendering) + L0 (data). **This is today's `channels` UI half + room-ui's live atoms**, with the dead mock shell/screens deleted. AI-channel styling overrides live here as variants, not a separate path.
+
+### Add-ons (composable, optional)
+- **Agents** = `agents-headless` (data) + `agents-ui` (presentation). The Room consumes via **one join** (`useRoomTeammates`) and opens `AgentDetailPanel`/`GovernancePanel` through the **generic panel/cell runtime** — not a hardcoded shell view.
+- **Threads** are **not a layer** — a thread is a `sub_thread` channel recursively rendered by L2/L1/L0. Keep `RoomThreadPanel` a thin host.
+- **AI-channel overrides** (rich proposal/steps/governance rendering) compose over L1's message slots — not a parallel paradigm.
+
+---
+
+## 3. Component allocation (where everything lands)
+
+| Concern | Target layer | Canonical today | Retire (duplicate/dead) |
+|---|---|---|---|
+| Message list/bubble/content | L1 | chat-ui (canonical) | ai-chat re-exports (alias→keep); room-ui `RMsg`/`DateDivider` (delete) |
+| Composer + mention + attach | L1 | chat-ui `CompanionInput`/`MentionMenu`/`AttachMenu` | ai-chat `ChatInput`+pickers; room-ui `RComposer`/`RoomMentionMenu` (delete) |
+| Stream status / dots / error / thinking | L1 | chat-ui `StreamStatus`/`StreamDots`/`StreamError`/`ThinkingBlock` | ai-chat `StreamingIndicator`; room-ui `RThinking` (delete) |
+| **ai-steps panel + step + inline renderers** | **L1 (MIGRATE off Tamagui)** | — (gap) | ai-chat `AIStepsPanel`+5 steps+6 inline (port, then delete) |
+| Rich blocks (proposal/view/artifact/chips) | L1 | chat-ui family A | ai-chat family B (Tamagui) — port unique `WorkspaceProposalCard`, delete rest |
+| Identity SSOT + avatars/orbs | L1 + L0 types | chat-ui `resolveIdentityColor`/`AuthorAvatar`/`Orbs` | room-ui `OrbCluster`/`Presence` dup; **unify agents-headless `deriveAgentColor` onto the 7-slot palette** |
+| Shell / room column / channel renderer | L2 | channels `RoomShell`/`RoomView`/`ChannelPanel`/`ChannelRenderer` | room-ui mock `shell.tsx`; apps/chat `ChatApp` (delete) |
+| Server rail / sidebar / channel list | L2 | channels `RoomServerRail`/`RoomSidebarLive`/`ChannelsSidebar` | room-ui mock rail/sidebar; apps/chat sidebars (delete) |
+| Thread panel / branches | L2 host + L1 panel | channels `RoomThreadPanel`; chat-ui `BranchesPanel` | ai-chat `BranchCard`/`ParallelChatView`/ReactFlow viz (Tamagui); apps/chat floating |
+| Governance glass-box | L2 + add-on | channels `DecisionInbox`; room-ui `DecisionRow`; agents-ui `GovernancePanel` | ai-chat `ProposalInbox`/`ProposalsTab` (delete) |
+| Agent identity panels | Add-on (agents-ui) | agents-ui `AgentDetailPanel`/`CapabilityMatrix` | browser `AgentsApp` forked views (de-fork); ai-chat `PersonaChip`/pickers |
+| Data hooks / streaming / realtime | L0 | channels hooks + streaming + synap-hooks/synap-client | studio-local streaming store + `StreamingBridge` (delete — BUG-3) |
+
+---
+
+## 4. Migration path (deletion-first, low-risk ordering)
+
+Each step is independently shippable and gate-verifiable (typecheck per package). Governing rule: **does it let us delete something?**
+
+**Phase 0 — Fix the foundation (correctness, do FIRST).** Fix **BUG-1** (manager emits `type:"chat:message"` on the bus, or `useRealtimeSync` reads the raw event) and **BUG-2** (write optimistic promotion to `{threadId, limit:50}` / use a `setQueriesData` predicate). Delete **BUG-3** (`StreamingBridge` + studio-local store). *Dogfood-verify realtime delivery for a 2nd user/agent.* This also unblocks the reverted E1b Room streaming fold-in.
+
+**Phase 1 — Carve out L0 `chat-data`.** Extract the headless half of `channels` (or designate `channels` data-only and move components to L2). Move `ChatParticipant`/identity types down so data hooks stop importing `chat-ui`. Collapse `chat-headless` re-exports. *Deletes the data/UI tangle.*
+
+**Phase 2 — Promote L1 `chat-interface`.** Establish `chat-ui` as the canonical base. **Port the ai-steps subtree off Tamagui into L1** (the one real build, not a move). Reconcile the two proposal-card families onto family A. *Deletes family B + StreamingIndicator/RThinking dups.*
+
+**Phase 3 — Consolidate L2 `room-ui`.** Keep `channels`' Room components + room-ui's live atoms; **delete room-ui's dead mock** (shell/screens/RMsg/RComposer/RProposal/RThinking/RoomMentionMenu/OrbCluster/Presence). Move `thread`/`sub_thread`/`orchestrator` channel-renderer registration out of deprecated `ai-chat` into L2. Collapse `ChannelPanel`/`RoomView` into one frame + a room variant.
+
+**Phase 4 — Retire the deprecated packages.** Delete `@synap-app/chat` (dead). Migrate `apps/intelligence`'s `AIChannelView→ChatView` onto `ChannelPanel`, then delete `@synap-core/ai-chat`'s UI (keep only the `AIChatCell` registration, moved to L2). Prune the deprecated `@synap-core/chat-interface` web path (keep `/native` for relay until relay migrates).
+
+**Phase 5 — Unify agents.** De-fork browser `AgentsApp` onto `agents-ui`; collapse `deriveAgentColor` onto the 7-slot palette; open agent panels via the panel/cell runtime instead of RoomShell's hardcoded `agent-detail` view.
+
+> **Execution log (2026-06-07):** Phase 3's **room-ui dead-mock deletion is DONE & gate-verified** — removed the dead mock-gallery island (`gallery/RoomGallery.tsx` + `components/screens.tsx`, a self-contained island nothing live imports) and 13 superseded dead components (`RMsg`, `RComposer`, `RoomMentionMenu`, `RProposal`, `RThinking`, room-ui `OrbCluster`/`Presence`/`RoomShell`/`RoomSidebar`/`RoomHeader`/`MembersRail`/`ServerRail`/`ChannelListPanel`). room-ui + channels type-check exit 0; ai-chat at its 12-error baseline; browser references zero deleted symbols; live atoms (`MemberRow`/`DecisionRow`/`Routed`/`ThreadStarted`/`ChanRow`/`SideGroup`/`ChTheme`/`DateDivider`/…) all retained. Layers review APPROVED. A slop review proposed further deletions (`ChTheme`, `Seg`, `Ent`, `Ic`, `Mention`) but full-tree verification showed `ChTheme` (studio) and `Seg` (channels DecisionInbox) are **live** and `Ic`/`Mention` are unverifiable (identifier collisions) — so those were **rejected**, not applied. All other phases remain pending (runtime-visual / needs-dogfood).
+
+### Deletion scorecard (success = these gone)
+`@synap-app/chat` · `@synap-core/ai-chat` UI (family-B proposal cards, ai-steps after port, branch/parallel/persona Tamagui, ProposalInbox/ProposalsTab) · `@synap-core/chat-interface` web · room-ui dead mock (shell/screens/RMsg/RComposer/RProposal/RThinking/RoomMentionMenu/OrbCluster/Presence dups) · `StreamingIndicator` · studio-local streaming store + `StreamingBridge` · browser `AgentsApp` forked detail/governance views · one of the two identity palettes.
+
+---
+
+## 5. Open decisions (surface to the founder)
+
+1. **Naming collision — the "chat interface".** The intended base layer = today's `@synap-core/chat-ui`. But there's already a **deprecated** `@synap-core/chat-interface`. Options: (a) keep `chat-ui` as the canonical name and delete the deprecated `chat-interface`; (b) rename `chat-ui` → `chat-interface` (matches the mental model) *after* deleting the old one. **Recommend (a)** unless the name matters to you.
+2. **Split `channels` into `chat-data` + `room-ui`, or keep one internally-layered package?** Hard split = cleanest SSOT + enforced boundary, but more migration. Folder-level split inside `channels` (`/data` vs `/ui`) is lower-risk first. **Recommend the folder split first, hard split later.**
+3. **The ai-steps subtree + ReactFlow branch viz** are the only genuinely *rich* UI trapped in Tamagui. **Recommend:** port the ai-steps subtree (high value, shown every AI turn); defer/drop the ReactFlow branch-graph (niche).
+4. **AI-channel override scope.** You said overrides aren't the current focus (Room styling is). Confirm: build L1/L2 with *generic* slots now, add AI-channel-specific rich rendering as a later add-on — not a parallel `AIChannelView`.
+
+---
+
+*Living document. As each scorecard item is deleted, strike it here and flip the corresponding consolidation note in [agent-ux-state-and-plan](/team/platform/agent-ux-state-and-plan).*

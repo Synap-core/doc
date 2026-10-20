@@ -13,9 +13,17 @@ toc: true
 
 # Import Architecture
 
-**Last updated: 2026-04-07**
+**Last updated: 2026-04-07** · **OAuth-connector sections updated 2026-09-13** (see notes)
 
 How Synap handles all inbound data: device contacts, Telegram exports, LinkedIn archives, OAuth connector syncs, file uploads, and AI-structured content. Every source eventually creates entities through the same canonical path.
+
+> **2026-09-13 note:** the OAuth-connector row/section below described a per-record
+> `connector-sync` pipeline that has been superseded by the **Connect & Mirror plan**
+> (`CONNECT-AND-MIRROR-PLAN.md`). The one-sync-door model is: `connection-sync.ts`
+> (read → pure map → write via `EntityUpsertService`), first run grouped into ONE
+> `import.graph` proposal, steady runs governed by a per-connection rule, writes tagged
+> `origin: "sync"` (index/embed always run; event automations skip by default). See
+> [Connectors](/team/crm/connectors) and `synap-control-plane-api/CONNECTORS-NORTH-STAR.md` §4.
 
 ---
 
@@ -34,6 +42,11 @@ Source data
       → db.insert(entities)        → correct workspaceId (null for pod-wide profiles)
       → PropertyIndexService       → indexes searchable property values (Typesense)
       → EventRepository.emit()     → entity.create.completed → automations fire
+                                       (skipped by default when the write carries
+                                        `origin: "sync"` — an OAuth-connector sync write;
+                                        an automation must opt in with
+                                        `triggerConfig.includeSyncOrigin`. Index/embed
+                                        reactors always run regardless of origin.)
 
 ```
 
@@ -54,7 +67,7 @@ This gives every imported entity:
 | LinkedIn Archive | `relay-app` file picker | `@synap-core/import-parsers` | tRPC `import.linkedInContacts` | `linkedin-bulk-import` (pg-boss) | `contact` |
 | Device contacts | `relay-app` Contacts API | inline mapping | tRPC `import.contacts` | inline (direct EntityRepository) | `person` |
 | Files | Browser / API multipart | none | `POST /upload` (Hono REST) | inline in route handler | `file` |
-| OAuth connectors | Nango webhook → CP signal | connector-specific | `POST /api/hub/connector-sync` | `connector-sync` (pg-boss) | varies |
+| OAuth connectors (Google) | CP webhook → pod `POST /connectors/sync-trigger`, or cron/connect | `google-sync-kinds.ts` (pure map per kind) | in-process (Hub Protocol not involved) | `connection-sync-run` (pg-boss, `connection-sync.ts`) | `person` / `event` / mail thread — one `import.graph` proposal on first run, `EntityUpsertService` writes on steady runs |
 | CSV / JSON batch | Browser ImportSection | none (base64) | tRPC `import.submitBatch` | inline in router | varies |
 | AI structuring | IS `/api/structure` | AI inference | Hub Protocol | inline in IS handler | any |
 | Bookmarks | Browser ImportSection | DOMParser | tRPC `entities.create` | inline per-row | `bookmark` / `article` |
@@ -68,12 +81,17 @@ Dedup uses `entity_external_links` as a universal dedup registry:
 ```sql
 entity_external_links (
   entity_id        TEXT NOT NULL,
-  provider         TEXT NOT NULL,   -- 'telegram' | 'linkedin' | 'google-contacts' | 'github' | ...
+  provider         TEXT NOT NULL,   -- 'telegram' | 'linkedin' | 'google' | 'github' | ...
   external_id      TEXT NOT NULL,   -- phone | email | profile URL | OAuth object ID
-  nango_connection_id TEXT NOT NULL  -- OAuth connection ID, or 'direct-import' sentinel
+  nango_connection_id TEXT NOT NULL, -- OAuth connection ID, or 'direct-import' sentinel
+  url              TEXT              -- (added 2026-09-13, migration 0259) source URL for
+                                      -- "open in source" (Places) — e.g. the gcal htmlLink
   UNIQUE (provider, external_id)
 )
 ```
+
+Note: the Google provider id is `google` (one Nango integration for Gmail + Calendar +
+Contacts) — never `google-calendar` / `google-contacts`, which are not real provider ids.
 
 Import flow:
 1. Check `entity_external_links` by `(provider, externalId)` — exact match → skip or update
@@ -89,7 +107,7 @@ The `DIRECT_IMPORT_CONNECTION_ID = "direct-import"` sentinel satisfies the `NOT 
 | Telegram | `externalId` = phone (if known), else `tg-name-{slug}` | `properties->>'phone'` JSONB |
 | LinkedIn | `externalId` = email (if known), else `li-name-{slug}` | `lower(properties->>'email')` JSONB |
 | Device contacts | `externalId` = phone or email | `properties->>'phone'` |
-| Connectors | `externalId` = OAuth object ID | `nangoConnectionId` + `externalId` |
+| Connectors (Google) | `externalId` = OAuth object ID | identity signals (email/phone), same as any other source |
 
 **Stability rule**: name-slug fallbacks (`tg-name-john-smith`) must be deterministic — no batch index suffix. Same contact imported twice produces the same externalId → idempotent.
 

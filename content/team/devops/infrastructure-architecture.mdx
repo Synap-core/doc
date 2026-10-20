@@ -375,10 +375,10 @@ POST /auth/sign-up/email
   → POST /auth/verify-email callback
       → auth.ts user.create.after hook:
           1. Update waitlist.phase: "waitlist" → "signed_up"
-          2. fire-and-forget: provisionUserOnSharedPod()
-             → sign handshake JWT (5 min)
-             → POST pod:/api/handshake
-             → Creates Kratos identity + default workspace on shared pod
+          2. Record the account's relationship to its managed Pod
+             → does not create a Pod identity or session from the CP
+             → on first entry, the client uses direct generic federation exchange
+                or the Pod's direct login flow
           3. Create 7-day trial subscription (solo tier, no Stripe yet)
 ```
 
@@ -450,12 +450,11 @@ Step 4: Poll health / cloud-init  [UPDATE: "deploying_services" → "waiting_hea
   → On install_failed: DELETE server, abort (permanent error, no retry)
   → On timeout: UPDATE { status: "error" }, allow admin retry
 
-Step 5: Sync Intelligence Hub
-  → Sign provision JWT (type: "provision", 10 min)
-  → POST pod:/api/provision/connect  ← establish trusted CP session
-  → POST hub:/admin/provision-pod    ← register customer, set token limits
-  → POST pod:/api/provision/register-intelligence  ← deliver Hub API key to pod
-  → (optional) relay hubProtocolApiKey back to IS for proactive calls
+Step 5: Prepare optional intelligence delivery
+  → Do not call the retired /api/provision/connect identity route
+  → Register the customer with the Hub only through a dedicated operations contract
+  → Deliver Hub Protocol credentials only through that contract; never in a
+    user federation assertion or a CP identity payload
   → UPDATE dataPods { status: "sending_invitation" }
 
 Step 5b: Auto-install packages

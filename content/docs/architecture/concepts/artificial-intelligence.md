@@ -5,7 +5,7 @@ description: Documentation covering Artificial Intelligence
 section: general
 audience: users
 version: 1.0+
-last_updated: '2026-04-20'
+last_updated: '2026-09-19'
 tags: []
 hide_title: false
 toc: true
@@ -72,6 +72,49 @@ When the AI wants to make significant changes (like rewriting a document/code), 
 4.  **Action**: LLM decides to call `update_document`.
 5.  **Hub Protocol**: Sends `createDocumentProposal` to Backend.
 6.  **Frontend**: Real-time update shows a "Review Proposal" card in the chat.
+
+## 5. Where your data goes (AI sub-processors)
+
+Your data lives in your Data Pod. To answer an AI request, the Intelligence
+Service sends the text that request needs (a capture, a message and its
+context) to an AI model provider. Unless your pod runs a self-hosted model,
+**that text leaves Synap infrastructure** for the provider below that serves
+the call. Which providers are active depends on the keys the Intelligence
+Service is configured with; a pod admin can also add providers.
+
+| Provider | Used for | When |
+|---|---|---|
+| OpenRouter (openrouter.ai) | Chat, capture structuring, workspace routing; also text embeddings. OpenRouter forwards each call to the model vendor it routes to (e.g. DeepSeek, NVIDIA) | Default provider |
+| DeepSeek (api.deepseek.com) | Chat / reasoning models | When configured |
+| Anthropic (api.anthropic.com) | Chat / reasoning models | When configured |
+| Google AI (generativelanguage.googleapis.com) | Chat / vision models | When configured |
+| Groq (api.groq.com) | Fast chat models | When configured |
+| Cerebras (api.cerebras.ai) | Fast chat models | When configured |
+| OpenAI (api.openai.com) | Text embeddings for semantic search | When configured (fallback after OpenRouter) |
+| Self-hosted vLLM | Any tier | When your deployment runs one; data stays on your infrastructure |
+| TypeSafe (api.typesafe.ai) | Choosing which workspace a capture belongs in | When configured (`TYPESAFE_API_KEY`) |
+
+**TypeSafe decision model.** When the Intelligence Service has a TypeSafe key,
+the workspace decision sends it: the capture text (up to 4,000 characters), the
+names and descriptions of the candidate workspaces, and short snippets of your
+recent routing corrections and confirmations (where you moved or kept past
+captures). Without a key the choice is made by the providers above.
+
+A TypeSafe-only, per-pod consent flag existed briefly and was **withdrawn on
+2026-09-20**. It was inconsistent: every other provider in this table already
+receives capture content with no per-pod switch, and the flag gated the
+smallest flow (a 4,000-character routing question) while extraction — the
+larger one — stayed ungated. Per-vendor switches also do not scale to eight
+processors, and asking someone to consent to a vendor they cannot evaluate is
+not meaningful consent. WHICH processors the fleet uses is an operator
+decision, made in the Intelligence Service's provider configuration and
+disclosed in this table; a per-request `allowDecisionModel` flag remains the
+opt-out for individual routes. A pod-level AI-processing POLICY covering every
+provider uniformly is the intended replacement.
+
+The provider list is maintained in the Intelligence Service
+(`registry/seed-providers.ts`, `services/embeddings.ts`,
+`lib/decision-model.ts`); update this table when a provider is added.
 
 ---
 

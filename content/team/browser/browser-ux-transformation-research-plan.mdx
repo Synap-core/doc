@@ -1,0 +1,716 @@
+---
+title: 'Browser UX transformation research plan'
+description: >-
+  Code-grounded research plan for transforming Synap Browser into a usable pod
+  cockpit by reusing, refactoring, updating, and creating the right top-level
+  apps.
+section: general
+audience: product-design
+version: 0.1
+last_updated: '2026-06-19'
+tags: ['browser', 'ux', 'product', 'implementation', 'research']
+sidebar_position: null
+hide_title: false
+toc: true
+---
+
+# Browser UX transformation research plan
+
+**Status:** Research and implementation planning  
+**Primary surface:** Electron Browser  
+**Related guidelines:** [Browser UX productization guidelines](/team/browser/browser-ux-productization-guidelines)  
+**Related proposal:** [Browser daily cockpit UX proposal](/team/browser/daily-cockpit-ux-proposal)
+
+## One sentence
+
+Synap already has most of the backend and UI capabilities needed for the product we want; the transformation is mainly an information architecture, surface composition, and component quality pass that turns platform primitives into a coherent daily cockpit.
+
+## Research conclusion
+
+We should not rebuild Synap from scratch. The codebase already contains the right deep primitives:
+
+- unified capture pipeline
+- editable bento home
+- data/profile/view browsing
+- focus sessions with proposals, artifacts, links, runs, and events
+- activity/event chain and proposal detail surfaces
+- data model graph
+- workflows, agents, playbooks, connectors, vault, import, and cell studio
+- a shell that can open apps, entities, views, cells, and side panels
+
+The current problem is that users meet these as a set of implementation nouns. The product should expose a smaller set of user jobs:
+
+```text
+Home
+Capture
+Library
+Work
+Build
+Activity
+Settings
+```
+
+The next implementation should create this top-level grammar while reusing existing packages wherever possible.
+
+## What was inspected
+
+### Browser app registry
+
+- `browser/electron/renderer/src/apps/manifest.ts`
+- `browser/electron/renderer/src/stores/appRegistry.ts`
+- `browser/electron/renderer/src/components/layout/BrowserV2Shell/useBrowserV2ShellData.tsx`
+- `browser/electron/renderer/src/components/layout/BrowserV2Shell/Host.tsx`
+- `browser/electron/renderer/src/hooks/useKeyboardShortcuts.ts`
+
+### Capture
+
+- `browser/electron/renderer/src/components/overlay/QuickCaptureOverlay.tsx`
+- `browser/electron/renderer/src/components/modals/QuickCaptureModal.tsx`
+- `browser/electron/renderer/src/components/widgets/QuickCaptureWidget.tsx`
+- `browser/electron/renderer/src/components/widgets/CaptureFeedWidget.tsx`
+- `synap-app/packages/core/intake-ui/src/components/IntakeWidget.tsx`
+- `synap-app/packages/core/intake-ui/src/hooks/useIntakeFlow.ts`
+
+### Home and bento
+
+- `browser/electron/renderer/src/apps/DashboardApp.tsx`
+- `browser/electron/renderer/src/components/views/DashboardView/index.tsx`
+- `synap-app/packages/views/bento/src/utils/default-home-bento.ts`
+- `synap-app/packages/views/bento/src/components/BentoGrid.tsx`
+- `synap-app/packages/views/bento/src/components/BentoBlock.tsx`
+- `synap-app/packages/views/bento/src/widgets/registry.tsx`
+- `synap-app/packages/views/bento/src/cells/registerBentoCells.ts`
+
+### Library, data, views, profiles
+
+- `browser/electron/renderer/src/apps/DataApp.tsx`
+- `browser/electron/renderer/src/apps/LibraryApp.tsx`
+- `browser/electron/renderer/src/apps/ProfilesApp.tsx`
+- `browser/electron/renderer/src/apps/ViewsApp.tsx`
+- `synap-app/packages/apps/data/src/components/DataApp.tsx`
+- `synap-app/packages/apps/data/src/components/DataGridView.tsx`
+- `synap-app/packages/apps/data/src/components/DataListView.tsx`
+- `synap-app/packages/apps/views-management/src/components/ViewsManagementPage.tsx`
+
+### Work
+
+- `browser/electron/renderer/src/apps/SessionsApp.tsx`
+- `synap-app/packages/core/focus-sessions/src/components/SessionRoom.tsx`
+- `synap-app/packages/core/focus-sessions/src/buildSessionRoomData.ts`
+
+### Activity, proposals, reactions
+
+- `browser/electron/renderer/src/apps/reactions/ReactionsApp.tsx`
+- `browser/electron/renderer/src/providers/browserCellSetup.ts`
+- `browser/electron/renderer/src/components/command-surface/CommandSurface.tsx`
+
+### Build and power tools
+
+- `browser/electron/renderer/src/apps/DataStructureApp.tsx`
+- `browser/electron/renderer/src/apps/CellStudioApp.tsx`
+- `browser/electron/renderer/src/apps/WorkflowsApp.tsx`
+- `browser/electron/renderer/src/apps/agents/AgentsApp.tsx`
+- `browser/electron/renderer/src/apps/PlaybooksApp.tsx`
+- `browser/electron/renderer/src/apps/ImportApp.tsx`
+- `browser/electron/renderer/src/apps/VaultApp.tsx`
+- `synap-app/packages/features/connectors/src/components/ConnectorGrid.tsx`
+
+### Settings
+
+- `browser/electron/renderer/src/components/views/SettingsView.tsx`
+
+## Target information architecture
+
+| Target surface | User mental model | Current implementation base | Product action |
+|---|---|---|---|
+| Home | "What matters now?" | `dashboard`, home bento, capture-flow, proposals, sessions, feed widgets | Refactor default layout and widget grammar |
+| Capture | "Put anything in Synap" | `IntakeWidget`, capture pipeline, quick capture overlay/modal/widget | Update into universal multi-input primitive |
+| Library | "Browse what my pod knows" | `DataApp`, `LibraryApp`, `ProfilesApp`, `ViewsApp`, entity cards, profile dashboards | Consolidate under one user-facing Library shell |
+| Work | "Run/continue meaningful work" | `SessionsApp`, focus sessions, room/channel UI, artifacts, proposals | Refactor sessions around output-first rooms |
+| Build | "Add power by goal" | Data Structure, Views, Bento, Workflows, Agents, Playbooks, Import, Vault, Cell Studio, Connectors | Create a new Build landing shell that routes to existing tools |
+| Activity | "What happened and why?" | command surface, reactions, proposal detail, event chain | Keep and clarify as provenance/history |
+| Settings | "Account, pod, privacy, system" | `SettingsView` | Simplify after Build absorbs product configuration |
+
+## Surface research
+
+### 1. Capture
+
+**Current state**
+
+Capture is one of the strongest parts of the product. Browser quick capture already delegates to shared `IntakeWidget`, and `IntakeWidget` delegates the state machine to `useStructureCapture` from the capture pipeline.
+
+The existing shape is correct:
+
+- one capture renderer
+- variants for full and bar layouts
+- inline or modal review
+- seeded text, URL, page HTML, follow-up, and proposal review
+- dedup and AI fallback paths
+- resulting entities can be opened through the surface runtime
+
+**What to reuse**
+
+- `@synap-core/intake-ui`
+- `@synap-core/capture-pipeline`
+- `QuickCaptureOverlay`
+- `QuickCaptureModal`
+- `QuickCaptureWidget`
+- `CaptureFeedWidget`
+
+**What to update**
+
+- Make the home widget a rich capture block, not just a button.
+- Add attachment/file/photo input as a first-class capture source, not just a visual toggle.
+- Add microphone input as a capture source with the same review pipeline.
+- Add object-linking chips: link capture to an entity, session, workspace, source, or view.
+- Add routing chips: auto-route, route to workspace, route to profile, route to session, route to inbox.
+- Keep the "not written until you confirm" trust message visible wherever capture can mutate the pod.
+
+**What to create**
+
+No new capture system. Create only missing adapters around the shared capture pipeline:
+
+- file/blob adapter
+- voice/transcript adapter
+- route-chip metadata adapter
+- object-link context adapter
+
+**Product rule**
+
+Every input path should feel like the same object in different sizes:
+
+```text
+quick overlay = full capture
+home widget = cockpit capture
+command bar = compact capture
+browser save popover = contextual capture
+import = batch capture
+mobile widget = tiny capture
+```
+
+### 2. Home and bento cockpit
+
+**Current state**
+
+Home is already technically aligned with the product philosophy. `DashboardApp` is a thin wrapper over `DashboardView`, which uses shared bento cells. The default home bento already contains a greeting, capture-flow, recent items, active sessions, proposals, activity chart, and stats.
+
+The issue is not capability. The issue is how the layout reads. It still feels like a developer dashboard of widgets, while the desired experience is closer to a daily paper: headings, rows, calm sections, and cards that explain why they matter.
+
+**What to reuse**
+
+- `@synap-core/bento-view`
+- `BentoGrid`
+- `BentoBlock`
+- `default-home-bento.ts`
+- capture-flow cell registration
+- existing cells for greeting, active sessions, proposals, entity lists, session goal bar, AI inbox, and activity
+
+**What to update**
+
+- Redesign `default-home-bento.ts` around the target sections:
+  - capture
+  - needs attention
+  - continue
+  - Synap noticed
+  - organized today
+- Update bento block chrome and density so sections read as paper blocks, not editable developer tiles.
+- Give important widgets a title row, summary text, and route to the detailed page.
+- Preserve editability, but make edit controls secondary.
+- Improve card list primitives so Library, Home, Work, and Build share the same card quality.
+
+**What to create**
+
+- New bento presets for:
+  - pod home
+  - workspace home
+  - quiet day
+  - active day
+- Possibly a `CockpitSection` composition primitive, backed by existing bento blocks.
+
+**Product rule**
+
+Home should answer:
+
+```text
+What can I capture?
+What needs my decision?
+What should I continue?
+What did Synap understand?
+Where can I go deeper?
+```
+
+### 3. Library
+
+**Current state**
+
+There are two overlapping directions:
+
+- `DataApp` is the active powerful browser for entities, profiles, structured views, graph/table/calendar/timeline modes, saved lenses, and data structure toggles.
+- `LibraryApp` is a calmer entity gallery, but views are disabled behind `SHOW_VIEWS = false`.
+
+The product direction says the user-facing label should be Library. Under the hood, Library should compose Data, Profiles, Saved Views, Search, Entity Cards, and Graph.
+
+**What to reuse**
+
+- `@synap-core/data-app`
+- `DataApp`
+- `LibraryApp` where its calmer gallery code is useful
+- `ProfilesLauncherCell`
+- `ViewsApp`
+- `ViewsManagementPage`
+- entity detail side panels
+- profile dashboard cells
+- generic list/grid/table/graph renderers
+
+**What to update**
+
+- Rename the top-level user label from Data to Library.
+- Add a persistent left sidebar:
+  - profiles
+  - saved views
+  - recent
+  - open decisions
+  - reading queue
+  - people graph
+- Use the better card-list pattern from the design exploration:
+  - profile icon
+  - type label
+  - title
+  - key metadata
+  - relationship count
+  - workspace/source hint
+- Make saved views first-class inside Library rather than a separate mental model.
+- Keep advanced render modes, but progressively reveal them.
+
+**What to create**
+
+Create a consolidated `Library` shell. It can be implemented as:
+
+```text
+browser Library route
+  -> shared Library shell
+    -> DataApp browsing primitives
+    -> ViewsManagementPage saved views
+    -> ProfilesLauncherCell/profile sidebar
+    -> entity card/list/table/graph renderers
+```
+
+This is a composition refactor, not a data rewrite.
+
+**Product rule**
+
+Library should not feel like storage. It should feel like the shape of the user's knowledge:
+
+```text
+Browse by what it is, not where it is stored.
+```
+
+### 4. Work
+
+**Current state**
+
+Sessions are already the right foundation. `SessionsApp` has session overview, starter prompts, detail, proposals, artifacts, events, links, runs, run again, save as playbook, expected outputs, and channel opening. The shared `SessionRoom` already maps raw session data into a room model and is explicitly designed around Intent, Frame, Process, and Deliverable.
+
+The gap is visual and experiential. The current session experience is close to the target concept, but it needs to make outputs and decisions more central.
+
+**What to reuse**
+
+- `SessionsApp`
+- `@synap-core/focus-sessions`
+- `SessionRoom`
+- `buildSessionRoomData`
+- channels/room UI
+- proposals
+- artifacts
+- playbooks
+
+**What to update**
+
+- Make the session header output-first:
+  - goal
+  - status
+  - expected outputs
+  - participants/agents
+  - pause/run again/save as playbook
+- Make the live room the main process surface while running.
+- Make durable artifacts the main surface when outputs exist.
+- Promote proposals into a right rail or top attention module, not a buried list.
+- Make sources, event timeline, and links consistent secondary panels.
+- Ensure every artifact can be promoted to Library, Document, Table, Dashboard, Decision, or View.
+
+**What to create**
+
+- Work overview page, if SessionsApp cannot be adapted cleanly:
+  - continue sessions
+  - running rooms
+  - recent outputs
+  - saved playbooks
+  - agent work waiting for approval
+
+**Product rule**
+
+Work is not chat. Work is an output-producing room with memory, tools, proposals, and durable artifacts.
+
+### 5. Build
+
+**Current state**
+
+The capabilities exist but are scattered:
+
+- Data Structure manages profiles, properties, relations, and profile packs.
+- Views and Bento manage interfaces.
+- Cell Studio builds custom cells.
+- Workflows and Reactions manage automation.
+- Agents and Playbooks manage AI behavior.
+- Import, Vault, and Connectors manage data ingress and guarded access.
+- Settings also contains many power/configuration surfaces.
+
+This is where we should create a new top-level app.
+
+**What to reuse**
+
+- `DataStructureApp`
+- `ViewsApp`
+- bento dashboards
+- `CellStudioApp`
+- `WorkflowsApp`
+- Reactions automation cells
+- `AgentsApp`
+- `PlaybooksApp`
+- connectors UI
+- `ImportApp`
+- `VaultApp`
+
+**What to update**
+
+- Group tools by user goal, not internal package:
+  - Data model
+  - Interfaces
+  - Automation
+  - AI
+  - Connections
+- Each group card should explain the job, show common entry points, and route to existing detail pages.
+- Suggested builds should appear at the top:
+  - create a property
+  - create a saved view
+  - turn repeated approvals into automation
+  - save a session as a playbook
+  - reconnect a source
+
+**What to create**
+
+Create `BuildApp` in Browser.
+
+Proposed route map:
+
+| Build group | Routes to |
+|---|---|
+| Data model | `dataStructure`, profile detail, property detail, relation type detail, profile packs |
+| Interfaces | `views`, bento dashboards, `cellStudio`, view/cell detail surfaces |
+| Automation | `workflows`, automation cells, reactions automation management |
+| AI | `agents`, `playbooks`, governance, skills, proactive preferences |
+| Connections | `import`, connectors, `vault`, sync, source health |
+
+**Product rule**
+
+Build should not be a developer page. It should be the answer to:
+
+```text
+What do you want Synap to become better at?
+```
+
+### 6. Activity
+
+**Current state**
+
+Activity is conceptually strong. The command surface coalesces proposals, agent runs, events, and data flow by correlation ID, with persona lenses, facets, session filters, and side-docked proposal detail. Reactions has tabs for Pulse, Automations, Connections, and Health.
+
+The direction should be to keep Activity as provenance/history, while Home and Work own "Needs attention".
+
+**What to reuse**
+
+- `command-surface` cell
+- `CommandSurface`
+- `ActivityCard`
+- `proposal-detail`
+- event chain and proposal feeds
+- Reactions management cells where still useful
+
+**What to update**
+
+- Rename and position Activity as "what happened and why".
+- Keep proposal review available, but do not make Activity the primary inbox.
+- Fold Reactions management cells into Activity or Build depending on user goal.
+- Improve Activity cards so they explain:
+  - actor
+  - action
+  - object
+  - risk
+  - decision status
+  - resulting entity/artifact
+
+**What to create**
+
+No new Activity app for now. Consolidate around command surface.
+
+**Product rule**
+
+Home says what needs a decision. Activity explains the chain of events.
+
+### 7. Settings
+
+**Current state**
+
+Settings is overloaded. It contains account/system settings, workspace settings, proactive AI, profiles, connectors, integrations, packages, import, renderers, capabilities, developer, diagnostics, pod redundancy, privacy, and more.
+
+This is not a criticism of the implementation; it is a sign that power features have not yet been moved into the product surfaces where they belong.
+
+**What to keep in Settings**
+
+- account
+- pod identity
+- workspace basics
+- members and access
+- appearance
+- privacy
+- security
+- subscription
+- API keys
+- diagnostics
+- developer mode
+- about
+
+**What to move out**
+
+| Current settings area | Target home |
+|---|---|
+| profiles | Build / Data model |
+| property/renderers/capabilities | Build / Interfaces or Data model |
+| connectors/integrations/sync | Build / Connections |
+| import | Capture or Build / Connections |
+| proactive AI | Build / AI plus Home preferences |
+| agent systems | Build / AI |
+| packages/extensions | Build / Interfaces or Connections |
+
+**Product rule**
+
+Settings is for configuring the system. Build is for extending what Synap can do.
+
+## App action matrix
+
+| Current app/surface | Action | Target role |
+|---|---|---|
+| `dashboard` | Refactor | Main Home cockpit |
+| `pod-home` | Refactor/clarify | Pod/workspace switcher and pod overview, not competing Home |
+| `data` | Rename/reframe | Library base implementation |
+| `library` | Reuse selectively | Calmer gallery/card code for Library |
+| `profiles` | Fold in | Library sidebar and Build/Data model entry |
+| `views` | Fold in | Library saved views and Build/Interfaces |
+| `dataStructure` | Keep, route through Build | Data model workbench |
+| `sessions` | Promote/refactor | Work |
+| `chat`/`channels` | Reframe | Work rooms and companion, not necessarily top-level |
+| `command-surface` | Keep | Activity |
+| `reactions` | Consolidate | Activity/Build management cells |
+| `proposals` | Keep hidden/detail | Needs attention cards and proposal detail |
+| `workflows` | Keep, route through Build | Automation |
+| `agents` | Keep, route through Build | AI |
+| `playbooks` | Keep, route through Build and Work | AI/work templates |
+| `import` | Keep, route through Capture/Build | Connections and batch capture |
+| `vault` | Keep, route through Build/Settings | Guarded credentials and access |
+| `cellStudio` | Keep, route through Build | Interface/cell creation |
+| `settings` | Simplify | Account, pod, security, privacy, system |
+| `whiteboard` | Keep secondary | Workspace/interface artifact, not core rail by default |
+| `browser` | Keep | Web capture and browsing context |
+
+## Navigation refactor
+
+Current rail exposes implementation nouns:
+
+```text
+Workspaces, Home, Data, Whiteboard, Chat, Activity
+```
+
+Recommended primary navigation:
+
+```text
+Home
+Library
+Work
+Activity
+```
+
+Recommended global actions:
+
+```text
+Capture
+Search
+Ask Synap
+Command palette
+```
+
+Recommended secondary/power:
+
+```text
+Build
+Settings
+Browser
+Whiteboard
+Vault
+Terminal, only in dev mode
+```
+
+Keyboard shortcuts should be updated with the same mental model:
+
+| Intent | Shortcut target |
+|---|---|
+| Home | `dashboard` |
+| Capture | quick capture overlay |
+| Library | Library/Data route |
+| Work | `sessions` |
+| Activity | `command-surface` |
+| Build | new `build` app |
+| Settings | `settings` |
+
+## Implementation phases
+
+### Phase 1: Navigation and labels
+
+Goal: make the product shape visible before deep visual polish.
+
+- Rename the user-facing Data rail item to Library.
+- Promote Work/Sessions into the primary navigation.
+- Add Build as a secondary/power entry.
+- Decide whether Browser and Whiteboard stay primary or move secondary.
+- Update command palette and keyboard shortcut labels.
+- Keep old app IDs for compatibility where possible.
+
+### Phase 2: Universal capture
+
+Goal: make capture feel like one object everywhere.
+
+- Update `QuickCaptureWidget` into the home capture card.
+- Add routing chips and object-link context.
+- Thread files/blobs through capture pipeline.
+- Add microphone/transcript capture.
+- Ensure all capture variants share the same review and proposal behavior.
+
+### Phase 3: Home cockpit bento
+
+Goal: turn default Home from a dashboard into a daily cockpit.
+
+- Replace default home layout with the new cockpit sections.
+- Create active day and quiet day variants.
+- Update bento block/card styling.
+- Improve proposal/session/feed widgets.
+- Keep edit mode, but make reading mode the default experience.
+
+### Phase 4: Library consolidation
+
+Goal: one place to browse entities, profiles, saved views, and graph.
+
+- Build a consolidated Library shell.
+- Use profile/sidebar navigation.
+- Bring saved views into the Library mental model.
+- Improve card/list components.
+- Keep advanced view modes available but secondary.
+
+### Phase 5: Work sessions
+
+Goal: make sessions feel like output-producing rooms.
+
+- Update session overview cards.
+- Redesign session detail around goal, expected outputs, proposals, room, sources, and durable artifacts.
+- Promote artifact-to-Library flows.
+- Make playbook creation a natural follow-up.
+
+### Phase 6: Build app
+
+Goal: expose power without overwhelming first use.
+
+- Create `BuildApp`.
+- Add five goal cards: Data model, Interfaces, Automation, AI, Connections.
+- Add Synap-suggested build cards.
+- Route each card to existing tools and detail surfaces.
+- Move product configuration entry points out of Settings gradually.
+
+### Phase 7: Settings simplification
+
+Goal: make Settings quiet again.
+
+- Keep account, pod, workspace basics, privacy, security, subscription, diagnostics, developer.
+- Link to Build for configuration that changes product capability.
+- Remove duplicate app-like settings sections after Build routes exist.
+
+## Package impact
+
+| Package/repo | Expected changes |
+|---|---|
+| `browser` | app manifest, shell rail, keyboard shortcuts, BuildApp, Library route, wrappers, settings cleanup |
+| `synap-app/packages/core/intake-ui` | capture variants, routing chips, attachment/mic UI |
+| `synap-app/packages/core/capture-pipeline` | file/blob/mic/object-link metadata threading |
+| `synap-app/packages/views/bento` | default home bento, block chrome, cockpit presets |
+| `synap-app/packages/apps/data` | Library composition, card/list quality, saved views integration |
+| `synap-app/packages/apps/views-management` | saved views as Library sidebar section and Build/Interfaces route |
+| `synap-app/packages/core/focus-sessions` | session room layout and artifact prominence |
+| `synap-app/packages/features/proposals` | attention cards and review components |
+| `synap-app/packages/features/connectors` | Build/Connections route-ready connector panels |
+| `synap-app/packages/features/workflows` | Build/Automation route-ready surface |
+
+## Open product decisions
+
+### Should Capture be a rail item?
+
+Recommendation: no. Capture should be a global action and a home widget. It is too universal to live only as an app.
+
+### Should Browser stay primary?
+
+Recommendation: keep it accessible, but do not make it one of the primary product lanes unless the workspace is explicitly web-research-heavy. Browser is a context source, not the core product promise.
+
+### Should Whiteboard stay primary?
+
+Recommendation: keep it available as an artifact/interface surface, but not as a default top-level lane until its role in Work or Interfaces is clearer.
+
+### Should Proposals become an app again?
+
+Recommendation: no. Proposals are a trust mechanism. They should appear in Home, Work, Activity, and detail surfaces as needed.
+
+### Should DataApp be replaced by LibraryApp?
+
+Recommendation: not immediately. Build Library as a composition shell over the strongest DataApp primitives. Reuse the calmer LibraryApp code where it improves card browsing, but do not fork the data model.
+
+## Verification plan
+
+For each implementation phase:
+
+- run targeted TypeScript checks in the touched package
+- run Browser lint/typecheck for touched Electron surfaces
+- verify app manifest and command palette entries
+- open Browser locally and smoke test:
+  - rail navigation
+  - quick capture
+  - Library open entity detail
+  - Work open session detail
+  - Build route links
+  - Activity proposal detail
+  - Settings links to Build
+
+Visual verification should include:
+
+- desktop wide viewport
+- laptop viewport
+- narrow/mobile-like viewport where applicable
+- text overflow check on card titles, buttons, chips, and rail labels
+- bento layout stability when widgets load empty, loading, and populated states
+
+## Recommended immediate next step
+
+Start with Phase 1 and a thin Phase 6:
+
+1. Add `BuildApp` as a landing page that routes to existing tools.
+2. Rename/reframe Data as Library in navigation.
+3. Promote Sessions as Work.
+4. Keep Activity as command surface.
+5. Leave Settings intact but add cross-links out to Build.
+
+This gives the product the right skeleton quickly, without waiting for every component redesign.
+

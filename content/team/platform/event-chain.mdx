@@ -102,7 +102,7 @@ All event type strings are declared in `packages/events/src/event-types.ts` as `
 | `RELATION_CREATED`        | `relation.create.completed`         | Entity relation added           |
 | `RELATION_DELETED`        | `relation.delete.completed`         | Entity relation removed         |
 | `CAPTURE_COMPLETE`        | `capture.complete.completed`        | Quick capture pipeline finished |
-| `CONNECTOR_SYNC_COMPLETE` | `connector_sync.complete.completed` | Connector sync batch finished   |
+| `CONNECTOR_SYNC_COMPLETE` | `connector_sync.complete.completed` | Connector sync batch finished — for Google, emitted once per `runConnectionSync` run (not per write); the run's individual writes stay quiet by default (`origin:"sync"` skips outbound webhook delivery and cross-thread notifications unless a subscription opts in) |
 | `PROACTIVE_POST`          | `proactive.post.completed`          | Proactive message delivered     |
 | `NOTIFICATION_CREATED`    | `notification.created`              | Notification persisted          |
 | `CHANNEL_MESSAGE_CREATED` | `channel_message.created.completed` | Message posted via automation   |
@@ -129,7 +129,7 @@ interface AutomationTriggerConfig {
   filters?: Record<string, unknown>; // generic dot-notation key=value filters
 
   // connector_sync filters
-  provider?: string; // "google-calendar", "github"
+  provider?: string; // "google", "github"
   syncStatus?: "success" | "error" | "any";
 
   // capture filters

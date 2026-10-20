@@ -1,5 +1,5 @@
 ---
-title: 'Eve <-> Hub Auth Convergence'
+title: 'Eve &lt;-> Hub Auth Convergence'
 description: >-
   How @synap-core/auth became the public foundation for Eve, Hub, Studio,
   Canvas, CRM, DevPlane and the-arch — single sign-in across .synap.live,
@@ -8,14 +8,14 @@ description: >-
 section: general
 audience: developers
 version: 1.0+
-last_updated: '2026-05-18'
+last_updated: '2026-07-14'
 tags: []
 sidebar_position: null
 hide_title: false
 toc: true
 ---
 
-# Eve <-> Hub Auth Convergence
+# Eve &lt;-> Hub Auth Convergence
 
 **Date:** 2026-05-06
 **Status:** Canonical reference for cross-app SSO and the Synap-hosted vs self-hosted split. Companion to [Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx) — that doc covers what credentials Eve holds and which pod channel they belong on; this doc covers how those credentials are minted, shared across apps, and (for Eve only) mirrored to the host.
@@ -25,7 +25,7 @@ toc: true
 ## Related
 
 - [Eve Credentials & the Two-Channel Rule](./eve-credentials.mdx) — two-credential model, cookie-only for user actions, the agent vs user channel.
-- [Auth Architecture](./auth-architecture.mdx) — Better Auth on CP, Kratos on pod, handshake JWTs.
+- [Auth Architecture](./auth-architecture.mdx) — account-service and Pod-local auth boundaries.
 - [Eve — Per-Agent Hub Keys](./eve-agent-keys.mdx) — per-agent Hub keys (the agent side of the same secrets file).
 - [Hub Protocol](./hub-protocol.mdx) — REST surface the agent API key fronts.
 
@@ -49,7 +49,7 @@ Code references:
 
 There are exactly **two valid auth modes**:
 
-- **Synap-hosted** (default) — sign in with a Synap CP account, then connect to a pod via the CP handshake. Marketplace, cross-pod sharing, and entitlements work.
+- **Synap-hosted** (default) — sign in with a Synap CP account, select a Pod from the CP ledger, then exchange a short-lived assertion directly with that Pod. Marketplace, cross-pod sharing, and entitlements work.
 - **Self-hosted** — bypass the CP entirely, sign in with pod-local Kratos credentials. Apps that depend on the CP gracefully degrade.
 
 Eve is the same shape as the other apps with **one extra step**: after a successful CP sign-in it mirrors the session into `~/.eve/secrets.json` so the on-host CLI / daemon can act as the user without prompting again.
@@ -105,7 +105,7 @@ There are three storage layers. Each answers a different question and they don't
 
 **CP and pod auth are orthogonal.** Signing out of the CP (`clearSharedSession`) does not clear `synap:pods`, and vice versa. `EveAccountGate` considers a user authenticated if *either* a valid CP session OR a valid pod session exists for the current pod URL. The first three layers exist on every app using `@synap-core/auth`. The host layer is **Eve-only**.
 
-**`synap:pods` is written on every successful auth** (CP handshake, direct Kratos login, manual Kratos flow). `finalizeSession` calls `storePodSession` internally, so the pod sessions map is always populated regardless of which auth path was used.
+**`synap:pods` is written on every successful Pod auth** (direct federation exchange, direct Kratos login, or manual Kratos flow). `finalizeSession` calls `storePodSession` internally, so the Pod sessions map is populated regardless of the entry path.
 
 **`storeSharedSession` clears cookies before writing** to prevent duplicate `synap-session` / `SYNAP_INSTANCE_URL` cookies when switching pods (e.g., user accepts an invite on Pod B while still having a Pod A session in their browser).
 
@@ -160,11 +160,12 @@ operator                Eve UI / Hub          api.synap.live           pod.<doma
    │                        │ POST /api/auth/sync  │                        │
    │                        │ owner-gate → disk    │                        │
    │                        │                      │                        │
-   │ 2. pick a pod          │                      │                        │
-   ├───────────────────────►│ POST /pods/handshake │                        │
+   │ 2. pick a Pod          │                      │                        │
+   │                        │ reads CP Pod ledger  │                        │
    │                        ├─────────────────────►│                        │
-   │                        │ ◄── ES256 JWT ───────┤                        │
-   │                        │                      │ POST /api/handshake    │
+   │                        │ ◄── assertion ───────┤                        │
+   │                        │                      │ POST /api/federation/  │
+   │                        │                      │ exchange { assertion } │
    │                        ├──────────────────────────────────────────────►│
    │                        │ ◄── PodSession ────────────────────────────────┤
    │                        │                      │                        │
@@ -172,7 +173,7 @@ operator                Eve UI / Hub          api.synap.live           pod.<doma
    │                        │ now carries podUrl + workspaceId              │
 ```
 
-This is the `apps/hub/lib/auth.ts` flow, mirrored verbatim by `apps/studio`, `apps/canvas`, `apps/crm`, `apps/devplane`, `apps/base`, `the-arch`, and `eve-dashboard`. The shared bits — `signInToControlPlane`, `signUpToControlPlane`, `verifyCPTotp`, `fetchUserPods`, `handshakeConnectToPod` — all live in `@synap-core/auth` and are wrapped by each app's `lib/auth.ts` for app-specific persistence (e.g. Hub's `synap-cp-session` cookie for the platform proxy).
+This is the shared auth shape used by Hub, Studio, Canvas, CRM, DevPlane, the-arch, and Eve. `@synap-core/auth` restores the account session, fetches the account's Pod ledger, obtains a Pod-specific assertion, and sends the assertion directly to the Pod. App wrappers add only local persistence or host-sync behavior.
 
 ---
 
@@ -305,7 +306,7 @@ Note the asymmetry: we only react to **clear** (newValue === null), not to write
 There are exactly **three** legitimate places the user types or sees a token. Anything else is a smell — file an issue.
 
 1. **Sign-in screen "Self-hosted" tab.** Pod URL + Kratos email/password. The only place where the user explicitly opts out of the CP path. Implemented by `EveSignInScreen` (Eve) and the equivalent self-host card on Hub/Studio.
-2. **Settings → Advanced → "Connect remote pod"** *(deferred)*. Pod URL + credentials/handshake. Lets an operator point an existing Eve at a pod they didn't bootstrap from this Eve. Currently not implemented; tracked under §10.
+2. **Settings → Advanced → "Connect remote pod"** *(deferred)*. Pod URL plus direct credentials or an approved issuer flow. Lets an operator point an existing Eve at a Pod they did not bootstrap from this Eve. Currently not implemented; tracked under §10.
 3. **Settings → Pod → Agent API key viewer.** Read-only display of the `agents.eve.hubApiKey` slot, plus a "Rotate" button. For OpenClaw / external skills that need a Hub key. Never used to authenticate the dashboard itself.
 
 NOT legitimate:
@@ -332,7 +333,7 @@ NOT legitimate:
 | `hestia-cli` | `packages/eve-dashboard/app/(os)/components/auth/EveAccountGate.tsx` | Gate that branches between authenticated, self-hosted, and signed-out paths. |
 | `hestia-cli` | `packages/eve-dashboard/app/(os)/components/auth/PodConnectGate.tsx` | Pod-connect screen with "Claim this pod" CTA into the self-hosted form. |
 | `hestia-cli` | `packages/eve-dashboard/app/api/auth/sync/route.ts` | Owner-gated host secrets writer (§6). |
-| `hestia-cli` | `packages/eve-dashboard/app/api/pod/claim/route.ts` | Triggers `/pods/handshake` on the user's behalf to provision the user on the pod; session is carried by the Kratos cookie thereafter. |
+| `hestia-cli` | `packages/eve-dashboard/app/api/pod/claim/route.ts` | Uses the generic identity-link/receipt flow to claim an existing Pod relationship; the Pod session is created only by a direct Pod exchange. |
 | `hestia-cli` | `packages/@eve/dna/src/secrets-contract.ts` | Defines the `cp.userSession` slot, helpers `readCpUserSession` / `writeCpUserSession` / `clearCpUserSession`. |
 
 ---

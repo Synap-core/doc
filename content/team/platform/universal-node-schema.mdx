@@ -1,0 +1,225 @@
+# The Universal Node — Canonical Schema Proposal
+
+*Synap Technologies — Version 0.1 (Proposal), June 2026*
+*Companion to [The Homoiconic Substrate](/team/home/homoiconic-substrate) (roadmap item #2). Status: **proposed**, not yet built.*
+
+---
+
+## Why this document exists
+
+The white paper's most load-bearing claim is that *a cell, a view, an automation, and an agent are the same universal node differentiated by configuration.* Today they are **not** — they are seven-plus tables that each re-implement a subset of the same metadata (identity, ownership, trust, provenance, version, config, type-vs-instance), kept aligned by hand. The cost is visible in the verified consolidation gaps: `widget_definitions` ↔ `cell_instances` ↔ `views` overlap; `CAPABILITIES_MANIFEST` is hand-synced to `widget_definitions`; agent identity is split across `users` and an `agents` catalog; the workspace-definition JSON can't express behavior.
+
+This document defines the **one typed shape** those tables are all specializations of. It is the schema that, if adopted, *is the kernel* — and the test of its correctness is that adopting it lets us **delete** tables, columns, and hand-syncs.
+
+> **A note on a real tension (honesty first).** The May 2026 "Profile Renderer" North Star listed *"mixing cells (sub-page units) and renderers (page-level) in one registry"* as an explicit anti-goal — a guard against an Airtable-style *views-vs-interfaces* dual paradigm. The June 2026 cell-consolidation work then found that *"Views are already cells"* (`CellRenderer` is one render path for bento/panel/full-page/embed). This proposal sides with the **later** finding and reconciles the two: the anti-goal was against **two competing paradigms with two registries**; the Universal Node is the **opposite** — *one* envelope with *typed kinds*, which removes the dual paradigm rather than creating it. A view is not a second paradigm; it is a cell whose body is a query + projection. See §3.2.
+
+---
+
+## 1. The three unifications
+
+The Universal Node is not "one big table for everything." It is three orthogonal unifications layered together. Keeping them distinct is what makes the model powerful instead of a god-object.
+
+- **U1 — The Envelope.** Every node, whatever its kind, carries the *same* metadata: identity, ownership/scope, provenance, trust, version, lifecycle. This is the duplicated-across-tables surface we collapse.
+- **U2 — The Definition/Instance axis.** Every kind has *types* and *instances*, and the relationship between them is resolved by *one* layered-overlay rule — the rule that already exists as `getEffectiveProperties` and `getEffectiveRenderer`, generalized to all node config.
+- **U3 — The Atom Registry.** A node's `typeKey` ultimately resolves to either a *composition* of other nodes or a code-backed **atom** (a cell renderer, an automation node type, an agent tool, a kernel operation). The atom set is the finite, code-owned vocabulary; everything else is data. This is the boundary from white paper §5.
+
+---
+
+## 2. U1 — The Node envelope
+
+The shared envelope. Every concrete kind embeds this; nothing re-invents it.
+
+```ts
+/** The universal metadata every node carries, regardless of kind. */
+interface NodeEnvelope {
+  id: string;                       // uuid
+  kind: NodeKind;                   // discriminant — see §3
+  typeKey: string;                  // the node's TYPE: profile slug | cell renderer key | agentType | trigger key
+  name: string;
+  description?: string;
+
+  // Ownership & scope (today: re-implemented per table, "workspaceId null = system" everywhere)
+  userId: string;
+  workspaceId: string | null;       // null = pod-global / system-wide
+  scope: 'system' | 'shared' | 'workspace' | 'user';
+
+  // Provenance — WHO authored this node (today: only cell_instances has createdByKind)
+  createdByKind: 'human' | 'ai_agent' | 'system';
+  createdByUserId: string;
+  agentUserId?: string;             // the acting agent identity, if AI-authored
+  sourceProposalId?: string;        // the proposal whose execution materialized this node
+  correlationId?: string;           // ties node back to the event spine
+
+  // Trust — how much authority this node's code/config is granted
+  // (today: trustLevel on widget_definitions AND cell_instances, separately)
+  trustLevel: 'trusted' | 'installed' | 'generated';
+
+  // Lifecycle (today: version + deletedAt repeated on every table)
+  version: number;                  // optimistic lock
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;        // soft-delete → reversibility
+}
+
+type NodeKind =
+  | 'profile' | 'entity' | 'relation'   // data plane
+  | 'cell'                              // surface plane (view = cell, bento = cell, widget = cell)
+  | 'automation'                       // behavior plane (command = automation kind)
+  | 'agent' | 'channel';               // actor plane
+```
+
+**What this collapses (verified duplication):** `trustLevel` (2 tables today), `createdByKind` (1 table, should be all), `version`/`deletedAt`/`workspaceId-null-is-system`/`scope` (re-declared on profiles, views, widget_definitions, cell_instances, channels, users-as-agents). After U1, these live once.
+
+---
+
+## 3. The kinds — each a typed body over the envelope
+
+A node is `NodeEnvelope & { body: KindBody }` where the body is selected by `kind`. The bodies are **not new designs** — they are the *existing* schemas, now sitting on the shared envelope.
+
+### 3.1 Data plane — `profile`, `entity`, `relation`
+
+```ts
+interface ProfileBody {                  // a TYPE (today: profiles table)
+  parentProfileId?: string;              // inheritance
+  defaultValues: Record<string, unknown>;
+  propertyDefs: PropertyDef[];           // the field schema (today: property_defs, 3-layer scoped)
+  listRenderer?: RendererRef;            // → a cell typeKey + config
+  detailRenderer?: RendererRef;
+}
+interface EntityBody {                    // an INSTANCE (today: entities table)
+  properties: Record<string, unknown>;   // validated against profile.propertyDefs
+}
+interface RelationBody {                  // an EDGE (today: relations table)
+  sourceRef: NodeRef;                     // polymorphic: entity | cell
+  targetRef: NodeRef;
+  relationType: string;
+}
+```
+`profile : entity` is the canonical Definition/Instance pair. `property_def` folds into `ProfileBody.propertyDefs` (it is the profile's field schema, already 3-layer scoped via `(profileId × workspaceId)`).
+
+### 3.2 Surface plane — `cell` (view, bento, widget all fold here)
+
+```ts
+interface CellBody {
+  // typeKey (on the envelope) selects the renderer atom (§4): 'kanban' | 'table' | 'calendar'
+  // | 'graph' | 'bento' | 'entity-detail' | 'chart' | 'iframe' | 'frame' | <generated> ...
+  rendererType: 'builtin' | 'native' | 'iframe' | 'frame';  // from widget_definitions
+  config: Record<string, unknown>;        // the render config (today: views.config / cell_instances.config)
+
+  // present only when this cell renders a collection (i.e. it IS a view):
+  scopeProfileIds?: string[];             // which entity types (today: views.scopeProfileIds)
+  query?: EntityQuery;                    // filters/sorts/search/groupBy (today: views.query)
+
+  // composition (today: views.embeddedViewIds / bentoLayout):
+  children?: CellPlacement[];             // a bento/composite cell embeds other cells
+
+  // canvas (today: views canvas fields):
+  yjsRoomId?: string;
+}
+```
+
+**The reconciliation, concretely:**
+- A **widget definition** (cell TYPE) = a `cell`-kind node with `scope:'system'`, `workspaceId:null`, and a `configSchema` describing valid `config`. This *replaces* the `widget_definitions` table **and** the `CAPABILITIES_MANIFEST`↔table hand-sync: the manifest becomes a seed of system-scoped cell-type nodes.
+- A **placed cell** (`cell_instances`) and a **saved view** (`views`) are both `cell`-kind **instances** — the only difference is that a view-instance has `scopeProfileIds` + `query` populated (it renders a collection) and a widget-instance does not (it renders a fixed thing). One table, one render path (`CellRenderer`), differentiated by whether the body carries a query. **This is "Views are already cells," made structural.**
+
+### 3.3 Behavior plane — `automation` (command folds here)
+
+```ts
+interface AutomationBody {
+  trigger: TriggerRef;                    // typeKey = trigger event, e.g. 'entity.create.completed'
+  flowDefinition: { nodes: FlowNode[]; edges: FlowEdge[] };  // 12 node types incl. loop, sub_automation
+  enabled: boolean;
+}
+```
+A **command** is an automation whose trigger is `command.execute`. The `flowDefinition` already exists; the work is *making it expressible in the workspace-definition JSON* (white paper roadmap #1). FlowNode types that reference an agent (`skill`, future `agent` node) make the actor plane composable from the behavior plane.
+
+### 3.4 Actor plane — `agent`, `channel`
+
+```ts
+interface AgentBody {                     // an agent is a node AND a users-row (see migration note)
+  systemPrompt: string;
+  toolCategories: ToolCategory[];         // capability categories (resolve to tool atoms §4)
+  disabledTools?: string[]; extraTools?: string[];
+  maxSteps: number;
+  modelId?: string; temperature?: number;
+  parentAgentId?: string;                 // durable lineage (today: schema-only, unused)
+  governanceMode?: 'standard' | 'agent-owned';
+}
+interface ChannelBody {
+  channelType: 'thread'|'personal'|'sub_thread'|'feed'|'external'|'agent_collab'|'group';
+  members: ChannelMember[];               // memberId may be human OR agent (both are nodes)
+  contextRefs: NodeRef[];                 // what this channel is "about"
+}
+```
+An **agent definition** (`AGENT_DEFINITIONS` in code + `agent_configs`) is an `agent`-kind node of `scope:'system'|'workspace'`; an **agent instance** is the `users`-row agent. `agentType` stays the `typeKey`. `channel_members` carries the per-member `canDraft/canPropose/canAct` capability grants, which feed the governance membrane unchanged.
+
+---
+
+## 4. U3 — The Atom Registry (the finite, code-backed vocabulary)
+
+A node's `typeKey` resolves, at the leaves, to an **atom**: a primitive that requires code. Everything that is *not* an atom is a *composition* of nodes (pure data). The atom set is small, enumerable, and owned by engineers; it is the precise boundary of "any app from JSON."
+
+| Atom class | What it is | Current home | Count is bounded by |
+|---|---|---|---|
+| **Renderer atoms** | A cell's actual render code (`kanban`, `graph`, `chart`, `entity-detail`, `iframe`, `frame`) | `@synap/capabilities` manifest / cell-runtime | # of built-in cell renderers |
+| **Flow-node atoms** | The 12 automation node types (trigger, condition, loop, transform, fetch, query, skill, sub_automation, …) | `schema/automations.ts` | fixed set, grows rarely |
+| **Tool atoms** | The agent capabilities (search, create_entity, dispatch_agent, proactive_post, …) grouped by category | IS `tool-categories.ts` | # of registered tools |
+| **Kernel-op atoms** | The membrane's verbs (`create/update/delete/relate/query/render/propose`) | `permission-check.ts` action map | tiny, ~7 |
+
+```ts
+interface AtomRegistryEntry {
+  atomKey: string;            // matches a node typeKey
+  atomClass: 'renderer' | 'flow-node' | 'tool' | 'kernel-op';
+  configSchema: JSONSchema;   // validates a node's config/body against the atom — enables the AI repair loop
+  trustLevel: 'trusted';      // atoms are code → always trusted; generated nodes compose atoms
+  deps?: string[];
+}
+```
+
+**The single rule for adding an atom** (white paper §5): a new atom is added through a **governed proposal** — the same membrane as all other writes. This closes the loop: the one escape hatch from the JSON closure runs through the same gate as the paths within it. `configSchema` per atom is also what powers reliable AI authoring: the agent emits a node, the schema validates it, errors feed the repair loop, and only a valid node executes as a proposal.
+
+---
+
+## 5. The spine: one type through kernel, governance, authoring, and agents
+
+The reason this is *the* kernel and not just a refactor: the Node is simultaneously the unit of all four subsystems.
+
+- **Data kernel** — a node is an entity/profile/view/cell.
+- **Governance** — a **proposal** is a *proposed node operation* (`{ op: 'create'|'update'|'delete', node: Node }` or a composite `{ operations: NodeOp[] }`). This is *already* what the `proposals.data` envelope stores; the Node type makes it formal.
+- **Authoring** — a **workspace definition** is a *bundle of nodes* (`{ nodes: Node[], relations: RelationBody[] }`). `createWorkspaceFromDefinition` becomes "instantiate this bundle," and — critically — once `automation`/`channel`/`agent` are node kinds, the definition JSON expresses **behavior**, closing white-paper roadmap #1 *for free*.
+- **Agents** — an agent is a node that *emits node operations*. Recursion (an agent creating an agent) is just a node-create proposal where the created node has `kind:'agent'`.
+
+```ts
+type NodeOp = { op: 'create' | 'update' | 'delete'; node: Node };
+type Proposal = { operations: NodeOp[]; reasoning: string; /* envelope */ };
+type WorkspaceDefinition = { meta: {...}; nodes: Node[]; relations: RelationBody[] };
+// agent output  → NodeOp[]  → checkPermissionOrPropose  → Proposal  → replay  → live nodes
+```
+
+One type flows through all of it. That is the homoiconic substrate, expressed as a schema.
+
+---
+
+## 6. Migration implications (what this lets us delete)
+
+The correctness test for this proposal is deletion. If adopted in full:
+
+- **Merge** `widget_definitions` + `cell_instances` + `views` → `nodes WHERE kind='cell'` (type = system-scoped cell node; instance = workspace-scoped cell node; view = cell node with `scopeProfileIds`+`query`). *Delete two tables.*
+- **Delete the `CAPABILITIES_MANIFEST` ↔ `widget_definitions` hand-sync** — the manifest seeds system cell-type nodes; one source of truth. *(Verified gap closed.)*
+- **Fold** `property_defs` into `ProfileBody.propertyDefs` resolution (keep the 3-layer scope rule). *Possibly keep the table as a normalized projection; remove the conceptual split.*
+- **Unify agent identity** — `agents` catalog + `agent_configs` + `users`-row agent → `nodes WHERE kind='agent'` (definition) + the `users` row (instance, for auth/identity). *Delete the `agents` catalog table; finish the dual-write migration.*
+- **Make `parentAgentId` real** — durable agent lineage becomes a relation between agent nodes; enables governed durable spawn.
+- **Extract one governance policy** — the `@synap/jobs` forked `DEFAULT_AUTO_APPROVE`/`ADMIN_ACTIONS` mirror moves to a shared lower package both `api` and `jobs` import. *Delete the fork.*
+- **Unify channel membership** — `agent_collab`'s `metadata.participants` array → `channel_members` rows (which already model human/agent uniformly). *Delete the legacy array path.*
+
+None of these is required *atomically*. The envelope (U1) can be introduced as a shared mixin first; kinds migrate one at a time behind it. Sequencing is in the [Consolidation Plan](/team/platform/substrate-consolidation-plan).
+
+---
+
+## 7. Open decisions (surface to the founder)
+
+1. **Does `relation` stay a top-level kind or fold into the graph as edges-only?** Proposal: keep as a kind (it has its own envelope/provenance) but it is the one kind without a Definition/Instance split.
+2. **Is `command` a kind or an `automation` sub-type?** Proposal: sub-type (trigger=`command.execute`) — fewer kinds, same power.
+3. **Do we physically merge cell tables, or introduce a `nodes` view over them first?** Proposal: logical envelope first (a shared TS type + columns), physical table merge later, to de-risk. The plan defaults to this.
+4. **`property_defs`: keep as a table (normalized, queryable for the data-structure viewer) or inline into profile body JSON?** Proposal: keep the table as the projection, treat it as `ProfileBody.propertyDefs` conceptually.
+5. **Where does `RendererRef` (from the Profile-Renderer North Star) live?** Proposal: it *is* a reference to a `cell`-kind node (`{ typeKey, config }` = config-path; `{ rendererType:'iframe', config:{fileRef} }` = file-path). The two North Stars unify here.

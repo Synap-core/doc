@@ -28,7 +28,7 @@ Background:       #15110D
 Surface elevated: #1E1810
 Surface border:   rgba(255,255,255,0.07)
 Accent:           #C28A4A  (amber — interactive elements)
-AI accent:        #10B981  (emerald — ONLY AI-origin content)
+AI accent:        #FFDB23  (the logo yellow, --synap-ai — ONLY AI-origin content; deep gold #756201 in light)
 Text primary:     rgba(255,255,255,0.92)
 Text secondary:   rgba(255,255,255,0.55)
 Text tertiary:    rgba(255,255,255,0.28)

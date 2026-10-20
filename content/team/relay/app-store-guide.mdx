@@ -48,8 +48,8 @@ Create two web pages:
 Must include:
 - **What data is collected**: Name, email, phone, contacts (from device import), usage analytics
 - **How it's stored**: On the user's own Synap Data Pod (self-sovereign — user controls their data)
-- **AI processing**: Contact enrichment, relationship scoring via Synap Intelligence Service
-- **Third-party sharing**: No data sold to third parties. AI processing stays within Synap infrastructure
+- **AI processing**: Contact enrichment, relationship scoring via Synap Intelligence Service. The Intelligence Service sends the text it needs to process to third-party AI model providers (sub-processors) — it does NOT stay within Synap infrastructure unless the pod runs a self-hosted model. List every provider the deployment can call; the current list is in [Artificial Intelligence → Where your data goes](/docs/architecture/concepts/artificial-intelligence#5-where-your-data-goes-ai-sub-processors)
+- **Third-party sharing**: No data sold to third parties. Data is shared with the AI sub-processors above only to process the request. The TypeSafe decision model is opt-in per pod (off by default)
 - **Data retention**: User controls all data. Can delete anytime from Settings
 - **Children**: Not designed for users under 13 (COPPA compliance)
 - **Contact**: support@synap.live

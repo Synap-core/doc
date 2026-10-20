@@ -103,8 +103,9 @@ Synap is a sovereign personal data infrastructure with AI-powered organization. 
 | `restore` | Start all services, health check | ES256 JWT |
 | `configure` | Update .env vars, activate compose profiles | ES256 JWT |
 | `archive` | DB dump + volume tar → S3 presigned upload | ES256 JWT |
-| `exec` | Docker exec in container (requires `allowExec` claim) | ES256 JWT + allowExec |
 | `agent-update` | Rebuild pod-agent container | ES256 JWT |
+
+Every command above resolves to one **named script** in `deploy/pod-agent/`, invoked as argv (`execFile("/bin/sh", [<script>, ...args])`) — no command ever builds a shell string from request input. An `exec` command (`docker exec <container> sh -c <command>`, gated by an `allowExec` JWT claim) briefly existed and was deleted: nothing ever set the `allowExec` claim, so it was a zero-caller door whose only reachable outcome was a remote shell. A source-scan tripwire in synap-backend (`packages/api/src/__tripwires__/pod-agent-has-no-shell.test.ts`) now fails CI if any pod-agent command ever constructs a shell string again.
 
 ### Security Model
 

@@ -5,6 +5,10 @@
   "icon": "app-window",
   "pages": [
     "index",
+    "daily-cockpit-ux-proposal",
+    "browser-ux-productization-guidelines",
+    "browser-ux-transformation-research-plan",
+    "crm-workspace-browser-experience-handoff",
     "architecture",
     "security",
     "operations-and-release",

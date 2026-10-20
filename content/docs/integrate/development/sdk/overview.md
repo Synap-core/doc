@@ -22,7 +22,7 @@ Synap exposes your data pod as a fully-typed tRPC API. Two npm packages let you 
 
 Both packages are generated from the same `AppRouter` type, so autocomplete covers every procedure.
 
-If you're instead building an **agent, CLI, or headless script** — no React, no bundler, no tRPC types needed — use [`@synap/hub-rest-client`](https://npmjs.com/package/@synap/hub-rest-client) instead: a zero-dependency REST client over the same pod, built for that use case. This page covers the tRPC SDK; agents should read the [Hub Protocol reference](../../reference/api-reference) instead.
+If you're instead building an **agent, CLI, or headless script** — no React, no bundler, no tRPC types needed — use [`@synap-core/hub-rest-client`](https://npmjs.com/package/@synap-core/hub-rest-client) instead: a zero-dependency REST client over the same pod, built for that use case. This page covers the tRPC SDK; agents should read the [Hub Protocol reference](../../reference/api-reference) instead.
 
 ---
 

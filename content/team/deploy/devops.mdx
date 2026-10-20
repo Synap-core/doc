@@ -319,6 +319,24 @@ CMD ["node", "dist/index.js"]
 
 ---
 
+### Connectors (Nango broker)
+
+**Default (CP-managed pod):** when `CONTROL_PLANE_URL` is set, external-service
+connections (Google, etc.) are brokered by that control plane — the pod holds no
+Nango key at all, and any local `NANGO_HOST` / `NANGO_SECRET_KEY` left in the
+environment is ignored (with a warning), never silently preferred over the broker.
+
+**Self-hosted opt-out:** a pod running its own Nango instance sets
+`SYNAP_CONNECTOR_BROKER=local` — this is the explicit operator opt-out, and it
+overrides `CONTROL_PLANE_URL` for connectors specifically (the pod still uses the
+control plane for everything else). Set `NANGO_HOST` and `NANGO_SECRET_KEY` to your
+own Nango instance in that case.
+
+**No `CONTROL_PLANE_URL` at all:** the pod behaves as self-hosted by default — no
+opt-out flag needed, `NANGO_HOST` / `NANGO_SECRET_KEY` are read directly.
+
+---
+
 ### Network Isolation
 
 **Docker Network**:

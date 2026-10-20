@@ -44,29 +44,29 @@
 
     - Add TaskPriority = 'low' | 'normal' | 'high' | 'urgent'                                                                   
 
-    - Add BuilderTask interface: { id, status, type, priority, prompt, source, result, createdAt, updatedAt, startedAt,        
+    - Add BuilderTask interface: &#123; id, status, type, priority, prompt, source, result, createdAt, updatedAt, startedAt,        
 
   completedAt }                                                                                                                 
 
-    - Add BuilderTaskPayload interface: { taskId, prompt, engine } (what gets passed to subprocess)                             
+    - Add BuilderTaskPayload interface: &#123; taskId, prompt, engine } (what gets passed to subprocess)                             
 
-    - Add BuilderTaskResult interface: { taskId, output, exitCode, artifacts, submittedAt }                                     
+    - Add BuilderTaskResult interface: &#123; taskId, output, exitCode, artifacts, submittedAt }                                     
 
   - **Task polling types** — packages/@eve/dna/src/types.ts                                                                         
 
-    - Add PollConfig interface: { intervalMs, maxRetries, backoffMultiplier, syncEndpoint }                                     
+    - Add PollConfig interface: &#123; intervalMs, maxRetries, backoffMultiplier, syncEndpoint }                                     
 
-    - Add TaskSyncResponse interface: { tasks: BuilderTask[], since: string }                                                   
+    - Add TaskSyncResponse interface: &#123; tasks: BuilderTask[], since: string }                                                   
 
-    - Add TaskSubmission interface: { taskId, status, result?: string, artifacts?: string[] }                                   
+    - Add TaskSubmission interface: &#123; taskId, status, result?: string, artifacts?: string[] }                                   
 
   - **Hermes daemon types** — packages/@eve/dna/src/types.ts                                                                        
 
     - Add HermesMode = 'daemon' | 'once'                                                                                        
 
-    - Add HermesConfig interface: { enabled, mode, pollInterval, workspaceDir, skillsDir, maxConcurrent, engine }               
+    - Add HermesConfig interface: &#123; enabled, mode, pollInterval, workspaceDir, skillsDir, maxConcurrent, engine }               
 
-    - Add HermesState interface: { status: 'idle' | 'polling' | 'running' | 'error', currentTaskId?, uptime?, tasksCompleted?,
+    - Add HermesState interface: &#123; status: 'idle' | 'polling' | 'running' | 'error', currentTaskId?, uptime?, tasksCompleted?,
 
   lastPoll? }                                                                                                                   
 
@@ -74,9 +74,9 @@
 
     - Add MessagingChannel = 'whatsapp' | 'telegram' | 'imessage'                                                               
 
-    - Add MessagingConfig interface: { [channel]: { webhookUrl?, phoneCode?, sessionId?, botToken?, deviceId?, phoneNumber? } }
+    - Add MessagingConfig interface: &#123; [channel]: &#123; webhookUrl?, phoneCode?, sessionId?, botToken?, deviceId?, phoneNumber? } }
 
-    - Add VoiceConfig interface: { transcriptionModel?, voiceId?, sttEndpoint? }                                                
+    - Add VoiceConfig interface: &#123; transcriptionModel?, voiceId?, sttEndpoint? }                                                
 
   - **Organ info update** — packages/@eve/dna/src/types.ts                                                                          
 
@@ -100,11 +100,11 @@
 
   - **Secrets contract** — packages/@eve/dna/src/secrets-contract.ts                                                                
 
-    - Add messaging to arms secrets: { whatsappSessionId?, telegramBotToken?, imessageDeviceId? }
+    - Add messaging to arms secrets: &#123; whatsappSessionId?, telegramBotToken?, imessageDeviceId? }
 
-    - Add voice to arms secrets: { sttEndpoint?, voiceId? }                                                                     
+    - Add voice to arms secrets: &#123; sttEndpoint?, voiceId? }                                                                     
 
-    - Add hermes to builder secrets: { enabled?, pollInterval?, workspaceDir?, skillsDir?, maxConcurrent?, codeEngine? }        
+    - Add hermes to builder secrets: &#123; enabled?, pollInterval?, workspaceDir?, skillsDir?, maxConcurrent?, codeEngine? }        
 
     - Update mergeNested calls for new sections                                                                                 
 
@@ -118,7 +118,7 @@
 
     - Fix JSDoc: "Hestia" → "Eve"                                                                                               
 
-    - Add hermes field to metadata: { hermesState?: HermesState }                                                               
+    - Add hermes field to metadata: &#123; hermesState?: HermesState }                                                               
 
     - Add getHermesState() / setHermesState() methods to EntityStateManager                                                     
 
@@ -236,7 +236,7 @@
 
     - Change execSync → spawn (non-blocking)
 
-    - Return Promise<{ exitCode, stdout, stderr, pid }> instead of blocking                                                    
+    - Return `Promise<{ exitCode, stdout, stderr, pid }>` instead of blocking                                                    
 
     - Add startSession(prompt) for long-running sessions                                                                        
 
@@ -352,9 +352,9 @@
 
     - eve arms messaging list — list configured channels                                                                        
 
-    - eve arms messaging add <channel> — add channel with prompts                                                               
+    - eve arms messaging add `<channel>` — add channel with prompts                                                               
 
-    - eve arms messaging remove <channel> — remove channel                                                                      
+    - eve arms messaging remove `<channel>` — remove channel                                                                      
 
     - eve arms messaging status — show connection status per channel                                                            
 
@@ -520,7 +520,7 @@
 
   - **Implement**: packages/eve-cli/src/commands/grow.ts
 
-    - Replace stub sleep() with actual eve <organ> install delegation
+    - Replace stub sleep() with actual eve `<organ>` install delegation
 
     - Implement growCapability() with real feature enhancements                                                                 
 
@@ -622,7 +622,7 @@
 
   - Verify: DockerComposeGenerator produces valid YAML
 
-  - Verify: All container names follow eve-{organ}-{service} convention
+  - Verify: All container names follow eve-&#123;organ}-&#123;service} convention
 
   - Verify: All services on eve-network
 

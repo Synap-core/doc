@@ -130,7 +130,7 @@ So “first message” from workspace view or side panel is supported without th
 
 ### 3.2 Intelligence routing and client
 
-- **resolveIntelligenceService({ userId, workspaceId, capability: "chat" }):** Prefer workspace overrides, then user preferences, then env `INTELLIGENCE_HUB_URL` (default localhost:3002).
+- **`resolveIntelligenceService({ userId, workspaceId, capability: "chat" })`:** Prefer workspace overrides, then user preferences, then env `INTELLIGENCE_HUB_URL` (default localhost:3002).
 - **IntelligenceHubClient:**
   - Non-streaming: `POST ${baseUrl}/api/expertise/request`.
   - Streaming: `POST ${baseUrl}/api/chat/stream`, body includes query, threadId, userId, agentId, agentType, workspaceId, dataPodUrl, dataPodApiKey, stream: true. Parses SSE and yields `{ type: "chunk"|"step"|"proposal"|"entities"|"branch_decision"|"complete"|"error", ... }`. Backend maps `content` → `chunk` for the frontend.

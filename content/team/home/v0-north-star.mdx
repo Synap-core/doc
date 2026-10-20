@@ -1,0 +1,47 @@
+# V0 North Star — Bring Your Own Agent
+
+*Synap Technologies — Decided 2026-06-10 (Antoine + Claude)*
+
+> **Canonical source:** [`V0-NORTH-STAR.md`](../../../../V0-NORTH-STAR.md) at the repo root. This page is a condensed reference for team navigation. Always defer to the canonical file for authoritative wording.
+
+---
+
+## The one-line pitch
+
+**Claude Code gave your agent a terminal. Synap gives it a second brain with a screen.**
+
+## The wedge
+
+People who already use **a CLI agent (Claude Code, opencode, …) + Obsidian/markdown as their second brain**. They already pay for an agent, already believe in data sovereignty, and hit the ceiling of "my AI works in files, my knowledge has no UI, no types, no governance."
+
+We don't sell them an AI (BYO agent = zero inference COGS). We sell the **substrate + the screen**: typed entities, views, live artifacts, proposals they can review, sessions they can watch.
+
+## The magic moment
+
+1. User opens Synap, starts a **session** with a goal.
+2. Their **own CLI agent** picks it up (`synap session …`), works against the pod.
+3. As it works, **artifacts materialize in the browser app**: entities, views, documents, generated cells — opened live via `synap://open/…`, updating in real time.
+4. Writes arrive as **proposals** the user reviews — glass-box AI, not magic-paste.
+5. The artifacts are **alive**: real data, clickable rows, editable values — not a static report.
+
+## V0 workstreams (priority order)
+
+1. **Artifacts come alive** — wire `onQuery`/`onMutate` for frame cells; create `BrowserViewFrameCell`; forward entity-change socket events into iframes.
+2. **Live agent presence** — socket events on agent writes (kill the 10 s poll); session progress streams into SessionsApp/GoalBar live.
+3. **Agent onboarding from the browser** — make the "Local CLI" settings stub real; browser generates key, hands it to CLI, one command to connect Claude Code/opencode.
+4. **Sessions as the shell** (Antoine-led) — start/continue a goal session; the session page is where artifacts and proposals stream in.
+5. **Import = onboarding** — Obsidian vault import + AI structuring as first-run experience. Time-to-magic < 10 min.
+6. **Beta mode toggle** — focused default surface vs. full surface (feature flag, not deletion).
+7. **Landing re-aim** — hero around the magic-moment demo + BYO-agent story.
+
+**V0.5 (after the loop works):** bundled local pod (embedded Postgres + `LOCAL_MODE` auth) with optional sync to a remote pod.
+
+## Explicitly out of scope for V0
+
+- New Intelligence Service features (IS goes maintenance-mode; in-browser AI = import/structure + automations only).
+- Mobile (relay-app), control-plane features, marketplace monetization, hosted pods.
+- Any new app/view/cell type that doesn't serve the magic moment.
+
+## Business posture
+
+Pre-revenue by design: enthusiasm (the demo) and retention (the loop) are the only two KPIs. Monetization later = hosted pods → marketplace → enterprise setup services, funded by traction.

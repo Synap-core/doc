@@ -108,8 +108,8 @@ This can align with the **Bento Grid** and **Home** work: the Intelligence app c
   - **Table:** `intelligence_actions` (or `workspace_actions`):
     - id, workspace_id, created_by, name, slug, description (optional),
     - prompt_template (text with placeholders),
-    - arguments (JSONB: array of { name, label, type, default }),
-    - data_binding (JSONB: e.g. { viewId?, documentIds?, entityId?, type: 'view'|'documents'|'entity'|'none' }),
+    - arguments (JSONB: array of `{ name, label, type, default }`),
+    - data_binding (JSONB: e.g. &#123; viewId?, documentIds?, entityId?, type: 'view'|'documents'|'entity'|'none' }),
     - agent_id (or agent_type),
     - created_at, updated_at.
   - **API:** `intelligence.createAction`, `updateAction`, `deleteAction`, `listActions` (by workspace).
@@ -124,7 +124,7 @@ This can align with the **Bento Grid** and **Home** work: the Intelligence app c
 
 - **Dashboard:** “Actions” section: list of user-created actions; click to run or edit.
 - **Create/Edit action:**
-  - Form: name, description, prompt template (with hint: “Use {{argName}} for arguments”).
+  - Form: name, description, prompt template (with hint: “Use &#123;&#123;argName}} for arguments”).
   - Arguments: add/remove rows (name, label, type, default).
   - Data binding: dropdown “None / View / Documents / Entity” + pick view or documents or entity when needed.
   - Agent: dropdown from getAgents.

@@ -9,7 +9,7 @@ last_updated: '2026-04-20'
 
 # Import
 
-Import existing data into Synap from CSV files, JSON exports, external service connectors via Nango, or from other pods in a pod-to-pod sync scenario.
+Import existing data into Synap from CSV files, JSON exports, brokered OAuth connectors (currently: Google), or from other pods in a pod-to-pod sync scenario.
 
 ## Import paths
 
@@ -72,39 +72,41 @@ Top-level JSON arrays within a single field are interpreted as select-type value
 
 ## Nango Connectors
 
-Nango is the self-hosted OAuth integration layer. Connectors sync data into Synap via the Hub Protocol.
+> **Superseded 2026-09-13.** The table and mechanics below (per-service Hub Protocol
+> sync, 15-minute polling, a dedicated `/connectors/sync/{connectionId}` trigger) do not
+> match what is shipped or planned. As of `CONNECT-AND-MIRROR-PLAN.md`: **only `google`**
+> (Gmail + Calendar + Contacts, ONE provider id, one OAuth connection) has a real sync
+> mapping (`event`, `email.thread`, `contact` kinds) — Slack/Notion/GitHub/Drive/
+> Jira/Linear/Zoom/Twitter/Stripe below are not implemented sync sources. Connect is
+> brokered (pod never holds a Nango key on a CP-managed pod — see
+> [Connectors](/team/crm/connectors)); the trigger door is `connection-sync.ts`
+> (on-connect, cron, or a CP webhook poke), not a per-connection REST endpoint; the
+> first sync of a connection produces ONE `import.graph` proposal, not a silent bulk
+> write; steady-state runs are governed by a per-connection rule, not a fixed interval.
+> Kept below for historical context only.
+
+Nango is the OAuth integration layer. Connectors sync data into Synap via the Hub Protocol.
 
 ### Supported services
 
 | Service | Data synced | Entity type mapping |
 |---------|------------|---------------------|
-| **Gmail** | Emails, contacts | `email` entity profiles, `contact` for sender/recipient |
-| **Slack** | Messages, channels, users | `message` entities within `channel` views, `person` for users |
-| **Notion** | Pages, databases, blocks | `note` entities, `task` for checkbox items, `project` for databases |
-| **GitHub** | Issues, PRs, repos | `task` for issues/PRs, `project` for repos, `person` for authors |
-| **Google Drive** | Documents, spreadsheets | `file` entities, `note` for doc content extraction |
-| **Jira** | Issues, sprints | `task` entities with status mapping, `project` for boards |
-| **Linear** | Issues, projects | `task` and `project` entities (native fit — preferred over Jira) |
-| **Zoom** | Meetings, recordings | `event` entities for scheduled meetings, `file` for recordings |
-| **Twitter/X** | Tweets, bookmarks | `bookmark` entities, `article` for long-form posts |
-| **Stripe** | Invoices, customers | `deal` entities, `company` for customers |
+| **Google** (Gmail + Calendar + Contacts, one connection) | Mail threads, calendar events, contacts | `person` for contacts, `event` for calendar, mail threads linked to activity timeline |
+| Slack, Notion, GitHub, Google Drive, Jira, Linear, Zoom, Twitter/X, Stripe | — | **Not implemented** — listed here previously as aspirational, not shipped |
 
-Additional connectors available through Nango's public catalog. New connectors are added by deploying updated Nango configurations on the pod.
+Additional providers exist in Nango's catalog but have no Synap-side sync mapping. Adding one is config (a capability template's `tools[].metadata.sync` + a `registerSyncKind` handler), not a new pipeline.
 
 ### OAuth handshake
 
-The connector is initiated from the Synap UI via the Connectors settings page, which generates an OAuth authorization URL through Nango's `/connect` endpoint. User is redirected to the service provider's OAuth consent screen. On callback, Nango stores the access and refresh tokens. Synap receives a Nango connection ID and initiates an initial sync via Hub Protocol `POST /connectors/sync/{connectionId}`.
+The connector is initiated from the Synap UI via the Connectors settings page. The client calls ONLY the pod's own `connectors.session` (tRPC) / `POST /connectors/connect` (Hub REST) — never Nango or the CP directly. The pod resolves whether to broker through the CP (CP-managed pod) or its own local Nango (self-hosted pod) and returns a `connectLink` to open.
 
 ### Sync scheduling
 
-Connectors support three sync modes:
-- **Initial sync**: Pulls all available data on first connection up to a configurable limit (default: 1000 records with pagination)
-- **Incremental sync**: Polls for new/changed records at a configurable interval (default: every 15 minutes, throttled to avoid provider rate limits)
-- **Manual trigger**: User-initiated sync from the connector detail page
+Sync is triggered by `enqueueConnectionSync` — the ONE door — for three reasons: `connect` (a new connection was just observed), `cron`, or `webhook` (the CP saw provider activity and poked the pod). There is no fixed 15-minute poll interval; cadence is provider/plan-dependent. First run is bounded (default 90 days / 200 items per kind) and always yields one grouped proposal before any silent write.
 
 ### Rate limiting
 
-Nango enforces per-service rate limits from upstream providers and batches requests to stay within quotas. Synap respects Nango's `X-RateLimit-Remaining` headers. When a provider rate limit is reached, sync is deferred and retried with exponential backoff (1s, 2s, 4s, 8s, up to 60s). Failed syncs create a warning notification under the `data_sync` category.
+Nango enforces per-service rate limits from upstream providers. Failed syncs surface through `getConnectionSyncStatus` (`phase: "failed"`, with an `error`) rather than a generic notification category.
 
 ## Pod-to-Pod Sync
 

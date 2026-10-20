@@ -1,10 +1,8 @@
 import { cn } from '@/lib/utils';
 
 /**
- * Home landing page — single source for CTA / surface spacing.
- *
- * IMPORTANT: This file MUST be listed in `tailwind.config.ts` `content` — otherwise JIT
- * never emits these utilities and spacing classes silently do nothing in production.
+ * Home landing page: single source for CTA / surface spacing.
+ * Tailwind v4 detects these class strings automatically (lib/ is not gitignored).
  */
 export const homeUi = {
   primaryCta: cn(

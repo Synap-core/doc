@@ -1,0 +1,7 @@
+{
+  "title": "Reference",
+  "description": "CLI, events, Hub REST API and MCP tools",
+  "root": true,
+  "icon": "Library",
+  "pages": ["index", "cli", "mcp-tools", "events", "hub-api"]
+}

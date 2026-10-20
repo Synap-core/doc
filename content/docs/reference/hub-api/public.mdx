@@ -1,0 +1,41 @@
+---
+title: Public
+description: The Public operations of the Hub REST API (3 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/public
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Read-only search over the facet-scoped public data a workspace opts
+          into via settings.publicProjection. No auth. Returns 404 when the
+          workspace has not opted in.
+      - content: Returns the publish-time snapshot and pinned revision of a PUBLISHED
+          public share. No auth; cross-origin readable; no credentials honoured.
+          Unknown, revoked, expired and unpublished tokens all return the same
+          404.
+      - content: Returns a PUBLISHED site's public metadata and its configured
+          collections. No auth; cross-origin readable; no credentials honoured.
+          Unknown, revoked, unpublished and deleted-project tokens all return
+          the same 404.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/public" webhooks={[]} operations={[{"path":"/public/projection","method":"get"},{"path":"/public/shares/{token}","method":"get"},{"path":"/public/sites/{siteToken}","method":"get"}]} showTitle />
+    </>
+  );
+}

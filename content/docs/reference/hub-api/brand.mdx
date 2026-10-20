@@ -1,0 +1,36 @@
+---
+title: Brand
+description: The Brand operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/brand
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Resolves the Brand space (the given workspace or the brand source it
+          declares, else the pod's brand provider) and the brand identity in it
+          — the project's brand, else the brand flagged default, else the only
+          brand — and returns that brand's kit with a deterministic content
+          `hash`. 404 with a typed `reason` and a human `message` when there is
+          no brand; a failed read is a 5xx, never an empty kit.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/brand" webhooks={[]} operations={[{"path":"/brand/kit","method":"get"}]} showTitle />
+    </>
+  );
+}

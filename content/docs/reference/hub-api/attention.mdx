@@ -1,0 +1,34 @@
+---
+title: Attention
+description: The Attention operations of the Hub REST API (2 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/attention
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: "The needs-you rows narrowed to the things of `profileSlug`
+          (`signals.list({ lens: 'needs-you', profileSlug })`)."
+      - content: '`signals.count({ profileSlug })` — the number with its parts
+          (decisions, notifications, blocked, review).'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/attention" webhooks={[]} operations={[{"path":"/attention/needs-you","method":"get"},{"path":"/attention/count","method":"get"}]} showTitle />
+    </>
+  );
+}

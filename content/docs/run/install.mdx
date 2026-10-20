@@ -1,0 +1,121 @@
+---
+title: Install
+description: What install.sh does, its options, and the flags you can pass to synap install.
+type: how-to
+audience: self-host
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+The supported install path is `install.sh`, published with every release of the backend. It bootstraps a bare host
+and hands over to the server CLI (`synap install`), which does the actual install. Images are pulled by digest from
+the release manifest; nothing is built on the host.
+
+## Install the stable release
+
+```bash
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo bash -s -- --domain pod.example.com --email you@example.com
+```
+
+Arguments after `--` go to the installer.
+
+## What install.sh does
+
+1. **Prerequisites.** Installs `curl`, `tar`, `jq` and `openssl` with `apt-get` if one is missing (on a system without
+   `apt-get` it stops and asks you to install it), installs Docker with `get.docker.com` if it is missing, and
+   requires Docker Compose v2.
+2. **Release manifest.** Downloads `release.json` for the release you asked for: `stable` by default.
+3. **Signature.** Checks the manifest's keyless signature from Synap's CI with `cosign`, if `cosign` is installed. See
+   [Verifying releases](#verifying-releases).
+4. **Deploy bundle.** Downloads the release's deploy bundle (the `synap` script, `deploy/` and Kratos configuration),
+   checks its SHA-256 against the manifest, and unpacks it into `/opt/synap`.
+5. **CLI on PATH.** Links `/opt/synap/synap` to `/usr/local/bin/synap`.
+6. **Install.** Runs `synap install --non-interactive --release <id>` in `/opt/synap`, with every other flag you passed.
+
+Run again with the same release, it re-enters `synap install`, which is idempotent and keeps your existing
+`deploy/.env`. To move to another release, use `synap update` (see [Upgrades](/docs/run/upgrades)).
+
+## install.sh options
+
+| Option | Meaning |
+|---|---|
+| `--release <id\|stable\|fast>` | The release to install. `stable` (default) is the latest tagged release; `fast` is the latest successful build of `main`; or a release ID such as `v1.1.3`. |
+| `--dir <path>` | Install directory. Default `/opt/synap`. |
+| `--help` | Print the usage. |
+
+Environment variables: `SYNAP_RELEASE` (same as `--release`), `SYNAP_DIR` (same as `--dir`), `SYNAP_BIN_DIR`
+(default `/usr/local/bin`) and `SYNAP_RELEASE_VERIFY` (see below). `SYNAP_DOMAIN`, `SYNAP_EMAIL`, `SYNAP_ADMIN_EMAIL`
+and `SYNAP_SMTP_URI` are accepted as aliases of the matching flags.
+
+## synap install flags
+
+These are passed through by `install.sh`. The installer always runs non-interactively.
+
+| Flag | Meaning |
+|---|---|
+| `--domain <host>` | The pod's host name, for example `pod.example.com`. |
+| `--email <email>` | Contact email for Let's Encrypt certificates. |
+| `--admin-email <email>` and `--admin-password <secret>` | Create the first admin during install. Both are needed in non-interactive mode. |
+| `--smtp-uri <uri>` | SMTP server for sign-in emails (`SMTP_CONNECTION_URI`). |
+| `--edge caddy\|tunnel\|traefik` | `caddy` (default): direct TLS. `tunnel`: Caddy behind a Cloudflare tunnel, needs `--tunnel-token` or `--tunnel-token-file`. `traefik`: an external edge in front of the pod. |
+| `--tunnel cloudflare\|pangolin`, `--tunnel-token <token>`, `--tunnel-token-file <path>` | Expose the pod through a tunnel. Prefer `--tunnel-token-file`. |
+| `--with-rsshub` | Also start RSSHub and browserless (the `rsshub` profile). |
+| `--intelligence-url <url>`, `--intelligence-key <key>` | An Intelligence Service for the pod's built-in AI features. |
+| `--name <name>` | A pod name. Without `--domain`, the pod becomes `pod.<name>.synap.live`. |
+| `--register-token <spr_…>` | Register the pod with the Synap Control Plane, using a single-use code. Needs `--name`. See [Connect to the Control Plane](/docs/run/connect-control-plane). |
+| `--control-plane <url>` | The Control Plane to register with (default `https://api.synap.live`). Only with `--register-token`. |
+
+Run `synap install --help` on the server for the complete list.
+
+### Retired flags
+
+`install.sh` refuses the flags of the retired installer with their new spelling instead of ignoring them:
+`--backend-version` and `--pod-agent-version` (use `--release`), `--control-plane-url` and `--provisioning-token`
+(use `--register-token` with `--control-plane`), and `--token` (use `--register-token`). `--with-openclaw` is accepted
+and ignored: the pod no longer bundles an agent.
+
+## The first admin
+
+Unless you passed `--admin-email` and `--admin-password`, or registered the pod with `--register-token` (the person
+the code was created for becomes the owner), the pod starts with no admin. Create one from the server:
+
+```bash
+cd /opt/synap/deploy
+sudo synap setup admin --email you@example.com --magic-link        # prints a one-hour sign-up link
+sudo synap setup admin --email you@example.com --password '<secret>'   # or create the admin directly
+sudo synap setup admin --status                                      # needed | ready
+```
+
+The link opens `https://<your domain>/setup?token=…`, where you choose a password. Once the pod has an owner,
+`sudo synap setup admin --retire-token` removes the bootstrap-only `PROVISIONING_TOKEN` from `.env`.
+
+## Verifying releases
+
+Synap's CI signs every release manifest with a keyless `cosign` signature. `SYNAP_RELEASE_VERIFY` controls what the
+installer (and `synap update`) does with it:
+
+| Value | Behaviour |
+|---|---|
+| `warn` (default) | Verifies when `cosign` is installed. A missing `cosign`, a missing signature or a failed check prints a warning and the install continues. |
+| `enforce` | Any of those refuses the install. |
+| `off` | No check, for a private mirror. |
+
+Install `cosign` and set `SYNAP_RELEASE_VERIFY=enforce` to refuse unsigned or tampered releases. Set it on the `sudo`
+command, because `sudo` drops variables exported in your shell:
+
+```bash
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo SYNAP_RELEASE_VERIFY=enforce bash -s -- --domain pod.example.com --email you@example.com
+sudo SYNAP_RELEASE_VERIFY=enforce synap update
+```
+
+A manual `synap update` also reads `SYNAP_RELEASE_VERIFY` from `deploy/.env`.
+
+## Installing from a checkout
+
+Developers can run `./synap install --from-source --domain localhost` in a clone of the backend repository to build
+the images locally. This is a development path, not a way to run a production pod; see the contributing guide in the
+[backend repository](https://github.com/Synap-core/backend).

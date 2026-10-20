@@ -1,0 +1,51 @@
+---
+title: Profiles
+description: The Profiles operations of the Hub REST API (6 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/profiles
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns profiles visible to the user in the given workspace (system +
+          workspace-scoped + extended).
+      - content: "Defines an entity kind (`profileKind: 'kind'`, default) or an
+          attachable role (`profileKind: 'role'`), optionally with `fields`.
+          Slug-idempotent. Governed: an agent caller gets `status: 'proposed'`
+          (fields deferred until approval) — that is success, not an error. Same
+          door as MCP synap_define_kind / synap_define_role."
+      - content: Returns property defs visible to the workspace (global + profile-base +
+          this workspace's overlays).
+      - content: 'Adds a property def. Set `overlay: true` to create a workspace-scoped
+          overlay invisible to other workspaces using the same profile.'
+      - content: 'Changes a stored def''s slug / valueType / constraints / uiHints. This
+          is the ONE edit door — `POST /property-defs` is slug-idempotent and
+          never converges, so it reports `status: "unchanged"` and points here.
+          Governed: an agent caller gets `status: ''proposed''` (that is
+          success, not an error), because narrowing a def re-interprets every
+          existing row of every profile that links it.'
+      - content: 'Returns the RendererTarget resolved for the given profile in the given
+          workspace. Resolution order: workspace overlay → profile system
+          default → hardcoded fallback. Omit `contentKind` to receive all
+          profile renderer kinds in one round trip.'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/profiles" webhooks={[]} operations={[{"path":"/profiles","method":"get"},{"path":"/profiles","method":"post"},{"path":"/property-defs","method":"get"},{"path":"/property-defs","method":"post"},{"path":"/property-defs/{id}","method":"patch"},{"path":"/profiles/{slug}/renderers","method":"get"}]} showTitle />
+    </>
+  );
+}

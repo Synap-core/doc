@@ -1,0 +1,37 @@
+---
+title: Sessions
+description: The Sessions operations of the Hub REST API (10 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/sessions
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns the active session for the channel or creates one. Sessions are
+          scoped to a chat/channel; supports a `bootstrapStateId` to start from
+          a compacted state.
+      - content: Closes a session and optionally records the produced compacted-state
+          id.
+      - content: Persists a summarized state snapshot for a channel. Used to bootstrap
+          subsequent sessions cheaply.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/sessions" webhooks={[]} operations={[{"path":"/sessions/getOrCreate","method":"post"},{"path":"/sessions/active","method":"get"},{"path":"/sessions/{sessionId}","method":"get"},{"path":"/sessions/{sessionId}","method":"patch"},{"path":"/sessions","method":"get"},{"path":"/sessions/{sessionId}/close","method":"post"},{"path":"/compacted-states","method":"get"},{"path":"/compacted-states","method":"post"},{"path":"/compacted-states/latest","method":"get"},{"path":"/compacted-states/{stateId}","method":"get"}]} showTitle />
+    </>
+  );
+}

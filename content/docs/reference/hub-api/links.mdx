@@ -1,0 +1,38 @@
+---
+title: Links
+description: The Links operations of the Hub REST API (2 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/links
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns every edge touching (type, id) — the REST mirror of the
+          canonical getLinksFor reader. Lets any agent/app traverse the graph
+          (tool↔vault, skill↔tool, session↔used→tool,
+          playbook→grants→capability) uniformly. Scoped to the caller's visible
+          workspaces.
+      - content: Creates a typed edge in the config graph (`links`) — the mirror of
+          `relations`. Can bridge entity DATA to config objects, e.g.
+          entity(knowledge) --about--> tool. Gated by checkPermissionOrPropose.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/links" webhooks={[]} operations={[{"path":"/links","method":"get"},{"path":"/links","method":"post"}]} showTitle />
+    </>
+  );
+}

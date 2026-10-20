@@ -1,0 +1,184 @@
+---
+title: SDK first query
+description: Install the typed SDK, create a client for your pod and read your first entities.
+type: tutorial
+audience: builder
+availability: [sdk, pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+`@synap-core/sdk` is a typed tRPC client for a Synap pod. Every procedure the pod exposes is available with
+autocomplete and compile-time checks, because the client is typed with the pod's own router type.
+
+The SDK calls the pod's `/trpc` endpoint, which accepts only a **sign-in session**: a person's session cookie in the
+browser, or their session token anywhere else. It is for apps that act as a signed-in person. It does not take API
+keys: for a script, an integration or an agent that holds an API key, use the
+[Hub REST API](#scripts-and-agents-with-an-api-key) instead.
+
+## What you need
+
+- A pod: [hosted](/docs/start/cloud-quickstart) or [self-hosted](/docs/start/self-host-quickstart).
+- An account on it you can sign in with.
+- The ID of the workspace you want to read.
+
+## 1. Install
+
+```bash
+npm install @synap-core/sdk
+```
+
+For a React app, install the React bindings instead; they include the SDK:
+
+```bash
+npm install @synap-core/react
+```
+
+## 2. Sign in and create a client
+
+In the browser, on a subdomain of the pod's domain (for example `app.example.com` next to `pod.example.com`) where
+the person is already signed in, pass no credential: every request is sent with `credentials: "include"`, so the
+browser's session cookie authenticates it.
+
+```ts
+import { createSynapClient } from "@synap-core/sdk";
+
+const synap = createSynapClient({
+  podUrl: "https://pod.example.com", // no trailing slash, no /trpc
+  workspaceId,
+});
+```
+
+Anywhere else (a server, a script, a desktop or mobile app), sign in once to get a session token, and pass it as
+`sessionToken`. A pod with password sign-in issues one through the native login flow of its sign-in service:
+
+```bash
+FLOW=$(curl -fsS https://pod.example.com/.ory/kratos/public/self-service/login/api | jq -r .id)
+curl -fsS -X POST "https://pod.example.com/.ory/kratos/public/self-service/login?flow=$FLOW" \
+  -H "Content-Type: application/json" \
+  -d '{"method": "password", "identifier": "you@example.com", "password": "<your password>"}' \
+  | jq -r .session_token
+```
+
+```ts
+const synap = createSynapClient({
+  podUrl: "https://pod.example.com",
+  sessionToken: process.env.SYNAP_SESSION_TOKEN,
+  workspaceId: process.env.SYNAP_WORKSPACE_ID!,
+  onAuthError: () => {
+    // 401: the session expired or was revoked. Sign in again.
+  },
+});
+```
+
+A session lasts 30 days and is not extended by use; treat the token like a password.
+
+| Option | Meaning |
+|---|---|
+| `podUrl` | Base URL of the pod. The client calls `<podUrl>/trpc`. |
+| `sessionToken` | A sign-in session token, sent as `x-session-token`. Leave it out to use the browser's session cookie. |
+| `workspaceId` | Sent as `x-workspace-id` to scope requests. Pass `""` for procedures that need no workspace. |
+| `extraHeaders` | Added to every request. |
+| `onAuthError` | Called on `401`. The client then rejects with a clean tRPC error instead of a parse error. |
+
+The type also has an `apiKey` option. It is only for the desktop app's local pod; a pod refuses API keys
+(`synap_user_…`, `synap_hub_…`) on `/trpc` with `401`.
+
+Calls made in the same tick are batched into one HTTP request, and values are encoded with superjson, which is why
+plain HTTP clients should use the [Hub REST API](/docs/reference/hub-api) instead of `/trpc`.
+
+## 3. Read entities
+
+```ts
+const { items, pagination } = await synap.entities.list.query({ limit: 20 });
+
+for (const entity of items) {
+  console.log(entity.id, entity.title);
+}
+```
+
+`entities.list` takes `limit` (1 to 1000, default 50) and `offset`, and filters such as `profileSlug` (one kind, for
+example `"task"`) and `facetSlug` (one role). With a workspace set, it returns that workspace's entities.
+
+## 4. Write, and expect proposals
+
+```ts
+const result = await synap.entities.create.mutate({
+  profileSlug: "note",
+  title: "My first note",
+});
+```
+
+Writes go through the pod's governance. Depending on who the key belongs to and the rules you set, a write is applied
+directly or comes back as a **proposal** (`status: "proposed"` with a `proposalId`) that a person approves. Handle
+both. See [Validation policy](/docs/build/concepts/validation-policy).
+
+## React
+
+```tsx
+import { SynapProvider, useSynap } from "@synap-core/react";
+
+export function App() {
+  return (
+    <SynapProvider podUrl="https://pod.example.com" workspaceId={workspaceId}>
+      <Entities />
+    </SynapProvider>
+  );
+}
+
+function Entities() {
+  const { data } = useSynap.entities.list.useQuery({ limit: 20 });
+  return <ul>{data?.items.map((e) => <li key={e.id}>{e.title}</li>)}</ul>;
+}
+```
+
+`useSynap` is the tRPC React client itself, not a function: write `useSynap.entities.list.useQuery(…)`, not
+`useSynap()`. `SynapProvider` takes the same options as `createSynapClient` (here, the signed-in person's session
+cookie; pass `sessionToken` outside the browser), plus an optional `queryClient` to share an existing TanStack Query
+client.
+
+`@synap-core/react` also exports ready-made `RouterInputs` and `RouterOutputs` types, `useSynapContext` (the provider's
+`podUrl` and `workspaceId`), and the hooks `useEntity`, `useEntities`, `useLinks` and `useView`.
+
+## Package reference
+
+| Package | Exports |
+|---|---|
+| `@synap-core/sdk` | `createSynapClient`, and the types `SynapClient`, `SynapClientOptions` and `AppRouter` |
+| `@synap-core/react` | `SynapProvider`, `useSynap`, `useSynapContext`, `useEntity`, `useEntities`, `useLinks`, `useView`, and the types `RouterInputs`, `RouterOutputs`, `SynapProviderProps`, `AppRouter` |
+
+Both packages ship ES modules and CommonJS with TypeScript declarations, under the MIT license. The router types
+come from `@synap-core/api-types`, a dependency, so the client's types follow the version of that package you install.
+Use only what the package root exports: other subpaths are not part of the published API.
+
+## Scripts and agents with an API key
+
+An [API key](/docs/build/api-keys) works on the Hub REST API under `/api/hub`, not on `/trpc`. From TypeScript,
+[`@synap-core/hub-rest-client`](https://www.npmjs.com/package/@synap-core/hub-rest-client) is a zero-dependency
+client for it:
+
+```bash
+npm install @synap-core/hub-rest-client
+```
+
+```ts
+import { HubRestClient } from "@synap-core/hub-rest-client";
+
+const hub = new HubRestClient({
+  podUrl: "https://pod.example.com",
+  apiKey: process.env.SYNAP_API_KEY!,
+  workspaceId: process.env.SYNAP_WORKSPACE_ID,
+});
+
+const entities = await hub.getRecentEntities({ profileSlug: "task", limit: 20 });
+```
+
+From any other language, call the same routes over HTTP with `Authorization: Bearer <key>`:
+
+```bash
+curl "https://pod.example.com/api/hub/entities?profileSlug=task&limit=20" \
+  -H "Authorization: Bearer $SYNAP_API_KEY"
+```
+
+Every route is in the [Hub REST API reference](/docs/reference/hub-api).

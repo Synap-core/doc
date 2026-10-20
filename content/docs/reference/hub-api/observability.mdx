@@ -1,0 +1,36 @@
+---
+title: Observability
+description: The Observability operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/observability
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: 'Computes routing accuracy from ai_decision (kind=route) and
+          ai_correction (kind=route) events: overall accuracy, applied rate, a
+          per-target-workspace breakdown (which workspaces get mis-routed to),
+          and a confidence-calibration table (does stated confidence track real
+          accuracy). Returns nulls (never divide-by-zero) when there is no data
+          yet in the window.'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/observability" webhooks={[]} operations={[{"path":"/observability/routing-health","method":"get"}]} showTitle />
+    </>
+  );
+}

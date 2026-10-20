@@ -1,0 +1,13 @@
+{
+  "title": "Concepts",
+  "pages": [
+    "kind-and-facets",
+    "entity-connections",
+    "profile-schemas",
+    "views",
+    "validation-policy",
+    "permission-model",
+    "hub-protocol-flow",
+    "pod-replication"
+  ]
+}

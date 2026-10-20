@@ -1,0 +1,50 @@
+---
+title: Knowledge
+description: The Knowledge operations of the Hub REST API (10 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/knowledge
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Pod-wide procedural docs addressed by string key. When workspaceId is
+          omitted, scopes to the authenticated user's namespace.
+      - content: Supports `Idempotency-Key`.
+      - content: DEPRECATED — prefer POST /knowledge/ask, whose procedural lane calls
+          the exact same searchFullText. Still functional for existing
+          integrations.
+      - content: Routes a natural-language query to the right knowledge substrate(s) —
+          semantic (typed entities), procedural (how-to docs), episodic
+          (captures) — and returns raw matches tagged with which substrate(s)
+          answered. For a synthesized human-readable answer use POST
+          /knowledge/answer instead.
+      - content: Supports `Idempotency-Key`.
+      - content: maxDepth is clamped to 3.
+      - content: DEPRECATED alias of POST /knowledge/search; retained for back-compat.
+          Runs the exact same retrieval handler. Prefer POST /knowledge/search
+          (retrieval) or POST /knowledge/answer (synthesized).
+      - content: Retrieves matches via the unified knowledge router, then synthesizes a
+          single concise answer over that context with one focused LLM call.
+          Returns the answer plus the sources it drew from; answer is null when
+          synthesis is unavailable (callers fall back to the sources list).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/knowledge" webhooks={[]} operations={[{"path":"/knowledge","method":"get"},{"path":"/knowledge","method":"post"},{"path":"/knowledge/search","method":"get"},{"path":"/knowledge/search","method":"post"},{"path":"/knowledge/{key}","method":"get"},{"path":"/knowledge/{key}","method":"delete"},{"path":"/knowledge/{key}","method":"put"},{"path":"/graph/traverse","method":"get"},{"path":"/knowledge/ask","method":"post"},{"path":"/knowledge/answer","method":"post"}]} showTitle />
+    </>
+  );
+}

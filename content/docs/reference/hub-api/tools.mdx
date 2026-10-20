@@ -1,0 +1,66 @@
+---
+title: Tools
+description: The Tools operations of the Hub REST API (11 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/tools
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: 'Lists tools visible to the caller: pod-wide (null workspaceId) plus
+          the given workspace. Requires hub-protocol.read scope.'
+      - content: "Seeds a `tools` row — the agnostic integration registry.
+          Proposal-gated: if the workspace governance requires review, returns
+          status='proposed' with a proposalId instead of creating. Requires
+          hub-protocol.write scope."
+      - content: "Updates a `tools` row. Proposal-gated: returns status='proposed' with
+          a proposalId when governance requires review. Changing
+          execution-defining fields (credentialRef, config, executor, kind,
+          inputSchema) resets approval to false. Pod-wide tools require
+          pod-admin. Requires hub-protocol.write scope."
+      - content: "Deletes a `tools` row. Proposal-gated: returns status='proposed' with
+          a proposalId when governance requires review (AI-initiated deletes
+          propose, human deletes execute). Requires hub-protocol.write scope."
+      - content: "For a tool whose provider calls the pod at
+          /api/webhooks/<provider>/:token (postiz, cal.com, fireflies, mailgun):
+          returns the full URL, minting the token on first call. Idempotent;
+          `rotate:true` replaces the token. Gated on write access to the tool's
+          own row. The URL carries a secret: show it to the person, never log
+          it. Requires hub-protocol.write scope."
+      - content: Sets the `approved` flag on a tool — the draft→approve→run gate.
+          Owner-gated (workspace owner, or pod-admin for pod-wide tools) via the
+          governed toolsRouter.setApproved. Requires hub-protocol.write scope.
+      - content: 'Sets the `authBinding` on a tool
+          (static/per_user/per_agent/per_entity). Owner-gated: workspace owner,
+          or pod-admin for pod-wide tools. Changing the binding resets approval.
+          Requires hub-protocol.write scope.'
+      - content: Lists the connections (vault secrets) scoped to this tool's capability.
+          Owner-gated. Requires hub-protocol.read scope.
+      - content: Binds a vault secret to a principal (participant or entity) for this
+          tool's capability, stamping the secret's connection context.
+          Owner-gated. The secret must exist and belong to the acting user.
+          Requires hub-protocol.write scope.
+      - content: Clears a secret's connection context (the `linkId` path param is the
+          secret id). Gated on secret ownership. Requires hub-protocol.write
+          scope.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/tools" webhooks={[]} operations={[{"path":"/tools","method":"get"},{"path":"/tools","method":"post"},{"path":"/tools/{id}","method":"get"},{"path":"/tools/{id}","method":"patch"},{"path":"/tools/{id}","method":"delete"},{"path":"/tools/{id}/webhook","method":"post"},{"path":"/tools/{id}/approve","method":"post"},{"path":"/tools/{id}/auth-binding","method":"post"},{"path":"/tools/{id}/credentials","method":"get"},{"path":"/tools/{id}/credentials","method":"post"},{"path":"/tools/{id}/credentials/{linkId}","method":"delete"}]} showTitle />
+    </>
+  );
+}

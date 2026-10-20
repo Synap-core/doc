@@ -4,31 +4,72 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Concept pages moved from Use Synap → Architecture (keep what-is-synap + index under /start/concepts). */
-const MOVED_CONCEPT_SLUGS = [
-  'architecture',
-  'artificial-intelligence',
-  'branching-conversations',
-  'building-blocks',
-  'channels',
-  'composable-architecture',
-  'contagious-layers',
-  'data-sovereignty',
-  'entities',
-  'entity-connections',
-  'event-sourcing-explained',
-  'hub-and-spoke',
-  'knowledge-graph',
-  'multi-agent-system',
-  'profile-schemas',
-  'views',
-  'workspace-as-a-service',
+/**
+ * Old public URLs → the six-section tree (2026-10 consolidation).
+ * Pages that were removed send readers to the closest current page.
+ */
+const moved = [
+  // Start
+  ['/docs/start/concepts/what-is-synap', '/docs/start/what-is-synap'],
+  ['/docs/start/concepts', '/docs/start/what-is-synap'],
+  ['/docs/start/getting-started/getting-started', '/docs/start'],
+  ['/docs/start/getting-started/ai-agents-and-tools', '/docs/build/agents'],
+  ['/docs/start/getting-started/next-steps', '/docs/start'],
+  ['/docs/start/getting-started', '/docs/start'],
+  // Cloud
+  ['/docs/cloud/synap-cloud', '/docs/use/cloud-vs-self-hosted'],
+  ['/docs/cloud/intelligence', '/docs/use/cloud-vs-self-hosted'],
+  ['/docs/cloud/pod-updates', '/docs/run/upgrades'],
+  ['/docs/cloud', '/docs/use/cloud-vs-self-hosted'],
+  // Build
+  ['/docs/integrate/integrations/api-keys', '/docs/build/api-keys'],
+  ['/docs/integrate/integrations/webhooks-guide', '/docs/build/webhooks'],
+  ['/docs/integrate/integrations/chat-stream', '/docs/build/chat-stream'],
+  ['/docs/integrate/integrations/skill-invocation', '/docs/build/skill-invocation'],
+  ['/docs/integrate/integrations/sdk-direct', '/docs/build/sdk'],
+  ['/docs/integrate/development/sdk/first-query', '/docs/build/sdk'],
+  ['/docs/integrate/development/sdk/overview', '/docs/build/sdk'],
+  ['/docs/integrate/development/sdk/creating-an-app', '/docs/build/sdk'],
+  ['/docs/integrate/agents/connect/raycast', '/docs/use/raycast'],
+  ['/docs/integrate/agents/connect/:path*', '/docs/build/agents'],
+  ['/docs/integrate/agents/mcp', '/docs/build/agents/mcp'],
+  ['/docs/integrate/agents/skills', '/docs/build/agents/skills'],
+  ['/docs/integrate/agents/:path*', '/docs/build/agents'],
+  ['/docs/integrate/reference/event-catalog', '/docs/reference/events'],
+  ['/docs/integrate/reference/:path*', '/docs/reference'],
+  ['/docs/integrate/:path*', '/docs/build'],
+  ['/docs/api', '/docs/reference/hub-api'],
+  ['/docs/reference/hub-rest', '/docs/reference/hub-api'],
+  // Architecture
+  ['/docs/architecture/concepts/kind-and-facets', '/docs/build/concepts/kind-and-facets'],
+  ['/docs/architecture/concepts/entity-connections', '/docs/build/concepts/entity-connections'],
+  ['/docs/architecture/concepts/profile-schemas', '/docs/build/concepts/profile-schemas'],
+  ['/docs/architecture/concepts/views', '/docs/build/concepts/views'],
+  ['/docs/architecture/concepts/pod-replication', '/docs/build/concepts/pod-replication'],
+  ['/docs/architecture/validation-policy', '/docs/build/concepts/validation-policy'],
+  ['/docs/architecture/permission-model', '/docs/build/concepts/permission-model'],
+  ['/docs/architecture/hub-protocol-flow', '/docs/build/concepts/hub-protocol-flow'],
+  ['/docs/architecture/events/:path*', '/docs/reference/events'],
+  ['/docs/architecture/deployment/data-pod/connect-control-plane', '/docs/run/connect-control-plane'],
+  ['/docs/architecture/deployment/data-pod/tunnels-and-domains', '/docs/run/domains-and-tls'],
+  ['/docs/architecture/deployment/:path*', '/docs/run'],
+  ['/docs/architecture/:path*', '/docs/start/what-is-synap'],
+  // Contributing
+  ['/docs/contributing/documentation-guide', '/docs/community/docs-style-guide'],
+  ['/docs/contributing/:path*', '/docs/community'],
+  // Older flat URLs
+  ['/docs/getting-started/:path*', '/docs/start'],
+  ['/docs/concepts/:path*', '/docs/start/what-is-synap'],
+  ['/docs/deployment/:path*', '/docs/run'],
+  ['/docs/development/:path*', '/docs/build'],
+  ['/docs/integrations/:path*', '/docs/build'],
+  ['/docs/reference/api-reference', '/docs/reference/hub-api'],
+  ['/docs/open-source/:path*', '/docs/community'],
+  ['/docs/overview/:path*', '/docs/start'],
+  // The internal section was removed
+  ['/team/:path*', '/docs/start'],
+  ['/developers/:path*', '/docs/build'],
 ];
-
-const movedConceptRedirects = MOVED_CONCEPT_SLUGS.flatMap((slug) => [
-  { source: `/docs/start/concepts/${slug}`, destination: `/docs/architecture/concepts/${slug}`, permanent: true },
-  { source: `/docs/concepts/${slug}`, destination: `/docs/architecture/concepts/${slug}`, permanent: true },
-]);
 
 /** @type {import('next').NextConfig} */
 const config = {
@@ -36,75 +77,10 @@ const config = {
   outputFileTracingRoot: __dirname,
   async redirects() {
     return [
-      // Default docs entry: Use Synap is a root folder (start/meta.json root: true)
       { source: '/docs', destination: '/docs/start', permanent: true },
-      { source: '/docs/overview', destination: '/docs/start', permanent: true },
-      { source: '/docs/overview/:path*', destination: '/docs/start', permanent: true },
-      { source: '/team', destination: '/team/home', permanent: true },
-      { source: '/team/overview', destination: '/team/home', permanent: true },
-
-      // Legacy team paths under /docs → /team
-      { source: '/docs/home/:path*', destination: '/team/home/:path*', permanent: true },
-      { source: '/docs/platform/:path*', destination: '/team/platform/:path*', permanent: true },
-      { source: '/docs/control-plane/:path*', destination: '/team/control-plane/:path*', permanent: true },
-      { source: '/docs/relay/:path*', destination: '/team/relay/:path*', permanent: true },
-      { source: '/docs/devops/:path*', destination: '/team/devops/:path*', permanent: true },
-
-      // Old flat public URLs → journey-based IA
-      { source: '/docs/getting-started/:path*', destination: '/docs/start/getting-started/:path*', permanent: true },
-      { source: '/docs/getting-started', destination: '/docs/start/getting-started', permanent: true },
-      {
-        source: '/docs/start/getting-started/introduction',
-        destination: '/docs/start/getting-started',
-        permanent: true,
-      },
-      {
-        source: '/docs/start/getting-started/why-events',
-        destination: '/docs/architecture/concepts/why-events',
-        permanent: true,
-      },
-      ...movedConceptRedirects,
-      { source: '/docs/concepts/:path*', destination: '/docs/start/concepts/:path*', permanent: true },
-      { source: '/docs/concepts', destination: '/docs/start/concepts', permanent: true },
-      { source: '/docs/guides/:path*', destination: '/docs/start/guides/:path*', permanent: true },
-      { source: '/docs/guides', destination: '/docs/start/guides', permanent: true },
-      { source: '/docs/deployment/:path*', destination: '/docs/architecture/deployment/:path*', permanent: true },
-      { source: '/docs/deployment', destination: '/docs/architecture/deployment', permanent: true },
-      { source: '/docs/start/deployment/:path*', destination: '/docs/architecture/deployment/:path*', permanent: true },
-      { source: '/docs/start/deployment', destination: '/docs/architecture/deployment', permanent: true },
-      { source: '/docs/strategy/:path*', destination: '/docs/start/strategy/:path*', permanent: true },
-      { source: '/docs/strategy', destination: '/docs/start/strategy', permanent: true },
-      { source: '/docs/resources/:path*', destination: '/docs/start/resources/:path*', permanent: true },
-      { source: '/docs/resources', destination: '/docs/start/resources', permanent: true },
-      {
-        source: '/docs/start/resources/comparisons/:path*',
-        destination: '/docs/start/resources',
-        permanent: true,
-      },
-      { source: '/docs/vision', destination: '/docs/start/vision', permanent: true },
-
-      { source: '/docs/development/contributing/:path*', destination: '/docs/contributing/guides/:path*', permanent: true },
-      { source: '/docs/development/contributing', destination: '/docs/contributing/guides/overview', permanent: true },
-
-      { source: '/docs/open-source/contributing/:path*', destination: '/docs/contributing/guides/:path*', permanent: true },
-      { source: '/docs/open-source/contributing', destination: '/docs/contributing/guides/overview', permanent: true },
-      { source: '/docs/open-source/:path*', destination: '/docs/contributing/:path*', permanent: true },
-      { source: '/docs/open-source', destination: '/docs/contributing', permanent: true },
-
-      { source: '/docs/platform-services', destination: '/docs/cloud/synap-cloud', permanent: true },
-      { source: '/docs/intelligence', destination: '/docs/cloud/intelligence', permanent: true },
-      { source: '/docs/development/:path*', destination: '/docs/integrate/development/:path*', permanent: true },
-      { source: '/docs/development', destination: '/docs/integrate/development', permanent: true },
-
-      { source: '/docs/integrations/:path*', destination: '/docs/integrate/integrations/:path*', permanent: true },
-      { source: '/docs/integrations', destination: '/docs/integrate/integrations', permanent: true },
-
-      { source: '/docs/reference/:path*', destination: '/docs/integrate/reference/:path*', permanent: true },
-      { source: '/docs/reference', destination: '/docs/integrate/reference', permanent: true },
-
-      // Removed /developers app — send to integrate hub + reference
-      { source: '/developers', destination: '/docs/integrate', permanent: true },
-      { source: '/developers/:path*', destination: '/docs/integrate/reference', permanent: true },
+      { source: '/team', destination: '/docs/start', permanent: true },
+      { source: '/developers', destination: '/docs/build', permanent: true },
+      ...moved.map(([source, destination]) => ({ source, destination, permanent: true })),
     ];
   },
 };

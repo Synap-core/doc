@@ -1,32 +1,50 @@
 {
-  "name": "synap-team-docs",
+  "name": "synap-docs",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "check": "node scripts/check.mjs",
+    "check:frontmatter": "node scripts/check-frontmatter.mjs",
+    "check:links": "node scripts/check-links.mjs",
+    "check:retired": "node scripts/check-retired-names.mjs",
+    "check:generated": "node scripts/generate-reference.mjs --check",
+    "check:markdown": "node scripts/check-markdown.mjs",
+    "test": "node --test scripts/*.test.mjs",
+    "reference:sync": "node scripts/sync-reference.mjs",
+    "reference:generate": "node scripts/generate-reference.mjs",
+    "reference:check": "node scripts/sync-reference.mjs --check"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.3.1",
     "@xyflow/react": "^12.10.2",
-    "fumadocs-core": "^14.7.7",
-    "fumadocs-mdx": "^11.7.4",
-    "fumadocs-ui": "^14.7.7",
+    "fumadocs-core": "^16.17.7",
+    "fumadocs-mdx": "^15.4.8",
+    "fumadocs-openapi": "^12.5.3",
+    "fumadocs-ui": "^16.17.7",
     "lucide-react": "^1.8.0",
-    "next": "^15.5.15",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
+    "next": "^16.4.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tailwind-merge": "^3.5.0",
     "tailwind-variants": "^3.2.2"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/mdx": "^2.0.13",
     "@types/node": "^22.19.17",
-    "@types/react": "^19.2.3",
-    "@types/react-dom": "^19.2.3",
-    "tailwindcss": "^3.4.19",
-    "typescript": "^5.9.3"
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "js-yaml": "^4.3.2",
+    "postcss": "^8.5.31",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.6"
   }
 }

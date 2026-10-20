@@ -1,0 +1,48 @@
+---
+title: Playbooks
+description: The Playbooks operations of the Hub REST API (5 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/playbooks
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Playbooks visible to the caller across the pod — every member workspace
+          plus pod-wide templates. Cursor-paginated. Same door as MCP
+          synap_list_playbooks.
+      - content: "Creates a reusable playbook (staged process template). Governed: an
+          agent caller gets 202 `status: 'proposed'` with a `reviewUrl` — that
+          is success, not an error. Same door as MCP synap_create_playbook."
+      - content: "Launches a playbook via its executor. Governed: an agent launch gets
+          202 `status: 'proposed'`. A playbook that depends on skills not
+          enabled yet returns `status: 'blocked'` with `unenabledSkills` and
+          `enableProposals` — nothing ran. Same door as MCP synap_run_playbook."
+      - content: "Marks a running run cancelled. When the run was handed to an external
+          agent whose binding supports cancel, the binding's cancel verb runs
+          first and must succeed; otherwise the run is cancelled and the
+          response says the agent could not be stopped from Synap. Human-only:
+          an agent key gets 403."
+      - content: Reports a run's status/summary back into Synap and records the entities
+          it produced (session → produced → entity links). Governance-gated; on
+          'proposed' the run is not mutated.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/playbooks" webhooks={[]} operations={[{"path":"/playbooks","method":"get"},{"path":"/playbooks","method":"post"},{"path":"/playbooks/{id}/run","method":"post"},{"path":"/runs/{runId}/cancel","method":"post"},{"path":"/runs/{runId}/capture","method":"post"}]} showTitle />
+    </>
+  );
+}

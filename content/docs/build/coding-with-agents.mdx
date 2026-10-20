@@ -1,0 +1,111 @@
+---
+title: Coding with agents
+description: Point Claude Code, Cursor and other coding agents at these docs, and connect them to your pod.
+type: how-to
+audience: builder
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A coding agent can connect to two different things. They are separate, and you can give it both.
+
+| | What the agent gets | Address |
+|---|---|---|
+| **These docs** | The documentation, to read and search while it writes code | `https://docs.synap.live/llms.txt`, any page as `.md`, the docs MCP server at `/api/mcp` |
+| **Your pod** | Your data, under the agent's own key and governance | Your pod's `/mcp`, connected with `@synap-core/cli` |
+
+Give it the docs when it writes code against Synap (an app on the SDK, a script on the Hub REST API, an MCP
+client). Connect it to your pod when it should work with your data.
+
+## Give an agent these docs
+
+### Start from llms.txt
+
+[`/llms.txt`](https://docs.synap.live/llms.txt) is the entry point written for agents: the sections, the key pages,
+the interfaces to prefer, and the package names that are retired and must not be used.
+[`/llms-full.txt`](https://docs.synap.live/llms-full.txt) is every page in one file.
+
+To make an agent use them in a repository, say so in its instruction file (`CLAUDE.md`, `AGENTS.md` or a Cursor
+rule):
+
+```md
+Synap documentation: https://docs.synap.live/llms.txt
+Read a page as Markdown by adding .md to its URL.
+```
+
+### Every page as Markdown
+
+Each page has a Markdown version, built from the same source as the HTML:
+
+```bash
+curl https://docs.synap.live/docs/build/agents/mcp.md                             # add .md to the URL
+curl -H 'Accept: text/markdown' https://docs.synap.live/docs/build/agents/mcp     # or ask for Markdown
+```
+
+On every page, **Copy Markdown** copies it, and **Open** sends it to ChatGPT, Claude or Cursor, or shows it on
+GitHub.
+
+### The docs MCP server
+
+`https://docs.synap.live/api/mcp` is an MCP server (Streamable HTTP, no sign-in) with three tools:
+
+| Tool | Does |
+|---|---|
+| `list_pages` | The index of every page, with its URL |
+| `get_page` | One page as Markdown, by its URL (for example `/docs/build/sdk`) |
+| `search` | Full-text search over the docs |
+
+Claude Code:
+
+```bash
+claude mcp add --transport http synap-docs https://docs.synap.live/api/mcp
+```
+
+Cursor, in `~/.cursor/mcp.json` or a project's `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "synap-docs": { "url": "https://docs.synap.live/api/mcp" }
+  }
+}
+```
+
+This server only serves the public documentation. It cannot see a pod.
+
+## Connect an agent to your pod
+
+Every pod serves its own MCP server at `/mcp`. The CLI connects an agent to it with an identity and a key of its own,
+so its writes go through your pod's governance and you can revoke it separately. See
+[Connect an agent](/docs/build/agents) for every client.
+
+```bash
+npx @synap-core/cli init          # first time: finds or creates your pod and connects the agents it detects
+synap connect claude-code         # or: codex, cursor, claude-desktop, ...
+```
+
+- **Claude Code**: `synap connect claude-code` registers the pod's MCP server with `claude mcp add` (user scope)
+  and installs the [Synap skills](/docs/build/agents/skills) in `~/.claude/skills/`.
+- **Cursor**: `synap connect cursor` writes the pod's MCP server into `~/.cursor/mcp.json`.
+- **claude.ai** (web): its connector settings take a URL and sign you in with OAuth, with no key to paste.
+  `synap mcp connect-claude` prints the steps and the Synap Cloud URL, `https://api.synap.live/mcp`. After you
+  approve, ask Claude to list your pods (`list_pods`) and connect one (`connect_pod`).
+
+Check the connection with `synap mcp verify` and `synap whoami`.
+
+### What the agent sees
+
+- Tool names start with `synap_`. A new agent key lists a small entry set: `synap_orient` is the session briefing
+  (what awaits your review, open work, your identity and projects), and `synap_ask` answers questions from your
+  data. The agent loads more tools in groups.
+  [MCP tools](/docs/reference/mcp-tools) lists them all.
+- Its writes become proposals unless a rule you set lets them apply. It can never approve a proposal.
+- What it may read and change is set by its key: see [API keys](/docs/build/api-keys).
+
+## Both at once
+
+The docs MCP server and your pod's MCP server are separate entries in the client's configuration: for example
+`synap-docs`, and the `synap-<pod name>` entry that `synap connect` writes. An agent building on Synap uses the first to look up how, and the second to act on your
+data.

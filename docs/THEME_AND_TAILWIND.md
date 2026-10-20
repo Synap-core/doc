@@ -1,37 +1,35 @@
-# Theme, Tailwind, and fumadocs-ui — configuration
+# Theme, Tailwind and Fumadocs UI
 
-## 1. Root cause: no `@tailwind` in `globals.css` (most important)
+The site uses Tailwind CSS v4 with its CSS-first configuration. There is no `tailwind.config.*` file.
 
-`@import 'fumadocs-ui/style.css'` pulls a **pre-built** CSS file from the package. It only contains utilities that **fumadocs-ui’s own** build included (a **subset** of Tailwind — e.g. `gap` only up to `gap-6`, limited padding scale).
+## Wiring
 
-There was **no** `@tailwind base|components|utilities` in this app. Without that, **PostCSS does not run Tailwind JIT** against `tailwind.config.ts` and your `content` globs. So **most classes used in `app/` and `components/` were never emitted**: `gap-12`, `py-10`, `md:py-14`, `p-6`, `rounded-2xl`, arbitrary values, `homeUi.*`, dialog layout, etc. The HTML still had `class="..."`, but the rules were missing — everything looked “wrong” except what happened to overlap the fumadocs subset (e.g. `Card` using `p-4`, `gap-4`).
+- `postcss.config.mjs` runs `@tailwindcss/postcss`.
+- `app/globals.css` imports, in order: `tailwindcss`, then the Fumadocs UI theme `fumadocs-ui/css/neutral.css` and its
+  layout preset `fumadocs-ui/css/preset.css`. The presets declare the classes Fumadocs components use (`@source
+  inline(...)`), so no `@source` for `node_modules` is needed.
+- Tailwind v4 finds the class names in the app's own files automatically (everything not gitignored), including
+  `lib/home-ui.ts`.
 
-**Fix:** in `app/globals.css`, after the fumadocs import, add:
+## Theme tokens
+
+Fumadocs 15+ uses full colour values in `--color-fd-*` variables (not the older `--fd-*` HSL triplets). Synap overrides
+the brand accent for light (`:root`) and dark (`.dark`) in `app/globals.css`:
 
 ```css
-@tailwind utilities;
+:root { --color-fd-primary: hsl(160, 84%, 39%); }
+.dark { --color-fd-primary: hsl(160, 72%, 45%); }
 ```
 
-Use `@tailwind base` / `components` only if you intentionally drop the fumadocs import and rely solely on the `docsUi` plugin (advanced). Usually **`@tailwind utilities`** is enough to add the full utility layer without duplicating fumadocs’ preflight bundle.
+Keep both: without the `.dark` value the accent reads wrong in dark mode. Utilities such as `bg-fd-primary`,
+`text-fd-muted-foreground` and `border-fd-border` come from these tokens.
 
-**Also:** `postcss.config.mjs` with the `tailwindcss` plugin should exist so Next applies this pipeline reliably.
+## Components
 
-## 2. Tailwind `content` paths
+Use the Fumadocs components (`Card`, `Cards`, `Callout`, `Steps`, `Tabs`) rather than custom markup, so pages keep the
+product look. The search dialog is the Fumadocs default, backed by `/api/search`.
 
-JIT only scans listed files. Include **`./lib/**/*.{ts,tsx}`** (and any other folder with class strings), or utilities referenced only from those files won’t generate.
+## Build warnings
 
-## 3. Don’t replace fumadocs `Card` to “fix spacing”
-
-Once (1) and (2) are fixed, **`Card` / `Cards`** look as designed. Replacing them with custom markup changes the product look; fix the pipeline first.
-
-## 4. Theme tokens (`--fd-*`)
-
-Synap overrides **`--fd-primary`** in `app/globals.css` for `:root` and `.dark`. Keep both if the brand must read correctly in dark mode.
-
-## 5. Dialogs vs search
-
-Don’t reuse fumadocs **search** dialog geometry for forms; use a centered panel with normal inset.
-
----
-
-**Summary:** The main misconfiguration was **Tailwind never running for the app** because **`globals.css` had no `@tailwind` directive**. Listing `lib/` in `content` matters but is secondary to that.
+`next build` prints CSS warnings about `::highlight(fd-search)` from the Fumadocs search styles. They come from the
+CSS minifier not knowing the CSS Custom Highlight API and are harmless.

@@ -1,0 +1,30 @@
+---
+title: EntityShare
+description: The EntityShare operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/entity-share
+  toc: []
+  structuredData:
+    headings: []
+    contents: []
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/entity-share" webhooks={[]} operations={[{"path":"/entity-share/deliver","method":"post"}]} showTitle />
+    </>
+  );
+}

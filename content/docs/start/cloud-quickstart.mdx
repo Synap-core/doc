@@ -1,0 +1,103 @@
+---
+title: Cloud quickstart
+description: Get a hosted pod on Synap Cloud and connect your computer, your AI agents and your phone with one command.
+type: tutorial
+audience: user
+availability: [cloud, cli, relay]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+With Synap Cloud, Synap runs the pod for you. You connect to it with `@synap-core/cli`, the command-line tool that
+connects a computer and its agents to a pod.
+
+<Callout title="Access">
+  Hosted pods are created on [synap.live](https://synap.live). While Synap Cloud is in private beta, creating a pod
+  may require an invitation.
+</Callout>
+
+## What you need
+
+- Node.js 20 or later (the CLI declares `node >= 20`).
+- A browser, to sign in and approve this computer.
+- Optional: an AI agent on this computer. `synap init` looks for Claude Code, Codex and Cursor.
+- Optional: the Relay app on your phone.
+
+## 1. Run the setup
+
+```bash
+npx @synap-core/cli init
+```
+
+You can also install the CLI once and run it as `synap`:
+
+```bash
+npm install -g @synap-core/cli
+synap init
+```
+
+## 2. Choose your pod
+
+When `synap init` finds no pod on this computer, it asks where your pod is:
+
+- **I have one on synap.live (sign in)**: sign in with your Synap account and pick a pod.
+- **Create in browser**: opens synap.live to create a pod, then waits until it answers. A new pod usually takes about
+  two minutes to start.
+- **I have a URL**: for a pod you already know the address of.
+- **Self-host**: prints the commands to install your own pod. See the [self-host quickstart](/docs/start/self-host-quickstart).
+
+## 3. Approve this computer
+
+The CLI shows a short address and a code:
+
+```
+Open https://<your-pod>/... on any device and enter ABCD-1234
+```
+
+Open the address on any device where you are signed in to your pod, enter the code and approve. On a server without
+a browser, use your phone or laptop. The code expires after a few minutes; run `synap init` again if it does.
+
+## 4. Connect your agents
+
+The CLI lists the agents it found on this computer (Claude Code, Codex, Cursor) and connects the ones you keep
+selected. Each agent gets its own key and identity on your pod, so you can see and revoke what each one did.
+
+To connect an agent later, or one `init` does not detect:
+
+```bash
+synap connect claude-code
+synap connect --list        # everything that can be connected
+```
+
+## 5. Pair your phone
+
+If your pod is served over HTTPS, `init` ends with a pairing link and QR code for Relay. Relay is where you approve
+what your agents propose. See [Relay](/docs/use/relay).
+
+## 6. Check that it works
+
+```bash
+synap status     # pod health and API status
+synap doctor     # is the key valid, do the workspace and project exist on this pod
+```
+
+Then give your agent a real task, for example: "Save a note in Synap with three things I want to do this week." The
+note arrives as a proposal; approve it in Relay or the Browser app.
+
+## Unattended setup
+
+For scripts and CI, pass everything on the command line:
+
+```bash
+synap init --pod-url https://<your-pod> --api-key <key> --agents claude-code,codex,cursor --yes
+```
+
+`--json` prints a summary (`podUrl`, `connected`, `notApproved`, `failed`, `pairLink`, `exitCode`). Exit code `0`
+means at least one agent was connected; `3` means no pod was found or reachable; `6` means the pod is ready but no
+agent was connected.
+
+## Next
+
+- [Connect an agent](/docs/build/agents) explains what the CLI writes for each agent.
+- [Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted) explains what Synap Cloud runs for you.

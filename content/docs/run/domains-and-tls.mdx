@@ -1,0 +1,84 @@
+---
+title: Domains and TLS
+description: The host names a pod uses, the DNS records it needs, automatic HTTPS with Caddy, and tunnels.
+type: how-to
+audience: self-host
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+## Two host names
+
+A pod answers on two host names:
+
+| Host | Setting | Serves |
+|---|---|---|
+| The pod | `DOMAIN` | The API (`/trpc`, `/api/*`), MCP (`/mcp`), sign-in, realtime and `/health` |
+| The admin console | `POD_ADMIN_DOMAIN` | The pod admin console, its sign-in page and first-admin setup |
+
+The installer derives the console's host from `--domain` by adding `-admin` to the first label:
+
+| `--domain` | Admin console |
+|---|---|
+| `pod.example.com` | `pod-admin.example.com` |
+| `synap.example.com` | `synap-admin.example.com` |
+
+Use a subdomain for `--domain`: with a bare domain such as `example.com`, the derived console host would be
+`example-admin.com`, which you do not own. The two hosts must share a parent domain, so that one sign-in session works
+on both. To choose another console host, set `POD_ADMIN_DOMAIN` and `POD_ADMIN_URL` with `synap config set`.
+
+## DNS
+
+Create an `A` record (and `AAAA` if the server has IPv6) for **both** host names, pointing at the server, before you
+install. Check them from the server:
+
+```bash
+cd /opt/synap/deploy
+sudo synap connectivity     # DNS and /health for the pod's domain
+```
+
+## Automatic HTTPS
+
+Caddy obtains and renews certificates from Let's Encrypt for both host names. It needs:
+
+- ports `80` and `443` (TCP) open to the internet, and `443/udp` for HTTP/3;
+- DNS already pointing at the server;
+- a contact email (`LETSENCRYPT_EMAIL`, set from `--email`).
+
+If a certificate is missing, check DNS first, then `sudo synap logs caddy`.
+
+## Exposing a pod through a tunnel
+
+A tunnel lets a pod with no public IP, or no open ports, be reached from the internet. Caddy still serves the pod;
+the tunnel connects to it from the inside.
+
+At install time:
+
+```bash
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo bash -s -- --domain pod.example.com --edge tunnel --tunnel-token-file /root/cloudflare-token
+```
+
+On an installed pod:
+
+```bash
+cd /opt/synap/deploy
+sudo synap tunnel enable cloudflare --token-file /root/cloudflare-token
+sudo synap tunnel status
+sudo synap tunnel disable
+```
+
+`synap tunnel enable` writes the token to `.env` (`CLOUDFLARED_TUNNEL_TOKEN` for Cloudflare) and starts the matching
+Compose profile. In the Cloudflare dashboard, route the tunnel's public host names to the pod. Prefer `--token-file`
+over `--token`, so the token does not end up in your shell history.
+
+`pangolin` is also accepted as a provider. The shipped Pangolin profile is a placeholder: check that it points at your
+real Pangolin connector image before relying on it.
+
+## Another web server in front of the pod
+
+If another reverse proxy owns ports 80 and 443 on the server (for example Traefik, as on an
+[Eve-managed](/docs/use/eve) server), install with `--edge traefik`. `SYNAP_EDGE=traefik` is then pinned in `.env`,
+and updates do not try to bind Caddy to those ports. Your proxy must route both host names to the pod.

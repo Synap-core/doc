@@ -1,0 +1,34 @@
+---
+title: Validation policy
+description: How the pod decides whether a requested change runs directly, becomes a proposal, or is refused.
+type: explanation
+audience: builder
+availability: [pod-oss, cloud]
+status: beta
+owner: Antoinesrvt
+---
+
+Validation policy determines whether a requested mutation can execute directly or must become a proposal.
+
+## Decision dimensions
+
+- **Actor/source**: user, AI, system, or external connector
+- **Action sensitivity**: low-risk read/update vs high-impact structural mutation
+- **Scope and ownership**: workspace and resource-level authorization context
+
+## Typical outcomes
+
+- **Direct execution** for allowed low-risk operations
+- **Proposal required** when policy demands human confirmation
+- **Denied** when actor lacks the required permission scope
+
+## Why this matters
+
+- keeps AI and automation productive without bypassing governance
+- preserves auditability for who changed what and why
+- enables human-in-the-loop approval for high-impact operations
+
+See:
+
+- [Permission model](/docs/build/concepts/permission-model)
+- [Connect an agent](/docs/build/agents)

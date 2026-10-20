@@ -1,0 +1,61 @@
+---
+title: Channels
+description: The Channels operations of the Hub REST API (8 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/channels
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns channels the authenticated user has access to. Supports
+          optional workspace and type filters. When `q` is set the SAME query is
+          narrowed server-side by title / branch purpose — browse and search are
+          one code path over one access floor, never two loaders.
+      - content: Idempotent find-or-link of the canonical EXTERNAL channel for
+          (externalSource, externalChannelId). Creates the channel if absent
+          and, when contextObjectId is supplied, binds it to that entity (e.g. a
+          client person/client entity mirrored as a Discord channel). Reuses the
+          shared inbound-recorder upsert so it dedups on the (externalSource,
+          externalId) partial unique index.
+      - content: Resolves (or creates) the AI channel scoped to a specific entity,
+          document, or view.
+      - content: Returns the per-(user, workspace) personal AI channel, scoped to the
+          orchestrator agent.
+      - content: Posts a system-prompt-overridden message into the channel and
+          dispatches the AI to respond. Used by skill triggers and proactive
+          entry points.
+      - content: Resolves the EXTERNAL channel by (externalSource='discord',
+          externalId=:externalChannelId) and ENQUEUES an agnostic `pin_message`
+          egress intent; the bridge performs the Discord pin.
+      - content: Resolves the EXTERNAL channel by (externalSource=provider||'discord',
+          externalId=:externalChannelId) and ENQUEUES an agnostic
+          `rename_channel` egress intent; the bridge performs the Discord rename
+          (rate-limited ~2 renames per 10 min per channel).
+      - content: Files a governed `channel/bind` proposal (subjectType 'channel', action
+          'bind'). On approval, points an EXISTING channel (by Synap channel
+          UUID) at a context object — usually a client entity — and optionally
+          stamps the firewall role (branchPurpose). ALWAYS proposes unless a
+          workspace opted 'channel.bind' into autoApproveFor. branchPurpose is
+          human-confirmed, never default-forced (client-comms is immutable once
+          set).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/channels" webhooks={[]} operations={[{"path":"/channels","method":"get"},{"path":"/channels","method":"post"},{"path":"/channels/by-context","method":"post"},{"path":"/channels/personal","method":"get"},{"path":"/channels/trigger-ai","method":"post"},{"path":"/channels/:externalChannelId/pins/:messageId","method":"post"},{"path":"/channels/:externalChannelId/rename","method":"post"},{"path":"/channels/:channelId/bind","method":"post"}]} showTitle />
+    </>
+  );
+}

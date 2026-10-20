@@ -1,0 +1,68 @@
+---
+title: Run your own pod
+description: What a self-hosted pod is made of, what you need to run one, and the tools you operate it with.
+type: explanation
+audience: self-host
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+The Synap pod is open source (MIT) and published as signed releases of the
+[backend repository](https://github.com/Synap-core/backend). This section covers running one on your own server. To
+get a pod running quickly, follow the [self-host quickstart](/docs/start/self-host-quickstart) first.
+
+## What runs on the server
+
+A pod is a Docker Compose project. The services that always run:
+
+| Service | What it does |
+|---|---|
+| `backend` | The pod API on port 4000: tRPC, the Hub REST API, MCP, webhooks and background workers |
+| `realtime` | Socket.IO and collaborative editing, on port 4001 |
+| `pod-admin` | The pod's admin console |
+| `postgres` | PostgreSQL 15 with TimescaleDB: your data and the event log |
+| `postgres-backup` | Hourly database dumps, off-host snapshots and restore drills |
+| `redis` | Cache and queues |
+| `minio` | File storage (S3-compatible) |
+| `typesense` | Full-text search, rebuilt from PostgreSQL |
+| `kratos` | Ory Kratos: sign-in and accounts |
+| `caddy` | The web server in front of everything, with automatic HTTPS. Publishes ports 80 and 443. |
+
+Only Caddy is published on the server's public interfaces. PostgreSQL, MinIO, Typesense and Kratos bind to
+`127.0.0.1` only.
+
+Optional services are behind Compose profiles: `monitoring` (Dozzle, Prometheus, Grafana, Alertmanager), `rsshub`
+(RSSHub and browserless), `cloudflare-tunnel` and `pangolin-tunnel`.
+
+## What you need
+
+- A Linux server with Docker and Docker Compose v2, reachable as root.
+- A domain with DNS records for the pod and its admin console. See [Domains and TLS](/docs/run/domains-and-tls).
+- Ports 80 and 443 open, unless you expose the pod through a tunnel.
+- Free disk space: updates refuse to start with less than 2 GB free (`SYNAP_UPDATE_MIN_FREE_MB`, default `2048`).
+
+## The server CLI
+
+The installer puts the operator CLI at `/usr/local/bin/synap`. It is a shell script that ships with each release, in
+`/opt/synap`. It works on the deploy directory, so run it from there (or set `SYNAP_DEPLOY_DIR` on the `sudo` command:
+`sudo SYNAP_DEPLOY_DIR=/opt/synap/deploy synap …`):
+
+```bash
+cd /opt/synap/deploy
+sudo synap help
+```
+
+| Task | Command | Page |
+|---|---|---|
+| Install | `synap install` (run by `install.sh`) | [Install](/docs/run/install) |
+| Change a setting | `synap config set KEY=VALUE`, then `synap apply` | [Configuration](/docs/run/configuration) |
+| Back up and restore | `synap backup …`, `synap restore …` | [Backups](/docs/run/backups) |
+| Update | `synap update` | [Upgrades](/docs/run/upgrades) |
+| Check health, read logs | `synap health`, `synap doctor`, `synap logs` | [Operations](/docs/run/operations) |
+| Review exposure, secrets and trust | `synap config list`, `synap policy show` | [Security hardening](/docs/run/security-hardening) |
+| Sign-in with a Synap account | `synap federation connect-cloud` | [Connect to the Control Plane](/docs/run/connect-control-plane) |
+
+This server CLI is not the user CLI `@synap-core/cli`, which also runs as `synap` but on your laptop, to connect
+computers and agents to a pod.

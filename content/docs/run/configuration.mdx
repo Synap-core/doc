@@ -1,0 +1,89 @@
+---
+title: Configuration
+description: Change a self-hosted pod's settings safely with synap config, and the settings you are most likely to need.
+type: how-to
+audience: self-host
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A pod's settings live in `/opt/synap/deploy/.env`, created by the installer with generated secrets. Change it with
+`synap config`, not with a text editor: `synap config` checks every value against the schema in
+`deploy/env.schema` and writes the file atomically, keeping a backup.
+
+## Change a setting
+
+```bash
+cd /opt/synap/deploy
+sudo synap config set SMTP_CONNECTION_URI='smtp://user:pass@smtp.example.com:587'
+sudo synap apply
+```
+
+`synap apply` recreates the running services whose configuration changed, so they read the new `.env`. It never
+deletes a volume or starts a stopped service.
+
+## synap config
+
+| Command | What it does |
+|---|---|
+| `synap config list` | Every key, with secrets masked. |
+| `synap config get KEY [--reveal]` | One value, masked unless `--reveal`. |
+| `synap config set KEY=VALUE …` | Validates every pair, then writes. Keeps `.env.bak.<timestamp>`. `--stdin` or `--from-file F` read `KEY=VALUE` lines, which keeps secret values out of your shell history. |
+| `synap config unset KEY …` | Removes keys, with the same rules. |
+| `synap config validate` | Checks the whole `.env` against the schema. Non-zero exit on errors. |
+| `synap config diff [from] [to]` | Masked diff, by default from the newest backup to the current `.env`. |
+| `synap config edit` | Opens a copy in `$EDITOR`; replaces `.env` only if the copy validates. |
+
+`synap config set` refuses:
+
+- keys the schema does not know (a typo, or something like `PATH`);
+- values of the wrong type (a host name with `https://`, a non-numeric count);
+- keys owned by `synap update` (the release and image keys);
+- changes to an **immutable** secret that already has a value, such as `POSTGRES_PASSWORD` or `JWT_SECRET`, because
+  existing data depends on it. `--force` overrides this; only use it if you know the data does not depend on the old
+  value.
+
+## Settings you are likely to change
+
+| Key | What it is |
+|---|---|
+| `DOMAIN` | The pod's host name. See [Domains and TLS](/docs/run/domains-and-tls). |
+| `PUBLIC_URL` | The pod's public origin, `https://<DOMAIN>` by default. |
+| `POD_ADMIN_DOMAIN`, `POD_ADMIN_URL` | The admin console's host name and origin. |
+| `LETSENCRYPT_EMAIL` | Contact email for certificates. |
+| `SMTP_CONNECTION_URI`, `SMTP_FROM_ADDRESS` | The mail server for recovery codes and verification emails. Without them, mail is not delivered and the "Email me a code" recovery option stays hidden. The from-address must be on a domain your mail relay has verified. |
+| `INTELLIGENCE_HUB_URL`, `INTELLIGENCE_HUB_API_KEY` | The Intelligence Service behind the pod's built-in AI features. |
+| `CONTROL_PLANE_URL` | The Synap Control Plane this pod talks to, if any. |
+| `SYNAP_CATALOG_SOURCE` | `off` stops the pod from fetching Synap's marketplace catalog (it otherwise reads it every 10 minutes, anonymously). |
+| `SYNAP_UPDATE_CHANNEL` | The release channel a bare `synap update` uses: `stable` (default) or `fast`. |
+| `BACKUP_REPOSITORY` and `BACKUP_*` | The off-host backup target. See [Backups](/docs/run/backups). |
+| `PG_BACKUP_INTERVAL_SECONDS`, `PG_BACKUP_KEEP`, `PG_BACKUP_KEEP_DAILY` | Local dump schedule: every 3600 seconds, keeping the newest 6 plus one per day for 7 days, by default. |
+| `MAX_UPLOAD_SIZE` | The largest upload the pod accepts, for example `100MB`. |
+| `SYNAP_EDGE` | `caddy` (default) or `traefik` when another web server is in front of the pod. |
+
+The full list, with each key's type and flags, is `deploy/env.schema` in the deploy directory.
+
+## Connectors
+
+Connections to outside accounts (Google, Slack, GitHub and so on) go through [Nango](https://nango.dev). Who brokers
+them depends on two settings:
+
+| Your pod | Connections are brokered by |
+|---|---|
+| `CONTROL_PLANE_URL` is set | The Control Plane, with a credential it delivers to the pod. A local `NANGO_HOST` and `NANGO_SECRET_KEY` are ignored. |
+| `CONTROL_PLANE_URL` is set and `SYNAP_CONNECTOR_BROKER=local` | Your own Nango instance, at `NANGO_HOST` with `NANGO_SECRET_KEY`. |
+| `CONTROL_PLANE_URL` is empty | Your own Nango instance, at `NANGO_HOST` with `NANGO_SECRET_KEY`. |
+
+```bash
+sudo synap config set SYNAP_CONNECTOR_BROKER=local NANGO_HOST=https://nango.example.com
+printf 'NANGO_SECRET_KEY=%s\n' '<secret>' | sudo synap config set --stdin
+sudo synap apply
+```
+
+## Secrets
+
+The installer generates every secret the pod needs (database password, JWT secret, Kratos secrets, MinIO and
+Typesense keys, encryption keys). `synap config list` and `get` mask them. Secrets are also included, encrypted, in
+the off-host backup snapshot; see [Backups](/docs/run/backups).

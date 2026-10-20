@@ -1,0 +1,35 @@
+---
+title: Security
+description: How to report a vulnerability in Synap privately, and what happens after you do.
+type: how-to
+audience: contributor
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+## Report a vulnerability
+
+**Do not open a public issue or pull request for a security problem.**
+
+Email **security@synap.live** with:
+
+- what is affected: the pod (backend), the CLI, Synap Cloud, an app, or this site, and the version if you know it;
+- how to reproduce it, and what an attacker could do with it;
+- whether you want to be credited, and how.
+
+This applies to the open-source repositories and to Synap Cloud.
+
+## What happens next
+
+We acknowledge your report, investigate, and keep you informed until it is fixed. We ask you not to disclose the
+problem publicly until a fix is released and pod operators have had a reasonable time to update.
+
+## For pod operators
+
+- Keep your pod updated: [Upgrades](/docs/run/upgrades). Automatic updates apply signed releases only.
+- Verify releases with `cosign` and `SYNAP_RELEASE_VERIFY=enforce`: [Verifying releases](/docs/run/install#verifying-releases).
+- Keep the database, MinIO, Typesense and Kratos ports on `127.0.0.1`, as the stock configuration does: only Caddy
+  should face the internet.
+- Give agents and integrations their own keys with the smallest grant that works: [API keys](/docs/build/api-keys).

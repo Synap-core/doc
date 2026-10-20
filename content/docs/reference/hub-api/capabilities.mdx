@@ -1,0 +1,117 @@
+---
+title: Capabilities
+description: The Capabilities operations of the Hub REST API (14 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/capabilities
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: 'Returns the unified `Capability[]` read-model for a workspace
+          (pod-wide + the given workspace): tools + skills + commands, each with
+          `verbs` (label/kind/granted/effectiveExecMode/govDefault),
+          `governance` (the run posture for an agent: auto runs now, propose
+          files a review, none nothing runs here) and `enabled` (the approval
+          gate — a separate fact). Reuses the same `listCapabilities` adapter
+          the tRPC `playbooks.capabilityRegistry.list` exposes. Requires
+          hub-protocol.read scope. Pass `workspaceId` to scope to one workspace;
+          OMIT it for the pod-wide read (all accessible workspaces + globals,
+          deduped). Pass `intent` (a registry slug) to keep only the
+          capabilities declaring at least one verb with that vendor-independent
+          routing intent — applied AFTER the pod-wide merge, so a capability
+          visible through two workspaces is judged once. A verb declaring no
+          intent never matches.'
+      - content: Returns the capability containers visible in a workspace (pod-wide +
+          the given workspace). Each container is a named bundle of parts —
+          Connections (tools), Skills, and Built-ins — grouped via the `links`
+          table as `tool|skill --member_of--> capability`. Each returned
+          container includes its `parts` (connections/builtins/skills with names
+          + kinds) so the agent knows what each bundle contains. Thin door over
+          the tRPC `capabilities.containers.list` + `.get` callers. Pass `query`
+          to SEARCH (ranked match over container name/description + member
+          names) instead of the full dump; `limit` caps the result count
+          (default 20 with a query). No `kind` filter here — a container is a
+          bundle, not a single-kind verb (use the plain `/capabilities` list's
+          `kind` filter for that axis). Requires hub-protocol.read scope. Pass
+          `workspaceId` to scope to one workspace; OMIT it for the pod-wide read
+          (all accessible workspaces + globals, deduped). Pass `intent` (a
+          registry slug) to keep only the containers holding at least one MEMBER
+          brick that declares that vendor-independent routing intent — the
+          intent lives on the verb, so the match is resolved against the
+          capability REGISTRY and mapped back through each brick's
+          `containerId`. A container whose members declare no intent never
+          matches.
+      - content: Instantiates a set of {vault secrets · tools · skills} from a config
+          descriptor (inline `definition` or a seed `templateKey`) + `params`.
+          `{{param}}` placeholders are interpolated; each tool/skill is created
+          through the governed routers (proposal-gated — proposal ids are
+          surfaced in `proposals`). Requires hub-protocol.write scope.
+      - content: Re-projects drifted capability-template skills
+          (providerSpec/parameters/code/description) onto their installed
+          containers through the governed `createCapabilityFromDefinition`
+          applier — add-only, never touches a skill the template doesn't
+          declare. `dryRun:true` computes the report without writing. Requires
+          hub-protocol.write scope.
+      - content: Advances each standalone-installed view/skill/automation's untouched
+          fields to its source marketplace template through the governed
+          per-kind `.update` door. A user-edited field is owner-owned — left
+          alone and reported. A private/unsynced package is skipped.
+          `dryRun:true` computes the report without writing. Requires
+          hub-protocol.write scope.
+      - content: Clears the `marketSource` source-link on a standalone-installed
+          view/skill/automation so a future template change no longer reconciles
+          onto it. Persisted through the governed per-kind `.update` door.
+          Requires hub-protocol.write scope.
+      - content: 'Returns ONE `CapabilityCard` per capability PACK: each installed
+          container (member tools folded into `connection`, member skills into
+          `verbs`) plus each available template not yet installed. Every card
+          carries a computed `status` (available / needs_connection / connected
+          / draft / ready / partial / unavailable) and exactly one `nextAction`.
+          De-duped by pack identity (the container/template name) so duplicate
+          bare tools/skills collapse under their pack. Requires
+          hub-protocol.read scope and a `workspaceId` query param.'
+      - content: Projects the shared capability registry into executable actions. Draft,
+          disconnected, teaching-only, and catalog-only entries are omitted.
+          Each action carries its real parameter schema, connection state,
+          approval posture, and effective execution mode. Requires a workspace
+          lens. Pass `intent` (a closed ABSTRACT_VERBS value) to keep only the
+          actions whose verb declares that routing intent — the
+          vendor-independent way to ask "what can send a message?". A verb that
+          declares no intent is never matched (the vocabulary is closed; absence
+          is never guessed).
+      - content: Resolves a capability verb (verbId = backing skill name) or a skillId
+          to its skill, runs it through gateCapabilityExecution, and on `run`
+          delegates to the IS sandbox executor. Returns 200 with the result (or
+          a dry-run preview), 202 with a reviewable proposal when governance
+          requires approval, 403 when denied. Requires hub-protocol.write scope.
+      - content: Returns metadata for the capability's credentials (vault rows carrying
+          capability_id). NEVER returns secret values. Owner-scoped. Requires
+          hub-protocol.read.
+      - content: Server-encrypts and stores a new credential (secrets row) for the
+          capability. Promotes it to default when requested or when it is the
+          capability's first credential. Requires hub-protocol.write.
+      - content: Updates credential fields; rotates (re-encrypts) when `value` is given;
+          enforces a single default. Requires hub-protocol.write.
+      - content: Soft-deletes a credential; promotes the oldest remaining credential to
+          default when the removed one was default. Requires hub-protocol.write.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/capabilities" webhooks={[]} operations={[{"path":"/capabilities","method":"get"},{"path":"/capabilities/containers","method":"get"},{"path":"/capabilities/apply","method":"post"},{"path":"/capabilities/reconcile","method":"post"},{"path":"/configs/reconcile","method":"post"},{"path":"/configs/detach","method":"post"},{"path":"/capabilities/containers/{id}","method":"delete"},{"path":"/capabilities/catalog","method":"get"},{"path":"/capabilities/actions","method":"get"},{"path":"/capabilities/execute","method":"post"},{"path":"/capabilities/{capabilityId}/credentials","method":"get"},{"path":"/capabilities/{capabilityId}/credentials","method":"post"},{"path":"/capabilities/{capabilityId}/credentials/{id}","method":"patch"},{"path":"/capabilities/{capabilityId}/credentials/{id}","method":"delete"}]} showTitle />
+    </>
+  );
+}

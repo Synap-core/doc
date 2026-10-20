@@ -1,0 +1,44 @@
+---
+title: Agents
+description: The Agents operations of the Hub REST API (5 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/agents
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns users with userType='agent' that are members of the requested
+          workspace (or any accessible workspace).
+      - content: Returns per-user/per-workspace/per-agentType config overrides. Filter
+          by userId (required), workspaceId (optional), agentType (optional).
+          The caller can only read configs whose userId is themselves OR an
+          agent user whose parentAgentId == caller.
+      - content: Posts a system-prompt-overridden message into the channel and
+          dispatches the AI to respond. Used by skill triggers and proactive
+          entry points.
+      - content: Resolves-or-creates the Discord-bound channel, records the inbound
+          message, runs ONE Intelligence Service orchestrator turn via streaming
+          accumulation (external actions stay proposal-gated), and returns the
+          agent's reply text synchronously. On pod deadline, returns
+          partial:true with steps collected so far.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/agents" webhooks={[]} operations={[{"path":"/agent-users","method":"get"},{"path":"/agent-configs","method":"get"},{"path":"/channels/trigger-ai","method":"post"},{"path":"/discord/agent-turn","method":"post"},{"path":"/agents/sync","method":"post"}]} showTitle />
+    </>
+  );
+}

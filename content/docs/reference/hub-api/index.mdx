@@ -1,0 +1,129 @@
+---
+title: "Hub REST API"
+description: "The pod's HTTP API for agents, scripts and integrations, rendered from its OpenAPI description."
+availability: [pod-oss, cloud]
+type: "reference"
+audience: "builder"
+status: "current"
+owner: "Antoinesrvt"
+generated_from: "Synap-core/backend@c31e261ab (main)"
+---
+
+Generated from [Synap-core/backend@c31e261ab](https://github.com/Synap-core/backend/tree/c31e261ab53490de5b2e4de79fdf8bfd8191e01d) (`main`): [`docs/reference/hub-openapi.json`](https://github.com/Synap-core/backend/blob/c31e261ab53490de5b2e4de79fdf8bfd8191e01d/docs/reference/hub-openapi.json). Do not edit this page; see `scripts/generate-reference.mjs`.
+
+The Hub REST API is the pod's HTTP API for anything that is not a TypeScript app: agents, scripts, automation tools and
+integrations in any language. It is served under `/api/hub` on every pod. The pages in this section are rendered from
+its OpenAPI description, grouped by tag.
+
+## The OpenAPI description
+
+Every pod publishes the OpenAPI description of its Hub REST API, without authentication:
+
+```bash
+curl https://pod.example.com/api/hub/openapi.json
+```
+
+It matches the pod's exact version, so use it (or a client generated from it) when your pod runs a different version
+from the one these pages were generated from.
+
+## Authentication
+
+```
+Authorization: Bearer <API key>
+```
+
+| Scope | Allows |
+|---|---|
+| `hub-protocol.read` | `GET` requests |
+| `hub-protocol.write` | Writes |
+
+A key's grant can narrow what it reads further; a read the grant cannot bound answers `403 GRANT_DOOR_UNSUPPORTED`.
+See [API keys](/docs/build/api-keys).
+
+Requests can name a workspace with the `X-Workspace-Id` header (or in the body or query, depending on the route).
+
+## Writes and proposals
+
+Writes go through the pod's governance: a write is applied directly where a rule allows it, and otherwise returns a
+proposal. Approving a proposal is refused for an agent's key: approval is a human step. See
+[Proposals](/docs/reference/hub-api/proposals).
+
+## Clients
+
+- [`@synap-core/hub-rest-client`](https://www.npmjs.com/package/@synap-core/hub-rest-client): a zero-dependency
+  TypeScript client for Node.js, browsers, Deno and Bun.
+- Any OpenAPI client generator, from `/api/hub/openapi.json`.
+- [`@synap-core/cli`](/docs/reference/cli) and the [MCP endpoint](/docs/build/agents/mcp) use the same API.
+
+## Errors
+
+Errors are JSON with an `error` message, and an HTTP status that says what went wrong: `401` for a missing or invalid
+key, `403` for a missing scope or a refused grant, `404` for a missing object, `409` for a conflict such as a proposal
+that is no longer pending.
+
+## Operations by tag
+
+290 operations on 247 paths, in 60 tags (an operation with two tags is listed under both, 298 entries). Paths are relative to `/api/hub`.
+
+| Tag | Operations |
+|---|---|
+| [Agent Skills](/docs/reference/hub-api/agent-skills) | 9 |
+| [Agents](/docs/reference/hub-api/agents) | 5 |
+| [Artifacts](/docs/reference/hub-api/artifacts) | 3 |
+| [Attention](/docs/reference/hub-api/attention) | 2 |
+| [Auth](/docs/reference/hub-api/auth) | 2 |
+| [Automations](/docs/reference/hub-api/automations) | 7 |
+| [Brand](/docs/reference/hub-api/brand) | 1 |
+| [Calendar](/docs/reference/hub-api/calendar) | 4 |
+| [Capabilities](/docs/reference/hub-api/capabilities) | 14 |
+| [Capture](/docs/reference/hub-api/capture) | 3 |
+| [Channels](/docs/reference/hub-api/channels) | 8 |
+| [Commands](/docs/reference/hub-api/commands) | 3 |
+| [Connectors](/docs/reference/hub-api/connectors) | 9 |
+| [Discord](/docs/reference/hub-api/discord) | 8 |
+| [Documents](/docs/reference/hub-api/documents) | 6 |
+| [Entities](/docs/reference/hub-api/entities) | 17 |
+| [EntityShare](/docs/reference/hub-api/entity-share) | 1 |
+| [Events](/docs/reference/hub-api/events) | 2 |
+| [FocusSessions](/docs/reference/hub-api/focus-sessions) | 12 |
+| [Governance](/docs/reference/hub-api/governance) | 1 |
+| [Graph](/docs/reference/hub-api/graph) | 1 |
+| [Guidelines](/docs/reference/hub-api/guidelines) | 2 |
+| [Identity](/docs/reference/hub-api/identity) | 3 |
+| [Import](/docs/reference/hub-api/import) | 4 |
+| [Keys](/docs/reference/hub-api/keys) | 1 |
+| [Knowledge](/docs/reference/hub-api/knowledge) | 10 |
+| [Lifecycle](/docs/reference/hub-api/lifecycle) | 4 |
+| [Links](/docs/reference/hub-api/links) | 2 |
+| [Loops](/docs/reference/hub-api/loops) | 1 |
+| [MCP](/docs/reference/hub-api/mcp) | 1 |
+| [Memory](/docs/reference/hub-api/memory) | 7 |
+| [Messaging](/docs/reference/hub-api/messaging) | 17 |
+| [Notifications](/docs/reference/hub-api/notifications) | 1 |
+| [Observability](/docs/reference/hub-api/observability) | 1 |
+| [Packages](/docs/reference/hub-api/packages) | 1 |
+| [Playbooks](/docs/reference/hub-api/playbooks) | 5 |
+| [Proactive](/docs/reference/hub-api/proactive) | 1 |
+| [Profiles](/docs/reference/hub-api/profiles) | 6 |
+| [Proposals](/docs/reference/hub-api/proposals) | 9 |
+| [Public](/docs/reference/hub-api/public) | 3 |
+| [Relations](/docs/reference/hub-api/relations) | 3 |
+| [Rules](/docs/reference/hub-api/rules) | 4 |
+| [Runs](/docs/reference/hub-api/runs) | 3 |
+| [Search](/docs/reference/hub-api/search) | 4 |
+| [Sessions](/docs/reference/hub-api/sessions) | 10 |
+| [Setup](/docs/reference/hub-api/setup) | 1 |
+| [Skills](/docs/reference/hub-api/skills) | 7 |
+| [Subscriptions](/docs/reference/hub-api/subscriptions) | 2 |
+| [System](/docs/reference/hub-api/system) | 13 |
+| [Terminal](/docs/reference/hub-api/terminal) | 1 |
+| [Threads](/docs/reference/hub-api/threads) | 10 |
+| [Tools](/docs/reference/hub-api/tools) | 11 |
+| [UI](/docs/reference/hub-api/ui) | 1 |
+| [Users](/docs/reference/hub-api/users) | 1 |
+| [Vault](/docs/reference/hub-api/vault) | 6 |
+| [Views](/docs/reference/hub-api/views) | 4 |
+| [Webhooks](/docs/reference/hub-api/webhooks) | 4 |
+| [Widgets](/docs/reference/hub-api/widgets) | 2 |
+| [Workflows](/docs/reference/hub-api/workflows) | 2 |
+| [Workspaces](/docs/reference/hub-api/workspaces) | 12 |

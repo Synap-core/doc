@@ -1,0 +1,84 @@
+---
+title: Entities
+description: The Entities operations of the Hub REST API (17 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/entities
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns the caller's entities, optionally filtered by profileSlug and
+          workspaceId. Without workspaceId it reads every workspace the caller
+          can read plus pod-wide entities; with one, that workspace (an archived
+          or non-member one is a 403). Pod-wide profiles are returned regardless
+          of workspaceId. `userId` must be the caller's own id or `me`; any
+          other id is a 403.
+      - content: Counts the caller's visible things filed into NO project, grouped by
+          kind (largest first). `total` is the sum of `byProfile` and equals the
+          total of GET /entities?withoutProject=true with no lens.
+      - content: Canonical list/search endpoint. When `q` is set, performs a Typesense
+          search; otherwise lists entities with normal scoping.
+      - content: 'Creates an entity on behalf of a user. Honors profile.entityScope:
+          pod-wide profiles ignore workspaceId. Supports `Idempotency-Key`.'
+      - content: Returns up to `limit` relations (default 50, max 200) connected to the
+          entity. Workspace-scoped on shared pods.
+      - content: Returns the entity row by ID. Verifies workspace access on shared pods.
+      - content: Combines Typesense keyword search and pgvector cosine similarity
+          search, merged via Reciprocal Rank Fusion (RRF k=60). Falls back to
+          Typesense-only when the embedding service is unavailable.
+      - content: DEPRECATED — prefer POST /knowledge/ask, whose semantic lane calls the
+          exact same retrieve() SRE. Still functional for existing integrations.
+          Infers entity type(s) + property hints from the query, fuses unscoped
+          + type-scoped recall (RRF), and returns ranked entities plus the
+          inferred understanding. Phase 1 of the SRE.
+      - content: 'Service (Hub API-key) route. Two modes: (1) upload+link —
+          base64-decode an image, store it as a file entity (document +
+          snapshot); (2) link-only — pass `fileEntityId` to link a
+          previously-stored orphan file. Either way the file is linked to
+          :entityId via a `references` relation. Upload mode: max 10MB, image/*
+          only. Requires scope hub-protocol.write.'
+      - content: "Up to 500 items `{id, patch, expected?}`. Each item is written now
+          (when governance would auto-approve it), collected into ONE review
+          proposal, denied, or skipped. `validate: true` returns the per-item
+          verdict and writes nothing. `idempotencyKey` (or the `Idempotency-Key`
+          header) replays the first call's receipt."
+      - content: Patch entity title / preview / metadata. Supports `Idempotency-Key`.
+      - content: "Deletes an entity by id via the canonical entities.delete procedure.
+          For agent keys this is proposal-gated (returns { status: 'proposed',
+          proposalId }); auto-approved contexts complete inline. Acting identity
+          is bound to the principal."
+      - content: Returns the entity's live facets joined with their role-profile + that
+          profile's effective properties (workspace-lensed). Requires
+          hub-protocol.read.
+      - content: Attach a role-profile as an additive facet. Thin wrapper over the
+          governed entities.attachFacet door (proposal-gated for agents).
+          Requires hub-protocol.write.
+      - content: Thin wrapper over the governed entities.updateFacet door. Requires
+          hub-protocol.write.
+      - content: Thin wrapper over the governed entities.detachFacet door. Requires
+          hub-protocol.write.
+      - content: Call BEFORE create to decide create-vs-enrich-vs-attach_facet. Returns
+          `match:'strong'` (globally-unique signal hit — link/attach, don't
+          create), `'weak'` (same-name candidates — advisory), or `'none'`.
+          Read-only; never writes.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/entities" webhooks={[]} operations={[{"path":"/users/{userId}/entities","method":"get"},{"path":"/entities/without-project/counts","method":"get"},{"path":"/entities","method":"get"},{"path":"/entities","method":"post"},{"path":"/entities/{id}/connections","method":"get"},{"path":"/entities/{id}","method":"get"},{"path":"/entities/recall","method":"post"},{"path":"/entities/retrieve","method":"post"},{"path":"/entities/{entityId}/attachments","method":"post"},{"path":"/entities/batch-update","method":"post"},{"path":"/entities/{entityId}","method":"patch"},{"path":"/entities/{entityId}","method":"delete"},{"path":"/entities/{entityId}/facets","method":"get"},{"path":"/entities/{entityId}/facets","method":"post"},{"path":"/facets/{facetId}","method":"patch"},{"path":"/facets/{facetId}","method":"delete"},{"path":"/identity/resolve","method":"post"}]} showTitle />
+    </>
+  );
+}

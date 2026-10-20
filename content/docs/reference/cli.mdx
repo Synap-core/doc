@@ -1,0 +1,3219 @@
+---
+title: "CLI"
+description: "Every command of @synap-core/cli, generated from its command definitions."
+availability: [cli]
+type: "reference"
+audience: "builder"
+status: "current"
+owner: "Antoinesrvt"
+generated_from: "Synap-core/synap-cli@7562355c1 (main)"
+---
+
+Generated from [Synap-core/synap-cli@7562355c1](https://github.com/Synap-core/synap-cli/tree/7562355c125f5a67d938d9c651e4761cfb7aba08) (`main`): [`docs/reference/cli.json`](https://github.com/Synap-core/synap-cli/blob/7562355c125f5a67d938d9c651e4761cfb7aba08/docs/reference/cli.json). Do not edit this page; see `scripts/generate-reference.mjs`.
+
+`@synap-core/cli` (command `synap`) connects computers and AI agents to a pod and works with the pod from a terminal.
+It needs Node.js 20 or later.
+
+```bash
+npm install -g @synap-core/cli    # or run it once with: npx @synap-core/cli <command>
+synap --help
+synap <command> --help
+```
+
+`--pod <name>` works on every command: it runs that one command against a saved pod profile instead of the active
+pod.
+
+## Files and environment
+
+| File | Contents |
+|---|---|
+| `~/.synap/credentials.json` | Your Synap account token. |
+| `~/.synap/config.json` | Saved pods: URL, workspace, agent identity and key. (Older versions used `pod-config.json`.) |
+
+Never commit them.
+
+| Variable | Default |
+|---|---|
+| `SYNAP_CP_URL` | `https://api.synap.live` |
+| `SYNAP_LANDING_URL` | `https://synap.live` |
+
+## Commands
+
+220 commands, grouped by top-level command. 5 hidden commands (internal or deprecated) are not listed.
+
+| Global option | Description |
+|---|---|
+| `-V, --version` | output the version number |
+| `--pod <name>` | Run this command against a saved pod profile (overrides the default pod for this invocation only) |
+
+## synap init
+
+Full setup: connect to a Synap pod and install the skill
+
+```bash
+synap init [options]
+```
+
+| Option | Description |
+|---|---|
+| `--pod-url <url>` | Synap pod URL (skip pod choice prompt) |
+| `--api-key <key>` | Hub Protocol API key (skip key generation) |
+| `-y, --yes` | Accept the defaults, no prompts (connects the agents found on this machine) |
+| `--agents <list>` | Agents to connect, comma-separated: claude-code,codex,cursor |
+| `--json` | Print a JSON summary on stdout: \{podUrl, connected, notApproved, failed, pairLink, exitCode\} |
+
+```text
+Exit codes:
+  0  at least one agent connected
+  2  not a terminal, or a bad flag (pass --pod-url and --agents)
+  3  no pod found, created or reachable
+  4  cancelled
+  5  could not get your key for the pod (pass --api-key)
+  6  the pod is ready but no agent was connected
+```
+
+## synap launch
+
+Stand up a NEW company/OS on a pod — creates a project + its core workspaces (interactive)
+
+```bash
+synap launch [options]
+```
+
+| Option | Description |
+|---|---|
+| `--list` | List what can be launched (local templates, no pod needed) and exit |
+| `--search <query>` | Filter --list by name/description/slug |
+| `--type <type>` | Filter --list by package type (workspace\|capability\|skill\|workflow\|view\|cell) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap connect
+
+Plug something into your pod: an AI agent (claude-code, cursor, codex, …) or a tool/account (gmail, github, …)
+
+```bash
+synap connect [options] [thing]
+```
+
+| Option | Description |
+|---|---|
+| `--tool` | Treat \<thing\> as a tool/account even if it is also an agent name (no \<thing\>: list connectable services) |
+| `--workspace <id>` | Focus on one workspace (default: pod-wide) |
+| `--project <id>` | Focus on one project (agents only; composable with --workspace) |
+| `--pod-url <url>` | Synap pod URL |
+| `--api-key <key>` | Hub Protocol API key |
+| `--name <name>` | Pod profile to use (default: active pod) |
+| `--list` | List what can be connected and exit |
+| `--with-mcp` | Raycast only: also install the full 56-tool MCP server via mcp-remote (names overlap @synap) |
+| `--target <name>` | Legacy spelling of \<thing\> |
+| `--pin-workspace <id>` | Legacy spelling of --workspace |
+| `--pin-project <id>` | Legacy spelling of --project |
+
+## synap pods
+
+Manage multiple Synap pod profiles and switch between them
+
+```bash
+synap pods [options] [command]
+```
+
+### synap pods list
+
+List all configured pod profiles
+
+```bash
+synap pods list [options]
+```
+
+### synap pods add
+
+Connect a new pod and save as a named profile
+
+```bash
+synap pods add [options] [name] [url]
+```
+
+### synap pods use
+
+Switch active pod and propagate credentials to all agent surfaces
+
+```bash
+synap pods use [options] <name>
+```
+
+| Option | Description |
+|---|---|
+| `--surface <surface>` | Only switch this surface (raycast, claude-code, claude-desktop, cursor) |
+| `--json` | Output as JSON (incl. nextSteps for agents; full-switch only) |
+
+### synap pods update
+
+Change a saved pod's URL in place (verifies health + whether the key must be recreated)
+
+```bash
+synap pods update [options] <name> [url]
+```
+
+| Option | Description |
+|---|---|
+| `--url <url>` | New pod URL (alternative to the positional arg) |
+| `--yes` | Non-interactive: skip prompts (won't recreate a rejected key) |
+
+### synap pods remove
+
+Remove a pod profile
+
+```bash
+synap pods remove [options] <name>
+```
+
+Aliases: `rm`
+
+### synap pods reconnect
+
+Re-authenticate a saved pod (refresh API key without re-entering the URL)
+
+```bash
+synap pods reconnect [options] [name]
+```
+
+## synap status
+
+Show Synap pod health and API status
+
+```bash
+synap status [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Dump raw status (incl. release/migration detail) as JSON |
+
+## synap doctor
+
+Coherence preflight: pod host resolves, key authenticates, workspace/project exist on THIS pod, and why each configured key does or does not work — catches config drift in one call
+
+```bash
+synap doctor [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--fix` | Fix key problems: finish a pending approval, give this computer its own key, or rewrite stale copies — then verify over MCP |
+| `-v, --verbose` | Every check with its details, ids and addresses |
+
+## synap versions
+
+Show LOCAL vs NPM vs CONTROL-PLANE vs POD version drift for workspace-templates, api-types, and capabilities
+
+```bash
+synap versions [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output structured \{artifacts:\[...\]\} JSON |
+
+## synap whoami
+
+Show key owner vs EFFECTIVE user (+ isAgent), scopes/workspace, and flag env-vs-surface key divergence
+
+```bash
+synap whoami [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+
+## synap update
+
+Show how to update the CLI
+
+```bash
+synap update [options]
+```
+
+## synap switch
+
+Switch active pod (interactive picker if no name given)
+
+```bash
+synap switch [options] [name]
+```
+
+## synap connections
+
+Show everything connected: which pod each agent points at, and which tools the pod has connected
+
+```bash
+synap connections [options]
+```
+
+Aliases: `conn`
+
+## synap app
+
+Connect an app in this repo to your pod (synap.app.json)
+
+```bash
+synap app [options] [command]
+```
+
+### synap app init
+
+Write synap.app.json (asks name, pod, permissions) and register the app
+
+```bash
+synap app init [options]
+```
+
+### synap app connect
+
+Request the app's access, await approval, then write its key into the deploy target
+
+```bash
+synap app connect [options]
+```
+
+## synap mcp
+
+Connect any AI client to your pod's MCP server (the ambient tool layer)
+
+```bash
+synap mcp [options] [command]
+```
+
+### synap mcp url
+
+Print a ready-to-paste MCP connection (URL + key + snippets) for UI clients like ChatGPT
+
+```bash
+synap mcp url [options]
+```
+
+| Option | Description |
+|---|---|
+| `--client <name>` | Name the dedicated agent key after the target client |
+| `--workspace <id>` | Scope to a specific workspace (omit for pod-wide) |
+| `--project <id>` | Focus the agent on a project (narrows every tool call; orthogonal to --workspace) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap mcp verify
+
+Health-check: is the pod's /mcp endpoint reachable and the key valid?
+
+```bash
+synap mcp verify [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Scope to a specific workspace |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap mcp bridge
+
+Stdio MCP server for Claude Code: forwards to the pod and names the conversation (spawned by Claude Code, not run by hand)
+
+```bash
+synap mcp bridge [options]
+```
+
+| Option | Description |
+|---|---|
+| `--url <url>` | The pod MCP URL to forward to |
+
+### synap mcp use-bridge
+
+Connect Claude Code through the stdio bridge, so work can be traced to and reopened in its conversation
+
+```bash
+synap mcp use-bridge [options]
+```
+
+| Option | Description |
+|---|---|
+| `--off` | Switch back to the direct http connection |
+
+### synap mcp connect
+
+Write the MCP config for a file-configurable client (Claude Code, Cursor, Desktop, ChatGPT, …) — alias of `synap agents add <client>`
+
+```bash
+synap mcp connect [options] [client]
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Pod profile to connect |
+
+### synap mcp connect-chatgpt
+
+Connect ChatGPT (web) to Synap — API-key connector to your pod
+
+```bash
+synap mcp connect-chatgpt [options]
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Pod profile to connect |
+
+### synap mcp connect-chatgpt-oauth
+
+Connect ChatGPT (web) via Control Plane OAuth — multi-pod, no key to paste
+
+```bash
+synap mcp connect-chatgpt-oauth [options]
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Pod profile to connect |
+
+### synap mcp connect-claude
+
+Print the claude.ai (web) OAuth connection steps — paste a URL, approve in the browser, done
+
+```bash
+synap mcp connect-claude [options]
+```
+
+| Option | Description |
+|---|---|
+| `--cp-url <url>` | Control-plane origin override (default: derived from the pod host) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap mcp ui-setup
+
+Print the exact form fields to fill in the client's MCP/Connector UI (ChatGPT, Codex, Cursor, etc.)
+
+```bash
+synap mcp ui-setup [options] <client>
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Pod profile to use (default: active) |
+| `--workspace <id>` | Scope to a specific workspace |
+| `--project <id>` | Focus the agent on a project |
+| `--json` | Output as JSON |
+
+## synap login
+
+Connect your Synap account (private templates) + your pods
+
+```bash
+synap login [options]
+```
+
+| Option | Description |
+|---|---|
+| `--reconnect [name]` | Re-authenticate a saved pod without re-entering its URL |
+
+## synap orient
+
+Show a lightweight lens map: who you are, your projects (companies/initiatives), and workspaces (operational domains)
+
+```bash
+synap orient [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--details` | Include per-workspace profiles + entity counts (heavier) |
+| `--workspace <space>` | Orient ONE space by name or id, for this call only — shows its brief (purpose, kinds, rules, skills) without changing your pinned lens |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap digest
+
+Summarize what's in a workspace or project (counts + key entities)
+
+```bash
+synap digest [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id\|name>` | Workspace to digest (defaults to active workspace lens) |
+| `--project <id\|name>` | Project to digest (cross-cutting lens) |
+| `--json` | Output raw JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap diagnose
+
+See what an AI did — the run feed, or one run's nodes (by id or flow name)
+
+```bash
+synap diagnose [options] [run]
+```
+
+| Option | Description |
+|---|---|
+| `--flow <automation\|playbook\|capture\|capability\|session\|chat>` | Restrict the feed, or narrow the run lookup to one flow |
+| `--flow-id <id>` | Restrict the feed to one flow's runs (automationId / playbookId) |
+| `--limit <n>` | Max runs in the feed |
+| `--json` | Output raw JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap use
+
+Set the active workspace (by ID or name) — short form of `synap workspace use`. Default scope: this directory
+
+```bash
+synap use [options] <workspace>
+```
+
+| Option | Description |
+|---|---|
+| `--session` | Ephemeral: scope only this Claude Code session, don't persist |
+| `--global` | Durable machine-wide default (~/.synap/config.json) instead of this directory's .synap/lens.json |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap project
+
+Manage + focus the project lens (a commitment, spanning workspaces): list, new, use, clear
+
+```bash
+synap project [options] [command]
+```
+
+### synap project list
+
+List projects on the active pod, with the pinned one marked (bare `synap project` runs this)
+
+```bash
+synap project list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON (incl. nextSteps for agents) |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap project new
+
+Create a project (a commitment you are driving, with whom) on the active pod, then guide you to pin + add to it
+
+```bash
+synap project new [options] <name>
+```
+
+| Option | Description |
+|---|---|
+| `--description <text>` | Optional one-line description |
+| `--json` | Output as JSON (incl. nextSteps for agents) |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap project use
+
+Pin the active project (durable, like `synap use <workspace>`). Ref = uuid, slug, or \<pod\>/\<slug\> — cross-pod refs switch the active pod too
+
+```bash
+synap project use [options] <ref>
+```
+
+| Option | Description |
+|---|---|
+| `--session` | Ephemeral: scope only this Claude Code session, don't persist (cross-pod refs refused) |
+| `--global` | Durable machine-wide default (~/.synap/config.json) instead of this directory's .synap/lens.json |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap project clear
+
+Clear the active project focus (durable by default)
+
+```bash
+synap project clear [options]
+```
+
+| Option | Description |
+|---|---|
+| `--session` | Ephemeral: clear only this Claude Code session's project |
+| `--json` | Output as JSON |
+
+### synap project purge
+
+HARD teardown: delete a project + its pod-wide-exclusive entities (owner-only, irreversible)
+
+```bash
+synap project purge [options] <target>
+```
+
+| Option | Description |
+|---|---|
+| `--confirm <name>` | Confirm non-interactively by passing the exact project name |
+| `--yes` | Skip the interactive name prompt (uses the resolved name) |
+| `--json` | Output raw JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap lens
+
+Show the effective lens (workspace + project + focus session) and WHICH rung set each one
+
+```bash
+synap lens [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap ask
+
+Ask your pod anything — returns a synthesized answer with its sources
+
+```bash
+synap ask [options] <query>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Scope to a specific workspace (omit for pod-wide) |
+| `--limit <n>` | Max results per substrate Default: `"10"`. |
+| `--json` | Output as JSON |
+| `--session` | Scope retrieval to the active session context |
+| `--raw` | Skip synthesis: show the raw per-substrate matches instead |
+| `--compare` | A/B diagnostic: show baseline vs Horizon rankers side-by-side (read-only, does not change the answer) |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap capture
+
+Capture knowledge: smart `capture "<free text>"` (AI structures it). For canonical typed Knowledge, use `create entity --profile=knowledge --props='{"knowledgeForm":"insight|caution"}'`.
+
+```bash
+synap capture [options] [text]
+```
+
+| Option | Description |
+|---|---|
+| `--type <type>` | Legacy compatibility typed mode (gotcha\|lesson\|decision\|reference); new automation should use knowledgeForm |
+| `--claim <text>` | Typed mode: one-line assertion (required with --type) |
+| `--title <text>` | Typed mode: short name, 80 characters or less (default: the claim's first sentence, never cut) |
+| `--content <markdown>` | Typed mode: full Markdown explanation, stored as the linked Knowledge note |
+| `--why <text>` | Reasoning or context |
+| `--evidence <text>` | Supporting file path, URL, or code snippet |
+| `--tags <csv>` | Comma-separated tags e.g. repo:synap-backend,layer:migrations |
+| `--session` | Link captured knowledge to the active session |
+| `--pod-wide` | GLOBAL lane: pod-wide cross-cutting runbook (→ knowledge_keys), visible in every workspace |
+| `--global` | Alias for --pod-wide |
+| `--key <ns:slug>` | Stable key for a --pod-wide runbook (derived from --type + --claim if omitted) |
+| `--team` | Pin to the first product workspace (default: omit workspaceId — server-derived / pod-wide preferred for knowledge) |
+| `--workspace <id>` | Explicit workspace pin (otherwise workspaceId is omitted for knowledge) |
+| `--project <id\|name>` | Pin the capture to a project (id or name) — overrides SYNAP_PROJECT_ID / the session lens |
+| `--yes` | Skip the y/N confirmation prompt (smart mode) |
+| `--json` | Output as JSON |
+
+## synap import
+
+Import files, folders, or URLs into the pod (AI capture pipeline, or Superwhisper store-first)
+
+```bash
+synap import [options] [inputs...]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id\|name>` | Override AI workspace routing |
+| `--project <id\|name>` | Override AI project routing |
+| `--home-map <pairs>` | Multi-home path map: pathSubstring=workspaceNameOrId pairs (e.g. "Projects=Builder,Posts=Content OS"). Matched batch paths are rewritten with the workspace name as the first segment so placement heuristics pin the right home. No product defaults. |
+| `--dry-run` | Preview only — do not write |
+| `--yes` | Skip confirmation / auto-confirm store-first |
+| `--session` | Link created entities to the active session |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+| `--source <name>` | Adapter: superwhisper (paired meta.json+output.wav store-first) |
+| `--store-first` | Skip AI structure; store units as pod-wide notes (+ optional audio) |
+| `--keep-raw` | Keep the original file and link it to the created entity (default: extract, then discard the bytes) |
+| `--with-audio` | Upload WAV provenance (default on for --source superwhisper --store-first) |
+| `--no-with-audio` | Transcript-only (no WAV upload) |
+| `--limit <n>` | Max Superwhisper units to process |
+| `--concurrency <n>` | Parallel unit uploads (1–4) |
+| `--no-resume` | Ignore local import ledger (re-import all) |
+| `--job-status <jobId>` | Re-poll a background corpus import started by an earlier run (no waiting) |
+
+## synap upload
+
+Upload a file to the pod as an entity (\>10MB goes direct to storage: video ≤500MB, audio ≤100MB, zip ≤200MB)
+
+```bash
+synap upload [options] <path>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Pin the entity to this workspace (explicit placement) |
+| `--profile <slug>` | Entity kind to create (default: file), e.g. brand-asset |
+| `--prop <key=value>` | Entity property (repeatable) |
+| `--attach <entityId>` | After upload, link the document to this entity (references relation) |
+| `--title <title>` | Title for the created document |
+| `--open` | Open in the Synap desktop app after upload |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+```text
+Examples:
+  synap upload ./report.pdf
+  synap upload ./logo.png --title "Brand logo" --workspace <id>
+  synap upload ./spec.pdf --attach <entityId>
+  synap upload ./logo.svg --profile brand-asset --prop variant=dark --workspace <id>
+  synap upload ./launch.mp4 --workspace <id>
+  synap upload ./report.pdf --open
+```
+
+## synap subscribe
+
+Stream pod events as NDJSON (long-poll)
+
+```bash
+synap subscribe [options]
+```
+
+| Option | Description |
+|---|---|
+| `--event <pattern>` | Filter by event type pattern (e.g. proposal.\*) |
+| `--limit <n>` | Events per poll Default: `"20"`. |
+| `--json` | NDJSON output |
+| `--pod-url <url>` |  |
+| `--api-key <key>` |  |
+
+## synap home
+
+Show the active workspace's home bento layout (what cells are on screen)
+
+```bash
+synap home [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace to read (defaults to active workspace) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap context
+
+Session-start context: knowledge, proposals, tasks, active sessions
+
+```bash
+synap context [options]
+```
+
+| Option | Description |
+|---|---|
+| `--repo <name>` | Filter knowledge by repo tag |
+| `--limit <n>` | Entries per section Default: `"5"`. |
+| `--json` | NDJSON output |
+| `--workspace <id>` | Override workspace |
+| `--pod-url <url>` |  |
+| `--api-key <key>` |  |
+
+## synap discover
+
+Runtime discovery: entity profiles with property schemas + CLI command tree
+
+```bash
+synap discover [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON (default: human-readable) |
+| `--profiles` | Show only profiles (use with --json for machine-readable schema) |
+| `--commands` | Show only the command tree |
+| `--summary` | List profile kinds without property schemas |
+| `--profile-slugs <slugs>` | Comma-separated profile slugs to load in full |
+| `--workspace <id>` | Workspace to query (defaults to active workspace) |
+
+## synap workspace
+
+Manage + focus the workspace lens (an operational domain): list, use, clear
+
+```bash
+synap workspace [options] [command]
+```
+
+### synap workspace use
+
+Pin the active workspace by ID or name (durable, like `synap use <workspace>`). Default scope: this directory
+
+```bash
+synap workspace use [options] <workspace>
+```
+
+| Option | Description |
+|---|---|
+| `--session` | Ephemeral: scope only this Claude Code session, don't persist |
+| `--global` | Durable machine-wide default (~/.synap/config.json) instead of this directory's .synap/lens.json |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap workspace list
+
+List workspaces you belong to (bare `synap workspace` runs this)
+
+```bash
+synap workspace list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap workspace clear
+
+Clear the active workspace focus (durable by default)
+
+```bash
+synap workspace clear [options]
+```
+
+| Option | Description |
+|---|---|
+| `--session` | Ephemeral: clear only this Claude Code session's workspace |
+| `--json` | Output as JSON |
+
+### synap workspace provision-agent
+
+Provision an agent-owned workspace and set it as active (idempotent)
+
+```bash
+synap workspace provision-agent [options]
+```
+
+| Option | Description |
+|---|---|
+| `--agent-user-id <uuid>` | Agent user ID (defaults to caller) |
+| `--name <name>` | Workspace display name override |
+| `--no-use` | Do not set as active workspace after provisioning |
+| `--json` | Output as JSON |
+
+### synap workspace purge
+
+HARD teardown: delete a workspace + all its entities and blobs (owner-only, irreversible)
+
+```bash
+synap workspace purge [options] <target>
+```
+
+| Option | Description |
+|---|---|
+| `--confirm <name>` | Confirm non-interactively by passing the exact workspace name |
+| `--yes` | Skip the interactive name prompt (uses the resolved name) |
+| `--json` | Output raw JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap workspace archive
+
+Archive a workspace (hides it, pauses its workspace automations). Governed: agents propose
+
+```bash
+synap workspace archive [options] <workspace>
+```
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap workspace restore
+
+Restore an archived workspace (by id). Re-enables nothing; lists automations still paused
+
+```bash
+synap workspace restore [options] <workspace>
+```
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap workspace rename
+
+Rename a workspace. Governed: agents propose
+
+```bash
+synap workspace rename [options] <workspace> <newName>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap entity
+
+Entity operations: move
+
+```bash
+synap entity [options] [command]
+```
+
+### synap entity move
+
+Move entities into another workspace. Governed per entity: moved / proposed / errors
+
+```bash
+synap entity move [options] <entityIds...>
+```
+
+| Option | Description |
+|---|---|
+| `--to <workspace>` | Destination workspace id or name Required. |
+| `--reason <text>` | Why they belong there — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap list
+
+List pod resources
+
+```bash
+synap list [options] [command]
+```
+
+### synap list workspaces
+
+List workspaces you belong to
+
+```bash
+synap list workspaces [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap list profiles
+
+List entity profile types available in a workspace
+
+```bash
+synap list profiles [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace (defaults to active) |
+| `--json` | Output as JSON |
+
+### synap list views
+
+List views in a workspace (whiteboard, kanban, bento, …)
+
+```bash
+synap list views [options]
+```
+
+| Option | Description |
+|---|---|
+| `--type <type>` | Filter by view type (e.g. whiteboard, kanban, calendar) |
+| `--workspace <id>` | Workspace (defaults to active) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap list entities
+
+List entities on the pod
+
+```bash
+synap list entities [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Scope to a workspace (omit for pod-wide) |
+| `--profile <slug>` | Filter by profile slug (e.g. person, task, note) |
+| `--role <slug>` | Filter to entities carrying this role (e.g. client, partner) |
+| `--limit <n>` | Max results Default: `"50"`. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap show
+
+Show an entity with its properties and all linked relations
+
+```bash
+synap show [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap facet
+
+Manage roles attached to an entity (client, partner, contact, …)
+
+```bash
+synap facet [options] [command]
+```
+
+### synap facet attach
+
+Attach a role to an entity
+
+```bash
+synap facet attach [options] <entityId> <roleSlug>
+```
+
+| Option | Description |
+|---|---|
+| `--property <kv>` | Role property as key=value (repeatable) Default: `[]`. |
+| `--workspace <id>` | Role's lens (defaults to the active workspace) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap facet list
+
+List the roles attached to an entity
+
+```bash
+synap facet list [options] <entityId>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap facet detach
+
+Detach a role — pass the facet id, or --entity \<id\> --role \<slug\>
+
+```bash
+synap facet detach [options] [facetId]
+```
+
+| Option | Description |
+|---|---|
+| `--entity <id>` | Entity id (with --role, resolves the facet to detach) |
+| `--role <slug>` | Role slug (with --entity) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap proposals
+
+Review and act on governance proposals
+
+```bash
+synap proposals [options] [command]
+```
+
+### synap proposals list
+
+List governance proposals (default: the pending queue)
+
+```bash
+synap proposals list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--status <status>` | pending (default) \| approved \| auto_approved (what the agent already did) \| rejected \| expired (never decided) \| all Default: `"pending"`. |
+| `--workspace <id>` | Scope to a specific workspace |
+| `--session <id>` | Scope to one focus session (the agent run that filed them) |
+| `--limit <n>` | Max results Default: `"20"`. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap proposals approve
+
+Approve a pending proposal (interactive only — requires a TTY and a typed confirmation)
+
+```bash
+synap proposals approve [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | Optional approval note |
+| `--verb <verb>` | Same-name choice: fill_empty \| keep_existing \| use_capture \| separate |
+| `--existing <uuid>` | Existing record id — required for fill_empty, keep_existing, and use_capture |
+| `--yes` | Accepted for symmetry with other commands, but does NOT skip the typed confirmation — approval is always deliberate |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap proposals reject
+
+Reject a pending proposal
+
+```bash
+synap proposals reject [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | Rejection reason |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap proposals await
+
+Block until a proposal is decided. Exit 0 approved · 1 rejected/expired/withdrawn · 2 timeout
+
+```bash
+synap proposals await [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--timeout <duration>` | Give up after this long (e.g. 30m, 2h) Default: `"30m"`. |
+| `--interval <duration>` | Delay between checks (e.g. 10s) Default: `"10s"`. |
+| `--json` | Output the final status as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap worker
+
+Run Claude Code unattended here for the sessions handed to an agent
+
+```bash
+synap worker [options]
+```
+
+| Option | Description |
+|---|---|
+| `--agent <name>` | The named agent this machine works as (its key comes from ~/.synap) Required. |
+| `--interval <dur>` | How often to check for handed sessions (e.g. 30s, 2m) Default: `"30s"`. |
+| `--once` | Check once, run what is handed, wait for it, exit |
+| `--cwd <dir>` | Where the launched Claude Code works (default ~/Documents/Code/synap) |
+| `--max-parallel <n>` | Runs at the same time Default: `"1"`. |
+| `--claude-bin <path>` | The claude binary Default: `"claude"`. |
+| `--claude-config-dir <dir>` | CLAUDE_CONFIG_DIR for launched runs — picks which Claude subscription they use |
+| `--allowed-tools <list>` | Comma-separated Claude tools allowed without asking (the pod MCP server is always added) |
+| `--skip-permissions` | Launch with --dangerously-skip-permissions instead of an allow-list |
+| `--dry-run` | Claim and log what would launch, without launching Claude |
+
+## synap session
+
+Manage focus sessions (goal-bound AI work rooms)
+
+```bash
+synap session [options] [command]
+```
+
+### synap session start
+
+Start a new focus session and return its ID
+
+```bash
+synap session start [options]
+```
+
+| Option | Description |
+|---|---|
+| `--goal <text>` | What this session is working toward Required. |
+| `--workspace <id>` | Workspace that owns the session |
+| `--project <id>` | Project that owns the session (defaults to the active project lens; the pod accepts a workspace OR a project) |
+| `--task-id <id>` | Link session to an existing task entity |
+| `--track <id>` | Born inside a track (a project's lasting goal) — implies its project |
+| `--template <id>` | Start from a playbook (seeds currentStage from its stages) |
+| `--no-template` | Opt out of auto-matching a playbook — start ad-hoc |
+| `--parent <id>` | Push from another session — records session --spawned_from--\> session (the parent stays open) |
+| `--suspended-intent <text>` | With --parent: this session BLOCKS the parent. One line naming what the parent was about to do; the parent waits until this session closes |
+| `--criteria <file.json>` | Path to a JSON file of binary acceptance criteria (SessionCriterion\[\]) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session list
+
+List focus sessions in the active workspace
+
+```bash
+synap session list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Scope to a specific workspace |
+| `--project <id>` | Scope to a project (its sessions across spaces) |
+| `--status <status>` | Filter by status: active \| paused \| closed |
+| `--kind <kind>` | Filter by population: work \| run \| receipt \| all Default: `"all"`. |
+| `--limit <n>` | Max results Default: `"20"`. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session get
+
+Show details for a specific focus session (works for project-scoped sessions)
+
+```bash
+synap session get [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace hint if the pod still requires it for GET |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session update
+
+Update a focus session's progress, status, stage or goal
+
+```bash
+synap session update [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace that owns the session (optional; inferred from the active lens) |
+| `--progress <0-100>` | Progress percentage — a whole number 0-100, not prose |
+| `--status <status>` | New status: active \| paused |
+| `--stage <key>` | Advance the session's current stage (playbook stage key) |
+| `--goal <text>` | Revised goal |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session close
+
+End a focus session (proposal pack) and optionally attach a recap
+
+```bash
+synap session close [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace hint (optional; not required for complete) |
+| `--recap <text>` | Short summary of what was accomplished (maps to summary) |
+| `--as <status>` | How it ended: closed (default, finished) \| cancelled (abandoned) \| failed (could not complete) |
+| `--json` | Output full pack (or close result) as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session attach
+
+Attach a session to this terminal — all hub calls tag X-Session-Id until detached
+
+```bash
+synap session attach [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session detach
+
+Remove the active session from this terminal
+
+```bash
+synap session detach [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+
+### synap session current
+
+Show the active session for this terminal (SYNAP_SESSION_ID, Claude-session lens, or .synap/lens.json)
+
+```bash
+synap session current [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+
+### synap session evidence
+
+Post your own pass/fail report for one evidence-checked acceptance criterion
+
+```bash
+synap session evidence [options] <key>
+```
+
+| Option | Description |
+|---|---|
+| `--session <id>` | Focus session ID (defaults to this terminal's active session) |
+| `--passed` | The criterion is satisfied |
+| `--failed` | The criterion is not satisfied |
+| `--detail <text>` | Optional note explaining the verdict |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session evaluate
+
+Run every pending acceptance-criterion check (evidence, capability, judge) and print the verdicts
+
+```bash
+synap session evaluate [options]
+```
+
+| Option | Description |
+|---|---|
+| `--session <id>` | Focus session ID (defaults to this terminal's active session) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap session wait
+
+Block until the human replies in the session room, then print the reply. Exit 0 replied · 1 timeout · 2 failure (auth/network/broken read)
+
+```bash
+synap session wait [options] <sessionId>
+```
+
+| Option | Description |
+|---|---|
+| `--since <iso>` | Only answers strictly after this ISO timestamp (default: now — skips anything that predates this wait) |
+| `--timeout <duration>` | Give up after this long (e.g. 30m, 2h) Default: `"30m"`. |
+| `--interval <duration>` | Delay between checks (e.g. 10s) Default: `"10s"`. |
+| `--limit <n>` | Max answers per page, 1-100 Default: `"20"`. |
+| `--json` | Output the reply(ies) — or the timeout — as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap playbook
+
+Run playbooks — governed, reusable processes
+
+```bash
+synap playbook [options] [command]
+```
+
+### synap playbook run
+
+Run a playbook by name or id, optionally on a subject entity
+
+```bash
+synap playbook run [options] <name-or-id>
+```
+
+| Option | Description |
+|---|---|
+| `--subject <entityId>` | The entity the playbook runs on |
+| `--param <key=value>` | Answer a declared param (repeatable; typed by the playbook) Default: `[]`. |
+| `--workspace <id>` | Write home for the run (defaults to the playbook's own workspace) |
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap track
+
+Manage tracks — the lasting goals a project pursues
+
+```bash
+synap track [options] [command]
+```
+
+### synap track list
+
+List a project's tracks (defaults to the active project lens)
+
+```bash
+synap track list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--project <id>` | Project id (defaults to the active project lens) |
+| `--all` | Include archived tracks |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track show
+
+Show one track: its steps and where it stands
+
+```bash
+synap track show [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track start
+
+Start a track — a lasting goal — on a project
+
+```bash
+synap track start [options]
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | The track's name (required without --playbook) |
+| `--direction <text>` | Where it is heading, one line |
+| `--playbook <id>` | Legacy: a track template (project-scoped playbook with steps) |
+| `--project <id>` | Project id (defaults to the active project lens) |
+| `--param <key=value>` | Answer a declared param (repeatable) Default: `[]`. |
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track advance
+
+Legacy (tracks with steps): move a track to a step; prints the session that step offers
+
+```bash
+synap track advance [options] <id> <stage>
+```
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track status
+
+Pause, resume or archive a track (active|paused|archived)
+
+```bash
+synap track status [options] <id> <status>
+```
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track params
+
+Answer the method's params as key=value (merged; key=null clears one)
+
+```bash
+synap track params [options] <id> <pairs...>
+```
+
+| Option | Description |
+|---|---|
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track start-step
+
+Legacy (tracks with steps): start one step's session — on a track with no steps, use 'session start --track'
+
+```bash
+synap track start-step [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--stage <key>` | Step key (defaults to the current step) |
+| `--title <text>` | Session name (defaults to the step's name) |
+| `--goal <text>` | Outcome (defaults to the step's goal) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap skill
+
+Execute a skill in an autonomous workspace session
+
+```bash
+synap skill [options] [command]
+```
+
+### synap skill gather-context
+
+Gather pod KG + local context (CLAUDE.md, .claude/kg-verify) for a session
+
+```bash
+synap skill gather-context [options]
+```
+
+| Option | Description |
+|---|---|
+| `--session <id>` | Focus session ID (required) |
+| `--workspace <id>` | Workspace ID (defaults to active workspace) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap skill suggest
+
+Search the skill knowledge base by topic or keyword
+
+```bash
+synap skill suggest [options] <topic>
+```
+
+| Option | Description |
+|---|---|
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap skill get
+
+Fetch a skill from the knowledge base by slug and print its body
+
+```bash
+synap skill get [options] <slug>
+```
+
+| Option | Description |
+|---|---|
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap skill add
+
+Add skill(s) to your pod from: bundled · a local path · ~/.claude/skills/ · owner/repo · a git URL
+
+```bash
+synap skill add [options] <source>
+```
+
+| Option | Description |
+|---|---|
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap skill list
+
+List the instruction skills installed on your pod
+
+```bash
+synap skill list [options]
+```
+
+Aliases: `ls`
+
+| Option | Description |
+|---|---|
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+| `--debug` | Show resolved credentials |
+
+### synap skill approve
+
+Approve a skill so it loads (agent-authored skills are born unapproved)
+
+```bash
+synap skill approve [options] <slug-or-id>
+```
+
+| Option | Description |
+|---|---|
+| `--revoke` | Revoke approval instead of granting it |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap skill remove
+
+Remove a skill from your pod by slug
+
+```bash
+synap skill remove [options] <slug>
+```
+
+Aliases: `rm`
+
+| Option | Description |
+|---|---|
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap skill sync
+
+Bulk-import local skills from ~/.claude/skills/ into the pod
+
+```bash
+synap skill sync [options]
+```
+
+| Option | Description |
+|---|---|
+| `--from <path>` | Skills directory path (default: ~/.claude/skills) |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap skill verify-code
+
+Run the project's type-check/test gate and store the result on the session
+
+```bash
+synap skill verify-code [options]
+```
+
+| Option | Description |
+|---|---|
+| `--session <id>` | Focus session ID Required. |
+| `--workspace <id>` | Workspace that owns the session Required. |
+| `--cmd <command>` | Gate command to run (e.g. 'pnpm type-check') Required. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap browse
+
+Browse entities in the active workspace, optionally filtered by profile type or role
+
+```bash
+synap browse [options] [profile]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Scope to a specific workspace |
+| `--role <slug>` | Filter to entities carrying this role (e.g. client, partner) |
+| `--limit <n>` | Max results Default: `"20"`. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap observe
+
+Write and recall pod-wide user observations (AI-maintained user model)
+
+```bash
+synap observe [options] [command]
+```
+
+### synap observe write
+
+Record an observation about the user (pod-scoped, AI-maintained)
+
+```bash
+synap observe write [options] <text>
+```
+
+| Option | Description |
+|---|---|
+| `--category <cat>` | working_style \| communication \| focus \| technical \| preference Default: `"preference"`. |
+| `--confidence <n>` | Confidence score 0-1 Default: `"0.5"`. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap observe recall
+
+Search recorded user observations
+
+```bash
+synap observe recall [options] <query>
+```
+
+| Option | Description |
+|---|---|
+| `--category <cat>` | Filter by category |
+| `--limit <n>` | Max results Default: `"10"`. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap get
+
+Get a single pod resource
+
+```bash
+synap get [options] [command]
+```
+
+### synap get entity
+
+Get an entity by ID
+
+```bash
+synap get entity [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap create
+
+Create pod resources
+
+```bash
+synap create [options] [command]
+```
+
+### synap create entity
+
+Create a new entity
+
+```bash
+synap create entity [options]
+```
+
+| Option | Description |
+|---|---|
+| `--profile <slug>` | Profile slug (e.g. person, note, task) Required. |
+| `--name <name>` | Entity name Required. |
+| `--content <markdown>` | Long-form Markdown body, stored as the entity's linked document |
+| `--workspace <id>` | Create in this workspace |
+| `--props <json>` | Properties as JSON string Default: `"{}"`. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap create relation
+
+Create a typed relation between two entities
+
+```bash
+synap create relation [options]
+```
+
+| Option | Description |
+|---|---|
+| `--source <id>` | Source entity ID Required. |
+| `--target <id>` | Target entity ID Required. |
+| `--type <type>` | Relation type (e.g. extends, part_of, implements, governs, related_to) Required. |
+| `--workspace <id>` | Workspace context |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap set
+
+Update pod resources
+
+```bash
+synap set [options] [command]
+```
+
+### synap set entity
+
+Update entity properties
+
+```bash
+synap set entity [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--props <json>` | Properties as JSON string Required. |
+| `--workspace <id>` | Workspace ID (sent in PATCH body so workspace-scoped automations fire) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap agents
+
+Manage agent principals on your pod (one per type for you; local keys are a cache)
+
+```bash
+synap agents [options] [command]
+```
+
+### synap agents list
+
+List your agents on this pod (one per type). Use --local for ~/.synap cache only.
+
+```bash
+synap agents list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--local` | List only the local ~/.synap agent cache |
+
+### synap agents add
+
+Bring an agent into the pod: a client (claude-code, cursor, codex, …), your own (--name → URL + key), or pick from this machine (no kind)
+
+```bash
+synap agents add [options] [kind]
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Name your own agent (e.g. researcher) — prints a URL + key to paste |
+| `--template <tmpl>` | Your own agent's template: twin \| assistant \| custom (default: custom) |
+| `--type <type>` | Explicit agent type for your own agent (default: a slug of --name) |
+| `--role <role>` | Workspace role: admin \| editor \| viewer (default: editor) |
+| `--workspace <id>` | Focus on one workspace (default: pod-wide) |
+| `--project <id>` | Focus on one project (composable with --workspace) |
+| `--with-mcp` | Raycast only: also install the full MCP server via mcp-remote |
+| `--api-key <key>` | Register a key you already hold, on this machine only (mints nothing) |
+| `--label <label>` | Human-readable description |
+
+### synap agents create
+
+Deprecated — use `synap agents add` (same flags)
+
+```bash
+synap agents create [options]
+```
+
+| Option | Description |
+|---|---|
+| `--template <tmpl>` | Agent template: twin \| assistant \| custom (default: custom) |
+| `--name <name>` | Agent name (not needed for twin — auto-generated) |
+| `--type <type>` | Agent type string for custom agents (default: matches template) |
+| `--role <role>` | Workspace role: admin \| editor \| viewer (default: editor) |
+| `--workspace <id>` | Focus on one workspace (default: pod-wide) |
+| `--project <id>` | Focus on one project |
+
+### synap agents rotate-key
+
+Rotate the Hub Protocol API key for an agent (local cache only)
+
+```bash
+synap agents rotate-key [options] <name-or-id>
+```
+
+### synap agents remove
+
+Remove a named agent identity (local cache only)
+
+```bash
+synap agents remove [options] <name>
+```
+
+Aliases: `rm`
+
+### synap agents info
+
+Show details for a named agent identity (local cache only)
+
+```bash
+synap agents info [options] <name>
+```
+
+| Option | Description |
+|---|---|
+| `--show-key` | Print the MCP URL and the full API key |
+| `--snippets` | Print paste-ready configs (Claude Code, Cursor, stdio clients) |
+
+## synap agent
+
+Run autonomous agent loops against the IS, or schedule recurring goals
+
+```bash
+synap agent [options] [command]
+```
+
+### synap agent ask
+
+Send one message to the workspace's deployed agent and print its reply (multi-turn: reuses one thread)
+
+```bash
+synap agent ask [options] <message>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id\|name>` | Workspace to talk to (uses active workspace/lens if omitted) |
+| `--thread <id>` | Target an existing thread/channel id instead of the default CLI chat thread |
+| `--new` | Start a fresh thread instead of continuing the persistent CLI chat thread |
+| `--agent-type <type>` | Requested agent type hint (backend currently routes to the orchestrator) |
+| `--timeout <seconds>` | How long to wait for the agent's reply (default: 90) |
+| `--json` | Machine-readable output \{ ok, reply, threadId, workspaceId \} |
+| `--pod-url <url>` | Override pod URL |
+| `--api-key <key>` | Override API key |
+
+### synap agent chat
+
+Interactive REPL conversation with the workspace's deployed agent
+
+```bash
+synap agent chat [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id\|name>` | Workspace to talk to (uses active workspace/lens if omitted) |
+| `--thread <id>` | Target an existing thread/channel id instead of the default CLI chat thread |
+| `--new` | Start a fresh thread instead of continuing the persistent CLI chat thread |
+| `--agent-type <type>` | Requested agent type hint (backend currently routes to the orchestrator) |
+| `--timeout <seconds>` | How long to wait for each reply (default: 90) |
+| `--pod-url <url>` | Override pod URL |
+| `--api-key <key>` | Override API key |
+
+### synap agent run
+
+Run an autonomous agent toward a goal using the Intelligence Service
+
+```bash
+synap agent run [options]
+```
+
+| Option | Description |
+|---|---|
+| `--goal <text>` | What the agent should accomplish Required. |
+| `--persona <type>` | researcher \| assistant \| developer (default: researcher) |
+| `--model <model>` | IS model alias, e.g. synap/advanced (default: synap/advanced) |
+| `--workspace <id>` | Workspace to store results in (uses active workspace if omitted) |
+| `--max-steps <n>` | Max reasoning steps before auto-saving (default: 12) |
+| `--dry-run` | Print config without running |
+| `--pod-url <url>` | Override pod URL |
+| `--api-key <key>` | Override API key |
+
+### synap agent schedule
+
+Add, list, or remove recurring agent schedules
+
+```bash
+synap agent schedule [options]
+```
+
+| Option | Description |
+|---|---|
+| `--goal <text>` | Goal for the scheduled agent |
+| `--name <label>` | Name for this schedule (required when adding) |
+| `--every <interval>` | hourly \| daily \| weekly |
+| `--persona <type>` | researcher \| assistant \| developer (default: researcher) |
+| `--model <model>` | IS model alias (default: synap/advanced) |
+| `--workspace <id>` | Workspace to store results in |
+| `--run-now` | Also run immediately after creating the schedule |
+| `--list` | List all configured schedules |
+| `--remove <name>` | Remove a schedule by name |
+| `--pod-url <url>` | Override pod URL |
+| `--api-key <key>` | Override API key |
+
+### synap agent tick
+
+Check due schedules and run them — wire this to crontab: `0 * * * * synap agent tick`
+
+```bash
+synap agent tick [options]
+```
+
+| Option | Description |
+|---|---|
+| `--dry-run` | Show what would run without executing |
+| `--pod-url <url>` | Override pod URL |
+| `--api-key <key>` | Override API key |
+
+## synap automate
+
+Ask the workspace agent to prepare a governed automation proposal
+
+```bash
+synap automate [options] <instruction>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id\|name>` | Workspace to use (uses active workspace/lens if omitted) |
+| `--thread <id>` | Continue an existing agent thread/channel |
+| `--new` | Start a fresh agent thread |
+| `--timeout <seconds>` | How long to wait for the agent's reply (default: 90) |
+| `--json` | Machine-readable output \{ ok, reply, threadId, workspaceId \} |
+| `--pod-url <url>` | Override pod URL |
+| `--api-key <key>` | Override API key |
+
+## synap rule
+
+State a standing rule in plain language — classified, shown, then governed-created
+
+```bash
+synap rule [options] [command] [text]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace to scope the rule to (uses active workspace if omitted) |
+| `--pod-wide` | Scope the rule to the whole pod, ignoring the active workspace |
+| `--yes` | Skip the one-off confirmation (never skips a clarification) |
+| `--json` | Output raw JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap rule list
+
+List rules with their intent, scope, and whether a behaviour is attached
+
+```bash
+synap rule list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Filter by workspace |
+| `--json` | Output raw JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap automation
+
+Create, manage, and inspect pod automations
+
+```bash
+synap automation [options] [command]
+```
+
+### synap automation list
+
+List automations on the pod
+
+```bash
+synap automation list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Filter by workspace |
+| `--status <status>` | Filter by status (active\|draft\|paused\|error) |
+| `--json` | Output raw JSON |
+
+### synap automation describe
+
+Show full details of an automation
+
+```bash
+synap automation describe [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` |  |
+| `--json` |  |
+
+### synap automation create
+
+Create an automation (quick flags or --from file.yaml)
+
+```bash
+synap automation create [options]
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Automation name (required in quick mode) |
+| `--trigger <spec>` | event:\<pattern\> \| cron:\<expr\> \| webhook \| manual |
+| `--filter <kv>` | key=value filter (event triggers, repeatable) Default: `[]`. |
+| `--action <type>` | notify \| channel-message \| none (default: none) |
+| `--message <text>` | Message content for notify/channel-message |
+| `--channel <id>` | Channel ID for channel-message action |
+| `--status <status>` | draft (default) \| active |
+| `--description <text>` | Description |
+| `--workspace <id>` | Workspace ID |
+| `--from <file>` | Create from YAML/JSON file instead of flags |
+
+### synap automation enable
+
+Activate an automation
+
+```bash
+synap automation enable [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` |  |
+
+### synap automation disable
+
+Pause an automation
+
+```bash
+synap automation disable [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` |  |
+
+### synap automation delete
+
+Delete an automation
+
+```bash
+synap automation delete [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` |  |
+| `--force` | Skip confirmation prompt |
+
+### synap automation schema
+
+Fetch the automation DSL schema from the pod (AI context)
+
+```bash
+synap automation schema [options]
+```
+
+| Option | Description |
+|---|---|
+| `--write-context [path]` | Write markdown context file for Claude Code |
+| `--json` | Output raw JSON instead of formatted markdown |
+
+## synap graph
+
+Low-level BFS graph traversal from an entity (prefer `synap ask` — graph is one of its signals)
+
+```bash
+synap graph [options]
+```
+
+| Option | Description |
+|---|---|
+| `--entity <id>` | Start entity ID Required. |
+| `--depth <n>` | Traversal depth (max 3) Default: `"2"`. |
+| `--json` | Raw JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap centrality
+
+Inspect PageRank centrality (entity_centrality) and trigger a recompute
+
+```bash
+synap centrality [options] [command]
+```
+
+### synap centrality status
+
+Show whether PageRank centrality has populated + the top central entities
+
+```bash
+synap centrality status [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap centrality recompute
+
+Enqueue a PageRank centrality recompute (runs in the background)
+
+```bash
+synap centrality recompute [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap events
+
+Show event chain for an entity or recent pod events
+
+```bash
+synap events [options]
+```
+
+| Option | Description |
+|---|---|
+| `--entity <id>` | Filter by entity ID (subjectId) |
+| `--limit <n>` | Number of events Default: `"20"`. |
+| `--json` | Raw JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap view
+
+Manage views
+
+```bash
+synap view [options] [command]
+```
+
+### synap view create
+
+Create a view (table, kanban, bento, …)
+
+```bash
+synap view create [options]
+```
+
+| Option | Description |
+|---|---|
+| `--type <type>` | View type: table\|kanban\|bento\|list\|grid\|gallery\|calendar\|masonry\|flow\|matrix\|branch_tree\|whiteboard Required. |
+| `--profile <slug>` | Entity profile to display (passed as profileId) |
+| `--name <name>` | View name |
+| `--workspace <id>` | Workspace ID |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap view list
+
+List views in the active workspace
+
+```bash
+synap view list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--type <type>` | Filter by view type (e.g. whiteboard, kanban, calendar) |
+| `--workspace <id>` | Workspace ID |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap view arrange
+
+Replace the widget arrangement of a bento view
+
+```bash
+synap view arrange [options] <viewId>
+```
+
+| Option | Description |
+|---|---|
+| `--file <path>` | JSON file containing widget layout (array or \{ widgets: \[...\] \}) |
+| `--workspace <id>` | Workspace ID |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+```text
+Examples:
+  synap view arrange <viewId> --file layout.json
+  echo '[{"id":"w1","kind":"widget","x":0,"y":0,"w":6,"h":4}]' | synap view arrange <viewId>
+
+Layout format (array of BentoWidget):
+  [{ "id": "<widgetId>", "kind": "widget|view|entity", "x": 0, "y": 0, "w": 6, "h": 4, "config": {} }]
+```
+
+## synap explain
+
+Full capability map — what Synap can do and how (no network required)
+
+```bash
+synap explain [options] [topic]
+```
+
+## synap open
+
+Open in the Synap desktop app. Use: open \<kind\> \<id\> or open \<id\> (auto-resolves type)
+
+```bash
+synap open [options] <kind-or-id> [id]
+```
+
+## synap doc
+
+Create and update markdown documents on the pod
+
+```bash
+synap doc [options] [command]
+```
+
+### synap doc create
+
+Create a new markdown document
+
+```bash
+synap doc create [options]
+```
+
+| Option | Description |
+|---|---|
+| `--title <title>` | Document title Required. |
+| `--content <text>` | Markdown content (inline) |
+| `--file <path>` | Read content from a file |
+| `--workspace <id>` | Workspace to create the document in |
+| `--open` | Open in the Synap desktop app after creation |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+```text
+Examples:
+  synap doc create --title "My Notes" --content "# Hello"
+  synap doc create --title "My Notes" --file ./notes.md --open
+  echo "# Draft" | synap doc create --title "Draft"
+```
+
+### synap doc update
+
+Update a document's content: the whole body, or one section (--section). Governed: an agent's edit is proposed.
+
+```bash
+synap doc update [options] <documentId>
+```
+
+| Option | Description |
+|---|---|
+| `--content <text>` | New markdown content (inline) |
+| `--file <path>` | Read new content from a file |
+| `--section <id>` | Write ONE section by id (content = the section body) instead of the whole document |
+| `--section-title <title>` | The section heading (required with --section) |
+| `--base-revision <n>` | The revision you read; refused if the document changed since |
+| `--open` | Open in the Synap desktop app after update |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+```text
+Examples:
+  synap doc update <id> --content "# Updated"
+  synap doc update <id> --file ./notes.md
+  cat notes.md | synap doc update <id>
+  synap doc update <id> --section risks --section-title "Risks" --file ./risks.md
+```
+
+### synap doc reference
+
+Create an external reference document (points at a URL — no bytes stored)
+
+```bash
+synap doc reference [options] <url>
+```
+
+| Option | Description |
+|---|---|
+| `--title <title>` | Document title Required. |
+| `--workspace <id>` | Workspace to create the reference in |
+| `--open` | Open in the Synap desktop app after creation |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+```text
+Examples:
+  synap doc reference https://example.com/spec --title "Vendor spec"
+```
+
+## synap cell
+
+Define and bundle frame cells for the Synap runtime
+
+```bash
+synap cell [options] [command]
+```
+
+### synap cell define
+
+Create or update a frame cell on the pod from ESM source
+
+```bash
+synap cell define [options]
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Cell display name Required. |
+| `--file <path>` | ESM source file (or pipe stdin) |
+| `--type-key <key>` | Explicit typeKey (default: generated:\<slug\>) |
+| `--deps <json>` | Dependency map JSON, e.g. '\{"recharts":"2.12.0"\}' |
+| `--view-types <list>` | Comma-separated view types this cell can render as a VIEW RENDERER, e.g. "list,table,kanban". Omit to leave an existing affinity untouched; pass "" to clear it |
+| `--content-kind <kind>` | What this cell renders — entity-detail \| entity-card \| entity-profile \| collection \| widget (default: widget, which is placeable but never offered as a profile renderer) |
+| `--workspace <id>` | Workspace to scope the cell to (default: your active workspace lens — run `synap lens` to see it) |
+| `--description <text>` | Short description |
+| `--open` | Open in the Synap desktop app after define |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+```text
+Without --view-types / --content-kind a cell installs cleanly but can never be
+PICKED as a view or profile renderer — it is only placeable on a bento.
+
+Examples:
+  synap cell define --name "Revenue Chart" --file ./chart.js
+  synap cell define --name "Revenue Chart" --file ./chart.js --deps '{"recharts":"2.12.0"}'
+  synap cell define --name "Deal Board" --file ./board.js --view-types kanban,table --content-kind collection
+  synap cell define --name "Contact Page" --file ./contact.js --content-kind entity-detail
+  cat chart.js | synap cell define --name "Revenue Chart"
+```
+
+### synap cell build
+
+Bundle a multi-file cell/app into a single ESM module the runtime expects
+
+```bash
+synap cell build [options] <entry>
+```
+
+| Option | Description |
+|---|---|
+| `--out <file>` | Output file path (default: \<entry\>.bundle.js) |
+| `--bundle-deps` | Inline all third-party deps into the bundle (only react/react-dom stay external) — output has deps=\{\} and the runtime CSP drops esm.sh entirely |
+| `--self-contained` | Build ONE complete HTML document (React, CSS, brand fonts inlined; nothing external) — the code of a rendererType "mcp-app" cell |
+| `--fonts` | With --self-contained: require the inlined brand fonts (default: include when @synap-core/design-tokens resolves) |
+| `--no-fonts` | With --self-contained: skip the inlined brand fonts |
+| `--define` | Chain into cell define after bundling (requires --name) |
+| `--name <name>` | Cell name (required with --define) |
+| `--type-key <key>` | Explicit typeKey (used with --define) |
+| `--deps <json>` | Override dependency versions as JSON, e.g. '\{"react":"18.3.0"\}' |
+| `--view-types <list>` | Comma-separated view-renderer affinity (used with --define), e.g. "list,table" |
+| `--content-kind <kind>` | entity-detail \| entity-card \| entity-profile \| collection \| widget (used with --define) |
+| `--workspace <id>` | Workspace (used with --define) |
+| `--description <text>` | Description (used with --define) |
+| `--open` | Open in browser after define (used with --define) |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+```text
+Output: a single ESM file.
+
+Default mode: bare imports (react, recharts, …) are externalized and emitted
+as a deps map. At runtime Synap resolves them via esm.sh importmap.
+
+--bundle-deps mode: only react/react-dom are externalized (React is
+host-inlined at runtime, never via esm.sh); everything else is bundled into
+the output, so the deps map is empty. A cell built this way reaches no esm.sh
+origin at runtime — the runtime CSP collapses to drop it entirely.
+
+Examples:
+  synap cell build ./src/chart.tsx --out ./dist/chart.js
+  synap cell build ./src/chart.tsx --out ./dist/chart.js --define --name "Revenue Chart"
+  synap cell build ./src/chart.tsx --out ./dist/chart.js --bundle-deps
+```
+
+## synap artifact
+
+Create and manage HTML artifacts as Synap documents
+
+```bash
+synap artifact [options] [command]
+```
+
+### synap artifact create
+
+Create an HTML artifact from a local file
+
+```bash
+synap artifact create [options]
+```
+
+| Option | Description |
+|---|---|
+| `--html <file>` | HTML file to upload Required. |
+| `--name <name>` | Document title (default: filename) |
+| `--workspace <id>` | Workspace context |
+| `--open` | Open in the Synap desktop app after creation |
+| `--json` | JSON output |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap connect-service
+
+Connect an external service (Google, GitHub, Notion, Linear, Slack, …)
+
+```bash
+synap connect-service [options] [service]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap tools
+
+Add and manage external service tools and their credentials
+
+```bash
+synap tools [options] [command]
+```
+
+### synap tools list
+
+List available tools and their connection status
+
+```bash
+synap tools list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--workspace <id>` | Workspace context |
+
+### synap tools connect
+
+Connect a credential to a tool (OAuth via the connection broker, or vault)
+
+```bash
+synap tools connect [options] <service>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap tools sync
+
+Trigger a manual sync for a connected tool
+
+```bash
+synap tools sync [options] <provider>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+
+### synap tools disconnect
+
+Revoke a tool's connection
+
+```bash
+synap tools disconnect [options] <provider>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--force` | Skip confirmation |
+
+### synap tools schema
+
+Fetch tool schema and supported providers (AI context)
+
+```bash
+synap tools schema [options]
+```
+
+| Option | Description |
+|---|---|
+| `--write-context [path]` | Write to .claude/TOOLS_CONTEXT.md |
+| `--json` | Output raw JSON instead of formatted markdown |
+
+## synap pod
+
+Show the whole configured pod — workspaces (with provenance), capabilities/automations/playbooks, and feed links
+
+```bash
+synap pod [options] [command]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output the full structured graph as JSON |
+| `--orphans` | Only show orphan/ad-hoc workspaces and their template-match suggestions |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap pod adopt
+
+Link an orphan/ad-hoc workspace (by name or id) to a matching template — makes it version-tracked
+
+```bash
+synap pod adopt [options] <workspaceNameOrId>
+```
+
+| Option | Description |
+|---|---|
+| `--template <slug>` | The template slug to adopt this workspace into Required. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap vendor
+
+Your marketplace publisher profile (what packages are attributed to)
+
+```bash
+synap vendor [options] [command]
+```
+
+### synap vendor create
+
+Create your publisher profile — do this BEFORE your first publish
+
+```bash
+synap vendor create [options] <slug>
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | Display name (defaults to a title-cased slug) |
+| `--description <text>` | Short description of you or your studio |
+| `--website <url>` | Website URL (must be a full URL) |
+| `--json` | Output as JSON |
+
+### synap vendor show
+
+Show whether you have a publisher profile
+
+```bash
+synap vendor show [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+
+## synap market
+
+Browse + install packages (workspaces, capabilities, skills, workflows, views, cells) into a project
+
+```bash
+synap market [options] [command]
+```
+
+| Option | Description |
+|---|---|
+| `--list` | List and exit (the default action) |
+| `--search <query>` | Filter by name/description/slug |
+| `--type <type>` | Filter by package type (workspace\|capability\|skill\|workflow\|view\|cell) |
+| `--json` | Output as JSON |
+
+### synap market install
+
+Install a package by slug into a project — workspaces install now; other types route you to the right surface
+
+```bash
+synap market install [options] <slug>
+```
+
+| Option | Description |
+|---|---|
+| `--project <id>` | Optionally tag the seeded entities to a project (installs are pod-wide by default) |
+| `--workspace <id>` | Acting workspace (UUID) a workflow/automation package is added to (required for that kind; defaults to your active lens). Ignored for pod-wide kinds |
+| `--onto <workspaceId>` | Reconcile this template ONTO an existing workspace (additive) instead of creating a new one |
+| `--dry-run` | Preview the create path write-free — report would-create / reuse / conflicts, install nothing |
+| `--timeout <seconds>` | How long to wait for the apply to finish (default: 120) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap market update
+
+Check installed packages for drift against the catalog, and re-apply the ones that are stale (all with --yes, specific ones with explicit slugs)
+
+```bash
+synap market update [options] [slugs...]
+```
+
+| Option | Description |
+|---|---|
+| `--yes` | Apply every available update without prompting (no slugs required), agreeing to every data change it lists |
+| `--accept-data-changes <opKeys>` | Agree to exactly these data changes (comma-separated opKeys from the preview) |
+| `--dry-run` | Force the preview path — never apply, even with --yes |
+| `--timeout <seconds>` | How long to wait for each package's apply to finish (default: 120) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap market installed
+
+List packages installed on this pod — a pure read, no writes (pairs with 'market update' to check drift)
+
+```bash
+synap market installed [options]
+```
+
+| Option | Description |
+|---|---|
+| `--outdated` | Only show packages with an update available |
+| `--tree` | Show the composition graph — package → templates → resulting workspaces, marking shared nodes |
+| `--layers` | Show the composition graph as a flat DAG — one row per slug, bedrock-first, with true fan-in counts |
+| `--json` | Output as JSON |
+
+### synap market workspaces
+
+List your workspaces with their template-attachment status — find the one that isn't attached yet (pure read)
+
+```bash
+synap market workspaces [options]
+```
+
+| Option | Description |
+|---|---|
+| `--unattached` | Only show workspaces that need attention (unattached or missing a version stamp) |
+| `--json` | Output as JSON |
+
+### synap market attach
+
+Reconcile a marketplace template onto an existing workspace + version-stamp it — how you relink a workspace installed before the marketplace
+
+```bash
+synap market attach [options] <workspaceId>
+```
+
+| Option | Description |
+|---|---|
+| `--slug <slug>` | Template to attach (inferred from the workspace's existing attachment or domain when omitted) |
+| `--project <id>` | Optionally tag the reconciled entities to a project |
+| `--timeout <seconds>` | How long to wait for the apply to finish (default: 120) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap market scaffold
+
+Write a minimal valid \<slug\>.template.yaml to edit in place (refuses to overwrite)
+
+```bash
+synap market scaffold [options] <slug>
+```
+
+| Option | Description |
+|---|---|
+| `--kind <kind>` | Scaffold a standalone package instead of a workspace template: cell, view, workflow, capability, skill |
+| `--json` | Output as JSON |
+
+### synap market validate
+
+Validate a local template file against the shared template validator — fast author feedback
+
+```bash
+synap market validate [options] <file>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output the validator result as JSON |
+
+### synap market publish
+
+Validate then publish a template (or a standalone cell/view package) to the marketplace (private by default) — pass a file, --from-workspace \<id\>, or --from-project \<id\>. Non-official publish never uses the synap-official vendor. Founder: --official \[slug...\] publishes the official catalog from the monorepo checkout (alias of `synap catalog publish --official --kind workspace`)
+
+```bash
+synap market publish [options] [targets...]
+```
+
+| Option | Description |
+|---|---|
+| `--official` | Publish the OFFICIAL Synap catalog (all templates, or the named slugs) from the monorepo checkout — requires a `synap login` session that owns the synap-official vendor; previews and asks first |
+| `--templates-dir <dir>` | With --official: path to the catalog package — synap-app/packages/catalog or workspace-templates (default: found by walking up from cwd) |
+| `--dry-run` | With --official: preview what would change against the live catalog, publish nothing |
+| `--yes` | With --official: skip the confirmation prompt |
+| `--public` | Publish as PUBLIC (default is private) |
+| `--private` | Publish as private (the default — stated explicitly) |
+| `--from-workspace <id>` | Serialize a live workspace into a template and publish it (instead of a file) |
+| `--from-project <id>` | Serialize a live project's used workspaces into a suite package (tags: suite, require deps) and publish it |
+| `--price <usd>` | Stamp pricingModel=one_time + priceUsd (dollars→cents). Settlement/Stripe is not this wave — columns only. |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override (for --from-workspace / --from-project) |
+| `--api-key <key>` | API key override (for --from-workspace / --from-project) |
+| `--no-bundle-deps` | Publish a cell's codeFile with external deps via esm.sh instead of bundling them in (default: bundled) |
+
+### synap market unpublish
+
+Flip a published package back to private (owner only)
+
+```bash
+synap market unpublish [options] <slug>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+
+## synap templates
+
+See every workspace's template status (attached, drifted, or unattached) and connect them — the one home for template health
+
+```bash
+synap templates [options] [command]
+```
+
+| Option | Description |
+|---|---|
+| `--needs-attention` | Show only workspaces that need action (drifted / unstamped / unattached-with-suggestion) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap templates attach
+
+Connect a workspace (by NAME or id) to a template — suggests the right one so you don't guess a slug
+
+```bash
+synap templates attach [options] <workspace>
+```
+
+| Option | Description |
+|---|---|
+| `--slug <slug>` | Force a specific template instead of the suggestion |
+| `--yes` | Accept a confident (domain-match) suggestion without prompting — for scripts |
+| `--project <id>` | Optionally tag the reconciled entities to a project |
+| `--timeout <seconds>` | How long to wait for the apply to finish (default: 120) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap templates update
+
+Apply template updates — 'update all' (or --yes) for every drifted workspace, or name specific slugs. Bare 'update' previews what's available.
+
+```bash
+synap templates update [options] [slugs...]
+```
+
+Aliases: `updates`
+
+| Option | Description |
+|---|---|
+| `--yes` | Apply every available update without prompting, agreeing to every data change it lists |
+| `--accept-data-changes <opKeys>` | Agree to exactly these data changes (comma-separated opKeys from the preview) |
+| `--dry-run` | Preview only — never apply |
+| `--timeout <seconds>` | How long to wait for each apply (default: 120) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap templates retire
+
+Move a retired template's space into its replacement (by template slug, workspace name or id). Shows the plan, asks, then moves through the pod — never deletes.
+
+```bash
+synap templates retire [options] <target>
+```
+
+| Option | Description |
+|---|---|
+| `--dry-run` | Show the plan only — move nothing |
+| `--yes` | Move without asking (for scripts) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap catalog
+
+Validate, diff and publish the OFFICIAL template catalog (workspaces, capabilities, skills, packs, automations) from the monorepo checkout
+
+```bash
+synap catalog [options] [command]
+```
+
+### synap catalog validate
+
+Validate the catalog (per-kind schema, cross-kind refs, goal grammar, duplicates) — offline
+
+```bash
+synap catalog validate [options] [slugs...]
+```
+
+| Option | Description |
+|---|---|
+| `--kind <kind>` | Only this kind: workspace \| capability \| skill \| pack \| automation |
+| `--catalog-dir <dir>` | Path to the catalog package (default: found by walking up from cwd) |
+| `--json` | Output as JSON |
+
+### synap catalog diff
+
+Show what would change against the live control-plane catalog (new / changed / unchanged)
+
+```bash
+synap catalog diff [options] [slugs...]
+```
+
+| Option | Description |
+|---|---|
+| `--kind <kind>` | Only this kind: workspace \| capability \| skill \| pack \| automation |
+| `--catalog-dir <dir>` | Path to the catalog package (default: found by walking up from cwd) |
+| `--json` | Output as JSON |
+
+### synap catalog publish
+
+Validate, preview the diff, confirm, then publish to the control plane — founder only: --official + a `synap login` session that owns synap-official
+
+```bash
+synap catalog publish [options] [slugs...]
+```
+
+| Option | Description |
+|---|---|
+| `--kind <kind>` | Only this kind: workspace \| capability \| skill \| pack \| automation |
+| `--catalog-dir <dir>` | Path to the catalog package (default: found by walking up from cwd) |
+| `--json` | Output as JSON |
+| `--official` | Publish as the synap-official vendor (required) |
+| `--dry-run` | Preview the diff only — publish nothing |
+| `--yes` | Skip the confirmation prompt |
+
+## synap capability
+
+The one capability-first root: list, add, enable, connect, show, run a capability pack
+
+```bash
+synap capability [options] [command]
+```
+
+Aliases: `cap`
+
+### synap capability list
+
+List capabilities — one row per pack, with status, connection, and verbs
+
+```bash
+synap capability list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--workspace <id>` | Workspace context |
+
+### synap capability add
+
+Install a capability from the catalog — omit the name to pick from a list
+
+```bash
+synap capability add [options] [name]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+
+### synap capability create
+
+Create a capability from a JSON definition (file path, or pipe JSON via stdin)
+
+```bash
+synap capability create [options] [file]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+
+### synap capability rm
+
+Remove capability container(s) by id or name — member tools/skills untouched
+
+```bash
+synap capability rm [options] <ids...>
+```
+
+Aliases: `remove`
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--force` | Skip the confirmation prompt |
+
+### synap capability enable
+
+Turn on a capability — omit the name to pick from a list; ensures its connection, then pick which verbs it can do
+
+```bash
+synap capability enable [options] [name]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+
+### synap capability connect
+
+Connect a service — omit the name to pick from connectable services
+
+```bash
+synap capability connect [options] [name]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--reconnect` | Force a fresh sign-in even if a connection already exists — fixes an expired or revoked token |
+
+### synap capability disconnect
+
+Disconnect a capability's service — accepts a capability name or a provider id
+
+```bash
+synap capability disconnect [options] <name>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--force` | Skip confirmation |
+
+### synap capability show
+
+Show one capability's full detail: status, connection, verbs, next action
+
+```bash
+synap capability show [options] <name>
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--workspace <id>` | Workspace context |
+
+### synap capability run
+
+Launch a verb — pass inputs as `--key value` flags
+
+```bash
+synap capability run [options] <verb> [params...]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--connection <id>` | Run against a specific stored connection id |
+| `--for <objId>` | Run against the connection bound to this context object id |
+
+### synap capability test
+
+Dry-run a verb (preview side effects without executing)
+
+```bash
+synap capability test [options] <verb>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+
+### synap capability connections
+
+Manage a capability's connections: list, add, update, rm
+
+```bash
+synap capability connections [options] [command]
+```
+
+Aliases: `conn`
+
+#### synap capability connections list
+
+List a capability's connections (label, kind, default, context, id)
+
+```bash
+synap capability connections list [options] <capability>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+
+#### synap capability connections add
+
+Add a connection — prompts for label + masked value unless provided as flags
+
+```bash
+synap capability connections add [options] <capability>
+```
+
+| Option | Description |
+|---|---|
+| `--label <label>` | Connection label |
+| `--value <value>` | Secret / credential value (else prompted, masked) |
+| `--context-type <type>` | Context type this connection binds to |
+| `--context-id <id>` | Context object id this connection binds to |
+| `--account-hint <hint>` | Human-readable account hint (e.g. an email) |
+| `--default` | Mark this connection as the capability's default |
+| `--workspace <id>` | Workspace context |
+
+#### synap capability connections update
+
+Update a connection's fields; --rotate (or --value) rotates its secret
+
+```bash
+synap capability connections update [options] <capability> <connectionId>
+```
+
+| Option | Description |
+|---|---|
+| `--label <label>` | New connection label |
+| `--value <value>` | New secret / credential value |
+| `--rotate` | Prompt (masked) for a new secret value |
+| `--context-type <type>` | New context type |
+| `--context-id <id>` | New context object id |
+| `--account-hint <hint>` | New account hint |
+| `--default` | Mark this connection as the capability's default |
+| `--workspace <id>` | Workspace context |
+
+#### synap capability connections rm
+
+Remove a connection by id (confirms first)
+
+```bash
+synap capability connections rm [options] <capability> <connectionId>
+```
+
+Aliases: `remove`
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+
+### synap capability sync-status
+
+Show sync status per provider × kind × connection (phase, counts, errors) — omit provider to see all
+
+```bash
+synap capability sync-status [options] [provider]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--json` | Output as JSON |
+
+## synap sync
+
+Sync status for connected providers — see `cap sync-status`
+
+```bash
+synap sync [options] [command]
+```
+
+### synap sync status
+
+Show sync status per provider × kind × connection (phase, counts, errors) — omit provider to see all. Alias of `synap cap sync-status`.
+
+```bash
+synap sync status [options] [provider]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace context |
+| `--json` | Output as JSON |
+
+## synap providers
+
+LLM providers on the pod (OpenAI/Anthropic/…) for local coding tools — not capability packs
+
+```bash
+synap providers [options] [command]
+```
+
+### synap providers list
+
+Show enabled AI providers and their models
+
+```bash
+synap providers list [options]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap providers pull
+
+Write pod LLM credentials into opencode or aider, or print the OpenAI-compatible \{pod\}/v1 endpoint
+
+```bash
+synap providers pull [options]
+```
+
+| Option | Description |
+|---|---|
+| `--target <name>` | Target tool: opencode \| aider |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+| `--show-key` | With --target show: print the full API key (default: redacted) |
+
+### synap providers set-key
+
+Store your own API key override for a provider (BYOI)
+
+```bash
+synap providers set-key [options] <providerId>
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace ID for workspace-scoped override |
+| `--api-key <key>` | API key (prompted if omitted) |
+| `--pod-url <url>` | Pod URL override |
+| `--hub-api-key <key>` | Hub API key override |
+
+### synap providers list-keys
+
+List user/workspace-level provider key overrides
+
+```bash
+synap providers list-keys [options]
+```
+
+| Option | Description |
+|---|---|
+| `--workspace <id>` | Workspace ID to check |
+| `--pod-url <url>` | Pod URL override |
+| `--hub-api-key <key>` | Hub API key override |
+
+## synap keys
+
+Manage pod API keys
+
+```bash
+synap keys [options] [command]
+```
+
+### synap keys rotate
+
+Rotate your CLI key to pick up the latest scope set
+
+```bash
+synap keys rotate [options]
+```
+
+| Option | Description |
+|---|---|
+| `--show-key` | Print the new key in full if it could not be saved to the config |

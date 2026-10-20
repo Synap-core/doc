@@ -1,0 +1,109 @@
+---
+title: Operations and troubleshooting
+description: Check a self-hosted pod's health, read its logs, manage its users, and fix the common problems.
+type: how-to
+audience: self-host
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Run every command from the deploy directory, as root:
+
+```bash
+cd /opt/synap/deploy
+```
+
+From anywhere else the server CLI stops with "Not in Synap installation directory". If you prefer not to `cd`, set
+`SYNAP_DEPLOY_DIR` on the `sudo` command itself (`sudo` drops variables exported in your shell):
+`sudo SYNAP_DEPLOY_DIR=/opt/synap/deploy synap health`.
+
+## Health
+
+| Command | What it tells you |
+|---|---|
+| `sudo synap health` | Docker and every service, locally. |
+| `sudo synap ps` | Every service and its status. |
+| `sudo synap doctor` | Read-only checks: `.env` against the schema, Compose projects, the release, backups, the PostgreSQL data layout. Exit code `1` when anything is found. `--json` for scripts. |
+| `sudo synap connectivity` | DNS and `/health` for the pod's domain. |
+| `sudo synap diagnose` | A broader diagnostic run. |
+| `curl https://pod.example.com/health` | The pod API answers. |
+
+## Logs
+
+```bash
+sudo synap logs                        # pick a service
+sudo synap logs backend --tail 100
+sudo synap logs backend --filter error
+sudo synap errors                      # search every service's logs for errors
+sudo synap errors backend 200          # the last 200 lines of one service
+```
+
+The `monitoring` profile adds a log viewer (Dozzle), metrics (Prometheus, Grafana) and alerts (Alertmanager), bound to
+`127.0.0.1` on the server: `sudo synap profiles enable monitoring`.
+
+## Services
+
+```bash
+sudo synap restart backend
+sudo synap stop
+sudo synap start
+sudo synap heal         # restart unhealthy containers, within a budget (never PostgreSQL)
+```
+
+## Users
+
+```bash
+sudo synap users list
+sudo synap users add-admin you@example.com --password-stdin
+sudo synap users reset-password person@example.com     # prompts for the password; --password-stdin for scripts
+```
+
+## Common problems
+
+**A certificate is not issued.** Both host names must resolve to the server (`sudo synap connectivity`), and ports
+80 and 443 must be open. Then read `sudo synap logs caddy`. See [Domains and TLS](/docs/run/domains-and-tls).
+
+**Sign-in or recovery emails never arrive.** The pod has no mail server configured. Set `SMTP_CONNECTION_URI` (and
+`SMTP_FROM_ADDRESS`) with `synap config set`, then `synap apply`. See [Configuration](/docs/run/configuration).
+
+**PostgreSQL refuses to start** with exit code 78 and `FATAL[synap]` in its logs. This is a safety stop: the database
+volume is not mounted where it should be, or the pod has data (`deploy/state/postgres-initialized` exists) but the
+database is empty. Do not work around it until you know where your data is: check `deploy/pgdata-safety.sh layout`
+and your dumps in `deploy/backups/postgres/`. Only to start from an empty database on purpose:
+`SYNAP_ALLOW_PG_REINIT=1 docker compose up -d postgres`.
+
+**"Refusing to guess the compose project".** More than one Compose project owns a PostgreSQL container for this
+deploy directory. The CLI changes nothing until you inspect each one and pin the real one with
+`COMPOSE_PROJECT_NAME=<project>` in `.env`; it prints the commands to do so.
+
+**An update failed.** It rolled back on its own. Read `deploy/state/last-update.json` for the step that failed, fix
+the cause (often disk space: updates need 2 GB free), and run `sudo synap update` again.
+
+**Ports 80 and 443 are already taken.** With Caddy as the edge, `synap update` checks first and stops with
+"SYNAP_EDGE=caddy but :80/:443 is held by: …", naming the containers, and changes nothing. If that container is your
+own reverse proxy, install or switch to `--edge traefik` (`sudo synap config set SYNAP_EDGE=traefik`); otherwise stop
+it. A web server running directly on the host (not in Docker) is not in that check: find it with
+`ss -tlnp | grep -E ':(80|443) '`. See [Domains and TLS](/docs/run/domains-and-tls#another-web-server-in-front-of-the-pod).
+
+**The laptop CLI cannot reach the pod.** From the laptop, `synap status` and `synap doctor` show whether the pod
+answers and whether the key works. `synap doctor --fix` repairs key problems.
+
+## Asking for help
+
+Open an issue in the [backend repository](https://github.com/Synap-core/backend/issues) with:
+
+- the release the pod runs: the `id` in `deploy/state/current-release.json`;
+- the output of `sudo synap doctor` and `sudo synap health`;
+- the failing step from `deploy/state/last-update.json`, if an update failed;
+- the relevant lines of `sudo synap logs <service>`.
+
+Read what you paste first. Never include `.env`, or the output of `docker compose config` or `docker inspect`: they
+contain your secrets. To report a vulnerability, follow the [security policy](/docs/community/security) instead.
+
+## Removing data
+
+`sudo synap reset` wipes workspace and application data after taking a backup and asking you to type the domain.
+`--full` recreates the stack (volumes kept) and `--full --delete-data` also removes this pod's volumes. Read
+`sudo synap help` before using it.

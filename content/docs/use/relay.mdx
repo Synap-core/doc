@@ -1,0 +1,44 @@
+---
+title: Relay (mobile)
+description: The Synap phone app, where you approve what your agents propose and capture things on the go.
+type: explanation
+audience: user
+availability: [relay]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Relay is the Synap app for iOS and Android. It is built for supervision: short, frequent acts you do wherever you
+are. Approve or reject what your agents propose, capture something before you forget it, and see what your agents
+and rules did on your behalf. Long authoring work belongs in [Browser](/docs/use/browser).
+
+## The tab bar
+
+| Tab | The question it answers |
+|---|---|
+| **Home** | Does anything need me? Pending approvals, and a "See all activity" link to what was done. |
+| **Moving** | What is being worked on now? The things in motion, each with the work on it, such as a session. All sessions, past ones included, are one tap away. |
+| **+** (centre) | Here is a new thing: search, capture or ask. Hold a choice to record your voice. |
+| **Library** | What do I have? Every record, browsable by kind (Things), and what you chose to keep (Kept). |
+| **Settings** | Configure Relay, including the trust rules your agents work under. |
+
+## Pairing Relay with your pod
+
+`synap init` (from `@synap-core/cli`) ends by showing a pairing link and QR code when your pod is served over HTTPS.
+Open it on your phone to connect Relay to that pod. A pod on `localhost` or plain HTTP cannot be paired; run
+`synap init --pod-url https://…` again once it has a public HTTPS address.
+
+## Capturing
+
+- **Share sheet**: send links, text and media to your pod from other apps.
+- **Capture button**: the centre button of the tab bar.
+- **Voice**: hold a capture choice to dictate.
+
+## Permissions
+
+Relay asks for a permission only for the feature that needs it: contacts (to import them as people), microphone and
+speech recognition (voice capture), camera (business cards and photos), and the photo library (photos you attach, and
+photo import if you turn it on).
+
+Relay is not open source.

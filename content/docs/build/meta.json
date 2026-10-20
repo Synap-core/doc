@@ -1,0 +1,21 @@
+{
+  "title": "Build",
+  "description": "SDK, API keys, webhooks, MCP and agent skills",
+  "root": true,
+  "icon": "CodeXml",
+  "pages": [
+    "index",
+    "coding-with-agents",
+    "---Your app---",
+    "sdk",
+    "api-keys",
+    "webhooks",
+    "n8n",
+    "chat-stream",
+    "skill-invocation",
+    "---Agents---",
+    "agents",
+    "---Concepts---",
+    "concepts"
+  ]
+}

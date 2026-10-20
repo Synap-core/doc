@@ -1,0 +1,58 @@
+---
+title: Documents
+description: The Documents operations of the Hub REST API (6 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/documents
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: "Replaces a document's content with `content` — one `replace_all` op
+          through the document patch door (prefer POST
+          /documents/{documentId}/patch for section or text edits). Governed: an
+          agent's full replacement is always a proposal for the document's
+          editors; a person's is applied. It may not change a person's section
+          or drop an embed (`allowRemovingEmbeds`). Pass `baseRevision` (GET →
+          `revision`); without it the revision at filing is pinned. `content` is
+          required; a `title` is refused with 400 (this route never renames)."
+      - content: "A full replacement — one `replace_all` op through the document patch
+          door (see POST /documents/{documentId}/patch). Governed: an agent's
+          full replacement is always a proposal, and it may not change a
+          person's section or drop an embed."
+      - content: Returns the document's raw bytes with the correct Content-Type
+          (text/html, text/markdown, application/pdf, etc.). Useful for iframes,
+          CLI downloads, and external consumers. Requires hub-protocol.read
+          scope. Pass userId as a query param.
+      - content: "THE document edit door. Ops, applied in order: `upsert_section
+          {id,title,body}` (one `::::synap-section` block by id), `replace_text
+          {old,new}` (`old` must match EXACTLY once — otherwise 400 with the
+          count), `append {body}`, `replace_all {content}` (needs
+          `baseRevision`). Pass `baseRevision` from GET /documents/{id}
+          (`revision`); a document that moved answers 409. Refused (403): an
+          agent changing a person's section (replace_all included); removing an
+          embed without `allowRemovingEmbeds: true`. Governed: applies or files
+          a proposal (202); an agent's replace_all is always a proposal. The
+          response carries `preview` (per section, before/after) and
+          `diagnostics` (advisory: what will not render — never a refusal;
+          `null` + `diagnosticsError` when the check could not run)."
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/documents" webhooks={[]} operations={[{"path":"/documents","method":"post"},{"path":"/documents/{documentId}","method":"get"},{"path":"/documents/{documentId}","method":"patch"},{"path":"/documents/proposals","method":"post"},{"path":"/documents/{documentId}/raw","method":"get"},{"path":"/documents/{documentId}/patch","method":"post"}]} showTitle />
+    </>
+  );
+}

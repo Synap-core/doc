@@ -1,0 +1,70 @@
+---
+title: FocusSessions
+description: The FocusSessions operations of the Hub REST API (12 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/focus-sessions
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Scope by `workspaceId` (membership-checked), `projectId` (the project
+          must be visible to the caller — `loadVisibleProject`, the same floor
+          every project read and filing write uses), or both. At least one is
+          required. Rows are always floored at the sessions the caller can read.
+      - content: IS creates a focus session, optionally with a correlationId for
+          idempotency. If a session with the same correlationId already exists
+          it is returned as-is.
+      - content: Lifecycle close via completeFocusSession — stamps closed, finishes any
+          running playbook_run, returns pendingProposals + counts + warnings.
+          Distinct from POST .../complete-run (playbook run only).
+      - content: Writes one `artifacts` provenance row attributing an already-existing
+          view/cell/document/entity/url to this session. `expectedLabel` claims
+          a declared deliverable slot for the join; it never stamps it done.
+      - content: Posts one ask in the session room, starts an agent turn for it, and
+          stamps `delegatedTo`/`delegatedAt` on the named slot. Never stamps
+          `status` — only an approval may do that.
+      - content: "Stamps `owner: 'human'` + `blockedReason` + `why` + `owedSince` on the
+          named slot. The slot stays `pending` — declaring that you cannot do
+          the work is the opposite of having done it. When a standing guideline
+          covers this kind of block, `blockGuidelines` carries its text."
+      - content: Clears `owner`, `blockedReason`, `why` and `owedSince` together. The
+          deliverable itself is unchanged and still owed.
+      - content: "Records the person's answer on the named slot and posts it into the
+          session room as the person. Not a delivery: `status` is untouched. A
+          slot that was handed to the person goes back to the agent with the
+          answer attached, and a pod-run agent that asked is woken. Emits
+          `focus_session.slot_answered.completed`. Refused (403) for an agent
+          key. A slot with a typed `ask` takes `value` (validated against it;
+          400 `ask_invalid:` when it does not fit, 409 `ask_changed:` when
+          `askFingerprint` no longer matches the slot's ask)."
+      - content: "Returns as soon as an answer newer than `since` exists (`status:
+          'answered'`, the same page shape as GET /answers), or after
+          `timeoutSeconds` (default 50, max 90) with `status: 'timeout'` and
+          `nextSince` to wait on again. Without `since`, only UNREAD answers:
+          slot answers not yet picked up, and room answers newer than the call.
+          An agent key's read stamps the slot answer's `answerPickedUpAt`
+          receipt."
+      - content: Answers the owner gave to agent questions and owed slots, `answeredAt >
+          since`, oldest first, id-stable. Pass `nextSince` back as `since`. For
+          agents the pod cannot wake (Claude Code, claude.ai, Raycast).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/focus-sessions" webhooks={[]} operations={[{"path":"/focus-sessions","method":"get"},{"path":"/focus-sessions","method":"post"},{"path":"/focus-sessions/:id","method":"get"},{"path":"/focus-sessions/:id","method":"patch"},{"path":"/focus-sessions/:id/complete","method":"post"},{"path":"/focus-sessions/:id/outputs","method":"post"},{"path":"/focus-sessions/:id/outputs/delegate","method":"post"},{"path":"/focus-sessions/:id/outputs/block","method":"post"},{"path":"/focus-sessions/:id/outputs/unblock","method":"post"},{"path":"/focus-sessions/:id/outputs/answer","method":"post"},{"path":"/focus-sessions/:id/answers/wait","method":"get"},{"path":"/focus-sessions/:id/answers","method":"get"}]} showTitle />
+    </>
+  );
+}

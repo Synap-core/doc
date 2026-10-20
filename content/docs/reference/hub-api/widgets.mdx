@@ -1,0 +1,30 @@
+---
+title: Widgets
+description: The Widgets operations of the Hub REST API (2 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/widgets
+  toc: []
+  structuredData:
+    headings: []
+    contents: []
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/widgets" webhooks={[]} operations={[{"path":"/widget-definitions","method":"get"},{"path":"/widget-definitions","method":"post"}]} showTitle />
+    </>
+  );
+}

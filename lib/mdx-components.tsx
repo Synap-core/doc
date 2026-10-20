@@ -1,9 +1,16 @@
+import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
 /**
- * MDX component map for docs + team collections.
- * - `SynapFlowDiagram` — generic React Flow canvas (pass `nodes` / `edges`).
- * - `PodReplicationPublicDiagram` / `PodReplicationTeamDiagram` — preset topology for pod replication.
- * - `EveStackDiagram` — Synap + Eve sidecars topology (team / Eve CLI).
+ * MDX component map for the docs collection: the fumadocs defaults (headings
+ * with anchors, code blocks, Card/Cards, Callout) plus Steps and Tabs, so a
+ * page can use them without an import.
  */
 export const mdxComponents = {
-  // Temporarily disabled due to build errors
+  ...defaultMdxComponents,
+  Step,
+  Steps,
+  Tab,
+  Tabs,
 };

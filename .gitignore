@@ -1,11 +1,11 @@
 # Dependencies
 node_modules/
 
-# Next.js / build
-.next/
-out/
-dist/
-build/
+# Next.js / build (root only: content/docs/build/ is the Build section)
+/.next/
+/out/
+/dist/
+/build/
 
 # Fumadocs generated
 .source/
@@ -28,3 +28,6 @@ build/
 *.zip
 .vercel
 .env*.local
+
+# Agent session state
+.omc/

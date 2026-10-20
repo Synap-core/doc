@@ -1,0 +1,109 @@
+---
+title: Docs style guide
+description: How to write a page for this site, the frontmatter every page needs, and how to verify what it says.
+type: how-to
+audience: contributor
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+This site is public and is read by people and by AI agents. A wrong page costs more than a missing one: an agent
+follows it literally. So every page states only what has been checked against the code.
+
+## What belongs here
+
+| Kind of knowledge | Where it lives |
+|---|---|
+| How to use, self-host, build on or contribute to Synap | **This site** |
+| How one repository's code works: architecture, invariants, design decisions | That repository's `docs/` folder, reviewed with the code |
+| Company plans, strategy, research and internal notes | Not in a public repository |
+| Reference that can be generated (CLI, MCP tools, REST API, events) | Generated from the source repositories; never edited by hand here |
+
+## Where a page goes
+
+Pages live in `content/docs/<section>/`. Pick the section by the reader's goal:
+
+| Section | For |
+|---|---|
+| `start` | Understanding Synap and getting a first pod working |
+| `use` | Using the apps day to day |
+| `build` | Building on a pod: SDK, keys, webhooks, agents, concepts |
+| `run` | Self-hosting and operating a pod |
+| `reference` | Lookup pages |
+| `community` | Contributing and policies |
+
+Add the page's file name (without extension) to the `pages` list of the folder's `meta.json`, or it will not appear
+in the navigation.
+
+## Frontmatter
+
+Every page starts with this block. The build fails on a page that does not match it, and `npm run check` reports the
+same errors without a build.
+
+```yaml
+---
+title: Webhooks                      # sentence case, short
+description: One sentence that says what the page gives the reader.
+type: how-to                         # tutorial | how-to | reference | explanation
+audience: builder                    # user | self-host | builder | contributor
+availability: [pod-oss, cloud]       # one or more of: pod-oss, cloud, browser, relay, raycast, eve, cli, sdk
+status: current                      # current | beta | deprecated
+owner: Antoinesrvt                   # GitHub handle of the person who keeps it right
+last_reviewed: 2026-10-20            # only if you verified the page against the code that day
+---
+```
+
+- **type**, after the Diataxis framework: a *tutorial* teaches by doing, a *how-to* solves one task, a *reference*
+  describes something to look up, an *explanation* gives understanding. One type per page.
+- **availability** is shown as badges: where the page's content applies.
+- **status**: `beta` for pages not yet verified or features that are still changing; `deprecated` for things being
+  retired. A `beta` page without `last_reviewed` shows a warning banner.
+- **last_reviewed**: set it only when you checked every command, flag, path, name and number on the page against the
+  code, and update it whenever you do so again.
+
+## The verification rule
+
+Before you write a fact, find it in the code:
+
+- a command or flag: in the CLI's command definitions or `--help` output;
+- an endpoint, header or status code: in the route that serves it;
+- a package name: on npm (`npm view <name>`) and in its `package.json`;
+- a setting: in `deploy/env.schema` of the backend repository;
+- a count ("13 tables", "29 event types"): count it in the code, or leave the number out.
+
+If you cannot verify something, leave it out, or keep the page `status: beta` without `last_reviewed`. Never copy a
+command from another doc without running it or reading its source.
+
+## Writing
+
+- Plain, specific sentences. Say what the reader does and what happens.
+- Use "you" for the reader. Use the present tense.
+- One idea per paragraph. Tables for options and comparisons.
+- Code blocks for anything the reader types, with placeholders like `pod.example.com` and `<id>`.
+- No marketing language, no emoji.
+- Use Synap's terms as the [glossary](/docs/start/glossary) defines them: kind, role (facet), project, track, session,
+  playbook, proposal.
+
+## Links
+
+- Link to other pages with absolute paths: `/docs/build/api-keys`, not `./api-keys`. Relative links break when a page
+  is an index page or moves.
+- `npm run check:links` checks every internal link and anchor.
+- Link to repositories, not to files that may not exist yet.
+
+## Retired names
+
+Some package names and domains never existed or were retired; for example, the CLI is `@synap-core/cli` and nothing else.
+`npm run check:retired` fails on any of them. The list is `scripts/retired-names.json`.
+
+## Before you open a pull request
+
+```bash
+npm ci
+npm run check     # frontmatter, links, retired names
+npm run build
+```
+
+The same checks run in CI on every pull request.

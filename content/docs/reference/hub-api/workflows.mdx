@@ -1,0 +1,37 @@
+---
+title: Workflows
+description: The Workflows operations of the Hub REST API (2 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/workflows
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: One workflow's runs + sessions + channels + produced results +
+          attributed proposals, derived from runtime keys. USER-floored; 404
+          when the workflow is not visible.
+      - content: The per-workflow focus-session event feed, newest-first,
+          cursor-paginated. USER-floored via the session-visibility derivation
+          (events carry no workspace column, so the visible-session set is the
+          security floor).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/workflows" webhooks={[]} operations={[{"path":"/workflows/{kind}/{id}/place","method":"get"},{"path":"/workflows/{kind}/{id}/feed","method":"get"}]} showTitle />
+    </>
+  );
+}

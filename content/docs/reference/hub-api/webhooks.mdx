@@ -1,0 +1,38 @@
+---
+title: Webhooks
+description: The Webhooks operations of the Hub REST API (4 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/webhooks
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns all webhook subscriptions belonging to the authenticated agent
+          user.
+      - content: Registers a webhook URL to receive real-time event notifications for
+          the specified event types.
+      - content: Permanently removes a webhook subscription by ID.
+      - content: Returns the delivery log (status, responseStatus, attempt, deliveredAt)
+          for a subscription owned by the caller. Powers the Reactions Health
+          tab + Replay.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/webhooks" webhooks={[]} operations={[{"path":"/webhooks","method":"get"},{"path":"/webhooks","method":"post"},{"path":"/webhooks/{id}","method":"delete"},{"path":"/webhooks/{id}/deliveries","method":"get"}]} showTitle />
+    </>
+  );
+}

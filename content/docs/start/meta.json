@@ -1,11 +1,7 @@
 {
-  "title": "Use Synap",
-  "description": "Install, learn the product, get started — deep tech lives in Architecture",
+  "title": "Start",
+  "description": "What Synap is and the two quickstarts",
   "root": true,
-  "icon": "rocket",
-  "pages": [
-    "index",
-    "getting-started",
-    "concepts"
-  ]
+  "icon": "Rocket",
+  "pages": ["index", "what-is-synap", "cloud-quickstart", "self-host-quickstart", "glossary"]
 }

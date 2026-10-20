@@ -1,0 +1,29 @@
+---
+title: Reference
+description: Lookup pages for the CLI, the MCP tools, the event catalog and the Hub REST API, generated from source.
+type: reference
+audience: builder
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+The reference pages are generated from the source repositories, so they cannot drift from the code. Each one says
+which repository and commit it was generated from. The source repositories export the data as JSON;
+`scripts/sync-reference.mjs` in this site's repository copies it and `scripts/generate-reference.mjs` turns it into
+these pages.
+
+| Reference | Generated from | Here |
+|---|---|---|
+| CLI (`@synap-core/cli`) | The command definitions in the `synap-cli` repository (`docs/reference/cli.json`) | [CLI](/docs/reference/cli) |
+| MCP tools | The tool definitions in the backend repository (`docs/reference/mcp-tools.json`) | [MCP tools](/docs/reference/mcp-tools) |
+| Events | `packages/events` in the backend repository (`docs/reference/events.json`) | [Event catalog](/docs/reference/events) |
+| Hub REST API | The OpenAPI description every pod serves at `/api/hub/openapi.json` (`docs/reference/hub-openapi.json`) | [Hub REST API](/docs/reference/hub-api) |
+
+Two references are not generated yet:
+
+| Reference | Source of truth | Here |
+|---|---|---|
+| Pod configuration | `deploy/env.schema` in the backend repository | [Configuration](/docs/run/configuration) |
+| Server CLI (`synap` on a pod host) | `synap help` and `synap <command> --help` on the server | [Run](/docs/run) |

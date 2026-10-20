@@ -1,0 +1,104 @@
+---
+title: Eve
+description: Install and operate a self-hosted server stack around a Synap pod with the eve command-line tool.
+type: how-to
+audience: self-host
+availability: [eve, pod-oss]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Eve is an operator command-line tool (`eve`) that installs and manages a self-hosted server stack: a Synap pod, plus
+optional services next to it such as a local model runner, agents, feeds and a chat interface, all behind one Traefik
+reverse proxy. It also runs a web dashboard for the stack. Eve is open source, in the
+[hestia-cli repository](https://github.com/Synap-core/hestia-cli).
+
+Eve does not replace the pod's own tooling: it installs and updates the pod through the same `synap` server CLI
+described in [Run](/docs/run). If you only want a pod, the [self-host quickstart](/docs/start/self-host-quickstart) is
+simpler.
+
+## Install Eve
+
+On a fresh Debian or Ubuntu server, as root:
+
+```bash
+apt-get update -y && apt-get install -y ca-certificates curl git
+curl -fsSL https://raw.githubusercontent.com/Synap-core/hestia-cli/main/bootstrap.sh | bash -s -- --no-setup
+```
+
+`bootstrap.sh` installs Docker, Node.js 20 and pnpm 10 when they are missing, clones Eve into `/opt/eve` (`--dir`
+chooses another directory), builds it and links the `eve` command into `/usr/local/bin`. Without `--no-setup` it then
+starts the older `eve setup` wizard, which needs an interactive terminal.
+
+## Install the stack
+
+```bash
+eve install                                              # interactive: pick a preset or components
+eve install --components traefik,synap --domain example.com --email you@example.com
+eve install --dry-run --components traefik,synap         # print the plan only
+```
+
+Traefik and the Eve dashboard are always installed. A few of the components you can add (`eve add <id>`) or remove
+(`eve remove <id>`) later:
+
+| ID | What it is |
+|---|---|
+| `synap` | The Synap pod |
+| `ollama` | Local model runner |
+| `hermes`, `openclaw` | Agents that work through the pod (Hermes is the one suggested for new installs) |
+| `rsshub` | Turns websites into feeds |
+| `openwebui` | A chat interface |
+
+`eve add` without an argument lists what can be added. The full list is in the
+[repository](https://github.com/Synap-core/hestia-cli).
+
+## Everyday commands
+
+| Task | Command |
+|---|---|
+| What is installed and running | `eve status` (`--watch`, `--json`) |
+| Diagnose problems | `eve doctor` |
+| Update every component, or some | `eve update`, `eve update synap` |
+| Update the pod to a release or channel | `eve update synap --release stable` (or `fast`, or a release ID) |
+| Restart components | `eve restart`, `eve restart synap` |
+| Logs of the Eve stack | `eve logs [service] -f`, from the Compose directory (or with `--compose-file`) |
+| Open the dashboard | `eve ui` (port `7979` by default) |
+| Serve the stack on your domain | `eve domain set example.com --ssl --email you@example.com`, then `eve domain show` |
+| Agent keys for the pod | `eve auth status`, `eve auth provision`, `eve auth renew --agent <slug>` |
+
+`eve update synap` runs the pod's own `synap update`, so the same backup, canary and automatic rollback apply. See
+[Upgrades](/docs/run/upgrades).
+
+## Where things live
+
+| Path | What it is |
+|---|---|
+| `/opt/eve` | Eve itself (the default of `bootstrap.sh`) |
+| `.eve/` in Eve's directory | Eve's secrets and setup choices |
+| `~/.local/share/eve/state.json` | Which components are installed (`EVE_STATE_HOME` moves it) |
+| `/opt/synap-backend` | The pod, when Eve installed it: a checkout of the backend repository (`SYNAP_REPO_ROOT` moves it) |
+| `/opt/synap-backend/deploy` | The pod's deploy directory |
+
+Run `synap` commands for an Eve-installed pod from `/opt/synap-backend/deploy` (or pass `SYNAP_DEPLOY_DIR` to it on
+the `sudo` command: `sudo SYNAP_DEPLOY_DIR=/opt/synap-backend/deploy synap …`), not
+from `/opt/synap/deploy` as on a pod installed with `install.sh`. Run `docker compose` for the pod from that directory
+too; from Eve's directory you reach a different Compose project.
+
+## What changes on an Eve-managed pod
+
+- **The pod's host name is `pod.<domain>`.** For the domain you give Eve, it installs the pod with
+  `--domain pod.<domain>`, so the admin console is `pod-admin.<domain>`.
+- **The edge is Traefik, not Caddy.** Eve runs `synap` with `SYNAP_SKIP_EDGE=1`, and the first install or update pins
+  `SYNAP_EDGE=traefik` in `deploy/.env`, the same setting `synap install --edge traefik` writes. Caddy cannot bind
+  port 80 next to Traefik, so a pod with Eve's override and no pinned edge is refused by `synap update` until you run
+  `synap config set SYNAP_EDGE=traefik`.
+- **A compose override marks it.** Eve writes a `docker-compose.override.yml` carrying an `eve-managed` marker in the
+  deploy directory. It attaches the pod's services to Eve's Docker network so Traefik can reach them. `synap doctor`
+  reports it.
+- **Each agent has its own key.** Eve gives every agent it manages its own Hub API key and pod user, minted through
+  the pod's `/api/hub/setup/agent`. `eve auth status` lists them.
+- **AI providers.** Changing the AI providers a pod uses needs the `providers.write` key scope, which is intended for
+  an operator tool such as Eve and is not part of an ordinary agent key.
+
+For everything else, the [Run](/docs/run) section applies to an Eve-managed pod as it does to any other.

@@ -1,0 +1,35 @@
+---
+title: Automations
+description: The Automations operations of the Hub REST API (7 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/automations
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Creates an automation. Defaults to status=draft. Use POST
+          /automations/{id}/activate to enable it.
+      - content: Returns automations for the user, optionally filtered by status.
+      - content: Runs the automation flow once with an optional payload. Bypasses the
+          automation's normal trigger config.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/automations" webhooks={[]} operations={[{"path":"/automations/create","method":"post"},{"path":"/automations","method":"get"},{"path":"/automations/{automationId}","method":"get"},{"path":"/automations/{automationId}","method":"patch"},{"path":"/automations/{automationId}/trigger","method":"post"},{"path":"/automations/{automationId}/activate","method":"post"},{"path":"/automations/{automationId}/pause","method":"post"}]} showTitle />
+    </>
+  );
+}

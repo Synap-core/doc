@@ -1,0 +1,75 @@
+---
+title: Marketplace listing policy
+description: How the marketplace works on a pod today, and the draft listing criteria and neutrality rule for what Synap lists.
+type: explanation
+audience: builder
+availability: [pod-oss, cloud]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+<Callout type="warn" title="Policy draft">
+  The listing criteria and the neutrality rule on this page are a **draft** for discussion. They are not yet applied
+  as written. The first section describes how pods behave today.
+</Callout>
+
+## How the marketplace works today
+
+A pod's marketplace lists packages (workspace templates, capabilities, automations, cells) from **sources**.
+
+- **Synap's catalog** is built in. The pod reads it from its configured Control Plane (`https://api.synap.live` by
+  default) every 10 minutes, anonymously. An operator can switch it off with `SYNAP_CATALOG_SOURCE=off`.
+- **Other sources.** A pod admin can add any other source by its HTTPS address. A source publishes a signed index
+  (`synap-index.json` and its `.sig`, signed with an ed25519 key); the format is documented in
+  [`docs/marketplace-source.md`](https://github.com/Synap-core/backend/blob/main/docs/marketplace-source.md) in the
+  backend repository.
+
+The pod admin chooses a trust level for each added source:
+
+| Level | Who can install | What the pod checks |
+|---|---|---|
+| **Official** (Synap's catalog only) | A person; an agent's install becomes a proposal | The configured Control Plane, over TLS |
+| **Trusted** | A person, after a preflight that names the code, network access and connectors a package brings | The signed index under the pinned key, not expired; each definition's digest |
+| **Showcase only** | Nobody on the pod: install opens the publisher's page | The listing only |
+
+What holds for every source:
+
+- Only a person who administers the pod can add a source, change its trust, or remove it. Agents and API keys are
+  refused.
+- Updates from a source are never applied automatically.
+- A package only **adds** to a pod. It is refused when it would overwrite something the pod already has under the
+  same name.
+- A pod's requests to a source are anonymous `GET`s: no cookies, no keys, no user identity.
+
+## Listing criteria (draft)
+
+To be listed in Synap's catalog, a package must:
+
+1. **Say what it does.** A name, a description that matches the package's behaviour, and an icon.
+2. **Declare what it reaches.** Every network destination, connector and piece of code it brings shows in the
+   install preflight. Nothing undeclared.
+3. **Respect governance.** It works through the pod's normal permission and proposal rules, and asks for no more
+   access than it needs.
+4. **Install cleanly.** It installs on a current stable pod without overwriting anything, and removes cleanly.
+5. **Have an owner.** A publisher who can be contacted and answers security reports.
+6. **Be honest about cost.** If it needs a paid plan or a paid third-party service, the listing says so.
+
+Synap may remove a listing that breaks these criteria, after telling the publisher why, except for a security
+problem, where it may remove it first.
+
+## Neutrality rule (draft)
+
+Synap publishes packages and apps of its own in the same catalog as other publishers. The rule:
+
+- **The same criteria.** Synap's own packages meet the listing criteria above, checked the same way.
+- **The same placement.** Search and browsing rank packages by the same rules for everyone. Synap's own packages get
+  no hidden boost, and no placement can be bought.
+- **Labels describe, they do not rank.** "Official" means "published by Synap" and the trust level a pod gives it; it
+  is not a quality badge.
+- **No lock-in through the catalog.** A pod admin can add other sources and switch Synap's catalog off. Synap will not
+  make a pod depend on its catalog to keep working.
+- **Same data rules.** Synap's own packages get no access to a pod's data that a third-party package with the same
+  declared permissions would not get.
+
+Comments on this draft are welcome as an [issue on the backend repository](https://github.com/Synap-core/backend/issues).

@@ -1,0 +1,33 @@
+---
+title: UI
+description: The UI operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/ui
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Emits a ui:focus event to the authenticated user's browser, instructing
+          it to open the specified surface (entity, view, cell, document,
+          channel, or app).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/ui" webhooks={[]} operations={[{"path":"/ui/focus","method":"post"}]} showTitle />
+    </>
+  );
+}

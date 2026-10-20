@@ -1,0 +1,113 @@
+---
+title: Connect to the Control Plane
+description: Let people sign in to a self-hosted pod with a Synap account, register the pod with Synap Cloud, and what the pod keeps for itself.
+type: how-to
+audience: self-host
+availability: [pod-oss, cloud]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A pod is a complete, independent server. It owns its users, memberships, workspaces, projects and sessions, and it
+trusts no outside service by default. Connecting it to the Synap Control Plane (or to another account service) is
+optional, and does not put that service's user or pod identifiers into the pod's identity model.
+
+## Sign in with a Synap account
+
+By default, people sign in to a self-hosted pod with email and password. To also offer "Continue with Synap Cloud":
+
+```bash
+cd /opt/synap/deploy
+sudo synap federation connect-cloud      # uses CONTROL_PLANE_URL, else https://api.synap.live
+sudo synap federation status
+sudo synap federation disable            # back to password sign-in only
+```
+
+`connect-cloud` accepts `--control-plane <url>` for another Control Plane and `--label <text>` for the button's label.
+It sets `CONTROL_PLANE_URL`, regenerates the sign-in configuration and restarts Kratos. The first time someone uses the
+button, they sign in once with their pod password to link the two accounts; after that, the button signs them in
+directly.
+
+## Register the pod with the Control Plane
+
+A pod can be registered with the Control Plane at install time, with a single-use registration code (`spr_…`)
+created for you by the Control Plane:
+
+```bash
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo bash -s -- --name <name> --register-token spr_… [--domain pod.example.com]
+```
+
+- `--name` is required with a registration code: it is the name the code was created for. Without `--domain`, the pod
+  is served at `pod.<name>.synap.live`.
+- Once the pod is healthy, it registers: the person the code was created for becomes its owner. A registered pod
+  cannot also be given a pre-seeded admin (`--admin-password`); the two are exclusive.
+- `--control-plane <url>` selects another Control Plane (default `https://api.synap.live`).
+
+`sudo synap policy show` prints what the Control Plane may ask this pod to do, and
+`sudo synap policy set-mode managed|self-hosted` changes it. See
+[Security hardening](/docs/run/security-hardening#what-a-control-plane-may-do-on-your-pod).
+
+### The pod's identity key
+
+A registered pod signs its own calls to the Control Plane with a P-256 key generated on the server, in
+`deploy/state/pod-identity/pod-key.pem` (mode `600`). Only its public half is ever sent: at registration, or with
+`enroll` for a pod that was installed without a registration code.
+
+```bash
+sudo synap pod-key show                                   # the public key (creates the key if missing)
+sudo synap pod-key enroll --pod-id <id> --code spr_…      # a pod installed by hand; the code comes from the Control Plane
+```
+
+`enroll` also takes `--control-plane <url>`; by default it uses `CONTROL_PLANE_URL`, then `https://api.synap.live`.
+
+## What each side owns
+
+| Side | Owns |
+|---|---|
+| The account service (for example the Synap Control Plane) | Its accounts, passwords, sessions and invitations, and its record of which people relate to which pods |
+| The pod | Which issuers it trusts, its local identities, memberships and access decisions, workspaces, projects and its own sessions |
+| The browser or app | Talks to both directly; carries only short-lived assertions or one-time receipts between them |
+
+The account service never receives a pod session token.
+
+## The federation endpoints
+
+For people building an account service or debugging one. All are under `/api/federation` on the pod:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /bootstrap` | Creates the first local owner of a fresh pod from a short-lived signed assertion, authorized by the pod's local installation secret. A second owner cannot be bootstrapped this way. |
+| `POST /identity-links` | A signed-in person links their pod account to an account service. Returns a one-time receipt. |
+| `POST /identity-links/consume` | The account service redeems the receipt, server to server. |
+| `POST /access-grants` | Applies an accepted invitation: a signed assertion naming one workspace or project on the pod. |
+
+Assertions are ES256-signed by the issuer, addressed to the pod's exact public origin, short-lived and single-use.
+The issuer publishes its keys as a JWKS over HTTPS. The pod rejects issuers and key locations that resolve to private
+or local network addresses.
+
+## How the pod checks an issuer
+
+The pod accepts a signed assertion only from an issuer in its **trusted-issuer registry**, approved, and holding the
+scope the endpoint requires. Setting `CONTROL_PLANE_URL` (which `synap federation connect-cloud` does) makes the pod,
+each time it starts, add that Control Plane to the registry with a fixed set of scopes. It reads the issuer name the
+Control Plane signs with from `<CONTROL_PLANE_URL>/federation/metadata`, and falls back to `CONTROL_PLANE_URL` itself.
+Extra scopes the Control Plane asks for wait for a pod admin's approval, unless the pod setting
+`trust.autoAcceptCpScopes` is on (it is off by default). An environment variable is never trusted on
+its own: without a registry entry, nothing is accepted.
+
+For every assertion, the pod:
+
+- selects the signing key by the token's `kid` and accepts only ES256;
+- checks the issuer, the expiry and the audience, which must be this pod;
+- checks the token's purpose (`type`), so a token minted for one endpoint cannot be used on another;
+- requires a `jti` and records it, so the same token is refused the second time.
+
+Keys are fetched from `<issuer>/.well-known/jwks.json` over HTTPS, with a 10-second timeout and a 256 KB limit, and
+cached for 24 hours. A token signed with a `kid` the cache does not hold triggers a fresh fetch, so an issuer can
+rotate its key without any change on the pod. If a fetch fails, the pod retries after 1, 5 and 30 seconds, then falls
+back to the last key set it fetched, for up to 48 hours.
+
+The older provisioning endpoints `/api/provision/connect`, `/authorize-issuer`, `/seed-trust`, `/seed-admin` and
+`/activate-member` are retired and answer with a retirement response.

@@ -1,0 +1,73 @@
+---
+title: Workspaces
+description: The Workspaces operations of the Hub REST API (12 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/workspaces
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Returns the workspace plus usedByProjectIds (projects that use this
+          domain via the project --uses--> workspace INDEX). Floored to projects
+          the caller can see. Not an ACL.
+      - content: Persists the workspace's AI provider routing policy. Owner/admin role
+          required.
+      - content: "Set/merge the workspace-EDGE fields on an existing workspace:
+          `sourceRoles` (domain → provider|consumer|provider-consumer) and
+          `defaultSources` (domain → source workspace to read from). Merges
+          per-domain — existing domains and all other settings are preserved,
+          never clobbered. Editor+ membership required. GOVERNED: rewiring
+          cross-workspace read routing goes through review — an agent caller
+          gets `{ status: 'proposed', proposalId }` (applied on approval); an
+          operator-authority caller applies immediately (`{ status: 'updated'
+          }`)."
+      - content: "Set the workspace's public-projection config: `enabled` (master
+          switch), `roles` (facet role-profile slugs whose holders are public)
+          and `fields` (property-key allowlist for a projected row). Writes ONLY
+          the `publicProjection` settings key — all other settings are
+          preserved, never clobbered. Editor+ membership required. GOVERNED:
+          opting into an unauthenticated public surface goes through review — an
+          agent caller gets `{ status: 'proposed', proposalId }` (applied on
+          approval); an operator-authority caller applies immediately (`{
+          status: 'updated' }`)."
+      - content: Returns the effective RBAC + auto-approve list for the workspace.
+          Membership required.
+      - content: "Deterministic briefing of a workspace's existing data so an agent can
+          understand it before acting: entity counts per profileSlug, the most
+          recently-updated entities, and a one-line prose summary (no LLM)."
+      - content: Returns workspaces + active workspace for a given user (used by IS to
+          bootstrap session context).
+      - content: Adds the given agent user as a member to all workspaces the calling
+          user belongs to (or just one, when workspaceId is supplied).
+          Idempotent — safe to call on reconnect. Used by `synap connect` when
+          'All workspaces' is selected to give the agent key pod-wide access.
+      - content: Idempotently provisions a workspace owned by an agent user. Sets wide
+          autoApproveFor so the agent can write freely within it. The calling
+          user is added as admin so they can see the agent's work. Requires
+          hub-protocol.write scope.
+      - content: 'Idempotently provisions a workspace from a WorkspaceProposal-shaped
+          definition. Restricted to agent users whose agentType is in the
+          allowlist (currently `eve`, `coder`). Pass a stable `proposalId` to
+          make retries idempotent — the same id for the same user returns the
+          existing workspace with `created: false`.'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/workspaces" webhooks={[]} operations={[{"path":"/workspaces","method":"get"},{"path":"/workspaces/{workspaceId}","method":"get"},{"path":"/workspaces/{workspaceId}/eve-provider-routing","method":"get"},{"path":"/workspaces/{workspaceId}/eve-provider-routing","method":"patch"},{"path":"/workspaces/{workspaceId}/source-edges","method":"patch"},{"path":"/workspaces/{workspaceId}/public-projection","method":"patch"},{"path":"/workspaces/{workspaceId}/governance","method":"get"},{"path":"/workspaces/{workspaceId}/digest","method":"get"},{"path":"/users/{userId}/context","method":"get"},{"path":"/workspaces/enroll-agent","method":"post"},{"path":"/workspaces/provision-agent","method":"post"},{"path":"/workspaces/from-definition","method":"post"}]} showTitle />
+    </>
+  );
+}

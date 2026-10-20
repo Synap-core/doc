@@ -1,47 +1,56 @@
 ---
-title: 'Use Synap'
-description: 'Install, learn the product, get started — deep tech lives in Architecture'
-section: general
-audience: users
-version: 1.0+
-last_updated: '2026-04-01'
-tags: []
-sidebar_position: null
-hide_title: false
-toc: true
+title: Start here
+description: Pick the path that matches what you want to do with Synap.
+type: explanation
+audience: user
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
 ---
 
-import { Card, Cards } from 'fumadocs-ui/components/card';
-import { Rocket, BookOpen, Terminal } from 'lucide-react';
+Synap is a data pod: a server that holds your records and lets the AI agents you connect work on them, with every
+agent change reaching your data as a proposal you can review. Read [What is Synap?](/docs/start/what-is-synap) for
+the model, then pick your path.
 
-Welcome to the Synap docs.
-
-This section covers product use: getting your Synap pod set up, understanding the core concepts, and making the most of what's in the application interface and views. Deep tech architecture, internal build guides, and operational runbooks live in the Architecture docs.
-
-## Where to start
+## What do you want to do?
 
 <Cards>
-  <Card icon={<Rocket className="size-4" />} title="Getting started" href="/docs/start/getting-started">
-    Choose your environment: hosted, Docker, or CLI. Follow the quickstart guide to set up a pod, connect agents, and begin importing data.
-  </Card>
-  <Card icon={<BookOpen className="size-4" />} title="Concepts" href="/docs/start/concepts">
-    Entities, views, channels, property schemas, and the triptych model that makes Synap's data architecture unique.
-  </Card>
-  <Card icon={<Terminal className="size-4" />} title="What is Synap?" href="/docs/start/concepts/what-is-synap">
-    Product overview, vision, key capabilities, and how Synap differs from traditional SaaS apps.
-  </Card>
+  <Card
+    title="Use Synap with a hosted pod"
+    description="Let Synap run the server. One command connects your computer, your agents and your phone."
+    href="/docs/start/cloud-quickstart"
+  />
+  <Card
+    title="Run your own pod"
+    description="Install the open-source pod on a Linux server with Docker, behind automatic HTTPS."
+    href="/docs/start/self-host-quickstart"
+  />
+  <Card
+    title="Connect an AI agent"
+    description="Give Claude Code, Codex, Cursor or any MCP client governed access to your pod."
+    href="/docs/build/agents"
+  />
+  <Card
+    title="Build an app on your pod"
+    description="Use the typed SDK for apps people sign in to, or an API key and the REST API for scripts and integrations."
+    href="/docs/build"
+  />
+  <Card
+    title="Use the apps"
+    description="Browser on the desktop, Relay on your phone, plus Raycast and Eve."
+    href="/docs/use"
+  />
+  <Card
+    title="Contribute"
+    description="The pod and the CLI are open source. Start from the repositories."
+    href="/docs/community"
+  />
 </Cards>
 
-## Navigation
+## Not sure yet?
 
-- **Getting started** — installation, setup, and quickstart for your pod
-- **Concepts** — product model overview and deep dives into each core concept
-- **What is Synap?** — product vision and high-level capability overview
-
-## Also check out
-
-- **[Architecture](/docs/architecture)** — technical depth: data pod internals, system patterns, event chain, branching conversations
-- **[Build & integrate](/docs/integrate)** — connecting agents, building on the backend, and hub protocol
-- **[Cloud & Intelligence](/docs/cloud)** — Synap Cloud and intelligence services
-
-Try Synap hosted at [synap.live](https://synap.live), or [run your own pod locally](https://github.com/synap-core/synap) with one command.
+- If you want the shortest path to a working pod, take the [Cloud quickstart](/docs/start/cloud-quickstart).
+- If your data must stay on hardware you control, take the [self-host quickstart](/docs/start/self-host-quickstart).
+  [Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted) compares the two.
+- Words you do not know are in the [glossary](/docs/start/glossary).

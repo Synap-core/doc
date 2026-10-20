@@ -1,0 +1,47 @@
+---
+title: Contributing
+description: The open-source Synap repositories, how to start contributing to each, and where to ask questions.
+type: explanation
+audience: contributor
+availability: [pod-oss, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+Synap's pod and its command-line tool are open source under the MIT license, and this documentation is a public
+repository. Contributions are welcome in each of them.
+
+## The repositories
+
+| Repository | What it is | Start with |
+|---|---|---|
+| [Synap-core/backend](https://github.com/Synap-core/backend) | The pod: API, database schema, workers, MCP server, deploy tooling and the agent skills (`skills/`) | The repository's README and contributing guide |
+| [Synap-core/synap-cli](https://github.com/Synap-core/synap-cli) | `@synap-core/cli`, the user CLI that connects computers and agents to a pod | The repository's README and contributing guide |
+| [Synap-core/doc](https://github.com/Synap-core/doc) | This site | [Docs style guide](/docs/community/docs-style-guide) |
+
+Each repository's own contributing guide is the source of truth for how to build, test and submit changes there.
+Read it before opening a pull request: the pod repository in particular has architecture rules and checks that a
+pull request must pass.
+
+The SDK packages (`@synap-core/sdk`, `@synap-core/react`) are published on npm under the MIT license; their source
+repository is not public yet.
+
+## Ways to contribute
+
+- **Report a bug** in the repository it belongs to, with the version (`synap status --json` for a pod,
+  `synap --version` for the CLI) and the steps to reproduce it.
+- **Fix the docs.** Every page is a file under `content/docs/` in [Synap-core/doc](https://github.com/Synap-core/doc).
+  See the [docs style guide](/docs/community/docs-style-guide).
+- **Improve a skill.** The agent skills live in `skills/` in the backend repository. See
+  [Agent skills](/docs/build/agents/skills).
+- **Report a vulnerability** privately, never in a public issue: see [Security](/docs/community/security).
+
+## Talk to us
+
+- [GitHub issues](https://github.com/Synap-core/backend/issues) on the backend repository, for technical questions
+  about the pod. Questions about the CLI go to [its issues](https://github.com/Synap-core/synap-cli/issues), and about
+  these docs to [the docs repository's issues](https://github.com/Synap-core/doc/issues).
+- [Discord](https://discord.gg/xhRdQ7hG5h), where builders share workspaces, playbooks and capabilities.
+
+Everyone taking part follows the [code of conduct](/docs/community/code-of-conduct).

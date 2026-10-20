@@ -1,0 +1,118 @@
+---
+title: Glossary
+description: The terms used across the Synap docs, in one place.
+type: reference
+audience: user
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+### Agent
+
+An AI program that works on your pod through MCP or the Hub REST API, for example Claude Code, Codex or Cursor.
+Each connected agent has its own identity and key on the pod.
+
+### API key
+
+A bearer token that lets an app, script or agent call your pod. It has scopes (which surfaces it may call) and a
+grant (what it may touch). See [API keys](/docs/build/api-keys).
+
+### Automation
+
+A playbook bound to a trigger: an event, a schedule (cron), a webhook, or a manual start.
+
+### Channel
+
+A conversation room. A session has a channel where you and your agents work on the same goal.
+
+### Control Plane
+
+The Synap Cloud service at `api.synap.live` that creates and manages hosted pods, handles Synap accounts and
+billing, and serves the marketplace catalog. A self-hosted pod can work without it.
+
+### Entity
+
+One record in your pod: a person, a task, a note. Every entity has exactly one kind and zero or more roles.
+
+### Event
+
+An append-only record of a change. The event log is the pod's audit trail.
+
+### Facet
+
+Another name for a role attached to an entity.
+
+### Hub REST API
+
+The pod's HTTP API under `/api/hub`, used by agents, scripts and integrations. Every pod publishes its OpenAPI
+description at `/api/hub/openapi.json`. See [Hub REST API](/docs/reference/hub-api).
+
+### Kind
+
+What an entity is: `person`, `task`, `event`, `note`, `article`, `decision`, or a kind you define.
+
+### MCP
+
+Model Context Protocol, the standard AI clients use to call tools. Every pod serves an MCP endpoint at `/mcp`.
+See [MCP](/docs/build/agents/mcp).
+
+### Playbook
+
+A session shape you can run again: a template for one kind of work, or a method a project runs as a track.
+
+### Pod
+
+Your Synap server: the API, PostgreSQL database, search, file storage and sign-in, run as a set of containers.
+Self-hosted or on Synap Cloud.
+
+### Pod admin console
+
+The pod's web console for its owner and admins, served on its own host name next to the pod (for example
+`pod-admin.example.com`).
+
+### Project
+
+Long-lived intent: something you are doing over weeks or months. Its progress is derived from the work it contains.
+
+### Proposal
+
+A change an agent asks to make. You review it and approve or reject it. Deletes, admin actions and changes of scope
+are always proposals; an agent's own key can never approve one.
+
+### Relay
+
+The Synap mobile app (iOS and Android), where you approve proposals and capture things. See [Relay](/docs/use/relay).
+
+### Role
+
+A context an entity plays, such as `client` or `blocker`. A role is attached to the entity; it is not a second
+entity. Also called a facet.
+
+### Session
+
+A bounded unit of work toward one goal, with a scope you accept before it runs. It can stand alone or be filed at a
+track and stage.
+
+### Skill
+
+A folder of instructions (a `SKILL.md` and reference files) that teaches an agent how to use Synap. See
+[Agent skills](/docs/build/agents/skills).
+
+### Synap Cloud
+
+Synap's hosted service: Synap runs your pod for you. See [Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted).
+
+### Track
+
+A reusable method running inside one project, such as "Content" or "Build". It keeps the definition it started
+from.
+
+### View
+
+A projection over your records (a table, board, calendar, graph and so on). It never copies data.
+
+### Workspace
+
+A space inside your pod that groups records, views and members, such as a business workspace and a personal one.

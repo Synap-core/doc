@@ -1,0 +1,33 @@
+---
+title: Commands
+description: The Commands operations of the Hub REST API (3 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/commands
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: 'Runs a shell-compatible command after security gating. Three terminal
+          states: `executed`, `proposed` (awaiting approval), `denied` (blocked
+          by policy). Rate-limited to 10/min per workspace.'
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/commands" webhooks={[]} operations={[{"path":"/commands","method":"get"},{"path":"/commands/{id}","method":"get"},{"path":"/commands/execute","method":"post"}]} showTitle />
+    </>
+  );
+}

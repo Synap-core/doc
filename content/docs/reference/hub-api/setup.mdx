@@ -1,0 +1,31 @@
+---
+title: Setup
+description: The Setup operations of the Hub REST API (1 operation).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/setup
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: Provisioning auth via PROVISIONING_TOKEN — not bearer.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/setup" webhooks={[]} operations={[{"path":"/setup/agent","method":"post"}]} showTitle />
+    </>
+  );
+}

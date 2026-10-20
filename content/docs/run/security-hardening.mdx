@@ -1,0 +1,141 @@
+---
+title: Security hardening
+description: What a self-hosted pod exposes, the defaults that protect it, and the settings to check before you put data in it.
+type: how-to
+audience: self-host
+availability: [pod-oss]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-10-20
+---
+
+A pod installed with `install.sh` starts from safe defaults. This page lists them, so you can check them on your own
+server, and the few things only you can do. Run the commands from the deploy directory:
+
+```bash
+cd /opt/synap/deploy
+```
+
+## Network exposure
+
+Only Caddy publishes ports on the server's public interfaces: `80` and `443` over TCP, and `443` over UDP for HTTP/3.
+Everything else that publishes a port binds it to `127.0.0.1`:
+
+| Service | Port on `127.0.0.1` |
+|---|---|
+| `realtime` | `4001` |
+| `postgres` | `5432` |
+| `minio` | `9000`, `9001` |
+| `typesense` | `8108` |
+| `kratos` | `4433`, `4434` |
+| `rsshub` profile: RSSHub, browserless | `1200`, `3000` |
+| `monitoring` profile: Dozzle, Prometheus, Grafana, Alertmanager | `8888`, `9090`, `3333`, `9093` |
+
+The backend publishes no port: it is reached only through the edge proxy (Caddy, unless you installed with
+`--edge traefik`). To reach a loopback-only tool from your laptop, use an SSH tunnel
+(`ssh -L 3333:127.0.0.1:3333 root@<server>` for Grafana) instead of opening its port.
+
+Use a host firewall that allows only what the pod needs, plus your SSH port. With `ufw`:
+
+```bash
+ufw allow 22/tcp      # or your SSH port
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 443/udp
+ufw enable
+```
+
+A pod exposed through a tunnel does not need `80` and `443` open in the firewall: the tunnel connects from the
+inside. See [Domains and TLS](/docs/run/domains-and-tls).
+
+## Secrets
+
+- The installer generates every secret with `openssl rand` and writes `deploy/.env` with mode `600`.
+- `synap config list` and `synap config get` mask secrets. `get --reveal` shows one value; avoid it on a shared screen.
+- Never paste `.env`, or the output of `docker compose config` or `docker inspect`, into an issue or a chat: they
+  contain the secrets in clear text.
+- Secrets that existing data depends on (`POSTGRES_PASSWORD`, `JWT_SECRET`, the Kratos, MinIO and Typesense keys,
+  `SYNAP_SERVICE_ENCRYPTION_KEY`, `VAULT_SERVER_KEY`, `PROVISIONING_TOKEN`) are marked immutable: `synap config set`
+  refuses to change them without `--force`. Do not force a change unless you know what reads the old value.
+- Rotation procedures for the Ory secrets and for the field-encryption keyring (`SYNAP_FIELD_KEYS`) are in
+  `deploy/runbooks/` of the [backend repository](https://github.com/Synap-core/backend). Try them on a test pod first.
+
+## The first admin and the bootstrap token
+
+`PROVISIONING_TOKEN` exists to bootstrap the pod. Once the pod has an owner, remove it:
+
+```bash
+sudo synap setup admin --status          # ready = the pod has an admin
+sudo synap setup admin --retire-token
+```
+
+Prefer `sudo synap setup admin --email you@example.com --magic-link` over `--password` on the command line, so the
+password never lands in your shell history. See [Install](/docs/run/install#the-first-admin).
+
+## Releases you install
+
+Install `cosign` and refuse unsigned or tampered releases, for `install.sh` and for every `synap update`. `sudo`
+drops variables exported in your shell, so set the variable on the `sudo` command itself:
+
+```bash
+curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
+  | sudo SYNAP_RELEASE_VERIFY=enforce bash -s -- --domain pod.example.com --email you@example.com
+sudo SYNAP_RELEASE_VERIFY=enforce synap update
+```
+
+A manual `synap update` also reads `SYNAP_RELEASE_VERIFY` from `deploy/.env`. Automatic updates always run with
+`enforce`. See [Verifying releases](/docs/run/install#verifying-releases).
+
+## Backups
+
+Give the pod **append-only** credentials for its off-host repository, so a compromised server cannot delete its own
+snapshots, and keep the recovery kit off the server. See [Backups and restore](/docs/run/backups).
+
+## Outbound connections you can turn off
+
+| Connection | How to turn it off |
+|---|---|
+| Synap's marketplace catalog, read every 10 minutes | `sudo synap config set SYNAP_CATALOG_SOURCE=off` |
+| A Control Plane (sign-in with a Synap account, registration, brokered connectors) | Leave `CONTROL_PLANE_URL` empty. A pod without it trusts no Control Plane. |
+
+## What a Control Plane may do on your pod
+
+A pod trusts no outside service by default. When you connect it to a Control Plane (see
+[Connect to the Control Plane](/docs/run/connect-control-plane)), two separate things decide what that service may do:
+
+- **The trusted-issuer registry**, in the pod's database. The Control Plane is approved with a fixed set of four
+  scopes: signing in people whose accounts are already linked, linking accounts, granting memberships, and
+  configuring data sources (for example, delivering the credential for brokered connectors) for linked users. If it
+  asks for more, the request is filed as a proposal in the owner's review queue and nothing more is granted until a
+  pod admin approves it.
+- **The command policy**, `deploy/state/pod-agent-policy.json`, for commands sent to the optional pod agent. Only the
+  owner writes it, with `synap policy`.
+
+```bash
+sudo synap policy show
+sudo synap policy set-mode self-hosted    # or managed
+```
+
+| Mode | The pod agent refuses |
+|---|---|
+| `self-hosted` | `archive`, `restore-archive` and `configure` |
+| `managed` | nothing |
+
+With no policy file the pod behaves as `self-hosted`, and a file it cannot read also falls back to the
+`self-hosted` refusals. Registration writes the file once, from the Control Plane's answer, and never overwrites an
+existing file. `synap policy add-recipient <age1…>` and `remove-recipient` set who can decrypt an archive of the pod.
+
+### The pod agent
+
+The pod agent is the service that carries out signed Control Plane commands (for example an update or an archive). It
+runs only when you turn it on (`SYNAP_WITH_POD_AGENT=1`, or `--with-pod-agent` at install) or set its trust settings,
+and it then needs both settings below, each a canonical `https://` URL with no trailing slash:
+
+| Setting | Meaning |
+|---|---|
+| `POD_AGENT_ISSUER_URL` | The only issuer whose signed commands it accepts. Its keys are fetched from that issuer, never from the request. |
+| `POD_AGENT_AUDIENCE` | This pod's public URL; a command must be addressed to it. |
+
+The agent publishes no port on the host. Caddy routes `/api/pod-agent/*` to it, and it records each command's ID so a
+command cannot be replayed, even after a restart. A self-hosted pod that does not use the Control Plane's update or
+archive features does not need it.

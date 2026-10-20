@@ -1,0 +1,55 @@
+---
+title: Rules
+description: The Rules operations of the Hub REST API (4 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/rules
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: 'Routes a STATEMENT to the shapes it implies (fact · behaviour ·
+          structure · schedule · notification · extraction · unknown), each with
+          a confidence and the literal cues that fired. Also reports `oneShot`
+          (the text reads as a one-off request, not a standing rule) and
+          `needsClarification` when the routing is undecidable. READ-ONLY: no
+          writes, no side effects, no I/O.'
+      - content: "Turns a typed rule into a structured WHEN / ONLY IF / THEN sentence
+          built from the caller's own trigger, action and kind menus. The shared
+          deterministic matcher runs first; the intelligence service is asked
+          only for the halves it left open, and may only pick from those menus.
+          The sentence is validated with the rule compiler (`validation`). Open
+          slots come back in `unresolved`. NEVER saves — create with `POST
+          /rules`. An unreachable assistant returns the matcher's reading with
+          `aiUnavailable: true`."
+      - content: 'Rules visible to the caller, newest first. Floored by the canonical
+          `visibleSkillsWhere` predicate. Every row carries `status`: `"active"`
+          for a materialized rule. With `includeProposed=true` the list ALSO
+          contains rules that exist only as a pending proposal —
+          `status:"proposed"` + the `proposalId` to review them (`synap open
+          proposal <id>`) — floored by `proposals.list`''s own
+          `userVisibleWhere` predicate plus the rule scope tiers. Default OFF,
+          so a caller reading "what is in effect" is unaffected.'
+      - content: Governed create. A `{status:"proposed", proposalId}` body is a SUCCESS
+          (HTTP 200) — the write is queued for the owner's review, exactly as an
+          agent-authored write should be. `{status:"denied"}` is a 403.
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/rules" webhooks={[]} operations={[{"path":"/rules/classify","method":"post"},{"path":"/rules/parse","method":"post"},{"path":"/rules","method":"get"},{"path":"/rules","method":"post"}]} showTitle />
+    </>
+  );
+}

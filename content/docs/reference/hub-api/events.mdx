@@ -1,0 +1,38 @@
+---
+title: Events
+description: The Events operations of the Hub REST API (2 operations).
+full: true
+type: reference
+audience: builder
+availability:
+  - pod-oss
+  - cloud
+status: current
+owner: Antoinesrvt
+generated_from: Synap-core/backend@c31e261ab (main)
+_openapi:
+  preload:
+    - hub-api/events
+  toc: []
+  structuredData:
+    headings: []
+    contents:
+      - content: 'Returns events from the event log filtered by type/subject/window, and
+          optionally by producer: `agentUserId` (everything one agent did),
+          `isAgent` (agent- vs human-produced) and `correlationId` (one request
+          chain). Default window is 7 days; default limit is 50, hard-capped at
+          200.'
+      - content: Long-lived Server-Sent Events stream. Emits `event` and `heartbeat`
+          frames. Consumers must dedupe by event id (at-least-once across
+          catch-up).
+---
+
+export default function Layout(props) {
+  const { OpenAPIPage } = props.components ?? {};
+  return (
+    <>
+      {props.children}
+      <OpenAPIPage document="hub-api/events" webhooks={[]} operations={[{"path":"/events","method":"get"},{"path":"/events/stream","method":"get"}]} showTitle />
+    </>
+  );
+}

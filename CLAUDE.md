@@ -92,9 +92,10 @@ the data (`npm run check:generated`); a weekly workflow (`reference-drift.yml`) 
 
 ### Reference data: merge order
 
-The reference JSON is currently pinned to unmerged branches: `claude/docs-front-door` in Synap-core/backend and
-`claude/cli-reference` in Synap-core/synap-cli (see `sources.json`), because the exporters live there. Once both
-branches are merged, sync from `main` and commit the result:
+The reference JSON is currently pinned to unmerged branches: `claude/docs-night` in Synap-core/backend (the one
+integration branch that carries the reference exporter and the Hub OpenAPI fix) and `claude/cli-reference` in
+Synap-core/synap-cli (see `sources.json`), because the exporters live there. After backend `claude/docs-night` and
+synap-cli `claude/cli-reference` merge, re-run `reference:sync` against `main` and commit the result:
 
 ```bash
 npm run reference:sync     # SYNAP_CLI_REF and SYNAP_BACKEND_REF default to main

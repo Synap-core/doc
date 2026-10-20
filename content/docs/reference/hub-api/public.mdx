@@ -1,6 +1,6 @@
 ---
 title: Public
-description: The Public operations of the Hub REST API (2 operations).
+description: The Public operations of the Hub REST API (3 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@1e43fc3ef (claude/docs-front-door)
+generated_from: Synap-core/backend@8dfcee47b (claude/docs-night)
 _openapi:
   preload:
     - hub-api/public
@@ -24,6 +24,10 @@ _openapi:
           public share. No auth; cross-origin readable; no credentials honoured.
           Unknown, revoked, expired and unpublished tokens all return the same
           404.
+      - content: Returns a PUBLISHED site's public metadata and its configured
+          collections. No auth; cross-origin readable; no credentials honoured.
+          Unknown, revoked, unpublished and deleted-project tokens all return
+          the same 404.
 ---
 
 export default function Layout(props) {
@@ -31,7 +35,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/public" webhooks={[]} operations={[{"path":"/public/projection","method":"get"},{"path":"/public/shares/{token}","method":"get"}]} showTitle />
+      <OpenAPIPage document="hub-api/public" webhooks={[]} operations={[{"path":"/public/projection","method":"get"},{"path":"/public/shares/{token}","method":"get"},{"path":"/public/sites/{siteToken}","method":"get"}]} showTitle />
     </>
   );
 }

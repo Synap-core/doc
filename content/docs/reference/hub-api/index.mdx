@@ -6,10 +6,10 @@ type: "reference"
 audience: "builder"
 status: "current"
 owner: "Antoinesrvt"
-generated_from: "Synap-core/backend@1e43fc3ef (claude/docs-front-door)"
+generated_from: "Synap-core/backend@8dfcee47b (claude/docs-night)"
 ---
 
-Generated from [Synap-core/backend@1e43fc3ef](https://github.com/Synap-core/backend/tree/1e43fc3efe1e45831f1ff632188f0fab3b317f05) (`claude/docs-front-door`): [`docs/reference/hub-openapi.json`](https://github.com/Synap-core/backend/blob/1e43fc3efe1e45831f1ff632188f0fab3b317f05/docs/reference/hub-openapi.json). Do not edit this page; see `scripts/generate-reference.mjs`.
+Generated from [Synap-core/backend@8dfcee47b](https://github.com/Synap-core/backend/tree/8dfcee47b1954271534bb824ec07e58aa8fb77e2) (`claude/docs-night`): [`docs/reference/hub-openapi.json`](https://github.com/Synap-core/backend/blob/8dfcee47b1954271534bb824ec07e58aa8fb77e2/docs/reference/hub-openapi.json). Do not edit this page; see `scripts/generate-reference.mjs`.
 
 The Hub REST API is the pod's HTTP API for anything that is not a TypeScript app: agents, scripts, automation tools and
 integrations in any language. It is served under `/api/hub` on every pod. The pages in this section are rendered from
@@ -63,7 +63,7 @@ that is no longer pending.
 
 ## Operations by tag
 
-285 operations on 244 paths, in 60 tags (an operation with two tags is listed under both, 293 entries). Paths are relative to `/api/hub`.
+290 operations on 247 paths, in 60 tags (an operation with two tags is listed under both, 298 entries). Paths are relative to `/api/hub`.
 
 | Tag | Operations |
 |---|---|
@@ -85,7 +85,7 @@ that is no longer pending.
 | [Entities](/docs/reference/hub-api/entities) | 17 |
 | [EntityShare](/docs/reference/hub-api/entity-share) | 1 |
 | [Events](/docs/reference/hub-api/events) | 2 |
-| [FocusSessions](/docs/reference/hub-api/focus-sessions) | 8 |
+| [FocusSessions](/docs/reference/hub-api/focus-sessions) | 12 |
 | [Governance](/docs/reference/hub-api/governance) | 1 |
 | [Graph](/docs/reference/hub-api/graph) | 1 |
 | [Guidelines](/docs/reference/hub-api/guidelines) | 2 |
@@ -106,7 +106,7 @@ that is no longer pending.
 | [Proactive](/docs/reference/hub-api/proactive) | 1 |
 | [Profiles](/docs/reference/hub-api/profiles) | 6 |
 | [Proposals](/docs/reference/hub-api/proposals) | 9 |
-| [Public](/docs/reference/hub-api/public) | 2 |
+| [Public](/docs/reference/hub-api/public) | 3 |
 | [Relations](/docs/reference/hub-api/relations) | 3 |
 | [Rules](/docs/reference/hub-api/rules) | 4 |
 | [Runs](/docs/reference/hub-api/runs) | 3 |
@@ -127,12 +127,3 @@ that is no longer pending.
 | [Widgets](/docs/reference/hub-api/widgets) | 2 |
 | [Workflows](/docs/reference/hub-api/workflows) | 2 |
 | [Workspaces](/docs/reference/hub-api/workspaces) | 12 |
-
-## Not in this description yet
-
-The pod serves these operations, but the generator could not describe them, so they are missing from the pages here and from `/api/hub/openapi.json`:
-
-- `POST /focus-sessions`
-- `PATCH /focus-sessions/:id`
-- `POST /focus-sessions/:id/outputs/block`
-- `POST /focus-sessions/:id/outputs/answer`

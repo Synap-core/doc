@@ -6,7 +6,7 @@
 //
 //   npm run reference:sync                         # from GitHub, each source at its default ref (main)
 //   SYNAP_CLI_REF=claude/cli-reference \
-//   SYNAP_BACKEND_REF=claude/docs-front-door \
+//   SYNAP_BACKEND_REF=claude/docs-night \
 //     npm run reference:sync                       # other refs (branch, tag or commit)
 //   npm run reference:sync -- --from local         # from sibling checkouts (../synap-cli, ../synap-backend)
 //   npm run reference:check                        # committed data == the files at the recorded commits

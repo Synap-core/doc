@@ -13,8 +13,8 @@
   },
   "backend": {
     "repo": "Synap-core/backend",
-    "ref": "claude/docs-front-door",
-    "commit": "1e43fc3efe1e45831f1ff632188f0fab3b317f05",
+    "ref": "claude/docs-night",
+    "commit": "8dfcee47b1954271534bb824ec07e58aa8fb77e2",
     "files": {
       "mcp-tools.json": {
         "path": "docs/reference/mcp-tools.json",
@@ -26,7 +26,7 @@
       },
       "hub-openapi.json": {
         "path": "docs/reference/hub-openapi.json",
-        "sha256": "77006ae2fe7939f8696dc043b0abcab3dce3ff31e66cb70714adbf38698348e8"
+        "sha256": "c09169062f257d6884d0ad70184457ceaed422796c019ed120ec2c9e455a4091"
       }
     }
   }

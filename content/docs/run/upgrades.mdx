@@ -28,6 +28,13 @@ sudo synap update --release v1.1.3    # one specific release
 | `--force` | Re-apply the release the pod is already on. |
 | `--from-source` | Build the checkout as images and apply it like a release. For development on a clone. |
 
+An update never falls back to building images on the server: without `--from-source` it only pulls the release's
+images, and a failed pull stops the update before anything changes.
+
+Options from older versions are still accepted, so scripts keep working: `--build`, `-b`, `--local` and `-l` mean
+`--from-source`; `--version <ref>`, `-v <ref>` and a bare `<ref>` mean `--release <ref>`; `latest` means the default
+channel; `--from-image` is ignored.
+
 ## What an update does
 
 Every update runs the same steps:

@@ -3,5 +3,5 @@
   "description": "Self-host a pod",
   "root": true,
   "icon": "Server",
-  "pages": ["index", "install", "configuration", "domains-and-tls", "backups", "upgrades", "operations", "connect-control-plane"]
+  "pages": ["index", "install", "configuration", "domains-and-tls", "backups", "upgrades", "operations", "security-hardening", "connect-control-plane"]
 }

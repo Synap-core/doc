@@ -10,6 +10,7 @@
     "sdk",
     "api-keys",
     "webhooks",
+    "n8n",
     "chat-stream",
     "skill-invocation",
     "---Agents---",

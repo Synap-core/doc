@@ -80,8 +80,26 @@ deploy directory. The CLI changes nothing until you inspect each one and pin the
 **An update failed.** It rolled back on its own. Read `deploy/state/last-update.json` for the step that failed, fix
 the cause (often disk space: updates need 2 GB free), and run `sudo synap update` again.
 
+**Ports 80 and 443 are already taken.** With Caddy as the edge, `synap update` checks first and stops with
+"SYNAP_EDGE=caddy but :80/:443 is held by: …", naming the containers, and changes nothing. If that container is your
+own reverse proxy, install or switch to `--edge traefik` (`sudo synap config set SYNAP_EDGE=traefik`); otherwise stop
+it. A web server running directly on the host (not in Docker) is not in that check: find it with
+`ss -tlnp | grep -E ':(80|443) '`. See [Domains and TLS](/docs/run/domains-and-tls#another-web-server-in-front-of-the-pod).
+
 **The laptop CLI cannot reach the pod.** From the laptop, `synap status` and `synap doctor` show whether the pod
 answers and whether the key works. `synap doctor --fix` repairs key problems.
+
+## Asking for help
+
+Open an issue in the [backend repository](https://github.com/Synap-core/backend/issues) with:
+
+- the release the pod runs: the `id` in `deploy/state/current-release.json`;
+- the output of `sudo synap doctor` and `sudo synap health`;
+- the failing step from `deploy/state/last-update.json`, if an update failed;
+- the relevant lines of `sudo synap logs <service>`.
+
+Read what you paste first. Never include `.env`, or the output of `docker compose config` or `docker inspect`: they
+contain your secrets. To report a vulnerability, follow the [security policy](/docs/community/security) instead.
 
 ## Removing data
 

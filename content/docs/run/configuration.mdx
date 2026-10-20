@@ -65,6 +65,23 @@ deletes a volume or starts a stopped service.
 
 The full list, with each key's type and flags, is `deploy/env.schema` in the deploy directory.
 
+## Connectors
+
+Connections to outside accounts (Google, Slack, GitHub and so on) go through [Nango](https://nango.dev). Who brokers
+them depends on two settings:
+
+| Your pod | Connections are brokered by |
+|---|---|
+| `CONTROL_PLANE_URL` is set | The Control Plane, with a credential it delivers to the pod. A local `NANGO_HOST` and `NANGO_SECRET_KEY` are ignored. |
+| `CONTROL_PLANE_URL` is set and `SYNAP_CONNECTOR_BROKER=local` | Your own Nango instance, at `NANGO_HOST` with `NANGO_SECRET_KEY`. |
+| `CONTROL_PLANE_URL` is empty | Your own Nango instance, at `NANGO_HOST` with `NANGO_SECRET_KEY`. |
+
+```bash
+sudo synap config set SYNAP_CONNECTOR_BROKER=local NANGO_HOST=https://nango.example.com
+printf 'NANGO_SECRET_KEY=%s\n' '<secret>' | sudo synap config set --stdin
+sudo synap apply
+```
+
 ## Secrets
 
 The installer generates every secret the pod needs (database password, JWT secret, Kratos secrets, MinIO and

@@ -51,8 +51,10 @@ const synap = createSynapClient({
 | `extraHeaders` | Added to every request. |
 | `onAuthError` | Called on `401`. The client then rejects with a clean tRPC error instead of a parse error. |
 
-With neither `apiKey` nor `sessionToken`, the client sends the browser's cookies (`credentials: "include"`), for an
-app served next to the pod where the person is already signed in.
+Every request is sent with `credentials: "include"`, so with neither `apiKey` nor `sessionToken` the browser's
+session cookie authenticates it: for an app served next to the pod where the person is already signed in. Calls made
+in the same tick are batched into one HTTP request, and values are encoded with superjson, which is why plain HTTP
+clients should use the [Hub REST API](/docs/reference/hub-api) instead of `/trpc`.
 
 ## 3. Read entities
 
@@ -94,14 +96,28 @@ export function App() {
 }
 
 function Entities() {
-  const { data } = useSynap().entities.list.useQuery({ limit: 20 });
+  const { data } = useSynap.entities.list.useQuery({ limit: 20 });
   return <ul>{data?.items.map((e) => <li key={e.id}>{e.title}</li>)}</ul>;
 }
 ```
 
-`@synap-core/react` also exports ready-made `RouterInputs` and `RouterOutputs` types, and the hooks `useEntity`,
-`useEntities`, `useLinks` and `useView`. `@synap-core/sdk` exports `createSynapClient` and the types `SynapClient`,
-`SynapClientOptions` and `AppRouter`.
+`useSynap` is the tRPC React client itself, not a function: write `useSynap.entities.list.useQuery(…)`, not
+`useSynap()`. `SynapProvider` takes the same options as `createSynapClient`, plus an optional `queryClient` to share an
+existing TanStack Query client.
+
+`@synap-core/react` also exports ready-made `RouterInputs` and `RouterOutputs` types, `useSynapContext` (the provider's
+`podUrl` and `workspaceId`), and the hooks `useEntity`, `useEntities`, `useLinks` and `useView`.
+
+## Package reference
+
+| Package | Exports |
+|---|---|
+| `@synap-core/sdk` | `createSynapClient`, and the types `SynapClient`, `SynapClientOptions` and `AppRouter` |
+| `@synap-core/react` | `SynapProvider`, `useSynap`, `useSynapContext`, `useEntity`, `useEntities`, `useLinks`, `useView`, and the types `RouterInputs`, `RouterOutputs`, `SynapProviderProps`, `AppRouter` |
+
+Both packages ship ES modules and CommonJS with TypeScript declarations, under the MIT license. The router types
+come from `@synap-core/api-types`, a dependency, so the client's types follow the version of that package you install.
+Use only what the package root exports: other subpaths are not part of the published API.
 
 ## Not using TypeScript or tRPC?
 

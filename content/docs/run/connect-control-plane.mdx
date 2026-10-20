@@ -46,7 +46,21 @@ curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stabl
 - `--control-plane <url>` selects another Control Plane (default `https://api.synap.live`).
 
 `sudo synap policy show` prints what the Control Plane may ask this pod to do, and
-`sudo synap policy set-mode managed|self-hosted` changes it.
+`sudo synap policy set-mode managed|self-hosted` changes it. See
+[Security hardening](/docs/run/security-hardening#what-a-control-plane-may-do-on-your-pod).
+
+### The pod's identity key
+
+A registered pod signs its own calls to the Control Plane with a P-256 key generated on the server, in
+`deploy/state/pod-identity/pod-key.pem` (mode `600`). Only its public half is ever sent: at registration, or with
+`enroll` for a pod that was installed without a registration code.
+
+```bash
+sudo synap pod-key show                                   # the public key (creates the key if missing)
+sudo synap pod-key enroll --pod-id <id> --code spr_…      # a pod installed by hand; the code comes from the Control Plane
+```
+
+`enroll` also takes `--control-plane <url>`; by default it uses `CONTROL_PLANE_URL`, then `https://api.synap.live`.
 
 ## What each side owns
 
@@ -72,6 +86,28 @@ For people building an account service or debugging one. All are under `/api/fed
 Assertions are ES256-signed by the issuer, addressed to the pod's exact public origin, short-lived and single-use.
 The issuer publishes its keys as a JWKS over HTTPS. The pod rejects issuers and key locations that resolve to private
 or local network addresses.
+
+## How the pod checks an issuer
+
+The pod accepts a signed assertion only from an issuer in its **trusted-issuer registry**, approved, and holding the
+scope the endpoint requires. Setting `CONTROL_PLANE_URL` (which `synap federation connect-cloud` does) makes the pod,
+each time it starts, add that Control Plane to the registry with a fixed set of scopes. It reads the issuer name the
+Control Plane signs with from `<CONTROL_PLANE_URL>/federation/metadata`, and falls back to `CONTROL_PLANE_URL` itself.
+Extra scopes the Control Plane asks for wait for a pod admin's approval, unless the pod setting
+`trust.autoAcceptCpScopes` is on (it is off by default). An environment variable is never trusted on
+its own: without a registry entry, nothing is accepted.
+
+For every assertion, the pod:
+
+- selects the signing key by the token's `kid` and accepts only ES256;
+- checks the issuer, the expiry and the audience, which must be this pod;
+- checks the token's purpose (`type`), so a token minted for one endpoint cannot be used on another;
+- requires a `jti` and records it, so the same token is refused the second time.
+
+Keys are fetched from `<issuer>/.well-known/jwks.json` over HTTPS, with a 10-second timeout and a 256 KB limit, and
+cached for 24 hours. A token signed with a `kid` the cache does not hold triggers a fresh fetch, so an issuer can
+rotate its key without any change on the pod. If a fetch fails, the pod retries after 1, 5 and 30 seconds, then falls
+back to the last key set it fetched, for up to 48 hours.
 
 The older provisioning endpoints `/api/provision/connect`, `/authorize-issuer`, `/seed-trust`, `/seed-admin` and
 `/activate-member` are retired and answer with a retirement response.

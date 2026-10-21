@@ -8,27 +8,22 @@ status: beta
 owner: Antoinesrvt
 ---
 
-**Two ways to link things — and why both exist**
+Synap has two ways to express a relationship between entities: a structural link, stored as a property, and a
+semantic relation, stored in the graph. This page explains when to use each.
 
-Synap has two distinct mechanisms for expressing relationships between entities. Understanding when to use each one is key to building well-structured workspaces and making the most of the knowledge graph.
-
----
-
-## The Two Systems at a Glance
+## The two systems
 
 | | **Structural links** (properties) | **Semantic relations** (relation objects) |
 |---|---|---|
 | **Where stored** | Entity's property values (`valueType: "entity_id"`) | `relations` table, typed by `relation_defs` |
 | **Defined by** | Profile schema (designed at workspace setup) | Created on the fly, by user or AI |
 | **Direction** | One-way (owned by the source entity) | Bi-directional, traversable both ways |
-| **Discoverability** | Schema-first — you know what fields exist | Emergent — you discover them via graph queries |
-| **Used in templates** | ✅ Yes — this is how templates wire things together | Optionally, for extra context |
+| **Discoverability** | Schema first: you know which fields exist | Emergent: you find them with graph queries |
+| **Used in templates** | Yes: templates wire records together this way | Optionally, for extra context |
 | **Good for** | Core data model ("this task belongs to this project") | Knowledge graph ("this note references that decision") |
 | **Created by** | User filling in forms, AI via structured output | User via whiteboard/connection UI, AI via graph tools |
 
----
-
-## System 1: Structural Links (Property-Based)
+## Structural links (properties)
 
 A **structural link** is an `entity_id` property on a profile.
 
@@ -49,27 +44,25 @@ A CRM workspace might define a **Deal** profile with these properties:
 }
 ```
 
-Each entity of type Deal then has `contact`, `owner`, and `company` as first-class fields pointing to other entities. This is exactly how Synap workspace templates work today.
+Each Deal entity then has `contact`, `owner` and `company` fields that point to other entities. Workspace templates model their relationships this way.
 
 ### When to use structural links
 
-- The relationship is **structural** — it's part of what an entity *is*, not something discovered later
-- The relationship is **always present** for entities of that profile type (or at least expected)
-- You want the link to show up as a **form field** users fill in
-- The relationship has a **clear direction** (e.g., "a Deal has one Contact", not "entities are loosely related")
-- You're defining a **workspace template** — use properties for all modelled relationships
+- The relationship is part of what the entity is, not something discovered later.
+- Every entity of that profile has it, or is expected to.
+- You want the link to appear as a form field people fill in.
+- The relationship has a clear direction ("a Deal has one Contact").
+- You are writing a workspace template: use properties for every modelled relationship.
 
-### How they're rendered
+### How they are displayed
 
 `entity_id` properties are displayed as entity reference chips (a small card showing the linked entity's name and type). Clicking navigates to that entity. In table views, they appear as inline entity badges.
 
----
-
-## System 2: Semantic Relations (Graph-Based)
+## Semantic relations (graph)
 
 A **semantic relation** is a record in the `relations` table, typed by a slug from `relation_defs`.
 
-These relations are **workspace-scoped**, **bi-directional**, and **not tied to a profile schema**. They can be created between any two entities at any time — by users, by AI, or by automations.
+These relations are scoped to a workspace, traversable in both directions and not tied to a profile schema. People, agents and automations can create one between any two entities at any time.
 
 ### Example
 
@@ -82,16 +75,16 @@ These relations are **workspace-scoped**, **bi-directional**, and **not tied to 
 }
 ```
 
-This relation was not defined in any profile schema. It was created because AI (or a user) noticed that the planning note referenced a decision entity.
+No profile schema defines this relation. An agent or a person created it after noticing that the planning note refers to a decision.
 
 ### When to use semantic relations
 
-- The relationship is **emergent** — discovered after the fact, not modelled upfront
-- The relationship exists **between arbitrary entity types** with no schema dependency
-- You want **rich graph traversal**: find all entities two hops away from X
-- The relationship is **many-to-many** and not easily expressed as a property
-- AI is building or annotating the knowledge graph
-- Users are drawing connections on the whiteboard canvas
+- The relationship is discovered after the fact, not modelled up front.
+- It links entities of any kinds, with no schema behind it.
+- You want graph traversal, such as every entity two hops from X.
+- It is many-to-many and hard to express as a property.
+- An agent is building or annotating the graph.
+- People are drawing connections on the whiteboard.
 
 ### Default relation types
 
@@ -114,11 +107,9 @@ Every workspace ships with 12 default semantic relation types, defined in `relat
 
 You can create additional workspace-specific types via `trpc.relationDefs.create`.
 
----
+## When both could work
 
-## The Overlap — and Why That's Fine
-
-You may notice that structural links and semantic relations can express similar things:
+Structural links and semantic relations can express similar things:
 
 - A Deal entity could have a `contact` property (structural) pointing to a Contact entity
 - *Or* you could create a `relates_to` semantic relation between a Deal and a Contact
@@ -130,11 +121,9 @@ The rule of thumb:
 An `assignee` field on a Task is a structural link — it's part of the Task's data model.
 A `references` relation between two documents is a semantic link — it emerged from content analysis.
 
-In practice, both appear side-by-side in the entity's **Connections** panel, so users see one unified view regardless of the underlying system.
+Both appear side by side in the entity's **Connections** panel, so people see one list whichever system holds the link.
 
----
-
-## The Unified Connections View
+## One list of connections
 
 The `EntityRelationshipsDisplay` component and the `relations.getConnections` API unify both systems:
 
@@ -195,12 +184,13 @@ const graph = connections.filter(c => c.source === "graph");
 const threads = connections.filter(c => c.source === "thread");
 ```
 
-> **Why prefer `getConnections` over `GET /relations` and `/graph/traverse`?**
-> The latter two only read the `relations` table. For system profiles (task.projectId, task.assignee, contact.companyId, deal.contactId), property links are auto-mirrored into relations, so everything shows up. But for **custom profiles with `entity_id` properties**, that auto-sync is not yet universal — links may exist only in the property index. `getConnections` reads from both sources in one call, so it never misses anything.
+> **Why `getConnections` rather than `GET /relations` or `/graph/traverse`?**
+> Those two read only the `relations` table. For system profiles (task.projectId, task.assignee, contact.companyId,
+> deal.contactId), property links are mirrored into relations automatically. For custom profiles with `entity_id`
+> properties they are not always mirrored, so a link may exist only in the property index. `getConnections` reads
+> both in one call.
 
----
-
-## For Template Authors
+## For template authors
 
 When writing workspace templates (`.json` proposal files), use **properties** for all modelled relationships:
 
@@ -228,19 +218,15 @@ When writing workspace templates (`.json` proposal files), use **properties** fo
 - `properties` with `valueType: "entity_id"` → structural links (filled in per entity)
 - `suggestedRelations` → semantic relations (graph edges seeded at workspace creation)
 
-Both are valid. Use them together for the richest workspace setup.
+A template can use both.
 
----
-
-## For AI / Agent Authors
+## For agent authors
 
 When writing agent tools that touch relationships:
 
-- **Write to properties** when updating well-defined entity fields (e.g., setting an assignee, linking a contact to a deal)
-- **Write to `relations`** when discovering emergent connections (e.g., AI notices a note references a decision and creates a `references` graph edge)
-- **Read `getConnections`** to traverse the full graph around any entity without needing to know which system the connections came from
-
----
+- **Write to properties** when setting a defined field (an assignee, the contact on a deal).
+- **Write to `relations`** for a connection you discover (a note refers to a decision: create a `references` edge).
+- **Read `getConnections`** to get every link around an entity without knowing which system holds it.
 
 ## Summary
 
@@ -260,10 +246,8 @@ When writing agent tools that touch relationships:
 └─────────────────────────────────────────────────────────────────┘
                               ↓
                   Unified Connections Panel
-              (users see one clean list of links)
+                  (one list of links)
 ```
-
----
 
 ## Related
 

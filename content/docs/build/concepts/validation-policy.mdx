@@ -8,27 +8,21 @@ status: beta
 owner: Antoinesrvt
 ---
 
-Validation policy determines whether a requested mutation can execute directly or must become a proposal.
+The validation policy decides whether a requested change runs directly or becomes a proposal.
 
-## Decision dimensions
+## What it looks at
 
-- **Actor/source**: user, AI, system, or external connector
-- **Action sensitivity**: low-risk read/update vs high-impact structural mutation
-- **Scope and ownership**: workspace and resource-level authorization context
+- **Who is asking**: a person, an agent, the system, or an external connector.
+- **How sensitive the action is**: a low-risk update or a high-impact structural change.
+- **Scope and ownership**: the workspace and the resource the change touches.
 
-## Typical outcomes
+## Outcomes
 
-- **Direct execution** for allowed low-risk operations
-- **Proposal required** when policy demands human confirmation
-- **Denied** when actor lacks the required permission scope
+- **Runs directly**: an allowed, low-risk change.
+- **Becomes a proposal**: the policy needs a person to confirm it.
+- **Refused**: the caller lacks the permission.
 
-## Why this matters
-
-- keeps AI and automation productive without bypassing governance
-- preserves auditability for who changed what and why
-- enables human-in-the-loop approval for high-impact operations
-
-See:
+See also:
 
 - [Permission model](/docs/build/concepts/permission-model)
 - [Connect an agent](/docs/build/agents)

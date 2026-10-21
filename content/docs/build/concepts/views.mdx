@@ -8,13 +8,9 @@ status: beta
 owner: Antoinesrvt
 ---
 
-## The Idea in One Line
-
-> Same data. Any lens. No code changes.
-
-A view is not a copy of your data — it is a named query + rendering configuration. Change the view type and the same entities become a kanban board, a timeline, a graph, a masonry feed. The data never moves. Only the lens changes.
-
-This is Config-over-Code in action: **every view is a JSON configuration**. AI can generate a complete dashboard from a plain-language description. No developer required.
+A view is not a copy of your data. It is a named query plus a rendering configuration, stored as JSON. Change the view
+type and the same entities appear as a kanban board, a timeline, a graph or a masonry feed; the records stay where
+they are.
 
 ## View types
 
@@ -33,12 +29,13 @@ renderable for existing views but are not offered when you create one. `mindmap`
 
 New view types are adapters in the view renderer; the data layer does not change.
 
-## AI-Generated Views
+## Views created by agents
 
-Because every view is a configuration, AI can generate views from natural language:
+Because a view is configuration, an agent can create one from a request in plain language, for example:
 
-- *"Create a pipeline view of my deals grouped by stage"* → kanban config, `groupBy: dealStage`
-- *"Build a team dashboard with open tasks, recent activity, and deal velocity"* → bento config with 3 widget blocks
-- *"Show me a graph of how my contacts relate to each other"* → graph view config
+- "Create a pipeline view of my deals grouped by stage": a kanban configuration with `groupBy: dealStage`.
+- "Build a team dashboard with open tasks, recent activity and deal velocity": a bento configuration with three
+  widget blocks.
+- "Show me a graph of how my contacts relate to each other": a graph view configuration.
 
-The AI writes the config. The view renderer runs it. No code touched.
+The agent writes the configuration and the view renderer draws it.

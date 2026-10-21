@@ -2,7 +2,7 @@ import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { AppWindow, ArrowRight, BookOpen, CodeXml, Library, Rocket, Server, Users } from 'lucide-react';
 import Link from 'next/link';
-import { SynapLogoMark } from '@/components/SynapLogoMark';
+import { baseOptions } from '@/lib/layout.shared';
 import { homeUi } from '@/lib/home-ui';
 
 const sections = [
@@ -46,22 +46,7 @@ const sections = [
 
 export default function HomePage() {
   return (
-    <HomeLayout
-      className="min-h-screen"
-      nav={{
-        title: (
-          <span className="flex items-center gap-2">
-            <SynapLogoMark className="size-5 shrink-0" />
-            <span className="font-bold text-fd-foreground">Synap</span>
-          </span>
-        ),
-        url: '/',
-      }}
-      links={[
-        { text: 'Documentation', url: '/docs/start' },
-        { text: 'GitHub', url: 'https://github.com/Synap-core', external: true },
-      ]}
-    >
+    <HomeLayout {...baseOptions()} className="min-h-screen" links={[{ text: 'Documentation', url: '/docs/start' }]}>
       <div className="container mx-auto flex flex-1 flex-col gap-12 px-4 py-10 md:gap-16 md:py-14">
         <section className="mx-auto max-w-3xl text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-fd-muted-foreground">
@@ -86,7 +71,10 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section>
+        <section aria-labelledby="sections-heading">
+          <h2 id="sections-heading" className="sr-only">
+            Sections
+          </h2>
           <Cards>
             {sections.map((section) => (
               <Card

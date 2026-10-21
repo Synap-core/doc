@@ -110,7 +110,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: page.data.title,
     description: page.data.description,
     alternates: {
+      canonical: page.url,
       types: { 'text/markdown': getPublicMarkdownUrl(page) },
+    },
+    openGraph: {
+      type: 'article',
+      siteName: 'Synap Docs',
+      title: page.data.title,
+      description: page.data.description,
+      url: page.url,
     },
   };
 }

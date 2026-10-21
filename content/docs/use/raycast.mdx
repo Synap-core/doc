@@ -6,11 +6,11 @@ audience: user
 availability: [raycast, cli]
 status: beta
 owner: Antoinesrvt
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-21
 ---
 
-The Synap extension for [Raycast](https://www.raycast.com) lets you search and write to your pod from the launcher
-and from Raycast AI.
+The Synap extension for [Raycast](https://www.raycast.com) gives you launcher commands to search your pod and capture
+into it. Raycast AI reaches your pod through its MCP server, not through the extension.
 
 ## Connect Raycast to your pod
 
@@ -20,17 +20,22 @@ Install the Synap extension in Raycast. Then, with the CLI connected to your pod
 synap connect raycast
 ```
 
-The CLI creates a dedicated agent key for Raycast on your pod and stores it where the Synap extension reads it. By
+The CLI creates a dedicated agent key for Raycast on your pod and stores it where the extension's commands read it. By
 default the key covers the whole pod; `--workspace <id>` limits it to one workspace.
 
-### Optional: the full MCP tool set
+## Connect Raycast AI (Raycast Pro)
 
-```bash
-synap connect raycast --with-mcp
-```
+The same command prints the steps. In Raycast:
 
-This also adds your pod's MCP server to Raycast's MCP configuration, through the `mcp-remote` bridge (Raycast's
-native MCP support runs local processes only). The tool names overlap with the extension's own commands.
+1. Run **Install MCP Server**.
+2. Enter a name, set the transport to **HTTP**, and use your pod's MCP URL, which the command prints.
+3. Set authentication to **OAuth**, choose **Dynamic**, press **Sign In**, and approve on your pod's consent page.
+   If sign-in fails, turn OAuth off and add the header `Authorization: Bearer <key>` instead. The command saves
+   the full value in a private file and prints its path.
+4. Press **Install MCP Server**. In Raycast AI, mention the server and ask anything.
+
+A new connection starts with the nine essential tools and loads more when a task needs them. The extension no longer
+adds AI tools of its own, so there is nothing to keep in step between Raycast and your pod.
 
 ## Generate script commands
 

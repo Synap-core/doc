@@ -1,6 +1,6 @@
 ---
 title: Public
-description: The Public operations of the Hub REST API (3 operations).
+description: The Public operations of the Hub REST API (5 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@c31e261ab (main)
+generated_from: Synap-core/backend@629c1d90e (main)
 _openapi:
   preload:
     - hub-api/public
@@ -23,6 +23,12 @@ _openapi:
     - depth: 2
       title: Read a published site's manifest (credentialless)
       url: '#read-a-published-sites-manifest-credentialless'
+    - depth: 2
+      title: List a published site collection (credentialless)
+      url: '#list-a-published-site-collection-credentialless'
+    - depth: 2
+      title: Read one published record of a site (credentialless)
+      url: '#read-one-published-record-of-a-site-credentialless'
   structuredData:
     headings:
       - content: Unauthenticated, field-whitelisted public projection of a workspace
@@ -31,6 +37,10 @@ _openapi:
         id: read-a-published-share-credentialless
       - content: Read a published site's manifest (credentialless)
         id: read-a-published-sites-manifest-credentialless
+      - content: List a published site collection (credentialless)
+        id: list-a-published-site-collection-credentialless
+      - content: Read one published record of a site (credentialless)
+        id: read-one-published-record-of-a-site-credentialless
     contents:
       - content: Read-only search over the facet-scoped public data a workspace opts
           into via settings.publicProjection. No auth. Returns 404 when the
@@ -46,6 +56,14 @@ _openapi:
           Unknown, revoked, unpublished and deleted-project tokens all return
           the same 404.
         heading: read-a-published-sites-manifest-credentialless
+      - content: One page of a collection's live published records (snapshots, no body).
+          No auth; cross-origin readable; no credentials honoured. Every miss
+          (token, collection) returns the same 404.
+        heading: list-a-published-site-collection-credentialless
+      - content: A live published record of a site collection, by public id or slug,
+          with its pinned body. No auth; cross-origin readable; no credentials
+          honoured. Every miss returns the same 404.
+        heading: read-one-published-record-of-a-site-credentialless
 ---
 
 export default function Layout(props) {
@@ -53,7 +71,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/public" webhooks={[]} operations={[{"path":"/public/projection","method":"get"},{"path":"/public/shares/{token}","method":"get"},{"path":"/public/sites/{siteToken}","method":"get"}]} showTitle />
+      <OpenAPIPage document="hub-api/public" webhooks={[]} operations={[{"path":"/public/projection","method":"get"},{"path":"/public/shares/{token}","method":"get"},{"path":"/public/sites/{siteToken}","method":"get"},{"path":"/public/sites/{siteToken}/collections/{key}","method":"get"},{"path":"/public/sites/{siteToken}/collections/{key}/{slugOrPublicId}","method":"get"}]} showTitle />
     </>
   );
 }

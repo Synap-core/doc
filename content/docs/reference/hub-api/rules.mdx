@@ -1,6 +1,6 @@
 ---
 title: Rules
-description: The Rules operations of the Hub REST API (4 operations).
+description: The Rules operations of the Hub REST API (5 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@c31e261ab (main)
+generated_from: Synap-core/backend@629c1d90e (main)
 _openapi:
   preload:
     - hub-api/rules
@@ -26,6 +26,9 @@ _openapi:
     - depth: 2
       title: Create a rule (governed)
       url: '#create-a-rule-governed'
+    - depth: 2
+      title: Edit a rule (governed)
+      url: '#edit-a-rule-governed'
   structuredData:
     headings:
       - content: Classify a natural-language rule
@@ -36,6 +39,8 @@ _openapi:
         id: list-rules
       - content: Create a rule (governed)
         id: create-a-rule-governed
+      - content: Edit a rule (governed)
+        id: edit-a-rule-governed
     contents:
       - content: 'Routes a STATEMENT to the shapes it implies (fact · behaviour ·
           structure · schedule · notification · extraction · unknown), each with
@@ -66,6 +71,17 @@ _openapi:
           (HTTP 200) — the write is queued for the owner's review, exactly as an
           agent-authored write should be. `{status:"denied"}` is a 403.
         heading: create-a-rule-governed
+      - content: 'Governed full-shape edit — the same door `skills.updateRule` calls.
+          Send the rule as it should be stored: `intent` and `scope` are
+          required and REPLACE the stored ones; `expiresAt` / `sentence` are
+          three-state (a value sets, `null` clears, absent keeps the stored
+          one); `draft: false` (the default) activates a draft by recompiling
+          it. A `{status:"proposed", proposalId}` body is a SUCCESS (HTTP 200) —
+          an agent''s edit is queued for review and nothing changes until a
+          person approves it. A rule the caller cannot see is a 404.
+          `{status:"denied"}` (with `failure.clause` when the compiler refused)
+          is a 403.'
+        heading: edit-a-rule-governed
 ---
 
 export default function Layout(props) {
@@ -73,7 +89,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/rules" webhooks={[]} operations={[{"path":"/rules/classify","method":"post"},{"path":"/rules/parse","method":"post"},{"path":"/rules","method":"get"},{"path":"/rules","method":"post"}]} showTitle />
+      <OpenAPIPage document="hub-api/rules" webhooks={[]} operations={[{"path":"/rules/classify","method":"post"},{"path":"/rules/parse","method":"post"},{"path":"/rules","method":"get"},{"path":"/rules","method":"post"},{"path":"/rules/{id}","method":"patch"}]} showTitle />
     </>
   );
 }

@@ -9,12 +9,10 @@ owner: Antoinesrvt
 last_reviewed: 2026-10-20
 ---
 
-**Bearer tokens for apps, sites, scripts and AI agents that call your pod.**
+An API key is a bearer token for an app, site, script or AI agent that calls your pod. It has two limits:
 
-A key answers two questions:
-
-- **Which doors can it knock on?** That is its **scopes**, a coarse gate per API surface.
-- **What can it touch once inside?** That is its **grant**, fine-grained: kinds, actions, workspaces, projects, or single objects.
+- Its **scopes** say which API surfaces it may call, one coarse gate per surface.
+- Its **grant** says what it may touch there: kinds, actions, workspaces, projects or single objects.
 
 A key can never do more than the person it acts for. Effective access is always *grant ∩ what you can see and do*.
 
@@ -81,7 +79,7 @@ Matching is segment by segment. `*` stands for one segment, and a shorter permis
 
 How it is enforced:
 
-- **Reads** are filtered in the pod's access layer, so a key with `entity.portfolio.read` simply never sees other kinds.
+- **Reads** are filtered in the pod's access layer, so a key with `entity.portfolio.read` never sees other kinds.
 - **Writes** are checked at the governance gate before anything else. A write outside the grant is **refused**, never queued for approval.
 - A grant **permits**, it never auto-approves. Agent writes still go through proposals as usual.
 - A write that creates related objects (links, files) needs those subjects in the grant too.

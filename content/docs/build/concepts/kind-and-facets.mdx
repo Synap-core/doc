@@ -8,43 +8,59 @@ status: beta
 owner: Antoinesrvt
 ---
 
-**One real-world thing is one entity, forever. What it's *being used as*, in a given context, is a facet — not a new entity.**
+One real-world thing is one entity. What it is used as in a given context is a facet (a role), not a new entity.
 
-## The one-line frame
+## Three questions, three places
 
-Every entity answers three separate questions, and Synap keeps them in three separate places:
+Every entity answers three separate questions, and Synap stores the answers in three separate places:
 
-- **What it IS** — its kind. A person, a company, a task. Fixed at creation, rarely changes. → `entities.profileId` (a `profileKind = 'kind'` profile).
-- **What it's BEING USED AS, where** — its facets. Client here, investor there, speaker at this one event. Additive, workspace-lensed, can come and go. → `entity_facets` rows (each pointing at a `profileKind = 'role'` profile).
-- **What it's CONNECTED TO** — its relations. Works at, assigned to, blocks. → `relations` / structural `entity_id` properties. See [Entity connections](/docs/build/concepts/entity-connections).
+- **What it is**: its kind. A person, a company, a task. Set at creation and rarely changed. Stored as
+  `entities.profileId`, pointing at a profile with `profileKind = 'kind'`.
+- **What it is used as, and where**: its facets. Client in one workspace, investor in another, speaker at one event.
+  Facets are added and removed over time and can be limited to a workspace. Stored as `entity_facets` rows, each
+  pointing at a profile with `profileKind = 'role'`.
+- **What it is connected to**: its relations. Works at, assigned to, blocks. Stored in `relations` or as structural
+  `entity_id` properties. See [Entity connections](/docs/build/concepts/entity-connections).
 
-Kind + Facets is about the first two. Getting the split wrong is what produced the historical bug this page documents: modeling "this person is now a client" by creating a *second* entity (a `client` record) that shadows the person, instead of attaching a role to the one entity that already exists.
+This page covers the first two. The mistake it prevents is modelling "this person is now a client" by creating a
+second entity (a `client` record) that shadows the person, instead of attaching a role to the entity that already
+exists.
 
 ## Why this exists
 
-Before Kind + Facets, "client," "partner," "prospect," "sponsor," "contact" and similar relationship states were each their own entity profile. A person who was a lead, then a client, then also a conference speaker accumulated multiple disconnected entity rows — no shared identity, duplicate data, and no way to answer "show me everything about this person" without a manual join a human had to think to do. The AI capture path made this worse: every time a message implied a new role, the path of least resistance was `create_entity` again.
+Before facets, "client", "partner", "prospect", "sponsor", "contact" and similar relationship states were each their
+own entity profile. A person who was a lead, then a client, then a conference speaker ended up as several unconnected
+entity rows: no shared identity, duplicated data, and no way to list everything about that person without a manual
+join. AI capture made it worse, because each message that implied a new role led to another `create_entity`.
 
-Kind + Facets fixes this at the storage layer: **one entity per real-world thing**, and every role it plays is an additive attachment, not a fork.
+Facets fix this in storage: one entity per real-world thing, and each role it plays is attached to it.
 
-## The 5-layer assignment table
+## Where each answer is stored
 
 | Layer | Question it answers | Storage | Changes how often |
 |---|---|---|---|
-| **Kind** | What IS this? | `profiles` row with `profileKind = 'kind'`, referenced by `entities.profileId` | Rarely — a kind change means the thing itself changed identity |
-| **Facet** | What role is it playing, where? | `entity_facets` row → a `profiles` row with `profileKind = 'role'` | Often — attach/detach as relationships start and end |
+| **Kind** | What IS this? | `profiles` row with `profileKind = 'kind'`, referenced by `entities.profileId` | Rarely: a kind change means the thing itself changed identity |
+| **Facet** | What role is it playing, where? | `entity_facets` row → a `profiles` row with `profileKind = 'role'` | Often: attach and detach as relationships start and end |
 | **Property** | What are its field values? | `entity_property_index` / `properties` JSONB, on the entity for kind-level fields, on the facet for role-specific fields (e.g. `crmStatus` lives on the `client` facet, not the `person`) | Continuously |
 | **Relation** | What's it linked to? | `relations` table (semantic) or a structural `entity_id` property | On demand, ad hoc |
-| **Lens (workspace)** | Who can see this facet/property? | `entity_facets.workspaceId` (nullable — pod-wide when null) + the 3-layer property-def scope | Set at attach/create time |
+| **Lens (workspace)** | Who can see this facet/property? | `entity_facets.workspaceId` (nullable; pod-wide when null) + the 3-layer property-def scope | Set at attach/create time |
 
-## The thingness ladder — and the promotion rule
+## When a role should be a kind
 
-Not every recurring "role" stays a facet forever. The test: **does it accrue its own independent life — its own timeline, its own relations to other things, its own state machine that outlives any single parent?** If yes, it earns kind-hood.
+Not every recurring role stays a facet. The test: does it have its own life, with its own timeline, its own relations
+to other things and its own states that outlive any single parent? If so, it is a kind.
 
-The canonical precedent is `deal`. A deal isn't just "a person in the `won` state" — it's a relationship-THING with its own buyer × seller × stage lifecycle, its own close date, its own linked contacts and documents. `deal` was kept as a primary kind (a `keep` entry in the conversion manifest), never folded into a facet, precisely because it has that independent life. `event` is the same case — a time-bound container, not a role someone plays.
+`deal` is the example. A deal is not "a person in the `won` state": it has its own buyer, seller and stage, its own
+close date, and its own linked contacts and documents. It was kept as a primary kind (a `keep` entry in the
+conversion manifest) for that reason. `event` is the same case: a time-bound container, not a role someone plays.
 
-Contrast with `client` / `partner` / `prospect` / `sponsor` / `competitor`: these describe a *stance* a person or company has, with no independent existence outside that person or company. They were converted to facets (`convertToFacet` entries in the manifest). A facet is inherently subordinate — detach it, and the parent entity is untouched; delete the parent, and the facet cascades away with it (`entityId` references `entities.id` with `onDelete: 'cascade'`).
+`client`, `partner`, `prospect`, `sponsor` and `competitor` describe a stance a person or company takes, with no
+existence outside that person or company. They were converted to facets (`convertToFacet` entries in the manifest).
+A facet depends on its parent: detach it and the entity is untouched; delete the entity and its facets are deleted
+with it (`entityId` references `entities.id` with `onDelete: 'cascade'`).
 
-**Rule of thumb:** if you can imagine the "role" outliving or being shared across multiple parents with its own graph of relations, it's probably a kind. If it's inseparable from one specific entity and just toggles that entity's stance, it's a facet.
+Rule of thumb: if the role could outlive its parent, or be shared by several parents with relations of its own, it is
+probably a kind. If it belongs to one entity and only changes that entity's stance, it is a facet.
 
 ## Storage model
 
@@ -64,36 +80,53 @@ entity_facets
   deletedAt       nullable              -- SOFT DELETE ONLY
 ```
 
-Two things worth calling out:
+- **Soft delete only.** `FacetRepository.detach()` never hard-deletes a row; it sets `deletedAt`. A partial unique
+  index (`entity_facets_entity_profile_ctx_ws_uniq`) covers only live rows, so attaching the same facet again after a
+  detach works and is idempotent (a client who churns and comes back needs no special case).
+- **Uniqueness is `(entityId, profileId, contextEntityId, workspaceId)`**, with `COALESCE` sentinel UUIDs standing in
+  for NULL in the two nullable columns. That is what lets you attach `speaker` twice, once per event through
+  `contextEntityId`, without colliding with a single pod-wide `client` facet.
 
-- **Soft delete only.** `FacetRepository.detach()` never hard-deletes a row — it sets `deletedAt`. A partial unique index (`entity_facets_entity_profile_ctx_ws_uniq`) covers only live rows, so re-attaching the same facet after a detach is a normal, idempotent flow (a churned client who comes back doesn't need special-casing).
-- **Uniqueness is `(entityId, profileId, contextEntityId, workspaceId)`**, with `COALESCE`-sentinel UUIDs standing in for NULL in the two nullable columns — this is what makes "attach `speaker` twice, once per event, via `contextEntityId`" possible without colliding with "attach `client` once, pod-wide."
+## Identity resolution
 
-## Identity resolution — why `profileSlug::value` was the bug
+Before this model, six separate implementations answered "is this the same subject?": entity resolution, capture's
+within-batch collapse, capture's persisted dedup scan, entity upsert's cross-source matching, and import graph merge.
+They disagreed on whether an email address merges two records automatically, and one of them fetched 5,000 rows to
+filter in JavaScript instead of joining in SQL.
 
-Before this model, there were **six independent "is this the same subject?" implementations** scattered across entity-resolution, capture within-batch collapse, capture's persisted-dedup JS scan, entity-upsert cross-source matching, and import graph-merge. They disagreed on the one question that mattered most — does an email address auto-merge? — and one of them re-implemented a SQL join as a fetch-5000-rows-and-filter-in-JS scan.
+`IdentityResolutionService` (`packages/database/src/services/identity-resolution-service.ts`) replaces them, with a
+fixed policy:
 
-`IdentityResolutionService` (`packages/database/src/services/identity-resolution-service.ts`) is the single replacement, with a frozen policy:
+- **Strong signals** (email, phone, URL such as LinkedIn or a website, handle, external id) are unique per subject. A
+  match on any of them resolves automatically: link, do not create. They are stored in `entity_identity_signals`, one
+  row per `(type, value)` pair.
+- **Weak signals** (name and `aliases[]`) are not unique. They only suggest candidates, limited to the rows the caller
+  can see and to the entity's kind, and never merge on their own.
 
-- **Strong atoms** — email, phone, url (LinkedIn/website), handle, external-id — are globally unique per subject. A match on any of them **auto-resolves**: link, don't create. Tracked in `entity_identity_signals`, one row per `(type, value)` pair.
-- **Weak atoms** — name (+ `aliases[]`) — are not unique. They surface candidates/suggestions only, scoped to the caller's visible rows and to the entity's kind. They never auto-merge on their own.
+This matters for facets: attaching a `client` facet to the wrong `person` because two people share a name is worse
+than asking which one you meant. A strong match (the same email) resolves without asking; everything else asks.
 
-This is why resolve-identity-first matters for facets specifically: attaching a `client` facet to the wrong `person` entity because two people share a name is a worse failure than asking the user to disambiguate. The strong path exists so that "this is clearly the same person" (same email) resolves without asking, and everything else asks.
+## Converting a kind into a role
 
-## The conversion story: the manifest is the record
-
-Migrating a profile from a primary kind into an attachable role is not a hand-written SQL migration. It's a declarative entry in `packages/database/src/conversions/manifest.ts`, interpreted by `runConversions()` (`conversions/engine.ts`) against the live database. Each op carries a stable `opKey`, recorded in a `_conversions` ledger so re-running the manifest is idempotent — an already-applied op is skipped.
+Turning a primary kind into an attachable role is not a hand-written SQL migration. It is a declarative entry in
+`packages/database/src/conversions/manifest.ts`, applied by `runConversions()` (`conversions/engine.ts`) to the live
+database. Each op has a stable `opKey`, recorded in a `_conversions` ledger, so running the manifest again skips the
+ops already applied.
 
 The manifest is a versioned, ordered list of `ConversionOp`s:
 
-- **`declareKind`** — assert a profile stays a primary kind (usually a no-op; records intent).
-- **`seedKindProfile`** — create a new kind profile if missing.
-- **`convertToFacet`** — the core op: flips a profile from `profileKind: 'kind'` to `'role'`, and for every live entity currently on that profile: (a) attaches a facet row carrying the mapped properties/status, then (b) re-points the entity's own `profileId`/`type` onto a target kind (e.g. every standalone `contact` entity becomes a `person` entity wearing a `contact`-shaped facet — never duplicated, never deleted).
-- **`mergeInto`** — fold multiple kinds into one (e.g. `note` + `capture` → `item`).
-- **`keep`** — explicit "stays a kind" with a reasoning note (this is where `deal` and `event` live).
-- **`extractNonEntity`** — pull something out of the entity model entirely.
+- **`declareKind`**: states that a profile stays a primary kind (usually a no-op that records the intent).
+- **`seedKindProfile`**: creates a kind profile if it is missing.
+- **`convertToFacet`**: changes a profile from `profileKind: 'kind'` to `'role'`. For every live entity on that
+  profile it attaches a facet row carrying the mapped properties and status, then points the entity's own
+  `profileId` and `type` at a target kind. For example, every standalone `contact` entity becomes a `person` entity
+  with a `contact` facet; nothing is duplicated or deleted.
+- **`mergeInto`**: folds several kinds into one (for example `note` and `capture` into `item`).
+- **`keep`**: records that a profile stays a kind, with the reason (`deal` and `event` are here).
+- **`extractNonEntity`**: moves something out of the entity model.
 
-Ops are append-only and immutable once shipped: a later change appends new `opKey`s rather than editing old ones, so the manifest doubles as an audit trail of every kind/facet decision made.
+Ops are append-only: a later change adds new `opKey`s instead of editing shipped ones, so the manifest is also the
+history of every kind and facet decision.
 
 ## API surface
 
@@ -101,32 +134,47 @@ Backend (`packages/api/src/routers/entities.ts`, Hub Protocol REST under `/api/h
 
 | Operation | Where | Notes |
 |---|---|---|
-| Attach a facet | `attachFacet` (tRPC) / `POST /api/hub/entities/:entityId/facets` | `FacetRepository.attach()` — the one write door. Validates `profileKind === 'role'` and `applicableKinds` unless `skipValidation` (trusted seed data only). |
-| Update a facet | `updateFacet` (tRPC) / `PATCH /api/hub/facets/:facetId` | `FacetRepository.update()` — status/properties. |
-| Detach a facet | `detachFacet` (tRPC) | `FacetRepository.detach()` — soft delete (`deletedAt`), never hard. |
+| Attach a facet | `attachFacet` (tRPC) / `POST /api/hub/entities/:entityId/facets` | `FacetRepository.attach()`, the only write path. Validates `profileKind === 'role'` and `applicableKinds` unless `skipValidation` (trusted seed data only). |
+| Update a facet | `updateFacet` (tRPC) / `PATCH /api/hub/facets/:facetId` | `FacetRepository.update()`: status and properties. |
+| Detach a facet | `detachFacet` (tRPC) | `FacetRepository.detach()`: soft delete (`deletedAt`), never a hard delete. |
 | Resolve effective facets | `getEffectiveFacets(db, entityId, { userId, workspaceId })` (`facet-resolution-service.ts`) | Joins each live facet with its role-profile and that profile's workspace-lensed effective properties. Powers `entity.get`'s `facets` list. |
 | Filter entities by facet | `entities.list({ facetSlug })` | Short-circuits to empty if the slug doesn't resolve to a live role-profile. |
-| Batch facet-slug lookup | `loadFacetSlugsBatch(db, entityIds)` | Unfiltered lens, used by search indexing and the graph service — the one shared implementation of a join that used to be hand-rolled twice. |
+| Batch facet-slug lookup | `loadFacetSlugsBatch(db, entityIds)` | Unfiltered lens, used by search indexing and the graph service. |
 
-All reads share one visibility predicate: `facetVisibilityConditions()` (`utils/facet-visibility.ts`) — workspace-scoped facets are visible to the workspace's members, pod-wide (null-workspace) facets carry an owner floor. The access-layer `VisibilityRule` registered for `entityFacets` in `packages/api/src/access/registry.ts` mirrors this predicate; the two are kept in sync by convention, not by shared code, so changing one requires changing the other.
+All reads share one visibility predicate, `facetVisibilityConditions()` (`utils/facet-visibility.ts`): facets scoped
+to a workspace are visible to its members, and pod-wide facets (no workspace) only to their owner or to a viewer the
+role profile is shared with. The access-layer `VisibilityRule` registered for `entityFacets` in `packages/api/src/access/registry.ts` mirrors this predicate; the two are kept in sync by convention, not by shared code, so changing one requires changing the other.
 
-Intelligence Service side: the `attach_facet` tool is how agents attach a role instead of creating a second entity — governed the same way entity creation is (may return `status: 'proposed'`, awaiting review, which is success-pending-review, not an error). `update_facet` is its counterpart for status transitions.
+Agents attach a role with the `attach_facet` tool instead of creating a second entity. It is governed like entity
+creation: it may return `status: 'proposed'`, which means the change is waiting for review, not that it failed.
+`update_facet` changes a facet's status.
 
 ## Open questions
 
-- **Relation targeting a facet, not just an entity.** Today every `relations` row points at an `entities.id`. There's no way to say "this note is about Alice *in her capacity as a client*" as opposed to Alice generally — relations always resolve to the parent entity. Facet-scoped relation context is under design.
-- **Cross-kind facet reuse.** `applicableKinds` lets one role-profile (e.g. `sponsor`) attach to both `person` and `company`. The UX for *browsing* facets across kinds (a single "all my clients, whether person or company" view) isn't built yet — `entities.list({ facetSlug })` returns entities of any kind wearing that facet, but no dedicated view composes it.
-- **When does a facet get promoted to a kind after the fact?** The manifest handles the reverse direction (kind → facet) as a first-class op. Promoting a facet back into a kind (a `sponsor` facet that starts accumulating its own deal pipeline and should become its own thing) doesn't have a symmetric op yet — it would today be a manual `declareKind` + data migration.
+- **A relation that targets a facet.** Every `relations` row points at an `entities.id`, so there is no way to say
+  "this note is about Alice as a client" rather than about Alice; relations always resolve to the parent entity.
+- **Browsing a facet across kinds.** `applicableKinds` lets one role profile (for example `sponsor`) attach to both
+  `person` and `company`. `entities.list({ facetSlug })` returns entities of any kind with that facet, but no view
+  shows "all my clients, people and companies" yet.
+- **Turning a facet back into a kind.** The manifest has an op for kind to facet, but none for the reverse (a
+  `sponsor` facet that grows its own deal pipeline). Today that is a manual `declareKind` plus a data migration.
 
-## Worked example — CRM
+## Example: a CRM
 
 A CRM workspace models relationship state entirely as facets on `person` and `company` identity entities, with `deal` staying a kind:
 
-- `person` / `company` — pod-wide identity kinds. Carry no sales state directly.
-- `client` / `partner` / `prospect` — role-profiles. Attached via `attach_facet` when the relationship actually starts (a deal wins → attach `client`; a lead qualifies → attach `prospect`). Status (`active`, `paused`, `churned`) lives on the facet, never on the identity entity.
-- `deal` — stays a kind. Its own pipeline stage, value, and close date; links to the person/company via relations, not by being a facet of them.
+- `person` and `company`: pod-wide identity kinds. They carry no sales state.
+- `client`, `partner` and `prospect`: role profiles, attached with `attach_facet` when the relationship starts (a deal
+  is won: attach `client`; a lead qualifies: attach `prospect`). The status (`active`, `paused`, `churned`) is on the
+  facet, never on the person or company.
+- `deal`: a kind, with its own pipeline stage, value and close date. It links to the person or company through
+  relations, not as a facet.
 
-When a deal transitions to `won`, the agent checks the person's existing facets first (via `get_entity`'s `facets` list): no `client` facet yet → `attach_facet`; an existing `client`/`prospect`/`paused` facet → `update_facet` to transition its status instead of re-attaching. This is what makes renewals (a new deal referencing a person who already wears a `client` facet), multi-stakeholder deals, and clean churn tracking (detach the facet, the identity remains) all fall out of the same primitive instead of needing special-case logic. The `synap` agent skill instructs agents to use `attach_facet` rather than `create_entity` for this.
+When a deal moves to `won`, the agent first reads the person's facets (the `facets` list from `get_entity`). With no
+`client` facet it calls `attach_facet`; with an existing `client`, `prospect` or paused facet it calls `update_facet`
+to change the status instead of attaching again. Renewals (a new deal for a person who already has a `client` facet),
+deals with several stakeholders and churn (detach the facet; the person remains) all work the same way. The `synap`
+agent skill tells agents to use `attach_facet` rather than `create_entity` here.
 
 ---
 

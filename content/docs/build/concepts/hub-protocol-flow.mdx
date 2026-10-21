@@ -8,28 +8,25 @@ status: beta
 owner: Antoinesrvt
 ---
 
-Hub Protocol is the primary bridge between agent runtimes and Synap pods.
+The Hub Protocol is the REST API (`/api/hub`) that agents, scripts and integrations use to reach a pod.
 
 ## Request path
 
-1. Client/agent calls Hub route with scoped credentials
-2. Backend resolves actor, workspace, and authorization scope
-3. Reads return directly; writes enter policy/governance flow
-4. Event/executor pipeline applies side effects and downstream updates
+1. The agent or script calls a Hub route with a scoped key.
+2. The pod resolves the caller, the workspace and the key's scope.
+3. A read returns directly; a write goes through governance (it runs or becomes a proposal).
+4. The event pipeline applies the change and its side effects.
 
-## Why this protocol exists
+It gives outside clients one stable surface instead of the apps' internal API, and applies the same governance and
+audit to an agent's write as to a person's.
 
-- one stable surface for external intelligence and automation clients
-- avoids coupling integrations to internal frontend implementation details
-- keeps governance and audit behavior consistent across user and agent writes
+## What it covers
 
-## Typical capabilities exposed
+- entities and relations
+- channels and messages
+- memory and facts
+- setup and integrations
 
-- entity and relationship operations
-- channel/message operations
-- memory/fact operations
-- setup and integration utility flows
-
-See:
+See also:
 
 - [Hub REST API](/docs/reference/hub-api)

@@ -13,18 +13,42 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/webhooks
-  toc: []
+  toc:
+    - depth: 2
+      title: List webhook subscriptions
+      url: '#list-webhook-subscriptions'
+    - depth: 2
+      title: Create a webhook subscription
+      url: '#create-a-webhook-subscription'
+    - depth: 2
+      title: Delete a webhook subscription
+      url: '#delete-a-webhook-subscription'
+    - depth: 2
+      title: List delivery log for a webhook subscription
+      url: '#list-delivery-log-for-a-webhook-subscription'
   structuredData:
-    headings: []
+    headings:
+      - content: List webhook subscriptions
+        id: list-webhook-subscriptions
+      - content: Create a webhook subscription
+        id: create-a-webhook-subscription
+      - content: Delete a webhook subscription
+        id: delete-a-webhook-subscription
+      - content: List delivery log for a webhook subscription
+        id: list-delivery-log-for-a-webhook-subscription
     contents:
       - content: Returns all webhook subscriptions belonging to the authenticated agent
           user.
+        heading: list-webhook-subscriptions
       - content: Registers a webhook URL to receive real-time event notifications for
           the specified event types.
+        heading: create-a-webhook-subscription
       - content: Permanently removes a webhook subscription by ID.
+        heading: delete-a-webhook-subscription
       - content: Returns the delivery log (status, responseStatus, attempt, deliveredAt)
           for a subscription owned by the caller. Powers the Reactions Health
           tab + Replay.
+        heading: list-delivery-log-for-a-webhook-subscription
 ---
 
 export default function Layout(props) {

@@ -13,14 +13,60 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/agent-skills
-  toc: []
+  toc:
+    - depth: 2
+      title: List all agent skills
+      url: '#list-all-agent-skills'
+    - depth: 2
+      title: Get a single agent skill by slug
+      url: '#get-a-single-agent-skill-by-slug'
+    - depth: 2
+      title: Create a agent skill
+      url: '#create-a-agent-skill'
+    - depth: 2
+      title: Update a agent skill by slug
+      url: '#update-a-agent-skill-by-slug'
+    - depth: 2
+      title: Delete a agent skill by id
+      url: '#delete-a-agent-skill-by-id'
+    - depth: 2
+      title: List executable skills (skills table)
+      url: '#list-executable-skills-skills-table'
+    - depth: 2
+      title: Create an executable skill (skills table)
+      url: '#create-an-executable-skill-skills-table'
+    - depth: 2
+      title: Get one executable skill by id (skills table)
+      url: '#get-one-executable-skill-by-id-skills-table'
+    - depth: 2
+      title: Import a skill with associated documents (JSON payload)
+      url: '#import-a-skill-with-associated-documents-json-payload'
   structuredData:
-    headings: []
+    headings:
+      - content: List all agent skills
+        id: list-all-agent-skills
+      - content: Get a single agent skill by slug
+        id: get-a-single-agent-skill-by-slug
+      - content: Create a agent skill
+        id: create-a-agent-skill
+      - content: Update a agent skill by slug
+        id: update-a-agent-skill-by-slug
+      - content: Delete a agent skill by id
+        id: delete-a-agent-skill-by-id
+      - content: List executable skills (skills table)
+        id: list-executable-skills-skills-table
+      - content: Create an executable skill (skills table)
+        id: create-an-executable-skill-skills-table
+      - content: Get one executable skill by id (skills table)
+        id: get-one-executable-skill-by-id-skills-table
+      - content: Import a skill with associated documents (JSON payload)
+        id: import-a-skill-with-associated-documents-json-payload
     contents:
       - content: 'Accepts a JSON body with skill metadata and an array of reference
           documents. Creates a pod-wide instruction skill and linked document
           rows. TODO: support ZIP (.skill file) upload with YAML frontmatter
           parsing.'
+        heading: import-a-skill-with-associated-documents-json-payload
 ---
 
 export default function Layout(props) {

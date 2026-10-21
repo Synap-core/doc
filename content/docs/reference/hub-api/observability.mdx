@@ -13,9 +13,14 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/observability
-  toc: []
+  toc:
+    - depth: 2
+      title: AI capture-routing health (decision vs. correction events)
+      url: '#ai-capture-routing-health-decision-vs-correction-events'
   structuredData:
-    headings: []
+    headings:
+      - content: AI capture-routing health (decision vs. correction events)
+        id: ai-capture-routing-health-decision-vs-correction-events
     contents:
       - content: 'Computes routing accuracy from ai_decision (kind=route) and
           ai_correction (kind=route) events: overall accuracy, applied rate, a
@@ -23,6 +28,7 @@ _openapi:
           and a confidence-calibration table (does stated confidence track real
           accuracy). Returns nulls (never divide-by-zero) when there is no data
           yet in the window.'
+        heading: ai-capture-routing-health-decision-vs-correction-events
 ---
 
 export default function Layout(props) {

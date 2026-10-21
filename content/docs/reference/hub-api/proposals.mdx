@@ -13,28 +13,78 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/proposals
-  toc: []
+  toc:
+    - depth: 2
+      title: Replace a document's content (alias of the patch door)
+      url: '#replace-a-documents-content-alias-of-the-patch-door'
+    - depth: 2
+      title: List proposals
+      url: '#list-proposals'
+    - depth: 2
+      title: Create a proposal
+      url: '#create-a-proposal'
+    - depth: 2
+      title: Get a single proposal by id
+      url: '#get-a-single-proposal-by-id'
+    - depth: 2
+      title: Revise a pending proposal
+      url: '#revise-a-pending-proposal'
+    - depth: 2
+      title: Revert an approved proposal
+      url: '#revert-an-approved-proposal'
+    - depth: 2
+      title: Approve a pending proposal
+      url: '#approve-a-pending-proposal'
+    - depth: 2
+      title: Reject a pending proposal
+      url: '#reject-a-pending-proposal'
+    - depth: 2
+      title: File a dev-loop human gate (plan or deploy approval)
+      url: '#file-a-dev-loop-human-gate-plan-or-deploy-approval'
   structuredData:
-    headings: []
+    headings:
+      - content: Replace a document's content (alias of the patch door)
+        id: replace-a-documents-content-alias-of-the-patch-door
+      - content: List proposals
+        id: list-proposals
+      - content: Create a proposal
+        id: create-a-proposal
+      - content: Get a single proposal by id
+        id: get-a-single-proposal-by-id
+      - content: Revise a pending proposal
+        id: revise-a-pending-proposal
+      - content: Revert an approved proposal
+        id: revert-an-approved-proposal
+      - content: Approve a pending proposal
+        id: approve-a-pending-proposal
+      - content: Reject a pending proposal
+        id: reject-a-pending-proposal
+      - content: File a dev-loop human gate (plan or deploy approval)
+        id: file-a-dev-loop-human-gate-plan-or-deploy-approval
     contents:
       - content: "A full replacement — one `replace_all` op through the document patch
           door (see POST /documents/{documentId}/patch). Governed: an agent's
           full replacement is always a proposal, and it may not change a
           person's section or drop an embed."
+        heading: replace-a-documents-content-alias-of-the-patch-door
       - content: Returns proposals for the authenticated user / a workspace. Default
           status filter is `pending`; `auto_approved` lists the audit receipts
           of agent writes that executed immediately under governance.
           `view=basic` returns the summary representation (identity +
           provenance, no `data`); the default `view=full` returns the detailed
           representation unchanged.
+        heading: list-proposals
       - content: Creates a pending proposal on behalf of an agent. Returns the new
           proposal id with status `pending`.
+        heading: create-a-proposal
       - content: Fetches one proposal's full current state — including `data` (e.g. a
           capability.run proposal's `runResult` once approved). Callers
           previously had no single-lookup door and had to page through GET
           /proposals to find one by id.
+        heading: get-a-single-proposal-by-id
       - content: Replaces a pending proposal's payload (e.g. AI revising its proposal
           after user feedback). Does NOT re-run the event pipeline.
+        heading: revise-a-pending-proposal
       - content: 'Undoes the effect of an approved/auto-approved proposal. A create:
           deletes the entities/relations/documents the approval created. An
           entity update: restores each field and property from the record
@@ -43,14 +93,17 @@ _openapi:
           entity. An update with no apply-time record (applied before undo
           existed, or a non-entity update), and a delete of anything but an
           entity (a hard delete), cannot be reverted and return 501.'
+        heading: revert-an-approved-proposal
       - content: Approves a pending proposal, executing its effect immediately.
           Delegates to the canonical `proposals.approve` tRPC mutation, then
           re-fetches the proposal so the response carries its post-execution
           state (e.g. a capability.run's `data.runResult` — success + returned
           data, or the exact denial reason on failure) in the SAME round trip
           instead of requiring a separate GET.
+        heading: approve-a-pending-proposal
       - content: Rejects a pending proposal. Delegates to the canonical
           `proposals.reject` tRPC mutation.
+        heading: reject-a-pending-proposal
       - content: "The typed door for the server-side dev loop's two stops:
           `dev.plan_approval` before the agent writes code,
           `dev.deploy_approval` before it ships a verified commit. Files a
@@ -60,6 +113,7 @@ _openapi:
           APPROVAL ONLY RECORDS THE DECISION on the session — the pod never runs
           `gateCommand` / `deployCommand`; the agent polls and acts on its own
           machine."
+        heading: file-a-dev-loop-human-gate-plan-or-deploy-approval
 ---
 
 export default function Layout(props) {

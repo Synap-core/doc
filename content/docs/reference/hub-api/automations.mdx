@@ -13,15 +13,53 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/automations
-  toc: []
+  toc:
+    - depth: 2
+      title: Create an automation
+      url: '#create-an-automation'
+    - depth: 2
+      title: List automations
+      url: '#list-automations'
+    - depth: 2
+      title: Get an automation
+      url: '#get-an-automation'
+    - depth: 2
+      title: Update an automation
+      url: '#update-an-automation'
+    - depth: 2
+      title: Manually trigger an automation
+      url: '#manually-trigger-an-automation'
+    - depth: 2
+      title: Activate an automation
+      url: '#activate-an-automation'
+    - depth: 2
+      title: Pause an automation
+      url: '#pause-an-automation'
   structuredData:
-    headings: []
+    headings:
+      - content: Create an automation
+        id: create-an-automation
+      - content: List automations
+        id: list-automations
+      - content: Get an automation
+        id: get-an-automation
+      - content: Update an automation
+        id: update-an-automation
+      - content: Manually trigger an automation
+        id: manually-trigger-an-automation
+      - content: Activate an automation
+        id: activate-an-automation
+      - content: Pause an automation
+        id: pause-an-automation
     contents:
       - content: Creates an automation. Defaults to status=draft. Use POST
           /automations/{id}/activate to enable it.
+        heading: create-an-automation
       - content: Returns automations for the user, optionally filtered by status.
+        heading: list-automations
       - content: Runs the automation flow once with an optional payload. Bypasses the
           automation's normal trigger config.
+        heading: manually-trigger-an-automation
 ---
 
 export default function Layout(props) {

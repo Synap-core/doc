@@ -13,19 +13,37 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/identity
-  toc: []
+  toc:
+    - depth: 2
+      title: Resolve an existing Discord→Synap identity link (read-only)
+      url: '#resolve-an-existing-discordsynap-identity-link-read-only'
+    - depth: 2
+      title: List linkable members of the acting workspace
+      url: '#list-linkable-members-of-the-acting-workspace'
+    - depth: 2
+      title: Link a Discord user to a Synap identity (admin-gated)
+      url: '#link-a-discord-user-to-a-synap-identity-admin-gated'
   structuredData:
-    headings: []
+    headings:
+      - content: Resolve an existing Discord→Synap identity link (read-only)
+        id: resolve-an-existing-discordsynap-identity-link-read-only
+      - content: List linkable members of the acting workspace
+        id: list-linkable-members-of-the-acting-workspace
+      - content: Link a Discord user to a Synap identity (admin-gated)
+        id: link-a-discord-user-to-a-synap-identity-admin-gated
     contents:
       - content: Returns whether the given Discord user is linked to a Synap user under
           the calling operator key. NEVER auto-creates a link.
+        heading: resolve-an-existing-discordsynap-identity-link-read-only
       - content: Returns the human members of the acting (operator) workspace that a
           Discord user can be linked to via the onboarding picker.
+        heading: list-linkable-members-of-the-acting-workspace
       - content: Creates the Discord→Synap mapping. mode='existing' maps onto an
           existing workspace member (impersonation — admin-only). mode='new'
           provisions a fresh Synap user + team membership (account creation —
           admin-only). Authorized by the acting context's workspace role
           (owner/admin), never a caller-supplied flag.
+        heading: link-a-discord-user-to-a-synap-identity-admin-gated
 ---
 
 export default function Layout(props) {

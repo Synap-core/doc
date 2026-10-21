@@ -13,28 +13,58 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/playbooks
-  toc: []
+  toc:
+    - depth: 2
+      title: List playbooks
+      url: '#list-playbooks'
+    - depth: 2
+      title: Create a playbook
+      url: '#create-a-playbook'
+    - depth: 2
+      title: Run a playbook
+      url: '#run-a-playbook'
+    - depth: 2
+      title: Cancel a live playbook run (and its external agent task)
+      url: '#cancel-a-live-playbook-run-and-its-external-agent-task'
+    - depth: 2
+      title: Capture a playbook run's outcome
+      url: '#capture-a-playbook-runs-outcome'
   structuredData:
-    headings: []
+    headings:
+      - content: List playbooks
+        id: list-playbooks
+      - content: Create a playbook
+        id: create-a-playbook
+      - content: Run a playbook
+        id: run-a-playbook
+      - content: Cancel a live playbook run (and its external agent task)
+        id: cancel-a-live-playbook-run-and-its-external-agent-task
+      - content: Capture a playbook run's outcome
+        id: capture-a-playbook-runs-outcome
     contents:
       - content: Playbooks visible to the caller across the pod — every member workspace
           plus pod-wide templates. Cursor-paginated. Same door as MCP
           synap_list_playbooks.
+        heading: list-playbooks
       - content: "Creates a reusable playbook (staged process template). Governed: an
           agent caller gets 202 `status: 'proposed'` with a `reviewUrl` — that
           is success, not an error. Same door as MCP synap_create_playbook."
+        heading: create-a-playbook
       - content: "Launches a playbook via its executor. Governed: an agent launch gets
           202 `status: 'proposed'`. A playbook that depends on skills not
           enabled yet returns `status: 'blocked'` with `unenabledSkills` and
           `enableProposals` — nothing ran. Same door as MCP synap_run_playbook."
+        heading: run-a-playbook
       - content: "Marks a running run cancelled. When the run was handed to an external
           agent whose binding supports cancel, the binding's cancel verb runs
           first and must succeed; otherwise the run is cancelled and the
           response says the agent could not be stopped from Synap. Human-only:
           an agent key gets 403."
+        heading: cancel-a-live-playbook-run-and-its-external-agent-task
       - content: Reports a run's status/summary back into Synap and records the entities
           it produced (session → produced → entity links). Governance-gated; on
           'proposed' the run is not mutated.
+        heading: capture-a-playbook-runs-outcome
 ---
 
 export default function Layout(props) {

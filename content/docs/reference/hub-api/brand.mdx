@@ -13,9 +13,14 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/brand
-  toc: []
+  toc:
+    - depth: 2
+      title: The caller's brand kit (json, css or frame-md)
+      url: '#the-callers-brand-kit-json-css-or-frame-md'
   structuredData:
-    headings: []
+    headings:
+      - content: The caller's brand kit (json, css or frame-md)
+        id: the-callers-brand-kit-json-css-or-frame-md
     contents:
       - content: Resolves the Brand space (the given workspace or the brand source it
           declares, else the pod's brand provider) and the brand identity in it
@@ -23,6 +28,7 @@ _openapi:
           brand — and returns that brand's kit with a deterministic content
           `hash`. 404 with a typed `reason` and a human `message` when there is
           no brand; a failed read is a 5xx, never an empty kit.
+        heading: the-callers-brand-kit-json-css-or-frame-md
 ---
 
 export default function Layout(props) {

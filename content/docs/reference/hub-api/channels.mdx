@@ -13,34 +13,81 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/channels
-  toc: []
+  toc:
+    - depth: 2
+      title: List/search channels
+      url: '#listsearch-channels'
+    - depth: 2
+      title: Create-or-link an EXTERNAL channel bound to an entity
+      url: '#create-or-link-an-external-channel-bound-to-an-entity'
+    - depth: 2
+      title: Find or create a channel by context object
+      url: '#find-or-create-a-channel-by-context-object'
+    - depth: 2
+      title: Get the user's personal channel
+      url: '#get-the-users-personal-channel'
+    - depth: 2
+      title: Trigger an AI response in a channel
+      url: '#trigger-an-ai-response-in-a-channel'
+    - depth: 2
+      title: Pin a message in a Discord channel
+      url: '#pin-a-message-in-a-discord-channel'
+    - depth: 2
+      title: Rename a Discord channel
+      url: '#rename-a-discord-channel'
+    - depth: 2
+      title: Propose binding a channel to a context object
+      url: '#propose-binding-a-channel-to-a-context-object'
   structuredData:
-    headings: []
+    headings:
+      - content: List/search channels
+        id: listsearch-channels
+      - content: Create-or-link an EXTERNAL channel bound to an entity
+        id: create-or-link-an-external-channel-bound-to-an-entity
+      - content: Find or create a channel by context object
+        id: find-or-create-a-channel-by-context-object
+      - content: Get the user's personal channel
+        id: get-the-users-personal-channel
+      - content: Trigger an AI response in a channel
+        id: trigger-an-ai-response-in-a-channel
+      - content: Pin a message in a Discord channel
+        id: pin-a-message-in-a-discord-channel
+      - content: Rename a Discord channel
+        id: rename-a-discord-channel
+      - content: Propose binding a channel to a context object
+        id: propose-binding-a-channel-to-a-context-object
     contents:
       - content: Returns channels the authenticated user has access to. Supports
           optional workspace and type filters. When `q` is set the SAME query is
           narrowed server-side by title / branch purpose — browse and search are
           one code path over one access floor, never two loaders.
+        heading: listsearch-channels
       - content: Idempotent find-or-link of the canonical EXTERNAL channel for
           (externalSource, externalChannelId). Creates the channel if absent
           and, when contextObjectId is supplied, binds it to that entity (e.g. a
           client person/client entity mirrored as a Discord channel). Reuses the
           shared inbound-recorder upsert so it dedups on the (externalSource,
           externalId) partial unique index.
+        heading: create-or-link-an-external-channel-bound-to-an-entity
       - content: Resolves (or creates) the AI channel scoped to a specific entity,
           document, or view.
+        heading: find-or-create-a-channel-by-context-object
       - content: Returns the per-(user, workspace) personal AI channel, scoped to the
           orchestrator agent.
+        heading: get-the-users-personal-channel
       - content: Posts a system-prompt-overridden message into the channel and
           dispatches the AI to respond. Used by skill triggers and proactive
           entry points.
+        heading: trigger-an-ai-response-in-a-channel
       - content: Resolves the EXTERNAL channel by (externalSource='discord',
           externalId=:externalChannelId) and ENQUEUES an agnostic `pin_message`
           egress intent; the bridge performs the Discord pin.
+        heading: pin-a-message-in-a-discord-channel
       - content: Resolves the EXTERNAL channel by (externalSource=provider||'discord',
           externalId=:externalChannelId) and ENQUEUES an agnostic
           `rename_channel` egress intent; the bridge performs the Discord rename
           (rate-limited ~2 renames per 10 min per channel).
+        heading: rename-a-discord-channel
       - content: Files a governed `channel/bind` proposal (subjectType 'channel', action
           'bind'). On approval, points an EXISTING channel (by Synap channel
           UUID) at a context object — usually a client entity — and optionally
@@ -48,6 +95,7 @@ _openapi:
           workspace opted 'channel.bind' into autoApproveFor. branchPurpose is
           human-confirmed, never default-forced (client-comms is immutable once
           set).
+        heading: propose-binding-a-channel-to-a-context-object
 ---
 
 export default function Layout(props) {

@@ -13,13 +13,30 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/relations
-  toc: []
+  toc:
+    - depth: 2
+      title: List relations
+      url: '#list-relations'
+    - depth: 2
+      title: Create a relation
+      url: '#create-a-relation'
+    - depth: 2
+      title: Delete a relation
+      url: '#delete-a-relation'
   structuredData:
-    headings: []
+    headings:
+      - content: List relations
+        id: list-relations
+      - content: Create a relation
+        id: create-a-relation
+      - content: Delete a relation
+        id: delete-a-relation
     contents:
       - content: Returns relations in a workspace. Filter by `entityId` (either side of
           the edge) and/or `type`.
+        heading: list-relations
       - content: Creates a typed edge between two entities.
+        heading: create-a-relation
 ---
 
 export default function Layout(props) {

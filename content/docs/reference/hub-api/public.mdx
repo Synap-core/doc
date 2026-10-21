@@ -13,21 +13,39 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/public
-  toc: []
+  toc:
+    - depth: 2
+      title: Unauthenticated, field-whitelisted public projection of a workspace
+      url: '#unauthenticated-field-whitelisted-public-projection-of-a-workspace'
+    - depth: 2
+      title: Read a published share (credentialless)
+      url: '#read-a-published-share-credentialless'
+    - depth: 2
+      title: Read a published site's manifest (credentialless)
+      url: '#read-a-published-sites-manifest-credentialless'
   structuredData:
-    headings: []
+    headings:
+      - content: Unauthenticated, field-whitelisted public projection of a workspace
+        id: unauthenticated-field-whitelisted-public-projection-of-a-workspace
+      - content: Read a published share (credentialless)
+        id: read-a-published-share-credentialless
+      - content: Read a published site's manifest (credentialless)
+        id: read-a-published-sites-manifest-credentialless
     contents:
       - content: Read-only search over the facet-scoped public data a workspace opts
           into via settings.publicProjection. No auth. Returns 404 when the
           workspace has not opted in.
+        heading: unauthenticated-field-whitelisted-public-projection-of-a-workspace
       - content: Returns the publish-time snapshot and pinned revision of a PUBLISHED
           public share. No auth; cross-origin readable; no credentials honoured.
           Unknown, revoked, expired and unpublished tokens all return the same
           404.
+        heading: read-a-published-share-credentialless
       - content: Returns a PUBLISHED site's public metadata and its configured
           collections. No auth; cross-origin readable; no credentials honoured.
           Unknown, revoked, unpublished and deleted-project tokens all return
           the same 404.
+        heading: read-a-published-sites-manifest-credentialless
 ---
 
 export default function Layout(props) {

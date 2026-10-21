@@ -13,19 +13,43 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/search
-  toc: []
+  toc:
+    - depth: 2
+      title: Search a single Typesense collection
+      url: '#search-a-single-typesense-collection'
+    - depth: 2
+      title: Cross-collection Typesense search
+      url: '#cross-collection-typesense-search'
+    - depth: 2
+      title: Search documents only
+      url: '#search-documents-only'
+    - depth: 2
+      title: PGVector semantic search
+      url: '#pgvector-semantic-search'
   structuredData:
-    headings: []
+    headings:
+      - content: Search a single Typesense collection
+        id: search-a-single-typesense-collection
+      - content: Cross-collection Typesense search
+        id: cross-collection-typesense-search
+      - content: Search documents only
+        id: search-documents-only
+      - content: PGVector semantic search
+        id: pgvector-semantic-search
     contents:
       - content: DEPRECATED — prefer POST /knowledge/ask, which routes across all
           substrates. Still functional for existing integrations.
+        heading: search-a-single-typesense-collection
       - content: DEPRECATED — prefer POST /knowledge/ask, which routes across all
           substrates. Still functional for existing integrations.
+        heading: cross-collection-typesense-search
       - content: DEPRECATED — prefer POST /knowledge/ask, which routes across all
           substrates. Still functional for existing integrations.
+        heading: search-documents-only
       - content: DEPRECATED — prefer POST /knowledge/ask (the SRE already uses pgvector
           internally as one signal). Disabled on shared pods (returns empty /
           503 when VECTOR_SEARCH_ENABLED=false).
+        heading: pgvector-semantic-search
 ---
 
 export default function Layout(props) {

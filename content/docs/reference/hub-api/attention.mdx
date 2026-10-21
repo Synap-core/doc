@@ -13,14 +13,26 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/attention
-  toc: []
+  toc:
+    - depth: 2
+      title: What needs you ON a kind's things
+      url: '#what-needs-you-on-a-kinds-things'
+    - depth: 2
+      title: The needs-you number ON a kind's things
+      url: '#the-needs-you-number-on-a-kinds-things'
   structuredData:
-    headings: []
+    headings:
+      - content: What needs you ON a kind's things
+        id: what-needs-you-on-a-kinds-things
+      - content: The needs-you number ON a kind's things
+        id: the-needs-you-number-on-a-kinds-things
     contents:
       - content: "The needs-you rows narrowed to the things of `profileSlug`
           (`signals.list({ lens: 'needs-you', profileSlug })`)."
+        heading: what-needs-you-on-a-kinds-things
       - content: '`signals.count({ profileSlug })` — the number with its parts
           (decisions, notifications, blocked, review).'
+        heading: the-needs-you-number-on-a-kinds-things
 ---
 
 export default function Layout(props) {

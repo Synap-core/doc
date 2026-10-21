@@ -13,9 +13,14 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/packages
-  toc: []
+  toc:
+    - depth: 2
+      title: List everything installed on this pod, per kind
+      url: '#list-everything-installed-on-this-pod-per-kind'
   structuredData:
-    headings: []
+    headings:
+      - content: List everything installed on this pod, per kind
+        id: list-everything-installed-on-this-pod-per-kind
     contents:
       - content: "Unions the install ledgers that already exist — workspaces
           (package_slug + version stamp), capability containers (template_key +
@@ -25,6 +30,7 @@ _openapi:
           reconcile, which costs one Control-Plane fetch per distinct package
           slug. `drift: null` on a row means NOT COMPUTED, never 'up to date'.
           Requires hub-protocol.read scope."
+        heading: list-everything-installed-on-this-pod-per-kind
 ---
 
 export default function Layout(props) {

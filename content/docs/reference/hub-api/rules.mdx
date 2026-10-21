@@ -13,9 +13,29 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/rules
-  toc: []
+  toc:
+    - depth: 2
+      title: Classify a natural-language rule
+      url: '#classify-a-natural-language-rule'
+    - depth: 2
+      title: Parse typed text into a rule sentence
+      url: '#parse-typed-text-into-a-rule-sentence'
+    - depth: 2
+      title: List rules
+      url: '#list-rules'
+    - depth: 2
+      title: Create a rule (governed)
+      url: '#create-a-rule-governed'
   structuredData:
-    headings: []
+    headings:
+      - content: Classify a natural-language rule
+        id: classify-a-natural-language-rule
+      - content: Parse typed text into a rule sentence
+        id: parse-typed-text-into-a-rule-sentence
+      - content: List rules
+        id: list-rules
+      - content: Create a rule (governed)
+        id: create-a-rule-governed
     contents:
       - content: 'Routes a STATEMENT to the shapes it implies (fact · behaviour ·
           structure · schedule · notification · extraction · unknown), each with
@@ -23,6 +43,7 @@ _openapi:
           (the text reads as a one-off request, not a standing rule) and
           `needsClarification` when the routing is undecidable. READ-ONLY: no
           writes, no side effects, no I/O.'
+        heading: classify-a-natural-language-rule
       - content: "Turns a typed rule into a structured WHEN / ONLY IF / THEN sentence
           built from the caller's own trigger, action and kind menus. The shared
           deterministic matcher runs first; the intelligence service is asked
@@ -31,6 +52,7 @@ _openapi:
           slots come back in `unresolved`. NEVER saves — create with `POST
           /rules`. An unreachable assistant returns the matcher's reading with
           `aiUnavailable: true`."
+        heading: parse-typed-text-into-a-rule-sentence
       - content: 'Rules visible to the caller, newest first. Floored by the canonical
           `visibleSkillsWhere` predicate. Every row carries `status`: `"active"`
           for a materialized rule. With `includeProposed=true` the list ALSO
@@ -39,9 +61,11 @@ _openapi:
           proposal <id>`) — floored by `proposals.list`''s own
           `userVisibleWhere` predicate plus the rule scope tiers. Default OFF,
           so a caller reading "what is in effect" is unaffected.'
+        heading: list-rules
       - content: Governed create. A `{status:"proposed", proposalId}` body is a SUCCESS
           (HTTP 200) — the write is queued for the owner's review, exactly as an
           agent-authored write should be. `{status:"denied"}` is a 403.
+        heading: create-a-rule-governed
 ---
 
 export default function Layout(props) {

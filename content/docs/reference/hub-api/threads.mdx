@@ -13,21 +13,75 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/threads
-  toc: []
+  toc:
+    - depth: 2
+      title: List chat threads for a user
+      url: '#list-chat-threads-for-a-user'
+    - depth: 2
+      title: Create or upsert a thread
+      url: '#create-or-upsert-a-thread'
+    - depth: 2
+      title: Get thread context (summary + linked entities/documents)
+      url: '#get-thread-context-summary--linked-entitiesdocuments'
+    - depth: 2
+      title: Update thread context summary
+      url: '#update-thread-context-summary'
+    - depth: 2
+      title: Link an entity to a thread
+      url: '#link-an-entity-to-a-thread'
+    - depth: 2
+      title: Link a document to a thread
+      url: '#link-a-document-to-a-thread'
+    - depth: 2
+      title: List active branches under a thread
+      url: '#list-active-branches-under-a-thread'
+    - depth: 2
+      title: List messages in a thread
+      url: '#list-messages-in-a-thread'
+    - depth: 2
+      title: Append a single message to a thread
+      url: '#append-a-single-message-to-a-thread'
+    - depth: 2
+      title: Append up to 100 messages atomically
+      url: '#append-up-to-100-messages-atomically'
   structuredData:
-    headings: []
+    headings:
+      - content: List chat threads for a user
+        id: list-chat-threads-for-a-user
+      - content: Create or upsert a thread
+        id: create-or-upsert-a-thread
+      - content: Get thread context (summary + linked entities/documents)
+        id: get-thread-context-summary--linked-entitiesdocuments
+      - content: Update thread context summary
+        id: update-thread-context-summary
+      - content: Link an entity to a thread
+        id: link-an-entity-to-a-thread
+      - content: Link a document to a thread
+        id: link-a-document-to-a-thread
+      - content: List active branches under a thread
+        id: list-active-branches-under-a-thread
+      - content: List messages in a thread
+        id: list-messages-in-a-thread
+      - content: Append a single message to a thread
+        id: append-a-single-message-to-a-thread
+      - content: Append up to 100 messages atomically
+        id: append-up-to-100-messages-atomically
     contents:
       - content: Returns threads owned by `userId`, scoped to either the requested
           `workspaceId` or all of the user's accessible workspaces (plus
           pod-wide personal/feed channels).
+        heading: list-chat-threads-for-a-user
       - content: Creates a new thread, OR upserts on (externalSource, externalId) when
           both are provided. Race-safe via partial unique index. Supports
           `Idempotency-Key`.
+        heading: create-or-upsert-a-thread
       - content: Inserts one message. When `autoRespond=true` and `role=user`, schedules
           an A2AI agent reply via pg-boss. Supports `Idempotency-Key`.
+        heading: append-a-single-message-to-a-thread
       - content: All inserts run in a single Drizzle transaction. autoRespond fires for
           AT MOST ONE message — the LAST user message in the batch. Supports
           `Idempotency-Key`.
+        heading: append-up-to-100-messages-atomically
 ---
 
 export default function Layout(props) {

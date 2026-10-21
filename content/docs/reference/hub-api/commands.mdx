@@ -13,13 +13,29 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/commands
-  toc: []
+  toc:
+    - depth: 2
+      title: List commands available to the user
+      url: '#list-commands-available-to-the-user'
+    - depth: 2
+      title: Get a single command
+      url: '#get-a-single-command'
+    - depth: 2
+      title: Execute a command (RBAC + proposal flow)
+      url: '#execute-a-command-rbac--proposal-flow'
   structuredData:
-    headings: []
+    headings:
+      - content: List commands available to the user
+        id: list-commands-available-to-the-user
+      - content: Get a single command
+        id: get-a-single-command
+      - content: Execute a command (RBAC + proposal flow)
+        id: execute-a-command-rbac--proposal-flow
     contents:
       - content: 'Runs a shell-compatible command after security gating. Three terminal
           states: `executed`, `proposed` (awaiting approval), `denied` (blocked
           by policy). Rate-limited to 10/min per workspace.'
+        heading: execute-a-command-rbac--proposal-flow
 ---
 
 export default function Layout(props) {

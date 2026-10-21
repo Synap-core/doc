@@ -13,17 +13,29 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/workflows
-  toc: []
+  toc:
+    - depth: 2
+      title: Get a workflow's place (derived aggregate)
+      url: '#get-a-workflows-place-derived-aggregate'
+    - depth: 2
+      title: Get a workflow's event feed
+      url: '#get-a-workflows-event-feed'
   structuredData:
-    headings: []
+    headings:
+      - content: Get a workflow's place (derived aggregate)
+        id: get-a-workflows-place-derived-aggregate
+      - content: Get a workflow's event feed
+        id: get-a-workflows-event-feed
     contents:
       - content: One workflow's runs + sessions + channels + produced results +
           attributed proposals, derived from runtime keys. USER-floored; 404
           when the workflow is not visible.
+        heading: get-a-workflows-place-derived-aggregate
       - content: The per-workflow focus-session event feed, newest-first,
           cursor-paginated. USER-floored via the session-visibility derivation
           (events carry no workspace column, so the visible-session set is the
           security floor).
+        heading: get-a-workflows-event-feed
 ---
 
 export default function Layout(props) {

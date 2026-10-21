@@ -13,18 +13,30 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/guidelines
-  toc: []
+  toc:
+    - depth: 2
+      title: Standing guidelines for a kind of blocked work
+      url: '#standing-guidelines-for-a-kind-of-blocked-work'
+    - depth: 2
+      title: Version history of one guideline
+      url: '#version-history-of-one-guideline'
   structuredData:
-    headings: []
+    headings:
+      - content: Standing guidelines for a kind of blocked work
+        id: standing-guidelines-for-a-kind-of-blocked-work
+      - content: Version history of one guideline
+        id: version-history-of-one-guideline
     contents:
       - content: "Returns the approved guidelines scoped to one `workKind` (a
           BLOCKED_REASONS token) in the caller's lens. Call it BEFORE handing a
           slot to the human: a guideline may say how to proceed without one.
           Informational only — it never changes governance and never retires a
           slot."
+        heading: standing-guidelines-for-a-kind-of-blocked-work
       - content: Every version of the guideline, newest first, revoked versions
           included. Visible to the owner of a pod-wide guideline, or to a member
           of the guideline's workspace.
+        heading: version-history-of-one-guideline
 ---
 
 export default function Layout(props) {

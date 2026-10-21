@@ -13,24 +13,53 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/agents
-  toc: []
+  toc:
+    - depth: 2
+      title: List AI agent users
+      url: '#list-ai-agent-users'
+    - depth: 2
+      title: List agent_configs rows
+      url: '#list-agent_configs-rows'
+    - depth: 2
+      title: Trigger an AI response in a channel
+      url: '#trigger-an-ai-response-in-a-channel'
+    - depth: 2
+      title: Run one orchestrator turn for an inbound Discord message
+      url: '#run-one-orchestrator-turn-for-an-inbound-discord-message'
+    - depth: 2
+      title: Sync agent registry from IS
+      url: '#sync-agent-registry-from-is'
   structuredData:
-    headings: []
+    headings:
+      - content: List AI agent users
+        id: list-ai-agent-users
+      - content: List agent_configs rows
+        id: list-agent_configs-rows
+      - content: Trigger an AI response in a channel
+        id: trigger-an-ai-response-in-a-channel
+      - content: Run one orchestrator turn for an inbound Discord message
+        id: run-one-orchestrator-turn-for-an-inbound-discord-message
+      - content: Sync agent registry from IS
+        id: sync-agent-registry-from-is
     contents:
       - content: Returns users with userType='agent' that are members of the requested
           workspace (or any accessible workspace).
+        heading: list-ai-agent-users
       - content: Returns per-user/per-workspace/per-agentType config overrides. Filter
           by userId (required), workspaceId (optional), agentType (optional).
           The caller can only read configs whose userId is themselves OR an
           agent user whose parentAgentId == caller.
+        heading: list-agent_configs-rows
       - content: Posts a system-prompt-overridden message into the channel and
           dispatches the AI to respond. Used by skill triggers and proactive
           entry points.
+        heading: trigger-an-ai-response-in-a-channel
       - content: Resolves-or-creates the Discord-bound channel, records the inbound
           message, runs ONE Intelligence Service orchestrator turn via streaming
           accumulation (external actions stay proposal-gated), and returns the
           agent's reply text synchronously. On pod deadline, returns
           partial:true with steps collected so far.
+        heading: run-one-orchestrator-turn-for-an-inbound-discord-message
 ---
 
 export default function Layout(props) {

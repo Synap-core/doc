@@ -13,40 +13,89 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/discord
-  toc: []
+  toc:
+    - depth: 2
+      title: Record an inbound Discord message (no IS turn)
+      url: '#record-an-inbound-discord-message-no-is-turn'
+    - depth: 2
+      title: Run one orchestrator turn for an inbound Discord message
+      url: '#run-one-orchestrator-turn-for-an-inbound-discord-message'
+    - depth: 2
+      title: Run the Gmail mail feed now (on-demand)
+      url: '#run-the-gmail-mail-feed-now-on-demand'
+    - depth: 2
+      title: Migrate existing UNBOUND bridge channels to pod-wide (dry-run by default)
+      url: '#migrate-existing-unbound-bridge-channels-to-pod-wide-dry-run-by-default'
+    - depth: 2
+      title: Run the Google Calendar event sync now (on-demand)
+      url: '#run-the-google-calendar-event-sync-now-on-demand'
+    - depth: 2
+      title: Resolve an existing Discord→Synap identity link (read-only)
+      url: '#resolve-an-existing-discordsynap-identity-link-read-only'
+    - depth: 2
+      title: List linkable members of the acting workspace
+      url: '#list-linkable-members-of-the-acting-workspace'
+    - depth: 2
+      title: Link a Discord user to a Synap identity (admin-gated)
+      url: '#link-a-discord-user-to-a-synap-identity-admin-gated'
   structuredData:
-    headings: []
+    headings:
+      - content: Record an inbound Discord message (no IS turn)
+        id: record-an-inbound-discord-message-no-is-turn
+      - content: Run one orchestrator turn for an inbound Discord message
+        id: run-one-orchestrator-turn-for-an-inbound-discord-message
+      - content: Run the Gmail mail feed now (on-demand)
+        id: run-the-gmail-mail-feed-now-on-demand
+      - content: Migrate existing UNBOUND bridge channels to pod-wide (dry-run by
+          default)
+        id: migrate-existing-unbound-bridge-channels-to-pod-wide-dry-run-by-default
+      - content: Run the Google Calendar event sync now (on-demand)
+        id: run-the-google-calendar-event-sync-now-on-demand
+      - content: Resolve an existing Discord→Synap identity link (read-only)
+        id: resolve-an-existing-discordsynap-identity-link-read-only
+      - content: List linkable members of the acting workspace
+        id: list-linkable-members-of-the-acting-workspace
+      - content: Link a Discord user to a Synap identity (admin-gated)
+        id: link-a-discord-user-to-a-synap-identity-admin-gated
     contents:
       - content: Dedup-records the inbound message and fires external_message.received.
           Does NOT dispatch the orchestrator. Use this for pure automation
           pipelines where no AI reply is needed.
+        heading: record-an-inbound-discord-message-no-is-turn
       - content: Resolves-or-creates the Discord-bound channel, records the inbound
           message, runs ONE Intelligence Service orchestrator turn via streaming
           accumulation (external actions stay proposal-gated), and returns the
           agent's reply text synchronously. On pod deadline, returns
           partial:true with steps collected so far.
+        heading: run-one-orchestrator-turn-for-an-inbound-discord-message
       - content: Invokes the mail-feed runner in-process (gmail_search → triage → post
           into the Discord-bound channel) and returns the run summary. No-ops
           when the Discord tool's mailFeed is disabled. Idempotent via the
           watermark.
+        heading: run-the-gmail-mail-feed-now-on-demand
       - content: Flips workspace-pinned, UNBOUND bridge channels (external_source in
           discord/telegram, no context binding) to pod-wide (workspace_id NULL,
           scope 'pod') for the acting user. Dry-run unless `apply:true`.
           Client-BOUND channels are intentionally excluded (client-isolation
           firewall). Idempotent.
+        heading: migrate-existing-unbound-bridge-channels-to-pod-wide-dry-run-by-default
       - content: Invokes the event-sync runner in-process (event entities + stellar
           deadlines + calendar_list → native Discord scheduled events) and
           returns the run summary. No-ops when the Discord tool's eventSync is
           disabled. Idempotent via the dedup map.
+        heading: run-the-google-calendar-event-sync-now-on-demand
       - content: Returns whether the given Discord user is linked to a Synap user under
           the calling operator key. NEVER auto-creates a link.
+        heading: resolve-an-existing-discordsynap-identity-link-read-only
       - content: Returns the human members of the acting (operator) workspace that a
           Discord user can be linked to via the onboarding picker.
+        heading: list-linkable-members-of-the-acting-workspace
       - content: Creates the Discord→Synap mapping. mode='existing' maps onto an
           existing workspace member (impersonation — admin-only). mode='new'
           provisions a fresh Synap user + team membership (account creation —
           admin-only). Authorized by the acting context's workspace role
           (owner/admin), never a caller-supplied flag.
+        heading: link-a-discord-user-to-a-synap-identity-admin-gated
 ---
 
 export default function Layout(props) {

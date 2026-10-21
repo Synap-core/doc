@@ -13,9 +13,81 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/capabilities
-  toc: []
+  toc:
+    - depth: 2
+      title: List the capability read-model (verb × grant × approval matrix)
+      url: '#list-the-capability-read-model-verb--grant--approval-matrix'
+    - depth: 2
+      title: List capability CONTAINERS (named bundles) the agent can discover
+      url: '#list-capability-containers-named-bundles-the-agent-can-discover'
+    - depth: 2
+      title: Apply a capability template
+      url: '#apply-a-capability-template'
+    - depth: 2
+      title: Reconcile installed capabilities to their Control-Plane templates
+      url: '#reconcile-installed-capabilities-to-their-control-plane-templates'
+    - depth: 2
+      title: Reconcile standalone-installed views/skills/automations to their
+        templates
+      url: '#reconcile-standalone-installed-viewsskillsautomations-to-their-templates'
+    - depth: 2
+      title: Detach a view/skill/automation from its marketplace template
+      url: '#detach-a-viewskillautomation-from-its-marketplace-template'
+    - depth: 2
+      title: Delete a capability container by id (member parts untouched)
+      url: '#delete-a-capability-container-by-id-member-parts-untouched'
+    - depth: 2
+      title: Pack-grouped, status-computed capability catalog (one row per pack)
+      url: '#pack-grouped-status-computed-capability-catalog-one-row-per-pack'
+    - depth: 2
+      title: List only actions an external AI can execute now
+      url: '#list-only-actions-an-external-ai-can-execute-now'
+    - depth: 2
+      title: Execute a registered capability (agnostic capability launcher)
+      url: '#execute-a-registered-capability-agnostic-capability-launcher'
+    - depth: 2
+      title: List a capability's credentials
+      url: '#list-a-capabilitys-credentials'
+    - depth: 2
+      title: Add a credential to a capability
+      url: '#add-a-credential-to-a-capability'
+    - depth: 2
+      title: Update a capability credential
+      url: '#update-a-capability-credential'
+    - depth: 2
+      title: Remove a capability credential
+      url: '#remove-a-capability-credential'
   structuredData:
-    headings: []
+    headings:
+      - content: List the capability read-model (verb × grant × approval matrix)
+        id: list-the-capability-read-model-verb--grant--approval-matrix
+      - content: List capability CONTAINERS (named bundles) the agent can discover
+        id: list-capability-containers-named-bundles-the-agent-can-discover
+      - content: Apply a capability template
+        id: apply-a-capability-template
+      - content: Reconcile installed capabilities to their Control-Plane templates
+        id: reconcile-installed-capabilities-to-their-control-plane-templates
+      - content: Reconcile standalone-installed views/skills/automations to their
+          templates
+        id: reconcile-standalone-installed-viewsskillsautomations-to-their-templates
+      - content: Detach a view/skill/automation from its marketplace template
+        id: detach-a-viewskillautomation-from-its-marketplace-template
+      - content: Delete a capability container by id (member parts untouched)
+        id: delete-a-capability-container-by-id-member-parts-untouched
+      - content: Pack-grouped, status-computed capability catalog (one row per pack)
+        id: pack-grouped-status-computed-capability-catalog-one-row-per-pack
+      - content: List only actions an external AI can execute now
+        id: list-only-actions-an-external-ai-can-execute-now
+      - content: Execute a registered capability (agnostic capability launcher)
+        id: execute-a-registered-capability-agnostic-capability-launcher
+      - content: List a capability's credentials
+        id: list-a-capabilitys-credentials
+      - content: Add a credential to a capability
+        id: add-a-credential-to-a-capability
+      - content: Update a capability credential
+        id: update-a-capability-credential
+      - content: Remove a capability credential
+        id: remove-a-capability-credential
     contents:
       - content: 'Returns the unified `Capability[]` read-model for a workspace
           (pod-wide + the given workspace): tools + skills + commands, each with
@@ -31,6 +103,7 @@ _openapi:
           routing intent — applied AFTER the pod-wide merge, so a capability
           visible through two workspaces is judged once. A verb declaring no
           intent never matches.'
+        heading: list-the-capability-read-model-verb--grant--approval-matrix
       - content: Returns the capability containers visible in a workspace (pod-wide +
           the given workspace). Each container is a named bundle of parts —
           Connections (tools), Skills, and Built-ins — grouped via the `links`
@@ -51,27 +124,32 @@ _openapi:
           capability REGISTRY and mapped back through each brick's
           `containerId`. A container whose members declare no intent never
           matches.
+        heading: list-capability-containers-named-bundles-the-agent-can-discover
       - content: Instantiates a set of {vault secrets · tools · skills} from a config
           descriptor (inline `definition` or a seed `templateKey`) + `params`.
           `{{param}}` placeholders are interpolated; each tool/skill is created
           through the governed routers (proposal-gated — proposal ids are
           surfaced in `proposals`). Requires hub-protocol.write scope.
+        heading: apply-a-capability-template
       - content: Re-projects drifted capability-template skills
           (providerSpec/parameters/code/description) onto their installed
           containers through the governed `createCapabilityFromDefinition`
           applier — add-only, never touches a skill the template doesn't
           declare. `dryRun:true` computes the report without writing. Requires
           hub-protocol.write scope.
+        heading: reconcile-installed-capabilities-to-their-control-plane-templates
       - content: Advances each standalone-installed view/skill/automation's untouched
           fields to its source marketplace template through the governed
           per-kind `.update` door. A user-edited field is owner-owned — left
           alone and reported. A private/unsynced package is skipped.
           `dryRun:true` computes the report without writing. Requires
           hub-protocol.write scope.
+        heading: reconcile-standalone-installed-viewsskillsautomations-to-their-templates
       - content: Clears the `marketSource` source-link on a standalone-installed
           view/skill/automation so a future template change no longer reconciles
           onto it. Persisted through the governed per-kind `.update` door.
           Requires hub-protocol.write scope.
+        heading: detach-a-viewskillautomation-from-its-marketplace-template
       - content: 'Returns ONE `CapabilityCard` per capability PACK: each installed
           container (member tools folded into `connection`, member skills into
           `verbs`) plus each available template not yet installed. Every card
@@ -80,6 +158,7 @@ _openapi:
           De-duped by pack identity (the container/template name) so duplicate
           bare tools/skills collapse under their pack. Requires
           hub-protocol.read scope and a `workspaceId` query param.'
+        heading: pack-grouped-status-computed-capability-catalog-one-row-per-pack
       - content: Projects the shared capability registry into executable actions. Draft,
           disconnected, teaching-only, and catalog-only entries are omitted.
           Each action carries its real parameter schema, connection state,
@@ -89,21 +168,27 @@ _openapi:
           vendor-independent way to ask "what can send a message?". A verb that
           declares no intent is never matched (the vocabulary is closed; absence
           is never guessed).
+        heading: list-only-actions-an-external-ai-can-execute-now
       - content: Resolves a capability verb (verbId = backing skill name) or a skillId
           to its skill, runs it through gateCapabilityExecution, and on `run`
           delegates to the IS sandbox executor. Returns 200 with the result (or
           a dry-run preview), 202 with a reviewable proposal when governance
           requires approval, 403 when denied. Requires hub-protocol.write scope.
+        heading: execute-a-registered-capability-agnostic-capability-launcher
       - content: Returns metadata for the capability's credentials (vault rows carrying
           capability_id). NEVER returns secret values. Owner-scoped. Requires
           hub-protocol.read.
+        heading: list-a-capabilitys-credentials
       - content: Server-encrypts and stores a new credential (secrets row) for the
           capability. Promotes it to default when requested or when it is the
           capability's first credential. Requires hub-protocol.write.
+        heading: add-a-credential-to-a-capability
       - content: Updates credential fields; rotates (re-encrypts) when `value` is given;
           enforces a single default. Requires hub-protocol.write.
+        heading: update-a-capability-credential
       - content: Soft-deletes a credential; promotes the oldest remaining credential to
           default when the removed one was default. Requires hub-protocol.write.
+        heading: remove-a-capability-credential
 ---
 
 export default function Layout(props) {

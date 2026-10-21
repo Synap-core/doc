@@ -13,20 +13,32 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/auth
-  toc: []
+  toc:
+    - depth: 2
+      title: Introspect the calling bearer credential
+      url: '#introspect-the-calling-bearer-credential'
+    - depth: 2
+      title: Why the presented key does or does not work (holder only)
+      url: '#why-the-presented-key-does-or-does-not-work-holder-only'
   structuredData:
-    headings: []
+    headings:
+      - content: Introspect the calling bearer credential
+        id: introspect-the-calling-bearer-credential
+      - content: Why the presented key does or does not work (holder only)
+        id: why-the-presented-key-does-or-does-not-work-holder-only
     contents:
       - content: Returns metadata about the API key that authenticated this request —
           id, owning user, scopes, expiry, last-used-at. Used by Eve CLI and
           external operators to verify their credential without making
           privileged calls. Returns 401 if no valid bearer was supplied.
+        heading: introspect-the-calling-bearer-credential
       - content: 'Answers the HOLDER of the bearer key — valid or not — with its state:
           `active`, `awaiting_approval` (+ the approval page), `revoked` (+
           when, why, and when/where a replacing connection was created),
           `expired`, or `unknown` for a secret this pod never issued. Looked up
           by the secret only; reveals nothing about any key the caller does not
           hold.'
+        heading: why-the-presented-key-does-or-does-not-work-holder-only
 ---
 
 export default function Layout(props) {

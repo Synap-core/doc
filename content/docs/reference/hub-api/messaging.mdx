@@ -13,9 +13,94 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/messaging
-  toc: []
+  toc:
+    - depth: 2
+      title: Land a provider-agnostic inbound message into the pod
+      url: '#land-a-provider-agnostic-inbound-message-into-the-pod'
+    - depth: 2
+      title: List connected messaging accounts for the current user
+      url: '#list-connected-messaging-accounts-for-the-current-user'
+    - depth: 2
+      title: Get hosted auth URL for connecting a new account
+      url: '#get-hosted-auth-url-for-connecting-a-new-account'
+    - depth: 2
+      title: Sync live accounts from the connector into the database
+      url: '#sync-live-accounts-from-the-connector-into-the-database'
+    - depth: 2
+      title: Get current messaging connector config state (masked)
+      url: '#get-current-messaging-connector-config-state-masked'
+    - depth: 2
+      title: Store Unipile connector credentials in the vault
+      url: '#store-unipile-connector-credentials-in-the-vault'
+    - depth: 2
+      title: Migrate workspace settings messaging credentials to vault
+      url: '#migrate-workspace-settings-messaging-credentials-to-vault'
+    - depth: 2
+      title: Disconnect a messaging account
+      url: '#disconnect-a-messaging-account'
+    - depth: 2
+      title: List conversations — entity-linked or browse mode
+      url: '#list-conversations--entity-linked-or-browse-mode'
+    - depth: 2
+      title: Track or link an external conversation thread
+      url: '#track-or-link-an-external-conversation-thread'
+    - depth: 2
+      title: Unlink an external conversation from a CRM entity
+      url: '#unlink-an-external-conversation-from-a-crm-entity'
+    - depth: 2
+      title: Clear unread flag for a linked channel
+      url: '#clear-unread-flag-for-a-linked-channel'
+    - depth: 2
+      title: All unread conversations linked to entities
+      url: '#all-unread-conversations-linked-to-entities'
+    - depth: 2
+      title: Get messages in a conversation thread
+      url: '#get-messages-in-a-conversation-thread'
+    - depth: 2
+      title: Import a conversation thread into the pod as a governed proposal
+      url: '#import-a-conversation-thread-into-the-pod-as-a-governed-proposal'
+    - depth: 2
+      title: Send a message in a conversation thread
+      url: '#send-a-message-in-a-conversation-thread'
+    - depth: 2
+      title: List all external channels (DB-backed inbox)
+      url: '#list-all-external-channels-db-backed-inbox'
   structuredData:
-    headings: []
+    headings:
+      - content: Land a provider-agnostic inbound message into the pod
+        id: land-a-provider-agnostic-inbound-message-into-the-pod
+      - content: List connected messaging accounts for the current user
+        id: list-connected-messaging-accounts-for-the-current-user
+      - content: Get hosted auth URL for connecting a new account
+        id: get-hosted-auth-url-for-connecting-a-new-account
+      - content: Sync live accounts from the connector into the database
+        id: sync-live-accounts-from-the-connector-into-the-database
+      - content: Get current messaging connector config state (masked)
+        id: get-current-messaging-connector-config-state-masked
+      - content: Store Unipile connector credentials in the vault
+        id: store-unipile-connector-credentials-in-the-vault
+      - content: Migrate workspace settings messaging credentials to vault
+        id: migrate-workspace-settings-messaging-credentials-to-vault
+      - content: Disconnect a messaging account
+        id: disconnect-a-messaging-account
+      - content: List conversations — entity-linked or browse mode
+        id: list-conversations--entity-linked-or-browse-mode
+      - content: Track or link an external conversation thread
+        id: track-or-link-an-external-conversation-thread
+      - content: Unlink an external conversation from a CRM entity
+        id: unlink-an-external-conversation-from-a-crm-entity
+      - content: Clear unread flag for a linked channel
+        id: clear-unread-flag-for-a-linked-channel
+      - content: All unread conversations linked to entities
+        id: all-unread-conversations-linked-to-entities
+      - content: Get messages in a conversation thread
+        id: get-messages-in-a-conversation-thread
+      - content: Import a conversation thread into the pod as a governed proposal
+        id: import-a-conversation-thread-into-the-pod-as-a-governed-proposal
+      - content: Send a message in a conversation thread
+        id: send-a-message-in-a-conversation-thread
+      - content: List all external channels (DB-backed inbox)
+        id: list-all-external-channels-db-backed-inbox
     contents:
       - content: Provider-agnostic inbound sensor door. Resolves-or-creates the EXTERNAL
           channel and dedup-records the inbound message (folding a subject line
@@ -23,6 +108,7 @@ _openapi:
           when no externalId is given), then fires external_message.received.
           NON-governed (a sensor write). Used by external bridges (Discord,
           Proton, …).
+        heading: land-a-provider-agnostic-inbound-message-into-the-pod
 ---
 
 export default function Layout(props) {

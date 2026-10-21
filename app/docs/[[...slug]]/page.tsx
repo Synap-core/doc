@@ -15,6 +15,7 @@ import { getPublicMarkdownUrl, gitConfig } from '@/lib/shared';
 import { openapi } from '@/lib/openapi';
 import { OpenAPIPage } from '@/components/api-page';
 import type { Metadata } from 'next';
+import type { TOCItemType } from 'fumadocs-core/toc';
 
 /** YAML turns 2026-10-20 into a Date before the schema sees it; show it as written. */
 function formatReviewed(value: unknown): string | null {
@@ -48,9 +49,16 @@ export default async function Page({ params }: Props) {
   const MDX = data.body;
   const reviewed = formatReviewed(data.last_reviewed);
   const markdownUrl = getPublicMarkdownUrl(page);
+  // A generated Hub REST API page has no Markdown headings: its operations' table of contents is in its frontmatter.
+  // `full` pages hide "On this page" by default; these list up to dozens of operations, so keep it.
+  const openapiToc = data._openapi?.toc as TOCItemType[] | undefined;
 
   return (
-    <DocsPage toc={data.toc} full={data.full}>
+    <DocsPage
+      toc={openapiToc ?? data.toc}
+      full={data.full}
+      tableOfContent={openapiToc?.length ? { enabled: true } : undefined}
+    >
       <DocsTitle>{data.title}</DocsTitle>
       <DocsDescription className="mb-0">{data.description}</DocsDescription>
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Page metadata">

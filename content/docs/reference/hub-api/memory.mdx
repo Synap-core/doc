@@ -13,19 +13,59 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/memory
-  toc: []
+  toc:
+    - depth: 2
+      title: Full-text search facts
+      url: '#full-text-search-facts'
+    - depth: 2
+      title: Save a memory fact
+      url: '#save-a-memory-fact'
+    - depth: 2
+      title: Semantic search facts by embedding
+      url: '#semantic-search-facts-by-embedding'
+    - depth: 2
+      title: Delete a fact
+      url: '#delete-a-fact'
+    - depth: 2
+      title: Store grouped chat turns
+      url: '#store-grouped-chat-turns'
+    - depth: 2
+      title: Store session metadata
+      url: '#store-session-metadata'
+    - depth: 2
+      title: Batch structured writes
+      url: '#batch-structured-writes'
   structuredData:
-    headings: []
+    headings:
+      - content: Full-text search facts
+        id: full-text-search-facts
+      - content: Save a memory fact
+        id: save-a-memory-fact
+      - content: Semantic search facts by embedding
+        id: semantic-search-facts-by-embedding
+      - content: Delete a fact
+        id: delete-a-fact
+      - content: Store grouped chat turns
+        id: store-grouped-chat-turns
+      - content: Store session metadata
+        id: store-session-metadata
+      - content: Batch structured writes
+        id: batch-structured-writes
     contents:
       - content: Stores a user-scoped episodic fact. The embedding is optional — when
           omitted, a zero vector is used so agents without embedding access can
           still write facts. Supports `Idempotency-Key`.
+        heading: save-a-memory-fact
       - content: Requires pgvector — disabled on shared pods.
+        heading: semantic-search-facts-by-embedding
       - content: Stores user/assistant/system turns grouped by sessionId. Each turn is
           persisted as a tagged fact for semantic retrieval plus a summary fact.
+        heading: store-grouped-chat-turns
       - content: Stores session metadata as a high-confidence fact for list/dedup
           purposes.
+        heading: store-session-metadata
       - content: Batch write of structured memory entries (remember/update/forget).
+        heading: batch-structured-writes
 ---
 
 export default function Layout(props) {

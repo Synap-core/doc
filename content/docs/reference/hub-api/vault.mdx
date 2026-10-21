@@ -13,27 +13,63 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/vault
-  toc: []
+  toc:
+    - depth: 2
+      title: Request a secret from the Vault
+      url: '#request-a-secret-from-the-vault'
+    - depth: 2
+      title: Poll a vault access request outcome
+      url: '#poll-a-vault-access-request-outcome'
+    - depth: 2
+      title: Redeem a granted vault reference to its value
+      url: '#redeem-a-granted-vault-reference-to-its-value'
+    - depth: 2
+      title: List credential metadata
+      url: '#list-credential-metadata'
+    - depth: 2
+      title: Store a credential in the Vault
+      url: '#store-a-credential-in-the-vault'
+    - depth: 2
+      title: Soft-delete a credential
+      url: '#soft-delete-a-credential'
   structuredData:
-    headings: []
+    headings:
+      - content: Request a secret from the Vault
+        id: request-a-secret-from-the-vault
+      - content: Poll a vault access request outcome
+        id: poll-a-vault-access-request-outcome
+      - content: Redeem a granted vault reference to its value
+        id: redeem-a-granted-vault-reference-to-its-value
+      - content: List credential metadata
+        id: list-credential-metadata
+      - content: Store a credential in the Vault
+        id: store-a-credential-in-the-vault
+      - content: Soft-delete a credential
+        id: soft-delete-a-credential
     contents:
       - content: AI requests access to a vault secret — creates a pending proposal and
           emits an urgent notification for user approval.
+        heading: request-a-secret-from-the-vault
       - content: Returns the proposal status (pending/approved/rejected) and, once
           approved, the vault:// reference granted by the user.
+        heading: poll-a-vault-access-request-outcome
       - content: Resolves a vault:// reference the authenticated agent has an active
           grant for, consuming one grant use. 403 if no redeemable grant exists
           for this principal.
+        heading: redeem-a-granted-vault-reference-to-its-value
       - content: Returns metadata for secrets owned by the acting user in scope. NEVER
           returns decrypted values — reading a value requires the request →
           proposal → grant flow.
+        heading: list-credential-metadata
       - content: Server-encrypts and stores a secret owned by the resolved acting user.
           Writes a secret_audit_log row recording the agent actor. Does NOT
           return the value.
+        heading: store-a-credential-in-the-vault
       - content: Soft-deletes a vault secret (sets deletedAt/deletedBy). Write-gated on
           the secret's own workspace (editor+) or its owner for a pod-wide
           secret. Never hard-deletes — grants and audit rows reference it.
           Requires hub-protocol.write.
+        heading: soft-delete-a-credential
 ---
 
 export default function Layout(props) {

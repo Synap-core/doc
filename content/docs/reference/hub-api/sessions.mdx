@@ -13,17 +13,70 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/sessions
-  toc: []
+  toc:
+    - depth: 2
+      title: Get or create a session for a channel
+      url: '#get-or-create-a-session-for-a-channel'
+    - depth: 2
+      title: Get the active session for a channel
+      url: '#get-the-active-session-for-a-channel'
+    - depth: 2
+      title: Get a session by id
+      url: '#get-a-session-by-id'
+    - depth: 2
+      title: Update a session
+      url: '#update-a-session'
+    - depth: 2
+      title: List sessions for a channel
+      url: '#list-sessions-for-a-channel'
+    - depth: 2
+      title: Close a session
+      url: '#close-a-session'
+    - depth: 2
+      title: List compacted states for a channel
+      url: '#list-compacted-states-for-a-channel'
+    - depth: 2
+      title: Create a compacted state
+      url: '#create-a-compacted-state'
+    - depth: 2
+      title: Get the latest compacted state for a channel
+      url: '#get-the-latest-compacted-state-for-a-channel'
+    - depth: 2
+      title: Get a compacted state by id
+      url: '#get-a-compacted-state-by-id'
   structuredData:
-    headings: []
+    headings:
+      - content: Get or create a session for a channel
+        id: get-or-create-a-session-for-a-channel
+      - content: Get the active session for a channel
+        id: get-the-active-session-for-a-channel
+      - content: Get a session by id
+        id: get-a-session-by-id
+      - content: Update a session
+        id: update-a-session
+      - content: List sessions for a channel
+        id: list-sessions-for-a-channel
+      - content: Close a session
+        id: close-a-session
+      - content: List compacted states for a channel
+        id: list-compacted-states-for-a-channel
+      - content: Create a compacted state
+        id: create-a-compacted-state
+      - content: Get the latest compacted state for a channel
+        id: get-the-latest-compacted-state-for-a-channel
+      - content: Get a compacted state by id
+        id: get-a-compacted-state-by-id
     contents:
       - content: Returns the active session for the channel or creates one. Sessions are
           scoped to a chat/channel; supports a `bootstrapStateId` to start from
           a compacted state.
+        heading: get-or-create-a-session-for-a-channel
       - content: Closes a session and optionally records the produced compacted-state
           id.
+        heading: close-a-session
       - content: Persists a summarized state snapshot for a channel. Used to bootstrap
           subsequent sessions cheaply.
+        heading: create-a-compacted-state
 ---
 
 export default function Layout(props) {

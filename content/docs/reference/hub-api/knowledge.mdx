@@ -13,30 +13,88 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/knowledge
-  toc: []
+  toc:
+    - depth: 2
+      title: List knowledge entries
+      url: '#list-knowledge-entries'
+    - depth: 2
+      title: Create a knowledge entry
+      url: '#create-a-knowledge-entry'
+    - depth: 2
+      title: Full-text search knowledge entries
+      url: '#full-text-search-knowledge-entries'
+    - depth: 2
+      title: Retrieval — route a query across knowledge substrates
+      url: '#retrieval--route-a-query-across-knowledge-substrates'
+    - depth: 2
+      title: Get a knowledge entry by key
+      url: '#get-a-knowledge-entry-by-key'
+    - depth: 2
+      title: Archive (soft-delete) a knowledge entry
+      url: '#archive-soft-delete-a-knowledge-entry'
+    - depth: 2
+      title: Upsert a knowledge entry
+      url: '#upsert-a-knowledge-entry'
+    - depth: 2
+      title: BFS traversal of the entity graph
+      url: '#bfs-traversal-of-the-entity-graph'
+    - depth: 2
+      title: DEPRECATED alias of /knowledge/search — raw retrieval door
+      url: '#deprecated-alias-of-knowledgesearch--raw-retrieval-door'
+    - depth: 2
+      title: Synthesized knowledge answer — retrieve + synthesize
+      url: '#synthesized-knowledge-answer--retrieve--synthesize'
   structuredData:
-    headings: []
+    headings:
+      - content: List knowledge entries
+        id: list-knowledge-entries
+      - content: Create a knowledge entry
+        id: create-a-knowledge-entry
+      - content: Full-text search knowledge entries
+        id: full-text-search-knowledge-entries
+      - content: Retrieval — route a query across knowledge substrates
+        id: retrieval--route-a-query-across-knowledge-substrates
+      - content: Get a knowledge entry by key
+        id: get-a-knowledge-entry-by-key
+      - content: Archive (soft-delete) a knowledge entry
+        id: archive-soft-delete-a-knowledge-entry
+      - content: Upsert a knowledge entry
+        id: upsert-a-knowledge-entry
+      - content: BFS traversal of the entity graph
+        id: bfs-traversal-of-the-entity-graph
+      - content: DEPRECATED alias of /knowledge/search — raw retrieval door
+        id: deprecated-alias-of-knowledgesearch--raw-retrieval-door
+      - content: Synthesized knowledge answer — retrieve + synthesize
+        id: synthesized-knowledge-answer--retrieve--synthesize
     contents:
       - content: Pod-wide procedural docs addressed by string key. When workspaceId is
           omitted, scopes to the authenticated user's namespace.
+        heading: list-knowledge-entries
       - content: Supports `Idempotency-Key`.
+        heading: create-a-knowledge-entry
       - content: DEPRECATED — prefer POST /knowledge/ask, whose procedural lane calls
           the exact same searchFullText. Still functional for existing
           integrations.
+        heading: full-text-search-knowledge-entries
       - content: Routes a natural-language query to the right knowledge substrate(s) —
           semantic (typed entities), procedural (how-to docs), episodic
           (captures) — and returns raw matches tagged with which substrate(s)
           answered. For a synthesized human-readable answer use POST
           /knowledge/answer instead.
+        heading: retrieval--route-a-query-across-knowledge-substrates
       - content: Supports `Idempotency-Key`.
+        heading: upsert-a-knowledge-entry
       - content: maxDepth is clamped to 3.
+        heading: bfs-traversal-of-the-entity-graph
       - content: DEPRECATED alias of POST /knowledge/search; retained for back-compat.
           Runs the exact same retrieval handler. Prefer POST /knowledge/search
           (retrieval) or POST /knowledge/answer (synthesized).
+        heading: deprecated-alias-of-knowledgesearch--raw-retrieval-door
       - content: Retrieves matches via the unified knowledge router, then synthesizes a
           single concise answer over that context with one focused LLM call.
           Returns the answer plus the sources it drew from; answer is null when
           synthesis is unavailable (callers fall back to the sources list).
+        heading: synthesized-knowledge-answer--retrieve--synthesize
 ---
 
 export default function Layout(props) {

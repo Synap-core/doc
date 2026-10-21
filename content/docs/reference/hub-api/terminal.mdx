@@ -13,12 +13,18 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/terminal
-  toc: []
+  toc:
+    - depth: 2
+      title: Read pod service logs
+      url: '#read-pod-service-logs'
   structuredData:
-    headings: []
+    headings:
+      - content: Read pod service logs
+        id: read-pod-service-logs
     contents:
       - content: Read-only docker logs / journalctl for an allowlisted set of services
           (api, intelligence, realtime, postgres, typesense). Auto-approved.
+        heading: read-pod-service-logs
 ---
 
 export default function Layout(props) {

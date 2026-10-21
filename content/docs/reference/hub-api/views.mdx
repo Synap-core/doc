@@ -13,16 +13,40 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/views
-  toc: []
+  toc:
+    - depth: 2
+      title: List views
+      url: '#list-views'
+    - depth: 2
+      title: Create a view
+      url: '#create-a-view'
+    - depth: 2
+      title: Update a view
+      url: '#update-a-view'
+    - depth: 2
+      title: Reorder/arrange widgets in a bento view
+      url: '#reorderarrange-widgets-in-a-bento-view'
   structuredData:
-    headings: []
+    headings:
+      - content: List views
+        id: list-views
+      - content: Create a view
+        id: create-a-view
+      - content: Update a view
+        id: update-a-view
+      - content: Reorder/arrange widgets in a bento view
+        id: reorderarrange-widgets-in-a-bento-view
     contents:
       - content: Returns the user's views in a workspace, optionally filtered by view
           type or profile.
+        heading: list-views
       - content: Creates a view (table, kanban, bento, etc.) over the entity store.
+        heading: create-a-view
       - content: Patch view name, config, or metadata.
+        heading: update-a-view
       - content: Replaces the widget arrangement for a bento-type view. Widget IDs must
           reference existing cell instances in the view.
+        heading: reorderarrange-widgets-in-a-bento-view
 ---
 
 export default function Layout(props) {

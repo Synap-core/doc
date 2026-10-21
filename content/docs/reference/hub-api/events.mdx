@@ -13,18 +13,30 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/events
-  toc: []
+  toc:
+    - depth: 2
+      title: List recent events for a user
+      url: '#list-recent-events-for-a-user'
+    - depth: 2
+      title: SSE stream of new events
+      url: '#sse-stream-of-new-events'
   structuredData:
-    headings: []
+    headings:
+      - content: List recent events for a user
+        id: list-recent-events-for-a-user
+      - content: SSE stream of new events
+        id: sse-stream-of-new-events
     contents:
       - content: 'Returns events from the event log filtered by type/subject/window, and
           optionally by producer: `agentUserId` (everything one agent did),
           `isAgent` (agent- vs human-produced) and `correlationId` (one request
           chain). Default window is 7 days; default limit is 50, hard-capped at
           200.'
+        heading: list-recent-events-for-a-user
       - content: Long-lived Server-Sent Events stream. Emits `event` and `heartbeat`
           frames. Consumers must dedupe by event id (at-least-once across
           catch-up).
+        heading: sse-stream-of-new-events
 ---
 
 export default function Layout(props) {

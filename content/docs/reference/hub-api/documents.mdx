@@ -13,9 +13,39 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/documents
-  toc: []
+  toc:
+    - depth: 2
+      title: Create a document
+      url: '#create-a-document'
+    - depth: 2
+      title: Fetch a document
+      url: '#fetch-a-document'
+    - depth: 2
+      title: Replace a document's content (alias of the patch door)
+      url: '#replace-a-documents-content-alias-of-the-patch-door'
+    - depth: 2
+      title: Replace a document's content (alias of the patch door)
+      url: '#replace-a-documents-content-alias-of-the-patch-door-1'
+    - depth: 2
+      title: Serve raw document content
+      url: '#serve-raw-document-content'
+    - depth: 2
+      title: Edit a document with ops
+      url: '#edit-a-document-with-ops'
   structuredData:
-    headings: []
+    headings:
+      - content: Create a document
+        id: create-a-document
+      - content: Fetch a document
+        id: fetch-a-document
+      - content: Replace a document's content (alias of the patch door)
+        id: replace-a-documents-content-alias-of-the-patch-door
+      - content: Replace a document's content (alias of the patch door)
+        id: replace-a-documents-content-alias-of-the-patch-door-1
+      - content: Serve raw document content
+        id: serve-raw-document-content
+      - content: Edit a document with ops
+        id: edit-a-document-with-ops
     contents:
       - content: "Replaces a document's content with `content` — one `replace_all` op
           through the document patch door (prefer POST
@@ -25,14 +55,17 @@ _openapi:
           or drop an embed (`allowRemovingEmbeds`). Pass `baseRevision` (GET →
           `revision`); without it the revision at filing is pinned. `content` is
           required; a `title` is refused with 400 (this route never renames)."
+        heading: replace-a-documents-content-alias-of-the-patch-door
       - content: "A full replacement — one `replace_all` op through the document patch
           door (see POST /documents/{documentId}/patch). Governed: an agent's
           full replacement is always a proposal, and it may not change a
           person's section or drop an embed."
+        heading: replace-a-documents-content-alias-of-the-patch-door-1
       - content: Returns the document's raw bytes with the correct Content-Type
           (text/html, text/markdown, application/pdf, etc.). Useful for iframes,
           CLI downloads, and external consumers. Requires hub-protocol.read
           scope. Pass userId as a query param.
+        heading: serve-raw-document-content
       - content: "THE document edit door. Ops, applied in order: `upsert_section
           {id,title,body}` (one `::::synap-section` block by id), `replace_text
           {old,new}` (`old` must match EXACTLY once — otherwise 400 with the
@@ -45,6 +78,7 @@ _openapi:
           response carries `preview` (per section, before/after) and
           `diagnostics` (advisory: what will not render — never a refusal;
           `null` + `diagnosticsError` when the check could not run)."
+        heading: edit-a-document-with-ops
 ---
 
 export default function Layout(props) {

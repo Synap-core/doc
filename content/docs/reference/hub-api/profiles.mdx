@@ -13,31 +13,67 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/profiles
-  toc: []
+  toc:
+    - depth: 2
+      title: List entity profiles
+      url: '#list-entity-profiles'
+    - depth: 2
+      title: Define a kind or a role
+      url: '#define-a-kind-or-a-role'
+    - depth: 2
+      title: List property definitions
+      url: '#list-property-definitions'
+    - depth: 2
+      title: Create a property definition
+      url: '#create-a-property-definition'
+    - depth: 2
+      title: Edit an existing property definition
+      url: '#edit-an-existing-property-definition'
+    - depth: 2
+      title: Get the effective renderer(s) for a profile
+      url: '#get-the-effective-renderers-for-a-profile'
   structuredData:
-    headings: []
+    headings:
+      - content: List entity profiles
+        id: list-entity-profiles
+      - content: Define a kind or a role
+        id: define-a-kind-or-a-role
+      - content: List property definitions
+        id: list-property-definitions
+      - content: Create a property definition
+        id: create-a-property-definition
+      - content: Edit an existing property definition
+        id: edit-an-existing-property-definition
+      - content: Get the effective renderer(s) for a profile
+        id: get-the-effective-renderers-for-a-profile
     contents:
       - content: Returns profiles visible to the user in the given workspace (system +
           workspace-scoped + extended).
+        heading: list-entity-profiles
       - content: "Defines an entity kind (`profileKind: 'kind'`, default) or an
           attachable role (`profileKind: 'role'`), optionally with `fields`.
           Slug-idempotent. Governed: an agent caller gets `status: 'proposed'`
           (fields deferred until approval) — that is success, not an error. Same
           door as MCP synap_define_kind / synap_define_role."
+        heading: define-a-kind-or-a-role
       - content: Returns property defs visible to the workspace (global + profile-base +
           this workspace's overlays).
+        heading: list-property-definitions
       - content: 'Adds a property def. Set `overlay: true` to create a workspace-scoped
           overlay invisible to other workspaces using the same profile.'
+        heading: create-a-property-definition
       - content: 'Changes a stored def''s slug / valueType / constraints / uiHints. This
           is the ONE edit door — `POST /property-defs` is slug-idempotent and
           never converges, so it reports `status: "unchanged"` and points here.
           Governed: an agent caller gets `status: ''proposed''` (that is
           success, not an error), because narrowing a def re-interprets every
           existing row of every profile that links it.'
+        heading: edit-an-existing-property-definition
       - content: 'Returns the RendererTarget resolved for the given profile in the given
           workspace. Resolution order: workspace overlay → profile system
           default → hardcoded fallback. Omit `contentKind` to receive all
           profile renderer kinds in one round trip.'
+        heading: get-the-effective-renderers-for-a-profile
 ---
 
 export default function Layout(props) {

@@ -13,18 +13,30 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/links
-  toc: []
+  toc:
+    - depth: 2
+      title: Read a node's links (neighbours in the config/runtime graph)
+      url: '#read-a-nodes-links-neighbours-in-the-configruntime-graph'
+    - depth: 2
+      title: Create a config/runtime link edge
+      url: '#create-a-configruntime-link-edge'
   structuredData:
-    headings: []
+    headings:
+      - content: Read a node's links (neighbours in the config/runtime graph)
+        id: read-a-nodes-links-neighbours-in-the-configruntime-graph
+      - content: Create a config/runtime link edge
+        id: create-a-configruntime-link-edge
     contents:
       - content: Returns every edge touching (type, id) — the REST mirror of the
           canonical getLinksFor reader. Lets any agent/app traverse the graph
           (tool↔vault, skill↔tool, session↔used→tool,
           playbook→grants→capability) uniformly. Scoped to the caller's visible
           workspaces.
+        heading: read-a-nodes-links-neighbours-in-the-configruntime-graph
       - content: Creates a typed edge in the config graph (`links`) — the mirror of
           `relations`. Can bridge entity DATA to config objects, e.g.
           entity(knowledge) --about--> tool. Gated by checkPermissionOrPropose.
+        heading: create-a-configruntime-link-edge
 ---
 
 export default function Layout(props) {

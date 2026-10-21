@@ -13,12 +13,18 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/proactive
-  toc: []
+  toc:
+    - depth: 2
+      title: Post a proactive message into the user's feed channel
+      url: '#post-a-proactive-message-into-the-users-feed-channel'
   structuredData:
-    headings: []
+    headings:
+      - content: Post a proactive message into the user's feed channel
+        id: post-a-proactive-message-into-the-users-feed-channel
     contents:
       - content: 'Rate-limited: max 3 messages/hour and 10/day per (user, workspace).
           Returns posted=false when rate-limited.'
+        heading: post-a-proactive-message-into-the-users-feed-channel
 ---
 
 export default function Layout(props) {

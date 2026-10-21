@@ -13,16 +13,38 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/import
-  toc: []
+  toc:
+    - depth: 2
+      title: Structure import items into a preview graph
+      url: '#structure-import-items-into-a-preview-graph'
+    - depth: 2
+      title: Materialize a previewed import graph
+      url: '#materialize-a-previewed-import-graph'
+    - depth: 2
+      title: Enqueue a large corpus import as a background job
+      url: '#enqueue-a-large-corpus-import-as-a-background-job'
+    - depth: 2
+      title: Poll a background corpus-import job
+      url: '#poll-a-background-corpus-import-job'
   structuredData:
-    headings: []
+    headings:
+      - content: Structure import items into a preview graph
+        id: structure-import-items-into-a-preview-graph
+      - content: Materialize a previewed import graph
+        id: materialize-a-previewed-import-graph
+      - content: Enqueue a large corpus import as a background job
+        id: enqueue-a-large-corpus-import-as-a-background-job
+      - content: Poll a background corpus-import job
+        id: poll-a-background-corpus-import-job
     contents:
       - content: AI/deterministic structure of markdown/obsidian/csv/bookmark items into
           composite operations + a governed import.graph proposal. Pair with
           POST /import/apply (proposalId is SSOT for ops).
+        heading: structure-import-items-into-a-preview-graph
       - content: Creates entities + relations from /import/analyze. When proposalId is
           set the stored proposal ops are SSOT (HITL); otherwise client
           operations (min 1) are required.
+        heading: materialize-a-previewed-import-graph
       - content: 'Background door onto ImportOrchestrator.analyzeLarge: enqueues the
           corpus on the `import-corpus` pg-boss queue and returns immediately
           with a jobId. The worker chunks the items (cross-chunk dedup
@@ -31,6 +53,7 @@ _openapi:
           /import/analyze calls racing the request timeout. Poll GET
           /import/corpus-job/{jobId}; on completion the result is the
           import.graph proposal in the review inbox.'
+        heading: enqueue-a-large-corpus-import-as-a-background-job
       - content: Returns the pg-boss state of a job created by POST
           /import/enqueue-corpus. Only the job's own submitter may read it.
           `completed` means the governed import.graph proposal has been written
@@ -39,6 +62,7 @@ _openapi:
           warn+blocker findings); it is null while the job is unfinished and on
           pods older than the worker that returns it — treat null as UNKNOWN,
           never as success.
+        heading: poll-a-background-corpus-import-job
 ---
 
 export default function Layout(props) {

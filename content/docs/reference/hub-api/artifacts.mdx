@@ -13,19 +13,37 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/artifacts
-  toc: []
+  toc:
+    - depth: 2
+      title: List artifacts visible to the caller
+      url: '#list-artifacts-visible-to-the-caller'
+    - depth: 2
+      title: Create an artifact
+      url: '#create-an-artifact'
+    - depth: 2
+      title: Update artifact state / placement
+      url: '#update-artifact-state--placement'
   structuredData:
-    headings: []
+    headings:
+      - content: List artifacts visible to the caller
+        id: list-artifacts-visible-to-the-caller
+      - content: Create an artifact
+        id: create-an-artifact
+      - content: Update artifact state / placement
+        id: update-artifact-state--placement
     contents:
       - content: Workspace rows follow membership; NULL-workspace (pod-personal) rows
           keep the caller's owner floor. `workspaceId` NARROWS the lens — omit
           it to list every artifact the caller can see, which is the only way to
           reach a pod-personal session's outputs.
+        heading: list-artifacts-visible-to-the-caller
       - content: "IS/agent creates an artifact. originKind defaults to 'agent' for
           hub-authenticated requests. Goes through the governance membrane — may
           return { status: 'proposed', proposalId } for agent callers."
+        heading: create-an-artifact
       - content: Loads the row by id, verifies the caller's workspace membership against
           the row's workspace, then gates through the governance membrane.
+        heading: update-artifact-state--placement
 ---
 
 export default function Layout(props) {

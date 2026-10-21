@@ -13,14 +13,52 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/skills
-  toc: []
+  toc:
+    - depth: 2
+      title: List system skill packages
+      url: '#list-system-skill-packages'
+    - depth: 2
+      title: Composed just-in-time teaching briefs for MCP tool names or action
+        verbIds
+      url: '#composed-just-in-time-teaching-briefs-for-mcp-tool-names-or-action-verbids'
+    - depth: 2
+      title: List skills
+      url: '#list-skills'
+    - depth: 2
+      title: Create a skill (capability substrate)
+      url: '#create-a-skill-capability-substrate'
+    - depth: 2
+      title: Approve or revoke a skill's execution
+      url: '#approve-or-revoke-a-skills-execution'
+    - depth: 2
+      title: Dry-run (preview) a skill to any level
+      url: '#dry-run-preview-a-skill-to-any-level'
+    - depth: 2
+      title: Delete a skill (capability substrate)
+      url: '#delete-a-skill-capability-substrate'
   structuredData:
-    headings: []
+    headings:
+      - content: List system skill packages
+        id: list-system-skill-packages
+      - content: Composed just-in-time teaching briefs for MCP tool names or action
+          verbIds
+        id: composed-just-in-time-teaching-briefs-for-mcp-tool-names-or-action-verbids
+      - content: List skills
+        id: list-skills
+      - content: Create a skill (capability substrate)
+        id: create-a-skill-capability-substrate
+      - content: Approve or revoke a skill's execution
+        id: approve-or-revoke-a-skills-execution
+      - content: Dry-run (preview) a skill to any level
+        id: dry-run-preview-a-skill-to-any-level
+      - content: Delete a skill (capability substrate)
+        id: delete-a-skill-capability-substrate
     contents:
       - content: Returns static SKILL.md documentation for the built-in skill packages
           listed in skills/manifest.json (baseline + workflow). Called by
           ensureEveSkillsLayout() to populate ~/.eve/skills/ for Claude Code and
           other text-based agents. Requires hub-protocol.read scope.
+        heading: list-system-skill-packages
       - content: 'Returns a composed teaching brief per requested name — teaching core
           (seeded system skills), a live governance verdict (auto/propose), and
           per-kind posture emphases. A name may be an MCP `synap_*` tool or a
@@ -29,8 +67,10 @@ _openapi:
           `workspaceId`, states its run posture (runs now / files a review).
           Names with no brief content are omitted. Requires hub-protocol.read
           scope.'
+        heading: composed-just-in-time-teaching-briefs-for-mcp-tool-names-or-action-verbids
       - content: Lists skills visible to the caller across the three-tier scope (pod ∪
           user-owned ∪ workspace). Requires hub-protocol.read scope.
+        heading: list-skills
       - content: "Seeds a `skills` row — AI know-how. Documentation (`body`) + OPTIONAL
           executable (`code`); `kind` is DERIVED from code presence, so
           prose-only is an 'instruction' skill and needs a `slug` (the ref
@@ -39,18 +79,22 @@ _openapi:
           status='proposed' with a proposalId when governance requires review.
           Optional `requires` writes `skill → requires → tool` links. Requires
           hub-protocol.write scope."
+        heading: create-a-skill-capability-substrate
       - content: Sets the `approved` flag on a skill — the draft→approve→run gate.
           Owner-gated (workspace owner, or pod-admin for pod-wide skills) via
           the governed skillsRouter.setApproved. Requires hub-protocol.write
           scope.
+        heading: approve-or-revoke-a-skills-execution
       - content: Executes a skill with external writes/sends STUBBED and reads kept
           real, returning the side effects it intended to perform — a safe
           preview before approval. Proxies to the Intelligence Service dry-run
           executor (it owns the sandbox); the acting identity is server-derived.
           Requires hub-protocol.write scope.
+        heading: dry-run-preview-a-skill-to-any-level
       - content: "Deletes a `skills` row. Proposal-gated: returns status='proposed' with
           a proposalId when governance requires review (AI-initiated deletes
           propose, human deletes execute). Requires hub-protocol.write scope."
+        heading: delete-a-skill-capability-substrate
 ---
 
 export default function Layout(props) {

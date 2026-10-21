@@ -13,14 +13,20 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/keys
-  toc: []
+  toc:
+    - depth: 2
+      title: Rotate the calling key to the latest CLI scope set
+      url: '#rotate-the-calling-key-to-the-latest-cli-scope-set'
   structuredData:
-    headings: []
+    headings:
+      - content: Rotate the calling key to the latest CLI scope set
+        id: rotate-the-calling-key-to-the-latest-cli-scope-set
     contents:
       - content: Revokes the current key and issues a new one with the full
           INTEGRATION_HUB_SCOPES.cli scope set, keeping its expiry. Only an
           agent/CLI key that already holds hub-protocol.read and
           hub-protocol.write qualifies; sub-tokens and probe keys are refused.
+        heading: rotate-the-calling-key-to-the-latest-cli-scope-set
 ---
 
 export default function Layout(props) {

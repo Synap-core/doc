@@ -13,12 +13,28 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/capture
-  toc: []
+  toc:
+    - depth: 2
+      title: Cluster open browser tabs into topic groups
+      url: '#cluster-open-browser-tabs-into-topic-groups'
+    - depth: 2
+      title: AI-structure raw input into entity proposals
+      url: '#ai-structure-raw-input-into-entity-proposals'
+    - depth: 2
+      title: Materialize structured proposals into entities
+      url: '#materialize-structured-proposals-into-entities'
   structuredData:
-    headings: []
+    headings:
+      - content: Cluster open browser tabs into topic groups
+        id: cluster-open-browser-tabs-into-topic-groups
+      - content: AI-structure raw input into entity proposals
+        id: ai-structure-raw-input-into-entity-proposals
+      - content: Materialize structured proposals into entities
+        id: materialize-structured-proposals-into-entities
     contents:
       - content: Forwards tabs to the Intelligence Service for AI clustering and returns
           a list of named clusters with each cluster's tabs.
+        heading: cluster-open-browser-tabs-into-topic-groups
       - content: 'Sends free-form text (and optional URL/HTML/context) to the AI capture
           pipeline. Returns proposed entities ready for /capture/execute. A
           HUMAN caller (no agent key) instead gets CONFIRM MODE: the plan is
@@ -37,8 +53,10 @@ _openapi:
           transcription_provider_not_configured, unsupported_type, …) — the
           latter are CONFIGURATION states, not outages, and must not be reported
           to a user as something to retry.'
+        heading: ai-structure-raw-input-into-entity-proposals
       - content: Creates the proposed entities and relations from a /capture/structure
           response.
+        heading: materialize-structured-proposals-into-entities
 ---
 
 export default function Layout(props) {

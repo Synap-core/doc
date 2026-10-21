@@ -13,9 +13,14 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/loops
-  toc: []
+  toc:
+    - depth: 2
+      title: Apply a loop (autonomy) template
+      url: '#apply-a-loop-autonomy-template'
   structuredData:
-    headings: []
+    headings:
+      - content: Apply a loop (autonomy) template
+        id: apply-a-loop-autonomy-template
     contents:
       - content: Instantiates an autonomy loop ({playbooks · triggers}) from a config
           descriptor (inline `definition` or a seed `templateKey`) + `params`.
@@ -24,6 +29,7 @@ _openapi:
           are surfaced in `proposals`). A playbook's inline `schedule`
           materializes its backing cron automation for free. Requires
           hub-protocol.write scope.
+        heading: apply-a-loop-autonomy-template
 ---
 
 export default function Layout(props) {

@@ -13,32 +13,99 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/focus-sessions
-  toc: []
+  toc:
+    - depth: 2
+      title: List focus sessions for a workspace or a project
+      url: '#list-focus-sessions-for-a-workspace-or-a-project'
+    - depth: 2
+      title: Create a focus session
+      url: '#create-a-focus-session'
+    - depth: 2
+      title: Get a focus session by ID
+      url: '#get-a-focus-session-by-id'
+    - depth: 2
+      title: Update a focus session
+      url: '#update-a-focus-session'
+    - depth: 2
+      title: Complete (close) a focus session and return the proposal pack
+      url: '#complete-close-a-focus-session-and-return-the-proposal-pack'
+    - depth: 2
+      title: Record an existing object as a session output
+      url: '#record-an-existing-object-as-a-session-output'
+    - depth: 2
+      title: Hand a declared deliverable to an agent
+      url: '#hand-a-declared-deliverable-to-an-agent'
+    - depth: 2
+      title: Hand a declared deliverable to the human
+      url: '#hand-a-declared-deliverable-to-the-human'
+    - depth: 2
+      title: Reclaim a deliverable handed to the human
+      url: '#reclaim-a-deliverable-handed-to-the-human'
+    - depth: 2
+      title: Answer what an agent asked about a deliverable (people only)
+      url: '#answer-what-an-agent-asked-about-a-deliverable-people-only'
+    - depth: 2
+      title: Wait (bounded long-poll) for the session owner's next answer
+      url: '#wait-bounded-long-poll-for-the-session-owners-next-answer'
+    - depth: 2
+      title: Poll the session owner's answers since a cursor
+      url: '#poll-the-session-owners-answers-since-a-cursor'
   structuredData:
-    headings: []
+    headings:
+      - content: List focus sessions for a workspace or a project
+        id: list-focus-sessions-for-a-workspace-or-a-project
+      - content: Create a focus session
+        id: create-a-focus-session
+      - content: Get a focus session by ID
+        id: get-a-focus-session-by-id
+      - content: Update a focus session
+        id: update-a-focus-session
+      - content: Complete (close) a focus session and return the proposal pack
+        id: complete-close-a-focus-session-and-return-the-proposal-pack
+      - content: Record an existing object as a session output
+        id: record-an-existing-object-as-a-session-output
+      - content: Hand a declared deliverable to an agent
+        id: hand-a-declared-deliverable-to-an-agent
+      - content: Hand a declared deliverable to the human
+        id: hand-a-declared-deliverable-to-the-human
+      - content: Reclaim a deliverable handed to the human
+        id: reclaim-a-deliverable-handed-to-the-human
+      - content: Answer what an agent asked about a deliverable (people only)
+        id: answer-what-an-agent-asked-about-a-deliverable-people-only
+      - content: Wait (bounded long-poll) for the session owner's next answer
+        id: wait-bounded-long-poll-for-the-session-owners-next-answer
+      - content: Poll the session owner's answers since a cursor
+        id: poll-the-session-owners-answers-since-a-cursor
     contents:
       - content: Scope by `workspaceId` (membership-checked), `projectId` (the project
           must be visible to the caller — `loadVisibleProject`, the same floor
           every project read and filing write uses), or both. At least one is
           required. Rows are always floored at the sessions the caller can read.
+        heading: list-focus-sessions-for-a-workspace-or-a-project
       - content: IS creates a focus session, optionally with a correlationId for
           idempotency. If a session with the same correlationId already exists
           it is returned as-is.
+        heading: create-a-focus-session
       - content: Lifecycle close via completeFocusSession — stamps closed, finishes any
           running playbook_run, returns pendingProposals + counts + warnings.
           Distinct from POST .../complete-run (playbook run only).
+        heading: complete-close-a-focus-session-and-return-the-proposal-pack
       - content: Writes one `artifacts` provenance row attributing an already-existing
           view/cell/document/entity/url to this session. `expectedLabel` claims
           a declared deliverable slot for the join; it never stamps it done.
+        heading: record-an-existing-object-as-a-session-output
       - content: Posts one ask in the session room, starts an agent turn for it, and
           stamps `delegatedTo`/`delegatedAt` on the named slot. Never stamps
           `status` — only an approval may do that.
+        heading: hand-a-declared-deliverable-to-an-agent
       - content: "Stamps `owner: 'human'` + `blockedReason` + `why` + `owedSince` on the
           named slot. The slot stays `pending` — declaring that you cannot do
           the work is the opposite of having done it. When a standing guideline
           covers this kind of block, `blockGuidelines` carries its text."
+        heading: hand-a-declared-deliverable-to-the-human
       - content: Clears `owner`, `blockedReason`, `why` and `owedSince` together. The
           deliverable itself is unchanged and still owed.
+        heading: reclaim-a-deliverable-handed-to-the-human
       - content: "Records the person's answer on the named slot and posts it into the
           session room as the person. Not a delivery: `status` is untouched. A
           slot that was handed to the person goes back to the agent with the
@@ -47,6 +114,7 @@ _openapi:
           key. A slot with a typed `ask` takes `value` (validated against it;
           400 `ask_invalid:` when it does not fit, 409 `ask_changed:` when
           `askFingerprint` no longer matches the slot's ask)."
+        heading: answer-what-an-agent-asked-about-a-deliverable-people-only
       - content: "Returns as soon as an answer newer than `since` exists (`status:
           'answered'`, the same page shape as GET /answers), or after
           `timeoutSeconds` (default 50, max 90) with `status: 'timeout'` and
@@ -54,9 +122,11 @@ _openapi:
           slot answers not yet picked up, and room answers newer than the call.
           An agent key's read stamps the slot answer's `answerPickedUpAt`
           receipt."
+        heading: wait-bounded-long-poll-for-the-session-owners-next-answer
       - content: Answers the owner gave to agent questions and owed slots, `answeredAt >
           since`, oldest first, id-stable. Pass `nextSince` back as `since`. For
           agents the pod cannot wake (Claude Code, claude.ai, Raycast).
+        heading: poll-the-session-owners-answers-since-a-cursor
 ---
 
 export default function Layout(props) {

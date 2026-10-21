@@ -13,9 +13,94 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/entities
-  toc: []
+  toc:
+    - depth: 2
+      title: List entities for a user
+      url: '#list-entities-for-a-user'
+    - depth: 2
+      title: Count the things in no project, by kind
+      url: '#count-the-things-in-no-project-by-kind'
+    - depth: 2
+      title: Search/list entities
+      url: '#searchlist-entities'
+    - depth: 2
+      title: Create an entity
+      url: '#create-an-entity'
+    - depth: 2
+      title: Get a single entity's relations
+      url: '#get-a-single-entitys-relations'
+    - depth: 2
+      title: Fetch a single entity
+      url: '#fetch-a-single-entity'
+    - depth: 2
+      title: Hybrid semantic recall
+      url: '#hybrid-semantic-recall'
+    - depth: 2
+      title: Type-aware hybrid retrieval (Synap Retrieval Engine)
+      url: '#type-aware-hybrid-retrieval-synap-retrieval-engine'
+    - depth: 2
+      title: Attach an image (uploaded or pre-stored) to an entity
+      url: '#attach-an-image-uploaded-or-pre-stored-to-an-entity'
+    - depth: 2
+      title: Update many entities in one governed call
+      url: '#update-many-entities-in-one-governed-call'
+    - depth: 2
+      title: Update an entity
+      url: '#update-an-entity'
+    - depth: 2
+      title: Delete an entity
+      url: '#delete-an-entity'
+    - depth: 2
+      title: List an entity's facets (role-profiles)
+      url: '#list-an-entitys-facets-role-profiles'
+    - depth: 2
+      title: Attach a facet (role-profile) to an entity
+      url: '#attach-a-facet-role-profile-to-an-entity'
+    - depth: 2
+      title: Update a facet's status / properties
+      url: '#update-a-facets-status--properties'
+    - depth: 2
+      title: Detach a facet (soft-delete)
+      url: '#detach-a-facet-soft-delete'
+    - depth: 2
+      title: Resolve identity (read-only) — does this subject already exist?
+      url: '#resolve-identity-read-only--does-this-subject-already-exist'
   structuredData:
-    headings: []
+    headings:
+      - content: List entities for a user
+        id: list-entities-for-a-user
+      - content: Count the things in no project, by kind
+        id: count-the-things-in-no-project-by-kind
+      - content: Search/list entities
+        id: searchlist-entities
+      - content: Create an entity
+        id: create-an-entity
+      - content: Get a single entity's relations
+        id: get-a-single-entitys-relations
+      - content: Fetch a single entity
+        id: fetch-a-single-entity
+      - content: Hybrid semantic recall
+        id: hybrid-semantic-recall
+      - content: Type-aware hybrid retrieval (Synap Retrieval Engine)
+        id: type-aware-hybrid-retrieval-synap-retrieval-engine
+      - content: Attach an image (uploaded or pre-stored) to an entity
+        id: attach-an-image-uploaded-or-pre-stored-to-an-entity
+      - content: Update many entities in one governed call
+        id: update-many-entities-in-one-governed-call
+      - content: Update an entity
+        id: update-an-entity
+      - content: Delete an entity
+        id: delete-an-entity
+      - content: List an entity's facets (role-profiles)
+        id: list-an-entitys-facets-role-profiles
+      - content: Attach a facet (role-profile) to an entity
+        id: attach-a-facet-role-profile-to-an-entity
+      - content: Update a facet's status / properties
+        id: update-a-facets-status--properties
+      - content: Detach a facet (soft-delete)
+        id: detach-a-facet-soft-delete
+      - content: Resolve identity (read-only) — does this subject already exist?
+        id: resolve-identity-read-only--does-this-subject-already-exist
     contents:
       - content: Returns the caller's entities, optionally filtered by profileSlug and
           workspaceId. Without workspaceId it reads every workspace the caller
@@ -23,54 +108,71 @@ _openapi:
           or non-member one is a 403). Pod-wide profiles are returned regardless
           of workspaceId. `userId` must be the caller's own id or `me`; any
           other id is a 403.
+        heading: list-entities-for-a-user
       - content: Counts the caller's visible things filed into NO project, grouped by
           kind (largest first). `total` is the sum of `byProfile` and equals the
           total of GET /entities?withoutProject=true with no lens.
+        heading: count-the-things-in-no-project-by-kind
       - content: Canonical list/search endpoint. When `q` is set, performs a Typesense
           search; otherwise lists entities with normal scoping.
+        heading: searchlist-entities
       - content: 'Creates an entity on behalf of a user. Honors profile.entityScope:
           pod-wide profiles ignore workspaceId. Supports `Idempotency-Key`.'
+        heading: create-an-entity
       - content: Returns up to `limit` relations (default 50, max 200) connected to the
           entity. Workspace-scoped on shared pods.
+        heading: get-a-single-entitys-relations
       - content: Returns the entity row by ID. Verifies workspace access on shared pods.
+        heading: fetch-a-single-entity
       - content: Combines Typesense keyword search and pgvector cosine similarity
           search, merged via Reciprocal Rank Fusion (RRF k=60). Falls back to
           Typesense-only when the embedding service is unavailable.
+        heading: hybrid-semantic-recall
       - content: DEPRECATED — prefer POST /knowledge/ask, whose semantic lane calls the
           exact same retrieve() SRE. Still functional for existing integrations.
           Infers entity type(s) + property hints from the query, fuses unscoped
           + type-scoped recall (RRF), and returns ranked entities plus the
           inferred understanding. Phase 1 of the SRE.
+        heading: type-aware-hybrid-retrieval-synap-retrieval-engine
       - content: 'Service (Hub API-key) route. Two modes: (1) upload+link —
           base64-decode an image, store it as a file entity (document +
           snapshot); (2) link-only — pass `fileEntityId` to link a
           previously-stored orphan file. Either way the file is linked to
           :entityId via a `references` relation. Upload mode: max 10MB, image/*
           only. Requires scope hub-protocol.write.'
+        heading: attach-an-image-uploaded-or-pre-stored-to-an-entity
       - content: "Up to 500 items `{id, patch, expected?}`. Each item is written now
           (when governance would auto-approve it), collected into ONE review
           proposal, denied, or skipped. `validate: true` returns the per-item
           verdict and writes nothing. `idempotencyKey` (or the `Idempotency-Key`
           header) replays the first call's receipt."
+        heading: update-many-entities-in-one-governed-call
       - content: Patch entity title / preview / metadata. Supports `Idempotency-Key`.
+        heading: update-an-entity
       - content: "Deletes an entity by id via the canonical entities.delete procedure.
           For agent keys this is proposal-gated (returns { status: 'proposed',
           proposalId }); auto-approved contexts complete inline. Acting identity
           is bound to the principal."
+        heading: delete-an-entity
       - content: Returns the entity's live facets joined with their role-profile + that
           profile's effective properties (workspace-lensed). Requires
           hub-protocol.read.
+        heading: list-an-entitys-facets-role-profiles
       - content: Attach a role-profile as an additive facet. Thin wrapper over the
           governed entities.attachFacet door (proposal-gated for agents).
           Requires hub-protocol.write.
+        heading: attach-a-facet-role-profile-to-an-entity
       - content: Thin wrapper over the governed entities.updateFacet door. Requires
           hub-protocol.write.
+        heading: update-a-facets-status--properties
       - content: Thin wrapper over the governed entities.detachFacet door. Requires
           hub-protocol.write.
+        heading: detach-a-facet-soft-delete
       - content: Call BEFORE create to decide create-vs-enrich-vs-attach_facet. Returns
           `match:'strong'` (globally-unique signal hit — link/attach, don't
           create), `'weak'` (same-name candidates — advisory), or `'none'`.
           Read-only; never writes.
+        heading: resolve-identity-read-only--does-this-subject-already-exist
 ---
 
 export default function Layout(props) {

@@ -13,23 +13,47 @@ generated_from: Synap-core/backend@c31e261ab (main)
 _openapi:
   preload:
     - hub-api/lifecycle
-  toc: []
+  toc:
+    - depth: 2
+      title: The pipeline of a kind or role
+      url: '#the-pipeline-of-a-kind-or-role'
+    - depth: 2
+      title: Things into done / lost per bucket
+      url: '#things-into-done--lost-per-bucket'
+    - depth: 2
+      title: What each space produces, and how its things stand
+      url: '#what-each-space-produces-and-how-its-things-stand'
+    - depth: 2
+      title: The things being worked, with their work
+      url: '#the-things-being-worked-with-their-work'
   structuredData:
-    headings: []
+    headings:
+      - content: The pipeline of a kind or role
+        id: the-pipeline-of-a-kind-or-role
+      - content: Things into done / lost per bucket
+        id: things-into-done--lost-per-bucket
+      - content: What each space produces, and how its things stand
+        id: what-each-space-produces-and-how-its-things-stand
+      - content: The things being worked, with their work
+        id: the-things-being-worked-with-their-work
     contents:
       - content: Things of `profileSlug` grouped by their declared lifecycle status, in
           option order (`lifecycle.board`). `workedBy=true` adds who is on each
           card.
+        heading: the-pipeline-of-a-kind-or-role
       - content: 'The goal line of a kind or role (`lifecycle.throughput`): every
           bucket, zeros included, oldest first.'
+        heading: things-into-done--lost-per-bucket
       - content: Every space the caller sees with its intent (`settings.intent`, else
           inferred) and, per produced kind, the pipeline in one line, needs-you,
           being-worked and a headline thing (`lifecycle.home`). `projectId`
           lists only the project's spaces (the ones it uses + its home; 404 when
           the caller cannot see it) and narrows every count.
+        heading: what-each-space-produces-and-how-its-things-stand
       - content: 'Things with open work on them (a session, an in-flight worker, a
           scheduled prep), most urgent first, plus `unattached`: open work
           sessions on no thing (`lifecycle.moving`).'
+        heading: the-things-being-worked-with-their-work
 ---
 
 export default function Layout(props) {

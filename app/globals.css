@@ -10,13 +10,28 @@
 
 /* ─── Synap theme ──────────────────────────────────────────────────────────── */
 
-/* Brand accent: Synap emerald. Fumadocs 15+ reads full colours from --color-fd-*. */
+/*
+ * Brand accent: Synap emerald. Fumadocs 15+ reads full colours from --color-fd-*.
+ * Light mode uses a deeper shade of the same hue, and a darker grey for secondary text, so text meets WCAG AA
+ * (4.5:1): the primary colour is also the text colour of the active sidebar and "On this page" entries, and the
+ * Fumadocs default grey measured 4.0-4.35:1 on the light backgrounds.
+ */
 :root {
-  --color-fd-primary: hsl(160, 84%, 39%);
+  --color-fd-primary: hsl(160, 84%, 24%);
   --color-fd-primary-foreground: hsl(0, 0%, 99%);
+}
+
+/* Light only: `.dark` keeps the Fumadocs default, which already passes. */
+:root:not(.dark) {
+  --color-fd-muted-foreground: hsl(0, 0%, 40%);
 }
 
 .dark {
   --color-fd-primary: hsl(160, 72%, 45%);
   --color-fd-primary-foreground: hsl(160, 30%, 8%);
+}
+
+/* A long unbroken heading (a tool or command name) wraps instead of widening the page on a phone. */
+#nd-page :is(h1, h2, h3, h4) {
+  overflow-wrap: anywhere;
 }

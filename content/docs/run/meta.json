@@ -10,6 +10,7 @@
     "configuration",
     "domains-and-tls",
     "connect-control-plane",
+    "eve",
     "---Operate---",
     "backups",
     "upgrades",

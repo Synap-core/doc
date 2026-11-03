@@ -23,10 +23,11 @@ only in the apps.
 
 - A read needs a valid identity and scope.
 - A write needs an identity and permission for that action.
-- A sensitive or policy-gated write can become a proposal.
+- An agent's write then goes through the [validation policy](/docs/concepts/validation-policy): it runs directly,
+  becomes a proposal, or is refused.
 
-This keeps one workspace's records out of another, keeps keys to the access they were given, and makes every agent
-or automation write reviewable.
+This keeps one workspace's records out of another, keeps keys to the access they were given, and puts every agent or
+automation write on the record.
 
 See also:
 

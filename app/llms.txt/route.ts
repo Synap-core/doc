@@ -14,8 +14,9 @@ export const revalidate = false;
 const intro = `# Synap Documentation
 
 > Synap is an open-source data pod: a server that holds a person's records and lets the AI agents they connect work
-> on them. Agent writes go through the pod's governance, so most of them reach the data as proposals a person
-> approves. These are the public docs for users, self-hosters, builders and contributors.
+> on them under the pod's governance: by default an agent's creates and edits apply directly with Undo, while
+> deletions and structural changes reach the data as proposals a person approves. These are the public docs for
+> users, self-hosters, builders and contributors.
 
 ## How to read these docs
 
@@ -51,7 +52,8 @@ const intro = `# Synap Documentation
 - Being told about changes: webhooks, or \`@synap-core/sdk-realtime\`.
 - Working with a pod through MCP: call \`synap_orient\` first in a session (the briefing), then \`synap_ask\` to
   recall anything from the pod in natural language.
-- Writes: expect a proposal rather than an applied change. An agent's key can never approve a proposal.
+- Writes: a write either applies (with Undo) or comes back as a proposal (\`status: "proposed"\`), depending on
+  the agent's write mode and the pod's rules; handle both. An agent's key can never approve a proposal.
 - The CLI package is \`@synap-core/cli\` (command \`synap\`). Self-hosting starts from \`install.sh\` in the
   backend's GitHub releases.
 `;

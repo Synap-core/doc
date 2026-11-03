@@ -22,7 +22,7 @@ connects a computer and its agents to a pod.
 - Node.js 20 or later (the CLI declares `node >= 20`).
 - A browser, to sign in and approve this computer.
 - Optional: an AI agent on this computer. `synap init` looks for Claude Code, Codex and Cursor.
-- Optional: the Relay app on your phone.
+- Optional: the Relay app on your phone. Relay is in beta testing and not yet in the app stores.
 
 ## 1. Run the setup
 
@@ -58,6 +58,17 @@ Open https://<your-pod>/... on any device and enter ABCD-1234
 Open the address on any device where you are signed in to your pod, enter the code and approve. On a server without
 a browser, use your phone or laptop. The code expires after a few minutes; run `synap init` again if it does.
 
+The approval page also asks how the agents' changes land:
+
+| Choice | What it does |
+|---|---|
+| **Normal** (recommended) | Creates and edits apply directly with Undo; deletions and structural changes ask you. |
+| **Creates only** | Creates apply directly with Undo; edits, deletions and structural changes ask you. |
+| **Ask first** | Every change asks you first. |
+
+Keep **Normal** if you are not sure. You can change it later on each agent's page in your pod's admin console. See
+[Validation policy](/docs/concepts/validation-policy).
+
 ## 4. Connect your agents
 
 The CLI lists the agents it found on this computer (Claude Code, Codex, Cursor) and connects the ones you keep
@@ -72,8 +83,9 @@ synap connect --list        # everything that can be connected
 
 ## 5. Pair your phone
 
-If your pod is served over HTTPS, `init` ends with a pairing link and QR code for Relay. Relay is where you approve
-what your agents propose. See [Relay](/docs/use/relay).
+If your pod is served over HTTPS, `init` ends with a pairing link and QR code for Relay, the phone app where you
+approve what your agents ask. Relay is in beta testing and not yet in the App Store or Google Play; until it is, skip
+this step and approve requests in the [Browser](/docs/use/browser) app on your desktop. See [Relay](/docs/use/relay).
 
 ## 6. Check that it works
 
@@ -82,8 +94,11 @@ synap status     # pod health and API status
 synap doctor     # is the key valid, do the workspace and project exist on this pod
 ```
 
-Then give your agent a real task, for example: "Save a note in Synap with three things I want to do this week." The
-note arrives as a proposal; approve it in Relay or the Browser app.
+Then give your agent a real task, for example: "Save a note in Synap with three things I want to do this week." Under
+the default write mode, the note is created at once and you can undo it. Open the Browser app to see it.
+
+To see a request, ask your agent to delete that note. A deletion always waits for your approval: it shows up as a
+**Request** in the Browser app, where you approve or reject it.
 
 ## Unattended setup
 

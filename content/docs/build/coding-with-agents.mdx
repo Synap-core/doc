@@ -101,7 +101,9 @@ Check the connection with `synap mcp verify` and `synap whoami`.
   (what awaits your review, open work, your identity and projects), and `synap_ask` answers questions from your
   data. The agent loads more tools in groups.
   [MCP tools](/docs/reference/mcp-tools) lists them all.
-- Its writes become proposals unless a rule you set lets them apply. It can never approve a proposal.
+- Its writes follow the write mode you chose when you connected it. Under the default, creates and edits apply
+  directly with Undo, and deletions and structural changes become proposals you approve. It can never approve a
+  proposal. See [Validation policy](/docs/concepts/validation-policy).
 - What it may read and change is set by its key: see [API keys](/docs/build/api-keys).
 
 ## Both at once

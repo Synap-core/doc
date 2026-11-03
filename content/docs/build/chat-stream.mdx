@@ -63,8 +63,9 @@ If the Intelligence Service cannot be reached or fails, the endpoint answers `50
 
 ## Approving what the AI proposes
 
-When the AI wants to change your data, the change becomes a **proposal**. A person approves it, for example in Relay
-or the Browser app, or through the Hub REST API:
+When the AI wants to make a change that the pod's governance does not let it apply directly (under the default write
+mode: a deletion or a structural change), the change becomes a **proposal**. A person approves it, for example in the
+Browser app, or through the Hub REST API:
 
 ```bash
 curl -X POST https://pod.example.com/api/hub/proposals/<proposalId>/approve \

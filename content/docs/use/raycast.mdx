@@ -9,28 +9,32 @@ owner: Antoinesrvt
 last_reviewed: 2026-10-20
 ---
 
-The Synap extension for [Raycast](https://www.raycast.com) lets you search and write to your pod from the launcher
-and from Raycast AI.
+Synap works in [Raycast](https://www.raycast.com) in two ways: Raycast AI talks to your pod's MCP server, and the
+Synap extension adds its own commands (search, capture and review) to the launcher.
+
+<Callout title="Not in the Raycast Store yet" type="warn">
+  The Synap extension is not published in the Raycast Store, so you cannot install it yet. Raycast AI can use your pod
+  today through its MCP server, as described below. Raycast AI needs Raycast Pro.
+</Callout>
 
 ## Connect Raycast to your pod
 
-Install the Synap extension in Raycast. Then, with the CLI connected to your pod, run:
+With the CLI connected to your pod, run:
 
 ```bash
 synap connect raycast
 ```
 
-The CLI creates a dedicated agent key for Raycast on your pod and stores it where the Synap extension reads it. By
-default the key covers the whole pod; `--workspace <id>` limits it to one workspace.
+The CLI does two things:
 
-### Optional: the full MCP tool set
+- It creates a dedicated agent key for Raycast on your pod and stores it where the Synap extension reads it. By
+  default the key covers the whole pod; `--workspace <id>` limits it to one space.
+- It prints the fields to add your pod's MCP server to Raycast AI. In Raycast, run **Install MCP Server**, enter the
+  name, the HTTP transport and the URL the CLI printed, and sign in with OAuth, then approve on your pod's consent
+  page. If sign-in fails, the CLI also shows an `Authorization` header to use instead; the full key is in a file only
+  you can read, and the CLI never prints it.
 
-```bash
-synap connect raycast --with-mcp
-```
-
-This also adds your pod's MCP server to Raycast's MCP configuration, through the `mcp-remote` bridge (Raycast's
-native MCP support runs local processes only). The tool names overlap with the extension's own commands.
+Raycast AI starts with a small set of essential Synap tools and loads more when a task needs them.
 
 ## Generate script commands
 

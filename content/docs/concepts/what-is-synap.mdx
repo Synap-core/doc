@@ -11,8 +11,9 @@ last_reviewed: 2026-10-20
 
 Synap is a **data pod**: a backend that holds your records in your own PostgreSQL database. You connect the AI agents
 you already use (Claude Code, Codex, Cursor, or anything that speaks MCP), and they work on those records under
-permissions you grant. Their changes are governed: most reach your data as **proposals** you approve, and every
-change is written to an append-only event log.
+permissions you grant. Their changes are governed: by default an agent's creates and edits apply directly and can be
+undone, while deletions and structural changes become **proposals** you approve. Every change is written to an
+append-only event log.
 
 You can run the pod yourself (it is open source, MIT-licensed) or let Synap run it for you on Synap Cloud. Both run
 the same code.
@@ -67,16 +68,31 @@ Two things make work repeatable:
   method a project runs as a track.
 - An **automation** binds a playbook to a trigger: an event, a schedule (cron), a webhook, or a manual start.
 
+The apps use everyday words for these: a workspace is a **Space**, a track a **Goal**, a stage a **Step**, a session a
+**Job**, a playbook a **Template** and a proposal a **Request**. The API, the CLI and the MCP tools keep the names
+used on this page.
+
 ## Governance: proposals and approval
 
 When an agent wants to change your data, the pod decides between two outcomes:
 
-- **Propose**: the change becomes a proposal. You review it, then approve or reject it. This is the default.
-- **Apply automatically**: only where you granted a rule that allows it. The change is applied and leaves a record.
+- **Apply directly**: the change is applied, leaves a record, and you can undo it.
+- **Propose**: the change becomes a proposal (shown in the apps as a **Request**). You review it, then approve or
+  reject it.
 
-Some changes can never be applied automatically, whatever rule you set: deletes and other destructive actions,
-admin actions, and changes of scope always become proposals. An agent's own key can never approve a proposal;
-approval is a human step.
+Which outcome a change gets depends on the agent's **write mode**, which you choose when you connect the agent and can
+change later:
+
+| Write mode | What applies directly | What becomes a proposal |
+|---|---|---|
+| **Normal** (the default) | Creates and edits, with Undo | Deletions and structural changes |
+| **Creates only** | Creates, with Undo | Edits, deletions and structural changes |
+| **Ask first** | Nothing | Every change |
+
+Some changes always become proposals, whatever the mode or rule: deletes and other destructive actions (archive,
+purge, merge), admin actions such as membership and what an agent may do, changes of scope, an agent defining a kind
+or role, and an agent creating a space, cell, playbook or automation. An agent's own key can never approve a proposal;
+approval is a human step. [Validation policy](/docs/concepts/validation-policy) has the details.
 
 Either way, every change is on the event log, which is append-only. That log is the audit trail: you can see what
 changed, who or what changed it, and when.

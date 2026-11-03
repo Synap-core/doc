@@ -60,7 +60,8 @@ See [MCP](/docs/agents/mcp).
 
 ### Playbook
 
-A session shape you can run again: a template for one kind of work, or a method a project runs as a track.
+A session shape you can run again: a template for one kind of work, or a method a project runs as a track. Shown in
+the apps as a **Template**.
 
 ### Pod
 
@@ -78,12 +79,15 @@ Long-lived intent: something you are doing over weeks or months. Its progress is
 
 ### Proposal
 
-A change an agent asks to make. You review it and approve or reject it. Deletes, admin actions and changes of scope
-are always proposals; an agent's own key can never approve one.
+A change an agent asks to make and that waits for a person. You review it and approve or reject it. Shown in the
+apps as a **Request**. Under the default write mode, an agent's creates and edits apply directly with Undo, and its
+deletions and structural changes become proposals. Deletes, admin actions and changes of scope are always proposals;
+an agent's own key can never approve one. See [Validation policy](/docs/concepts/validation-policy).
 
 ### Relay
 
-The Synap mobile app (iOS and Android), where you approve proposals and capture things. See [Relay](/docs/use/relay).
+The Synap mobile app (iOS and Android), where you approve proposals and capture things. It is in beta testing and
+not yet in the app stores. See [Relay](/docs/use/relay).
 
 ### Role
 
@@ -93,12 +97,16 @@ entity. Also called a facet.
 ### Session
 
 A bounded unit of work toward one goal, with a scope you accept before it runs. It can stand alone or be filed at a
-track and stage.
+track and stage. Shown in the apps as a **Job**.
 
 ### Skill
 
 A folder of instructions (a `SKILL.md` and reference files) that teaches an agent how to use Synap. See
 [Agent skills](/docs/agents/skills).
+
+### Stage
+
+One step of a track. A session can be filed at a track and one of its stages. Shown in the apps as a **Step**.
 
 ### Synap Cloud
 
@@ -107,7 +115,7 @@ Synap's hosted service: Synap runs your pod for you. See [Self-hosted pod or Syn
 ### Track
 
 A reusable method running inside one project, such as "Content" or "Build". It keeps the definition it started
-from.
+from. Shown in the apps as a **Goal**.
 
 ### View
 
@@ -116,3 +124,10 @@ A projection over your records (a table, board, calendar, graph and so on). It n
 ### Workspace
 
 A space inside your pod that groups records, views and members, such as a business workspace and a personal one.
+Shown in the apps as a **Space**.
+
+### Write mode
+
+How an agent's changes land, chosen when you connect the agent: **Normal** (the default: creates and edits apply
+directly with Undo; deletions and structural changes ask you), **Creates only** (creates apply with Undo; everything
+else asks you) or **Ask first** (every change asks you). See [Validation policy](/docs/concepts/validation-policy).

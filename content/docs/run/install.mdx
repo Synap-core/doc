@@ -28,7 +28,8 @@ Arguments after `--` go to the installer.
    `apt-get` it stops and asks you to install it), installs Docker with `get.docker.com` if it is missing, and
    requires Docker Compose v2.
 2. **Release manifest.** Downloads `release.json` for the release you asked for: `stable` by default.
-3. **Signature.** Checks the manifest's keyless signature from Synap's CI with `cosign`, if `cosign` is installed. See
+3. **Signature.** Checks the manifest's keyless signature from Synap's CI with `cosign`, and refuses the release if
+   the check fails. Without `cosign` on the host, it runs `cosign` from its official Docker image. See
    [Verifying releases](#verifying-releases).
 4. **Deploy bundle.** Downloads the release's deploy bundle (the `synap` script, `deploy/` and Kratos configuration),
    checks its SHA-256 against the manifest, and unpacks it into `/opt/synap`.
@@ -42,7 +43,7 @@ Run again with the same release, it re-enters `synap install`, which is idempote
 
 | Option | Meaning |
 |---|---|
-| `--release <id\|stable\|fast>` | The release to install. `stable` (default) is the latest tagged release; `fast` is the latest successful build of `main`; or a release ID such as `v1.1.3`. |
+| `--release <id\|stable\|fast>` | The release to install. `stable` (default) is the latest tagged release; `fast` is the latest successful build of `main`; or a release ID such as `v1.2.8`. |
 | `--dir <path>` | Install directory. Default `/opt/synap`. |
 | `--help` | Print the usage. |
 
@@ -99,20 +100,22 @@ installer (and `synap update`) does with it:
 
 | Value | Behaviour |
 |---|---|
-| `warn` (default) | Verifies when `cosign` is installed. A missing `cosign`, a missing signature or a failed check prints a warning and the install continues. |
-| `enforce` | Any of those refuses the install. |
-| `off` | No check, for a private mirror. |
+| `enforce` (default) | A missing signature or a failed check refuses the install, before the deploy bundle is downloaded. |
+| `warn` | They print a warning and the install continues. |
+| `off` | No check, for a private mirror with no signatures. |
 
-Install `cosign` and set `SYNAP_RELEASE_VERIFY=enforce` to refuse unsigned or tampered releases. Set it on the `sudo`
-command, because `sudo` drops variables exported in your shell:
+`cosign` does not need to be installed: when it is missing, the installer runs it from its official Docker image.
+
+To go on with a release that fails the check, for this run only, pass `SYNAP_RELEASE_VERIFY=warn` on the command line.
+Set it on the `sudo` command, because `sudo` drops variables exported in your shell:
 
 ```bash
 curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
-  | sudo SYNAP_RELEASE_VERIFY=enforce bash -s -- --domain pod.example.com --email you@example.com
-sudo SYNAP_RELEASE_VERIFY=enforce synap update
+  | sudo SYNAP_RELEASE_VERIFY=warn bash -s -- --domain pod.example.com --email you@example.com
+sudo synap update --insecure-skip-verify     # the same, for one update
 ```
 
-A manual `synap update` also reads `SYNAP_RELEASE_VERIFY` from `deploy/.env`.
+Automatic updates always enforce the check.
 
 ## Installing from a checkout
 

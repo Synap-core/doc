@@ -81,6 +81,8 @@ const movedToSections = [
   ['/docs/build/concepts/:page', '/docs/concepts/:page'],
   ['/docs/build/agents', '/docs/agents'],
   ['/docs/build/agents/:page', '/docs/agents/:page'],
+  // Eve is an operator tool for a server stack (2026-11-03).
+  ['/docs/use/eve', '/docs/run/eve'],
 ];
 
 /** @type {import('next').NextConfig} */

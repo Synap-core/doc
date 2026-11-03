@@ -80,5 +80,5 @@ real Pangolin connector image before relying on it.
 ## Another web server in front of the pod
 
 If another reverse proxy owns ports 80 and 443 on the server (for example Traefik, as on an
-[Eve-managed](/docs/use/eve) server), install with `--edge traefik`. `SYNAP_EDGE=traefik` is then pinned in `.env`,
+[Eve-managed](/docs/run/eve) server), install with `--edge traefik`. `SYNAP_EDGE=traefik` is then pinned in `.env`,
 and updates do not try to bind Caddy to those ports. Your proxy must route both host names to the pod.

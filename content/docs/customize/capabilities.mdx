@@ -1,0 +1,136 @@
+---
+title: Capabilities
+description: What a capability is, how to see what your pod has, install and run one from an app, an agent or the API, and make your own.
+type: how-to
+audience: user
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+A capability is something your pod can do: send an email from your account, search the web, publish a post, run a
+piece of code you wrote. Your agents, automations, apps and scripts ask the pod to do it; the pod runs it, with the
+credential it holds, under your governance.
+
+## What a capability is made of
+
+A capability is a connection to one service plus the **verbs** that use it. A verb is one action with named inputs,
+such as `gmail_send` or `calendar_list`. Installing a capability creates its parts in your pod, in this order:
+
+| Part | What it is |
+|---|---|
+| **Secrets** | The credentials it needs, such as an API key. They are stored in your pod's vault. A verb uses the credential without ever seeing it. |
+| **Tools** | A connection to one service: where its API is and which credential it uses. |
+| **Verbs** | What it can do. Each verb is a skill of one of three runnable kinds: **declarative** (one HTTP call to the service, described as data, run by the pod), **code** (JavaScript run in the pod's sandbox, see [Run your own code](/docs/customize/runnable-code)) or **builtin** (an operation built into the pod). |
+
+A capability can also ask questions when you install it (for example "Your API key") and bring playbooks and
+automations that use its verbs.
+
+A verb's ID is its name: that is what you pass to run it.
+
+## See what your pod has
+
+- **Pod admin console**: **Tools** lists everything installed on the pod (capabilities, instructions and code), and
+  each row opens that tool's own page. **Marketplace** lists what you can install. Both are for the pod's owner and
+  admins.
+- **CLI**:
+
+  ```bash
+  synap capability list              # one row per capability: status, connection, verbs
+  synap capability show <name>       # one capability in detail, with the next thing to do
+  ```
+
+- **Your agent**: `synap_list_capabilities` returns your connected services, each with its verbs and whether it is
+  connected, plus standalone runnable skills. A verb that is installed but switched off is marked
+  `blocked: "not_enabled"`, with a link for you to turn it on.
+- **API**: `GET /api/hub/capabilities` with a key that has the `hub-protocol.read` scope. See
+  [Capabilities in the Hub REST API](/docs/reference/hub-api/capabilities).
+
+## Install one
+
+Capabilities come from the [marketplace](/docs/customize/marketplace). From the CLI:
+
+```bash
+synap capability add               # pick one from the catalog
+synap capability add <name>        # or name it; it asks for anything it needs, such as an API key
+synap capability connect <name>    # sign in to the service, or give its credential
+synap capability enable <name>     # turn it on and choose which verbs it may run
+```
+
+A capability that is installed but not turned on cannot run: every run is refused until you enable it. A capability
+can hold several accounts for one service (`synap capability connections list <name>`); a run uses the default one
+unless it names another.
+
+Your agent can install one too (ask it, for example, "find a capability for my calendar and propose installing it").
+An agent's install is always a proposal (a **Request** in the apps) that you approve.
+
+From the API, `POST /api/hub/capabilities/apply` installs a catalog capability by its `templateKey` with its `params`,
+and needs the `hub-protocol.write` scope. When a person still has to answer a question or connect an account, it
+answers with what is missing (`missingFields`, or the connection to make).
+
+## Run a verb
+
+| From | How |
+|---|---|
+| The CLI | `synap capability run <verb> --<input> <value>`. `synap capability test <verb>` previews it without running it. |
+| Your agent (MCP) | `synap_run_capability` with `verbId` and `parameters`. See [MCP tools](/docs/reference/mcp-tools). |
+| A script or a server with an API key | `POST /api/hub/capabilities/execute`, or `executeCapability` in `@synap-core/hub-rest-client` (below). |
+| An automation | A `capability` step in its flow. See [Automations and playbooks](/docs/customize/automations-and-playbooks). |
+| An app a person connects to their pod | The intent actions the pod offers it, with the person's consent. See [Build a website on your pod](/docs/build/build-a-website). |
+
+```bash
+curl -X POST https://pod.example.com/api/hub/capabilities/execute \
+  -H "Authorization: Bearer $SYNAP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "verbId": "<verb name>", "parameters": { "query": "…" } }'
+```
+
+The body takes `verbId` (or `skillId`), `parameters`, and optionally `workspaceId`, `connectionSelector` (which
+account to use) and `idempotencyKey` (so a retried send happens once). The key needs the `hub-protocol.write` scope.
+The answer is `200` with the result, or `202` with `status: "proposed"`, a `proposalId` and a `reviewUrl` when the
+run waits for your approval.
+
+## What governance applies
+
+- **You run your own capability directly.** A person running a capability they own is not asked.
+- **An agent's run is checked.** A read-only verb runs. Any other verb runs when you granted it to that agent or a
+  rule allows it; otherwise the run becomes a proposal you approve, and the agent gets `status: "proposed"` with a
+  `reviewUrl`. This is a success, not an error. Running a verb is decided by these grants, not by the agent's write
+  mode; records the verb writes back into your pod follow the write mode like any other agent write.
+- **"Never" holds.** When you set a rule that says never for an agent and a kind of action, its run is refused.
+- **Untrusted origin asks you.** A run started from an outside channel becomes a proposal even when it would
+  otherwise run.
+- **A changed verb is switched off.** When what an approved verb runs changes (its code, the hosts it may reach, a
+  tool it uses), it is turned off until a person approves it again. Applying a marketplace update you chose keeps it on.
+
+See [Validation policy](/docs/concepts/validation-policy) for the rules every write follows.
+
+## Make your own
+
+From the smallest change to the largest:
+
+1. **A new verb on a service you already connected**, with no code: ask your agent to add it. `synap_create_verb`
+   describes one HTTP call on an installed tool (`method`, `pathTemplate`, `query`, `body`, `responseShape`,
+   `parameters`), and the pod runs it. It cannot run code, and it cannot create a new connection.
+2. **A verb that runs code**, when one HTTP call is not enough: a code skill. See
+   [Run your own code](/docs/customize/runnable-code).
+3. **A whole capability**: write a definition as JSON with at least a `key`, a `name`, its `tools` and its `skills`
+   (and optionally `params`, `vault`, `provides`, `playbooks` and `automations`), then install it on your pod:
+
+   ```bash
+   synap capability create ./my-capability.json
+   synap capability enable "<its name>"
+   ```
+
+   `synap capability create` sends the definition to `POST /api/hub/capabilities/apply`. Parts that need your
+   approval come back as proposals.
+4. **Share it**: publish it to the marketplace as a capability package. See
+   [Publish your own](/docs/customize/marketplace#publish-your-own).
+
+## Related
+
+- [Marketplace](/docs/customize/marketplace)
+- [Automations and playbooks](/docs/customize/automations-and-playbooks)
+- [Run your own code](/docs/customize/runnable-code)
+- [API keys](/docs/build/api-keys)

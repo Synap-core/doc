@@ -1,0 +1,137 @@
+---
+title: Spaces and templates
+description: What a space is, what a space template brings, and how to install one from the apps, the CLI or your agent.
+type: how-to
+audience: user
+availability: [pod-oss, cloud, browser, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+A **space** is one domain of your work inside your pod: sales, content, finance, research. The API, the CLI and the
+agent tools call it a **workspace** (`workspaceId`, `synap_create_workspace`). A **template** sets up a space in a
+single install, with the kinds of records, fields, views and playbooks (templates in the apps) that the domain needs.
+
+## What a space is
+
+A space is a lens on your records, not a container that copies them. Most kinds are pod-wide: a person is stored once,
+and every space that uses people sees the same record. What a space adds is its own view of them:
+
+- its own fields on shared kinds (a CRM space can add a deal stage to people without other spaces seeing it; see
+  [Profile schemas](/docs/concepts/profile-schemas)),
+- its own roles (a person is a `client` in your CRM space; see [Kind and facets](/docs/concepts/kind-and-facets)),
+- its own kinds, views, playbooks, automations and members.
+
+## One space per domain
+
+A domain is installed once. A **project** is a filter across spaces, never a reason for a second copy of one.
+
+"Content for client X" is the Content space filtered by the project X, not a second Content space. To work on a domain
+for a project:
+
+1. File the records into the project. Your agent does it with `synap_file_into_project`.
+2. Link the project to the space. Your agent does it with `synap_project_use_workspace`. Installing a template with a
+   project (`--project <id>` on the CLI) links them for you.
+
+The pod enforces this for every caller, person or agent:
+
+- No two active spaces share a name or a template.
+- A template is installed once per pod. Installing it again reuses the space it already made.
+- A request to create a second space for a domain that already has one gets that space back, with the reason.
+
+## What a template contains
+
+A template is a file (YAML in Synap's own catalog) with a `meta` header and a body. The parts you are likely to meet:
+
+| Part | What it brings |
+|---|---|
+| `workspace` | The space's name and description |
+| `profiles` | Kinds and roles, with their fields and, where they have one, their lifecycle (the stages a record moves through) |
+| `entityLinks`, `relationDefs` | The relation types records can be linked with |
+| `views`, `layout`, `bento` | The views and the space's home |
+| `playbooks`, `automations` | Repeatable work and the triggers that start it |
+| `integrations` | Capabilities (tools and connectors) to install with it |
+| `skills` | Skills linked to the space, so every agent working there is told about them |
+| `rules` | Rules it installs in the space. A later template update never overwrites a rule you edited |
+| `onboarding`, `seedEntities` | The context of the space's first-run interview, and initial records |
+| `dependencies` | Other templates it needs, installed first. CRM, for example, requires Strategy (`foundation`), which defines the shared `client`, `partner` and `lead` roles |
+
+A **project template** installs several spaces at once. On the marketplace it is a workspace package tagged `suite`,
+whose dependencies are the spaces it installs.
+
+Installing a template only adds. It reuses kinds your pod already has (adding its own fields to them as overlays) and
+is refused when it would overwrite something under the same name.
+
+## Install a template
+
+Browse the current templates first: the catalog changes, so this page does not list them. Examples include CRM, Content
+OS, Finance, HR, Legal and Research.
+
+### From the apps
+
+- **On the web**: [synap.live/marketplace](https://www.synap.live/marketplace). Sign in with your Synap account, open a
+  space or project template and choose **Install** to install it into one of your pods. The same page offers to open
+  the install in the Synap app, or gives you the `synap market install` command.
+- **In the Browser app**: open the **Marketplace** to find and install spaces, views and add-ons into the pod you are
+  signed in to.
+
+If the install needs your approval, it waits as a proposal (a request in the apps); approve it in Relay or the Browser
+app.
+
+### From the CLI
+
+```bash
+synap market --type workspace            # browse space templates
+synap market --search crm                # search by name, description or slug
+synap market install crm --dry-run       # preview: what it would create, reuse or conflict with; writes nothing
+synap market install crm                 # install
+synap market install crm --project <id>  # install and tag what it creates to a project
+```
+
+`--onto <workspaceId>` installs a template onto a space you already have, adding what is missing, instead of creating
+a new one. `--dry-run` works for space templates only.
+
+To start a new company or operating system on an empty pod, `synap launch` creates a project and its core spaces,
+interactively; `synap launch --list` shows what it can set up.
+
+### From your agent
+
+Your agent searches the marketplace with the pod's `market.search` verb and installs with `market.install`, both run
+through `synap_run_capability`. An install by an agent always becomes a proposal you approve, and so does an agent
+creating a space without a template (`synap_create_workspace`). Ask it in plain language, for example: "Find a
+template for running a podcast and propose installing it."
+
+An agent connected through the Synap Cloud connector (`https://mcp.synap.live`, what `synap mcp connect-claude` sets
+up for claude.ai) can also search the catalog with `market_search` before it picks a pod.
+
+## Keep a space in step with its template
+
+Templates get new versions. Your space records which template and version it was installed from.
+
+```bash
+synap templates                       # every space: attached, drifted or unattached
+synap templates update                # preview the available updates
+synap templates update crm            # apply one
+synap templates update all            # apply every available update
+synap templates attach "Sales"        # connect a space made before it had a template; suggests one
+```
+
+An update that changes existing data lists each change and waits for a person to agree. `--yes` agrees to every
+change it lists; `--accept-data-changes <opKeys>` agrees to exactly the ones you name from the preview. Some data
+changes need a pod owner or admin. An agent can check where each space stands with `synap_template_health`, but it
+cannot agree to a data change for you: run with an agent's key, an update becomes a proposal.
+
+When Synap retires a template in favour of another, `synap templates retire <target>` moves the space's records into
+the replacement's space. It shows the plan and asks first, and it never deletes.
+
+## Make your own template
+
+Build the space the way you want it, then publish it as a template with `synap market publish --from-workspace <id>`,
+or write the file yourself. See [Marketplace](/docs/customize/marketplace#publish-your-own).
+
+## Related
+
+- [Kinds, roles and fields](/docs/customize/kinds-and-fields): change the data model of a space after install.
+- [Marketplace](/docs/customize/marketplace): everything else you can install.
+- [Profile schemas](/docs/concepts/profile-schemas): how a space's fields layer over shared kinds.

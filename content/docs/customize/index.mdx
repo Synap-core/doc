@@ -1,0 +1,91 @@
+---
+title: Make Synap yours
+description: Every way to shape a pod to your work, from installing a template to writing your own app, and who does each.
+type: explanation
+audience: user
+availability: [pod-oss, cloud, browser, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+A pod starts with general kinds of records (people, companies, tasks, notes and so on). Everything else is added, and
+almost all of it is configuration stored in the pod, not code: a workspace (a space in the apps), a kind, a field, a view, an automation. So
+you, your agent and a template can all change it through the same doors, under the same review.
+
+Three kinds of actor make these changes:
+
+- **You, in an app**: the Browser app on the desktop, or the marketplace on [synap.live](https://www.synap.live/marketplace).
+- **Your agent, through MCP**: you ask in plain language, and the structural changes it makes become proposals
+  (requests in the apps) you approve.
+- **Code**: the `synap` CLI, a script on the Hub REST API, or an app on the SDK.
+
+## The extension points
+
+Ordered from no code to code.
+
+| You want to… | What it changes | Who does it |
+|---|---|---|
+| [Install a workspace from a template](/docs/customize/spaces-and-templates) | Adds a whole domain (a CRM, a content studio, finance): its kinds, fields, views, playbooks (templates in the apps) and automations | You in the Browser app or on synap.live, the CLI, or your agent |
+| [Add kinds, roles and fields](/docs/customize/kinds-and-fields) | Your data model: a new kind of record, a role an existing record can play, a field, a lifecycle | Your agent through MCP, or a template |
+| Add a [view](/docs/concepts/views) | How a set of records is shown (board, table, calendar, graph…). The records do not move | Your agent (`synap_create_view`), the CLI (`synap view create`), or a template |
+| [Install from the marketplace](/docs/customize/marketplace) | Adds packages others published: workspaces, capabilities, skills, automations, views, cards | You in an app, the CLI, or your agent |
+| [Add capabilities](/docs/customize/capabilities) | The tools your agents can call, such as an email or calendar account | You, the CLI, or your agent |
+| [Automate with playbooks and automations](/docs/customize/automations-and-playbooks) | Repeatable work: a shape of session (a job in the apps) you can run again, bound to a trigger | You, the CLI, or your agent |
+| [Import your data](/docs/customize/import) | Brings records from other tools into your pod | You or the CLI |
+| [Run your own code](/docs/customize/runnable-code) | Code that runs with your pod, such as a card that renders a record your way | Code |
+| Build your own [app or website](/docs/build) | A product of your own on top of your pod, through the SDK or the Hub REST API | Code |
+| Bring [your own agent](/docs/agents) | Which AI works on your pod, with its own key and identity | You, with `synap connect` or `synap agents add` |
+
+## Rules that hold for every extension
+
+- **Agents propose structural changes.** An agent defining a kind or a role, creating a workspace, playbook,
+  automation or card, or installing a package always files a proposal you approve, and no rule can change that.
+  Adding a field is a proposal by default. Plain record creates and edits are different: by default they apply
+  directly, with Undo. A person making the same change is not affected. See
+  [Validation policy](/docs/concepts/validation-policy).
+- **One workspace per domain.** A domain is installed once; a project is a filter across workspaces, never a second
+  copy of one. See [Spaces and templates](/docs/customize/spaces-and-templates#one-space-per-domain).
+- **Installing adds.** A package is refused when it would overwrite something your pod already has under the same
+  name. See [Marketplace listing policy](/docs/community/marketplace-policy).
+- **Records stay put.** A view is a projection and a workspace is a lens: neither copies your records.
+
+## In this section
+
+<Cards>
+  <Card
+    title="Spaces and templates"
+    description="What a space is, what a template brings, and how to install one from the apps, the CLI or an agent."
+    href="/docs/customize/spaces-and-templates"
+  />
+  <Card
+    title="Kinds, roles and fields"
+    description="Add a new kind of record, a role, a field or a lifecycle, through your agent or in a template."
+    href="/docs/customize/kinds-and-fields"
+  />
+  <Card
+    title="Marketplace"
+    description="Find, install, update and publish packages: workspaces, capabilities, skills, automations, views and cards."
+    href="/docs/customize/marketplace"
+  />
+  <Card
+    title="Capabilities"
+    description="Give your agents tools to call, with credentials that stay in your pod."
+    href="/docs/customize/capabilities"
+  />
+  <Card
+    title="Automations and playbooks"
+    description="Make work repeatable: playbooks you can run again, and the triggers that start them."
+    href="/docs/customize/automations-and-playbooks"
+  />
+  <Card
+    title="Import your data"
+    description="Bring records in from the tools you already use."
+    href="/docs/customize/import"
+  />
+  <Card
+    title="Runnable code"
+    description="Add code of your own that runs with your pod."
+    href="/docs/customize/runnable-code"
+  />
+</Cards>

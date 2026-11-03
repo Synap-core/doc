@@ -1,0 +1,168 @@
+---
+title: Run your own code
+description: Add code your pod can run when no capability does what you need (a code skill, a script on your own computer, or a card in the apps), how each is sandboxed and approved, and how agents, apps and scripts call it.
+type: how-to
+audience: builder
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+When no [capability](/docs/customize/capabilities) does what you need, you or your agent can add code. There are
+three places code runs. Each is sandboxed, and code an agent adds waits for your approval before it runs:
+
+| You want | Add | Where it runs |
+|---|---|---|
+| Logic over your data or an API: compute, filter, call a service, write records back | A **code skill** (JavaScript) | In your pod's sandbox |
+| A program with packages, files or Python: convert a file, chart a CSV, scrape a page | A **box script** (Python or Node.js) | On a computer of yours, in a fresh box per run |
+| Records shown your way: a card, a chart, a board | A **cell** (a card in the apps) | In the Synap apps, in a sandboxed frame |
+
+For a single HTTP call on a service you already connected, you need no code: add a declarative verb instead (see
+[Make your own capability](/docs/customize/capabilities#make-your-own)).
+
+## Code skills
+
+A code skill is a verb whose body is JavaScript. Once approved, it shows up next to your other verbs, and everything
+that can run a verb can run it.
+
+### What the code is
+
+Your code is the body of an async function. The pod runs it as:
+
+```js
+(async function (args, context) {
+  /* your code */
+})(args, context);
+```
+
+- `args` holds the inputs of the run, shaped by the skill's `parameters` (for example `{ "days": "number?" }`).
+- `context` holds `userId`, `workspaceId` and `agentUserId`.
+- What you `return` (JSON) is the run's result. `await` works at the top level.
+
+The code has the JavaScript built-ins plus `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `btoa`, `atob` and
+`structuredClone`. There is no `fetch`, `require`, `process` or `Buffer`: code that uses a name the sandbox does not
+provide is refused when it is saved. It reaches the outside only through what the pod hands it:
+
+| In the code | Does |
+|---|---|
+| `hubProtocol.getEntities({ profileSlug, limit })`, `hubProtocol.search(query, opts)`, `hubProtocol.getDocument(id)` | Read your pod, as you |
+| `propose.entity({ profileSlug, title, properties, … })` | Write a record back, through the same governance as any agent write |
+| `callProvider(tool, method, path, body)` | Call a connected service's API with its stored credential. The code never sees the key. |
+| `secrets.get("vault://…")` | Read a secret you granted it |
+| `host.fetch(url, opts)` | Reach a host on the skill's approved `allowedHosts` list (declared in a capability definition); every other host is refused |
+
+### Example
+
+This skill lists your overdue tasks. It reads only your pod:
+
+```js
+const tasks = await hubProtocol.getEntities({ profileSlug: "task", limit: 100 });
+const today = new Date().toISOString().slice(0, 10);
+const overdue = tasks.filter(
+  (t) => t.properties?.dueDate && String(t.properties.dueDate).slice(0, 10) < today,
+);
+return { count: overdue.length, titles: overdue.map((t) => t.title) };
+```
+
+### Add one
+
+- **Ask your agent.** It calls `synap_create_skill` with a `name`, a `description`, the `code`, a `body` explaining
+  the skill, and its `parameters`. When the code calls a connected service, it lists that tool in `requiredTools`, so
+  you approve the tool together with the skill. `timeoutSeconds` is 30 by default, at most 300.
+- **The API**: `POST /api/hub/skills`. See [Skills in the Hub REST API](/docs/reference/hub-api/skills).
+- **Inside a capability**, as a verb of `kind: "code"`, so it installs with the connection it needs. See
+  [Capabilities](/docs/customize/capabilities#make-your-own).
+
+To fix a skill, change it in place (`synap_update_skill`), never create a second one under the same name.
+
+### Approval
+
+A code skill runs only while it is turned on:
+
+- An agent's new skill comes back as a proposal (a **Request** in the apps), whatever its write mode: creating a skill
+  adds something that can act, so it is never one of the undoable writes an agent may make directly. The review shows
+  its whole code, the services and hosts it can reach; approving it also turns it on.
+- If you add a rule that lets an agent create skills without asking, a skill whose code reaches nothing outside your
+  pod (no hosts, no connected tools, no `callProvider`) starts turned on. Any other skill starts off, and the pod asks
+  you once whether to turn it on.
+- A code skill created through the API by a person starts turned off. Turn it on with
+  `POST /api/hub/skills/{id}/approve` and `{ "approved": true }`, with a person's key: an agent's key is refused.
+- Changing what a skill runs (its code, parameters, timeout, the hosts it may reach, or a tool added to it) turns it
+  off until a person approves it again. `synap_list_capabilities` then shows it as `blocked: "not_enabled"`, with a
+  link to turn it on.
+
+### How it is isolated
+
+Each run happens in a V8 isolate (`isolated-vm`) with 64 MB of memory and the skill's timeout, inside a separate
+worker process the pod supervises, started with Node.js's permission model and read-only file access. A code skill
+never runs inside the pod's API process; a pod in production refuses to.
+
+## Box scripts
+
+A box script is a whole program in Python or Node.js, with packages, run on a computer of yours, never on the pod.
+Each run gets a fresh box with no access to your pod and no secrets; its network reaches only the package registries
+(while installing) and the hosts the script declared.
+
+Your agent writes one with `synap_create_skill` and `executionMode: "box"`, the program in `code`, and
+`box: { language: "python" | "node", packages: [{ name, version }], hosts: [...] }`. Packages are pinned to an exact
+version. The script reads its inputs from `/in/parameters.json` and writes files to `/out`; they come back with the
+run, with its log and exit code. The reviewer approves the code, the packages and the hosts together.
+
+A run is queued (`status: "queued"` with a `boxRunId`) until a computer picks it up. For that, one of your computers
+runs `synap box serve`, and you turn on **Runs scripts** for it in the pod admin console, under **Computers**.
+Otherwise the run is refused and says why.
+
+<Callout title="A Proxmox host is needed today" type="warn">
+`synap box serve` creates each box as a fresh unprivileged LXC container on a Proxmox host, and destroys it after the
+run. Preparing that host is not covered in these docs yet.
+</Callout>
+
+## Cells
+
+A cell is UI code that renders records: a card for one kind, a chart, a board. It runs in the Synap apps, not on the
+pod.
+
+```bash
+synap cell build ./deal-card.tsx --out ./dist/deal-card.js --bundle-deps   # one module, packages included
+synap cell define --name "Deal card" --file ./dist/deal-card.js            # send it to the pod
+```
+
+`synap cell build --define` does both in one step. Bundle every dependency: a cell that asks for packages at run time
+fails to load. Your agent defines one with
+`synap_create_cell` (always a proposal), then binds it as how a kind renders (`list`, `detail`, `card` or
+`dashboard`) with `synap_promote_cell_to_renderer`.
+
+The cell runs in a sandboxed frame with no access to the app's origin, cookies or storage, and no pod key. It runs only
+its own bundled code, can contact only hosts that a package you installed declared, and reads and writes your pod by
+messages to the app, which allows a fixed set of operations.
+
+## Call your code from elsewhere
+
+Once approved, a code skill or a box script runs like any verb:
+
+| From | How |
+|---|---|
+| Your agent (MCP) | `synap_list_capabilities` lists it; `synap_run_capability` runs it, by its name (`verbId`) or `skillId`, with `parameters` |
+| The CLI | `synap capability run <name> --<input> <value>` |
+| An automation | A `skill` or `capability` step |
+| A script, or your website's server, with an API key | `POST /api/hub/capabilities/execute` with `skillId` or `verbId` and `parameters` (scope `hub-protocol.write`), or `POST /api/external/skills/{id}/invoke` with `{ "input": { … } }` (scope `skills.invoke`) |
+
+When an agent runs it, the same rules as any verb apply: it can come back as a proposal you approve. See
+[Capabilities](/docs/customize/capabilities#what-governance-applies).
+
+What is not possible today:
+
+- **An app a person connects to their pod** (built on `@synap-core/sdk/connect`, see
+  [Build a website on your pod](/docs/build/build-a-website)) cannot run your own skills. It reaches only the actions
+  the pod offers for an intent, such as "publish a post", and those come from Synap's official capabilities.
+- **A public website** with no key cannot run code on your pod.
+- **An automation step cannot hold code.** Its `condition`, `transform` and `compute` steps take expressions; put code
+  in a skill and call it from a `skill` step.
+
+## Related
+
+- [Capabilities](/docs/customize/capabilities)
+- [Automations and playbooks](/docs/customize/automations-and-playbooks)
+- [Skill invocation](/docs/build/skill-invocation)
+- [API keys](/docs/build/api-keys)

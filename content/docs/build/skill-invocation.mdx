@@ -39,7 +39,7 @@ Response:
 ```json
 [
   {
-    "id": "sk_01hx...",
+    "id": "0b6f1c9e-2d4a-4e8b-9c1a-5f3e7d2a1b00",
     "name": "Extract and save entities",
     "description": "Parses raw text and creates structured entity records in your workspace.",
     "scope": "workspace",
@@ -51,7 +51,7 @@ Response:
       },
       "required": ["text", "workspaceId"]
     },
-    "executionMode": "synchronous",
+    "executionMode": "sync",
     "timeoutSeconds": 30
   },
   {
@@ -66,7 +66,7 @@ Response:
       },
       "required": ["workspaceId"]
     },
-    "executionMode": "synchronous",
+    "executionMode": "sync",
     "timeoutSeconds": 15
   }
 ]
@@ -77,7 +77,7 @@ Response:
 ## Invoke a skill
 
 ```bash
-curl -X POST https://pod.example.com/api/external/skills/sk_01hx.../invoke \
+curl -X POST https://pod.example.com/api/external/skills/0b6f1c9e-2d4a-4e8b-9c1a-5f3e7d2a1b00/invoke \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

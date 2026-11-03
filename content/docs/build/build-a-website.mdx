@@ -1,0 +1,291 @@
+---
+title: Build a website on your pod
+description: Pick how your site talks to a pod, then build a Next.js app that people connect to their own pod, reading and writing their records with the SDK.
+type: tutorial
+audience: builder
+availability: [sdk, pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+A pod is a backend: a website or an app can read and write its records through the same doors, permissions and
+governance as the Synap apps. This page helps you pick the right door, then walks through the most complete case: an
+app that people connect to their own pod.
+
+## Pick how your site connects
+
+| Your site | Use | Credential |
+|---|---|---|
+| Shows what you published from your pod (a share, a form, a project published as a site) to anyone | `@synap-core/sdk/public` | None: the public token of what you published |
+| Lets each visitor connect **their own** pod and work on their records | `@synap-core/sdk/connect` (this tutorial) | The visitor's consent; the token stays on your server |
+| Runs on your own server against your own pod (a portfolio, an internal tool) | [`@synap-core/hub-rest-client`](/docs/build/sdk#scripts-and-agents-with-an-api-key) | An [API key](/docs/build/api-keys) kept on the server |
+| Runs where the person is already signed in to the pod (same domain) | The typed client in [`@synap-core/sdk`](/docs/build/sdk) | The person's sign-in session |
+
+Never put an API key in code that runs in the browser.
+
+## Build an app people connect to their pod
+
+You will build a small notes app. A visitor enters their pod's address; their pod shows a consent screen that lists
+what the app asks for and lets them choose which spaces it may use; the app then lists their notes and creates new
+ones.
+
+`@synap-core/sdk/connect` handles the sign-in for you: the OAuth flow with PKCE, the checks on the pod's answers, the
+token kept in a sealed, HTTP-only cookie on your server, and its renewal. It is server-only and throws if it is loaded
+in a browser. It uses Web-standard `Request` and `Response`, so it works in Next.js route handlers and other
+frameworks; this tutorial uses the Next.js App Router.
+
+### What you need
+
+- A Next.js 16 app (Next.js 16 names its middleware `proxy.ts`).
+- An https address for it, for example `https://notes.example.com`. A real pod only accepts an app served over https;
+  in development, use a tunnel.
+- A pod to connect to, [hosted](/docs/start/cloud-quickstart) or [self-hosted](/docs/start/self-host-quickstart).
+
+<Steps>
+<Step>
+
+### Install the SDK and set two variables
+
+```bash
+npm install @synap-core/sdk
+```
+
+```bash title=".env.local"
+SYNAP_APP_URL=https://notes.example.com
+SYNAP_APP_SESSION_SECRET=<at least 32 random characters>
+```
+
+`SYNAP_APP_URL` is your app's origin: no path, no trailing slash, a domain name rather than an IP address.
+`SYNAP_APP_SESSION_SECRET` seals the cookie that holds the connection. Keep both server-side, never in a
+`NEXT_PUBLIC_` variable.
+
+</Step>
+<Step>
+
+### Describe your app
+
+```ts title="lib/synap.ts"
+import { createPodAppAuth } from "@synap-core/sdk/connect";
+
+export const synap = createPodAppAuth({
+  appUrl: process.env.SYNAP_APP_URL!,
+  clientName: "My notes",
+  requests: [
+    { permission: "entity.note.read", reason: "Show your notes" },
+    { permission: "entity.note.create", reason: "Save the notes you write here" },
+  ],
+  secret: process.env.SYNAP_APP_SESSION_SECRET!,
+});
+```
+
+Each request is one permission, written `<subject>.<kind>.<action>` as in
+[API key grants](/docs/build/api-keys#grants-what-a-key-may-touch), with the sentence the consent screen shows. Ask
+for exactly what the app does: wildcards are refused, and the person sees every line. The SDK refuses at startup what
+the pod would refuse at sign-in.
+
+</Step>
+<Step>
+
+### Mount the sign-in routes
+
+Each route file re-exports one handler:
+
+```ts title="app/.well-known/synap-client.json/route.ts"
+import { synap } from "@/lib/synap";
+export const GET = synap.handlers.clientMetadata;
+```
+
+```ts title="app/api/synap/connect/route.ts"
+import { synap } from "@/lib/synap";
+export const POST = synap.handlers.connect;
+```
+
+```ts title="app/api/synap/callback/route.ts"
+import { synap } from "@/lib/synap";
+export const GET = synap.handlers.callback;
+```
+
+```ts title="app/api/synap/disconnect/route.ts"
+import { synap } from "@/lib/synap";
+export const POST = synap.handlers.disconnect;
+```
+
+`/.well-known/synap-client.json` describes your app to the pod. Its URL is your app's client ID, so there is nothing
+to register on the pod beforehand. `connect` and `disconnect` accept only a `POST` from your own pages.
+
+</Step>
+<Step>
+
+### Renew the connection before each page
+
+A server component cannot set cookies, so the connection is renewed in `proxy.ts`, before the page renders:
+
+```ts title="proxy.ts"
+import { NextResponse, type NextRequest } from "next/server";
+import { synap } from "@/lib/synap";
+
+export async function proxy(request: NextRequest) {
+  const outcome = await synap.refreshIfNeeded(request);
+  const headers = new Headers(request.headers);
+  if (outcome.cookieHeader !== null) headers.set("cookie", outcome.cookieHeader);
+  const response = NextResponse.next({ request: { headers } });
+  for (const cookie of outcome.setCookies) response.headers.append("Set-Cookie", cookie);
+  return response;
+}
+
+export const config = {
+  matcher: [
+    {
+      source: "/((?!_next/static|_next/image|api/synap/|\\.well-known/|.*\\.\\w+$).*)",
+      missing: [
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
+      ],
+    },
+  ],
+};
+```
+
+`refreshIfNeeded` renews the token only in its last five minutes. Forwarding `cookieHeader` lets the page see the
+renewed token in the same request. The matcher skips static files, the sign-in routes and router prefetches.
+
+</Step>
+<Step>
+
+### Add a connect page
+
+```tsx title="app/connect/page.tsx"
+export default function ConnectPage() {
+  return (
+    <form method="post" action="/api/synap/connect">
+      <label>
+        Your pod address <input name="pod" placeholder="pod.example.com" required />
+      </label>
+      <button type="submit">Connect</button>
+    </form>
+  );
+}
+```
+
+The form posts the pod's address (`https://` is added when it is missing). The visitor goes to their pod, approves,
+and comes back to `/`. A sign-in that fails comes back with an `error` code in the query: on `/connect` when it could
+not start, on `/connect/result` when it failed on the way back.
+
+</Step>
+<Step>
+
+### Read the visitor's notes
+
+```tsx title="app/page.tsx"
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { synap } from "@/lib/synap";
+import { addNote } from "./actions";
+
+export default async function Home() {
+  const connection = await synap.readConnection((await headers()).get("cookie"));
+  if (!connection) redirect("/connect");
+
+  const pod = synap.client(connection);
+  const notes = await pod.listEntities({ profileSlug: "note", limit: 50 });
+  if (!notes.ok) return <p>Could not read your notes ({notes.error.code}).</p>;
+
+  return (
+    <main>
+      <form action={addNote}>
+        <input name="title" required />
+        <button type="submit">Add note</button>
+      </form>
+      <ul>
+        {notes.data.map((note) => (
+          <li key={note.id}>{note.title}</li>
+        ))}
+      </ul>
+    </main>
+  );
+}
+```
+
+Calls return a result instead of throwing: `{ ok: true, data }`, or `{ ok: false, error }` whose `error.code` says what
+happened, such as `expired` (connect again), `forbidden` (the person did not grant it), `rate_limited` or
+`pod_unreachable`. The app sees only the spaces the person chose; without `workspaceId`, `listEntities` reads all of
+them.
+
+</Step>
+<Step>
+
+### Write, and expect a proposal
+
+```ts title="app/actions.ts"
+"use server";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { synap } from "@/lib/synap";
+
+export async function addNote(form: FormData) {
+  const connection = await synap.readConnection((await headers()).get("cookie"));
+  if (!connection) redirect("/connect");
+
+  const pod = synap.client(connection);
+  const space = pod.spaces()[0]; // a space the person granted
+  if (!space) redirect("/connect");
+
+  const result = await pod.post("/entities", {
+    profileSlug: "note",
+    title: String(form.get("title")),
+    workspaceId: space.workspaceId,
+  });
+
+  if (!result.ok) redirect(`/?failed=${result.error.code}`);
+  if (result.status === "proposed") redirect(`/?review=${encodeURIComponent(result.reviewUrl)}`);
+  redirect("/?saved=1");
+}
+```
+
+Every create names a space the person granted. A connected app acts as its own agent, one that asks first, so its
+writes come back as `status: "proposed"` with a `reviewUrl`, and the person approves them in their pod. That is a success: show
+"Sent to your pod for review" with the link, and never retry it. (`pod.actsAs` is `"agent"` for every app except
+Synap's official ones, whose writes apply directly.)
+
+</Step>
+</Steps>
+
+### Test without a pod
+
+`@synap-core/sdk/testing` has a mock pod, `createMockAuthServer()`, for development and tests. With
+`allowInsecureLoopback: true`, `createPodAppAuth` accepts it on `http://localhost`; a real pod, even a local one, still
+needs your app on https.
+
+### Going further
+
+The connection client has typed reads beyond `listEntities`: `getEntity`, `getEntityConnections`, `getDocument`,
+`getFileUrl` (a signed link to a file) and `listPendingProposals` (what waits for the person's review; needs
+`proposal.read`). `spaces()` and `can(permission, workspaceId)` let a page adapt to what was granted. `pod.actions`
+asks the person's own tools to do something for them, such as publishing a post, after they approve it (needs
+`capability.<intent>.run`). The `AGENTS.md` file shipped in the npm package documents every rule.
+
+## A public site
+
+To show what you published from your pod, with no sign-in at all:
+
+```ts
+import { createPublicClient } from "@synap-core/sdk/public";
+
+const pod = createPublicClient({ podUrl: "https://pod.example.com" });
+const page = await pod.listCollection("<site token>", "<collection key>");
+if (page.ok) console.log(page.data);
+```
+
+The client reads a public share (`readShare`), a form (`getForm`, `submitForm`), or a project you published as a site
+(`getSite`, `listCollection`, `getRecord`). Publishing a site creates its token, shown once to the person who
+publishes it. The same entry has helpers that turn what it reads into safe page models: render pod content through
+them, never as raw HTML.
+
+## Related
+
+- [SDK first query](/docs/build/sdk)
+- [Hub REST API reference](/docs/reference/hub-api)
+- [API keys](/docs/build/api-keys)
+- [Webhooks](/docs/build/webhooks)
+- [Run your own code](/docs/customize/runnable-code)

@@ -1,7 +1,12 @@
 {
   "title": "Get started",
-  "description": "Start here, and the two quickstarts",
+  "description": "Start here, choose your path, and the two quickstarts",
   "root": true,
   "icon": "Rocket",
-  "pages": ["index", "cloud-quickstart", "self-host-quickstart"]
+  "pages": [
+    "index",
+    "choose-your-path",
+    "cloud-quickstart",
+    "self-host-quickstart"
+  ]
 }

@@ -152,8 +152,8 @@ export default function HomePage() {
             structural changes wait for your approval.
           </p>
           <p className="max-w-2xl text-pretty text-base text-fd-muted-foreground">
-            It is for people who work with AI agents and want their notes, contacts, tasks and documents in one place
-            they own. For example, you ask Claude Code to log a call with a client: it adds the person and a note about
+            It is for people and small teams who work with AI agents and want their notes, contacts, tasks and documents in
+            one place they own. For example, you ask Claude Code to log a call with a client: it adds the person and a note about
             the call to your pod, and you find both in the Synap app on your desktop.
           </p>
           <FullSearchTrigger className="w-full max-w-md rounded-full bg-fd-card px-4 py-2.5" />

@@ -1,0 +1,19 @@
+{
+  "title": "Make it yours",
+  "description": "Spaces and templates, kinds and fields, the marketplace, capabilities, automations, import and your own code",
+  "root": true,
+  "icon": "Blocks",
+  "pages": [
+    "index",
+    "---No code---",
+    "spaces-and-templates",
+    "kinds-and-fields",
+    "marketplace",
+    "---Automate---",
+    "capabilities",
+    "automations-and-playbooks",
+    "import",
+    "---Code---",
+    "runnable-code"
+  ]
+}

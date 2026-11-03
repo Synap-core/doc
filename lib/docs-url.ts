@@ -1,7 +1,7 @@
 /**
  * Turn whatever an agent passes as a page reference into the page's URL path, so the docs
  * MCP server's `get_page` finds it: a path (`/docs/run/backups`), the Markdown URL
- * (`/docs/run/backups.md`), a full URL (`https://docs.synap.live/docs/run/backups#restore`),
+ * (`/docs/run/backups.md`), a full URL (`https://doc.synap.live/docs/run/backups#restore`),
  * a URL without its scheme, or a path without the `/docs` prefix (`run/backups`).
  *
  * No imports, so `node --test` can load it directly (scripts/docs-url.test.mjs).
@@ -16,7 +16,7 @@ export function normalizeDocsUrl(input: string, base = '/docs'): string {
       // Not a parseable URL: treat it as a path below.
     }
   } else if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?\//i.test(path)) {
-    // A host without a scheme, such as docs.synap.live/docs/run/backups.
+    // A host without a scheme, such as doc.synap.live/docs/run/backups.
     path = path.slice(path.indexOf('/'));
   }
 

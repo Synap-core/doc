@@ -35,7 +35,9 @@ app/           Next.js routes: home, /docs, /api/search, /api/mcp, /llms.txt, /l
 public/brand/  synap-mark.svg, the S mark, copied unchanged from synap-landing (never recolour or redraw it)
 proxy.ts       /docs/<page>.md and `Accept: text/markdown` -> the Markdown route
 lib/           page-meta.ts (frontmatter vocabulary), source.ts, markdown.ts, openapi.ts, mdx-components.tsx,
-               layout.shared.tsx (nav: mark, "Synap", "Docs", synap.live link), shiki-themes.ts (code colours)
+               layout.shared.tsx (nav: mark, "Synap", "Docs", synap.live link), shiki-themes.ts (code colours),
+               search.ts + search-rank.ts (one search for the dialog and the docs MCP server: title matches first,
+               generated reference after the guides, two short passages per page; tested by search-rank.test.mjs)
 scripts/       the checks (check-*.mjs), sync/generate-reference.mjs, reference-templates/, retired-names.json
 docs/          notes for people working on this site (not published); THEME_AND_TAILWIND.md has the brand tokens
 ```

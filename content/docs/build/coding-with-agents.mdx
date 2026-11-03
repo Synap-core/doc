@@ -13,7 +13,7 @@ A coding agent can connect to two different things. They are separate, and you c
 
 | | What the agent gets | Address |
 |---|---|---|
-| **These docs** | The documentation, to read and search while it writes code | `https://docs.synap.live/llms.txt`, any page as `.md`, the docs MCP server at `/api/mcp` |
+| **These docs** | The documentation, to read and search while it writes code | `https://doc.synap.live/llms.txt`, any page as `.md`, the docs MCP server at `/api/mcp` |
 | **Your pod** | Your data, under the agent's own key and governance | Your pod's `/mcp`, connected with `@synap-core/cli` |
 
 Give it the docs when it writes code against Synap (an app on the SDK, a script on the Hub REST API, an MCP
@@ -23,15 +23,15 @@ client). Connect it to your pod when it should work with your data.
 
 ### Start from llms.txt
 
-[`/llms.txt`](https://docs.synap.live/llms.txt) is the entry point written for agents: the sections, the key pages,
+[`/llms.txt`](https://doc.synap.live/llms.txt) is the entry point written for agents: the sections, the key pages,
 the interfaces to prefer, and the package names that are retired and must not be used.
-[`/llms-full.txt`](https://docs.synap.live/llms-full.txt) is every page in one file.
+[`/llms-full.txt`](https://doc.synap.live/llms-full.txt) is every page in one file.
 
 To make an agent use them in a repository, say so in its instruction file (`CLAUDE.md`, `AGENTS.md` or a Cursor
 rule):
 
 ```md
-Synap documentation: https://docs.synap.live/llms.txt
+Synap documentation: https://doc.synap.live/llms.txt
 Read a page as Markdown by adding .md to its URL.
 ```
 
@@ -40,8 +40,8 @@ Read a page as Markdown by adding .md to its URL.
 Each page has a Markdown version, built from the same source as the HTML:
 
 ```bash
-curl https://docs.synap.live/docs/agents/mcp.md                             # add .md to the URL
-curl -H 'Accept: text/markdown' https://docs.synap.live/docs/agents/mcp     # or ask for Markdown
+curl https://doc.synap.live/docs/agents/mcp.md                             # add .md to the URL
+curl -H 'Accept: text/markdown' https://doc.synap.live/docs/agents/mcp     # or ask for Markdown
 ```
 
 On every page, **Copy Markdown** copies it, and **Open** sends it to ChatGPT, Claude or Cursor, or shows it on
@@ -49,7 +49,7 @@ GitHub.
 
 ### The docs MCP server
 
-`https://docs.synap.live/api/mcp` is an MCP server (Streamable HTTP, no sign-in) with three tools:
+`https://doc.synap.live/api/mcp` is an MCP server (Streamable HTTP, no sign-in) with three tools:
 
 | Tool | Does |
 |---|---|
@@ -60,7 +60,7 @@ GitHub.
 Claude Code:
 
 ```bash
-claude mcp add --transport http synap-docs https://docs.synap.live/api/mcp
+claude mcp add --transport http synap-docs https://doc.synap.live/api/mcp
 ```
 
 Cursor, in `~/.cursor/mcp.json` or a project's `.cursor/mcp.json`:
@@ -68,7 +68,7 @@ Cursor, in `~/.cursor/mcp.json` or a project's `.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
-    "synap-docs": { "url": "https://docs.synap.live/api/mcp" }
+    "synap-docs": { "url": "https://doc.synap.live/api/mcp" }
   }
 }
 ```

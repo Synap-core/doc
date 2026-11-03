@@ -1,3 +1,3 @@
-import { searchServer } from '@/lib/search';
+import { searchGET } from '@/lib/search';
 
-export const { GET } = searchServer;
+export const GET = searchGET;

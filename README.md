@@ -23,7 +23,8 @@ CI runs the same checks and the build on every pull request.
 
 ## Where things are
 
-- Pages: `content/docs/<section>/`, in six sections: `start`, `use`, `build`, `run`, `reference`, `community`.
+- Pages: `content/docs/<section>/`, in eight sections: `start`, `concepts`, `use`, `agents`, `build`, `run`,
+  `reference`, `community`.
   Each folder's `meta.json` sets the navigation order.
 - How to write a page, the required frontmatter and the verification rule:
   [`content/docs/community/docs-style-guide.mdx`](content/docs/community/docs-style-guide.mdx).

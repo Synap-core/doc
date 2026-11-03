@@ -40,8 +40,8 @@ Read a page as Markdown by adding .md to its URL.
 Each page has a Markdown version, built from the same source as the HTML:
 
 ```bash
-curl https://docs.synap.live/docs/build/agents/mcp.md                             # add .md to the URL
-curl -H 'Accept: text/markdown' https://docs.synap.live/docs/build/agents/mcp     # or ask for Markdown
+curl https://docs.synap.live/docs/agents/mcp.md                             # add .md to the URL
+curl -H 'Accept: text/markdown' https://docs.synap.live/docs/agents/mcp     # or ask for Markdown
 ```
 
 On every page, **Copy Markdown** copies it, and **Open** sends it to ChatGPT, Claude or Cursor, or shows it on
@@ -79,7 +79,7 @@ This server only serves the public documentation. It cannot see a pod.
 
 Every pod serves its own MCP server at `/mcp`. The CLI connects an agent to it with an identity and a key of its own,
 so its writes go through your pod's governance and you can revoke it separately. See
-[Connect an agent](/docs/build/agents) for every client.
+[Connect an agent](/docs/agents) for every client.
 
 ```bash
 npx @synap-core/cli init          # first time: finds or creates your pod and connects the agents it detects
@@ -87,7 +87,7 @@ synap connect claude-code         # or: codex, cursor, claude-desktop, ...
 ```
 
 - **Claude Code**: `synap connect claude-code` registers the pod's MCP server with `claude mcp add` (user scope)
-  and installs the [Synap skills](/docs/build/agents/skills) in `~/.claude/skills/`.
+  and installs the [Synap skills](/docs/agents/skills) in `~/.claude/skills/`.
 - **Cursor**: `synap connect cursor` writes the pod's MCP server into `~/.cursor/mcp.json`.
 - **claude.ai** (web): its connector settings take a URL and sign you in with OAuth, with no key to paste.
   `synap mcp connect-claude` prints the steps and the Synap Cloud URL, `https://api.synap.live/mcp`. After you

@@ -1,4 +1,4 @@
 {
   "title": "Documentation",
-  "pages": ["start", "use", "build", "run", "reference", "community"]
+  "pages": ["start", "concepts", "use", "agents", "build", "run", "reference", "community"]
 }

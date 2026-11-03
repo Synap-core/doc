@@ -1,0 +1,23 @@
+{
+  "title": "Concepts",
+  "description": "How Synap works, from the pod to the protocol",
+  "root": true,
+  "icon": "Lightbulb",
+  "pages": [
+    "index",
+    "what-is-synap",
+    "---The data model---",
+    "kind-and-facets",
+    "entity-connections",
+    "views",
+    "profile-schemas",
+    "---Governance---",
+    "validation-policy",
+    "permission-model",
+    "---Under the hood---",
+    "hub-protocol-flow",
+    "pod-replication",
+    "---Look up---",
+    "glossary"
+  ]
+}

@@ -13,6 +13,58 @@ The Synap pod is open source (MIT) and published as signed releases of the
 [backend repository](https://github.com/Synap-core/backend). This section covers running one on your own server. To
 get a pod running quickly, follow the [self-host quickstart](/docs/start/self-host-quickstart) first.
 
+## In this section
+
+### Set up
+
+<Cards>
+  <Card
+    title="Install"
+    description="What install.sh does, its options, and the flags you can pass to synap install."
+    href="/docs/run/install"
+  />
+  <Card
+    title="Configuration"
+    description="Change a self-hosted pod's settings safely with synap config, and the settings you are most likely to need."
+    href="/docs/run/configuration"
+  />
+  <Card
+    title="Domains and TLS"
+    description="The host names a pod uses, the DNS records it needs, automatic HTTPS with Caddy, and tunnels."
+    href="/docs/run/domains-and-tls"
+  />
+  <Card
+    title="Connect to the Control Plane"
+    description="Let people sign in to a self-hosted pod with a Synap account, register the pod with Synap Cloud, and what the pod keeps for itself."
+    href="/docs/run/connect-control-plane"
+  />
+</Cards>
+
+### Operate
+
+<Cards>
+  <Card
+    title="Backups and restore"
+    description="Where a pod's data lives, the backups it takes on its own, off-host snapshots, and how to restore."
+    href="/docs/run/backups"
+  />
+  <Card
+    title="Upgrades"
+    description="Update a self-hosted pod with synap update, choose a release channel, turn on automatic updates, and read the outcome."
+    href="/docs/run/upgrades"
+  />
+  <Card
+    title="Operations and troubleshooting"
+    description="Check a self-hosted pod's health, read its logs, manage its users, and fix the common problems."
+    href="/docs/run/operations"
+  />
+  <Card
+    title="Security hardening"
+    description="What a self-hosted pod exposes, the defaults that protect it, and the settings to check before you put data in it."
+    href="/docs/run/security-hardening"
+  />
+</Cards>
+
 ## What runs on the server
 
 A pod is a Docker Compose project. The services that always run:

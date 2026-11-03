@@ -1,7 +1,19 @@
 {
-  "title": "Run",
-  "description": "Self-host a pod",
+  "title": "Self-host a pod",
+  "description": "Install and operate your own pod",
   "root": true,
   "icon": "Server",
-  "pages": ["index", "install", "configuration", "domains-and-tls", "backups", "upgrades", "operations", "security-hardening", "connect-control-plane"]
+  "pages": [
+    "index",
+    "---Set up---",
+    "install",
+    "configuration",
+    "domains-and-tls",
+    "connect-control-plane",
+    "---Operate---",
+    "backups",
+    "upgrades",
+    "operations",
+    "security-hardening"
+  ]
 }

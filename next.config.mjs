@@ -10,10 +10,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  */
 const moved = [
   // Start
-  ['/docs/start/concepts/what-is-synap', '/docs/start/what-is-synap'],
-  ['/docs/start/concepts', '/docs/start/what-is-synap'],
+  ['/docs/start/concepts/what-is-synap', '/docs/concepts/what-is-synap'],
+  ['/docs/start/concepts', '/docs/concepts/what-is-synap'],
   ['/docs/start/getting-started/getting-started', '/docs/start'],
-  ['/docs/start/getting-started/ai-agents-and-tools', '/docs/build/agents'],
+  ['/docs/start/getting-started/ai-agents-and-tools', '/docs/agents'],
   ['/docs/start/getting-started/next-steps', '/docs/start'],
   ['/docs/start/getting-started', '/docs/start'],
   // Cloud
@@ -31,35 +31,35 @@ const moved = [
   ['/docs/integrate/development/sdk/overview', '/docs/build/sdk'],
   ['/docs/integrate/development/sdk/creating-an-app', '/docs/build/sdk'],
   ['/docs/integrate/agents/connect/raycast', '/docs/use/raycast'],
-  ['/docs/integrate/agents/connect/:path*', '/docs/build/agents'],
-  ['/docs/integrate/agents/mcp', '/docs/build/agents/mcp'],
-  ['/docs/integrate/agents/skills', '/docs/build/agents/skills'],
-  ['/docs/integrate/agents/:path*', '/docs/build/agents'],
+  ['/docs/integrate/agents/connect/:path*', '/docs/agents'],
+  ['/docs/integrate/agents/mcp', '/docs/agents/mcp'],
+  ['/docs/integrate/agents/skills', '/docs/agents/skills'],
+  ['/docs/integrate/agents/:path*', '/docs/agents'],
   ['/docs/integrate/reference/event-catalog', '/docs/reference/events'],
   ['/docs/integrate/reference/:path*', '/docs/reference'],
   ['/docs/integrate/:path*', '/docs/build'],
   ['/docs/api', '/docs/reference/hub-api'],
   ['/docs/reference/hub-rest', '/docs/reference/hub-api'],
   // Architecture
-  ['/docs/architecture/concepts/kind-and-facets', '/docs/build/concepts/kind-and-facets'],
-  ['/docs/architecture/concepts/entity-connections', '/docs/build/concepts/entity-connections'],
-  ['/docs/architecture/concepts/profile-schemas', '/docs/build/concepts/profile-schemas'],
-  ['/docs/architecture/concepts/views', '/docs/build/concepts/views'],
-  ['/docs/architecture/concepts/pod-replication', '/docs/build/concepts/pod-replication'],
-  ['/docs/architecture/validation-policy', '/docs/build/concepts/validation-policy'],
-  ['/docs/architecture/permission-model', '/docs/build/concepts/permission-model'],
-  ['/docs/architecture/hub-protocol-flow', '/docs/build/concepts/hub-protocol-flow'],
+  ['/docs/architecture/concepts/kind-and-facets', '/docs/concepts/kind-and-facets'],
+  ['/docs/architecture/concepts/entity-connections', '/docs/concepts/entity-connections'],
+  ['/docs/architecture/concepts/profile-schemas', '/docs/concepts/profile-schemas'],
+  ['/docs/architecture/concepts/views', '/docs/concepts/views'],
+  ['/docs/architecture/concepts/pod-replication', '/docs/concepts/pod-replication'],
+  ['/docs/architecture/validation-policy', '/docs/concepts/validation-policy'],
+  ['/docs/architecture/permission-model', '/docs/concepts/permission-model'],
+  ['/docs/architecture/hub-protocol-flow', '/docs/concepts/hub-protocol-flow'],
   ['/docs/architecture/events/:path*', '/docs/reference/events'],
   ['/docs/architecture/deployment/data-pod/connect-control-plane', '/docs/run/connect-control-plane'],
   ['/docs/architecture/deployment/data-pod/tunnels-and-domains', '/docs/run/domains-and-tls'],
   ['/docs/architecture/deployment/:path*', '/docs/run'],
-  ['/docs/architecture/:path*', '/docs/start/what-is-synap'],
+  ['/docs/architecture/:path*', '/docs/concepts/what-is-synap'],
   // Contributing
   ['/docs/contributing/documentation-guide', '/docs/community/docs-style-guide'],
   ['/docs/contributing/:path*', '/docs/community'],
   // Older flat URLs
   ['/docs/getting-started/:path*', '/docs/start'],
-  ['/docs/concepts/:path*', '/docs/start/what-is-synap'],
+  // `/docs/concepts/*` was an older flat section; it is the Concepts section again (2026-11), so it is not redirected.
   ['/docs/deployment/:path*', '/docs/run'],
   ['/docs/development/:path*', '/docs/build'],
   ['/docs/integrations/:path*', '/docs/build'],
@@ -71,6 +71,18 @@ const moved = [
   ['/developers/:path*', '/docs/build'],
 ];
 
+/**
+ * 2026-11 navigation: Concepts and Agents became their own sections. Each page keeps its file name.
+ */
+const movedToSections = [
+  ['/docs/start/what-is-synap', '/docs/concepts/what-is-synap'],
+  ['/docs/start/glossary', '/docs/concepts/glossary'],
+  ['/docs/build/concepts', '/docs/concepts'],
+  ['/docs/build/concepts/:page', '/docs/concepts/:page'],
+  ['/docs/build/agents', '/docs/agents'],
+  ['/docs/build/agents/:page', '/docs/agents/:page'],
+];
+
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
@@ -80,7 +92,7 @@ const config = {
       { source: '/docs', destination: '/docs/start', permanent: true },
       { source: '/team', destination: '/docs/start', permanent: true },
       { source: '/developers', destination: '/docs/build', permanent: true },
-      ...moved.map(([source, destination]) => ({ source, destination, permanent: true })),
+      ...[...movedToSections, ...moved].map(([source, destination]) => ({ source, destination, permanent: true })),
     ];
   },
 };

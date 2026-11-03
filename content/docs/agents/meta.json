@@ -1,0 +1,7 @@
+{
+  "title": "Connect your AI",
+  "description": "Connect an agent, MCP and agent skills",
+  "root": true,
+  "icon": "Bot",
+  "pages": ["index", "mcp", "skills"]
+}

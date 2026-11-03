@@ -21,7 +21,7 @@ const quickstarts = [
   {
     icon: <Cloud aria-hidden />,
     title: 'Cloud quickstart',
-    description: 'Let Synap run the server. One command connects your computer, your agents and your phone.',
+    description: 'Let Synap run the server. One command connects your computer and your agents to a hosted pod.',
     href: '/docs/start/cloud-quickstart',
   },
   {
@@ -36,7 +36,7 @@ const intents: { icon: ReactNode; title: string; description: string; href: stri
   {
     icon: <AppWindow aria-hidden />,
     title: 'Use Synap',
-    description: 'Browser on the desktop, Relay on your phone, plus Raycast. Synap Cloud or your own pod.',
+    description: 'The Browser app on the desktop; Relay for your phone and Raycast are in beta. Synap Cloud or your own pod.',
     href: '/docs/use',
     links: [
       { title: 'Browser', href: '/docs/use/browser' },
@@ -61,7 +61,7 @@ const intents: { icon: ReactNode; title: string; description: string; href: stri
     description: 'Shape a pod to your work, from installing a template to writing your own app.',
     href: '/docs/customize',
     links: [
-      { title: 'Templates and spaces', href: '/docs/customize/spaces-and-templates' },
+      { title: 'Spaces and templates', href: '/docs/customize/spaces-and-templates' },
       { title: 'Marketplace', href: '/docs/customize/marketplace' },
       { title: 'Capabilities', href: '/docs/customize/capabilities' },
     ],

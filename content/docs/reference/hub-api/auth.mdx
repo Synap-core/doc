@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/auth
@@ -27,10 +27,11 @@ _openapi:
       - content: Why the presented key does or does not work (holder only)
         id: why-the-presented-key-does-or-does-not-work-holder-only
     contents:
-      - content: Returns metadata about the API key that authenticated this request —
-          id, owning user, scopes, expiry, last-used-at. Used by Eve CLI and
-          external operators to verify their credential without making
-          privileged calls. Returns 401 if no valid bearer was supplied.
+      - content: "Returns metadata about the API key that authenticated this request —
+          id, owning user, scopes, expiry, last-used-at, and `access` (the key's
+          grant: full access or what limits it). Used by Eve CLI and external
+          operators to verify their credential without making privileged calls.
+          Returns 401 if no valid bearer was supplied."
         heading: introspect-the-calling-bearer-credential
       - content: 'Answers the HOLDER of the bearer key — valid or not — with its state:
           `active`, `awaiting_approval` (+ the approval page), `revoked` (+

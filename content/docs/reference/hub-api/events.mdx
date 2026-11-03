@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/events
@@ -29,9 +29,9 @@ _openapi:
     contents:
       - content: 'Returns events from the event log filtered by type/subject/window, and
           optionally by producer: `agentUserId` (everything one agent did),
-          `isAgent` (agent- vs human-produced) and `correlationId` (one request
-          chain). Default window is 7 days; default limit is 50, hard-capped at
-          200.'
+          `isAgent` (agent- vs human-produced), `correlationId` (one request
+          chain) and `sessionId` (what one focus session produced). Default
+          window is 7 days; default limit is 50, hard-capped at 200.'
         heading: list-recent-events-for-a-user
       - content: Long-lived Server-Sent Events stream. Emits `event` and `heartbeat`
           frames. Consumers must dedupe by event id (at-least-once across

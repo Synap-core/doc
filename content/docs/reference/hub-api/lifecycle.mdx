@@ -1,6 +1,6 @@
 ---
 title: Lifecycle
-description: The Lifecycle operations of the Hub REST API (4 operations).
+description: The Lifecycle operations of the Hub REST API (5 operations).
 full: true
 type: reference
 audience: builder
@@ -9,11 +9,14 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/lifecycle
   toc:
+    - depth: 2
+      title: The declared lifecycle of a kind or role
+      url: '#the-declared-lifecycle-of-a-kind-or-role'
     - depth: 2
       title: The pipeline of a kind or role
       url: '#the-pipeline-of-a-kind-or-role'
@@ -28,6 +31,8 @@ _openapi:
       url: '#the-things-being-worked-with-their-work'
   structuredData:
     headings:
+      - content: The declared lifecycle of a kind or role
+        id: the-declared-lifecycle-of-a-kind-or-role
       - content: The pipeline of a kind or role
         id: the-pipeline-of-a-kind-or-role
       - content: Things into done / lost per bucket
@@ -37,6 +42,14 @@ _openapi:
       - content: The things being worked, with their work
         id: the-things-being-worked-with-their-work
     contents:
+      - content: 'The stages a kind or role declares (`lifecycle.get`): the status
+          `property` and its `options` in declared order, each with `key`,
+          `label`, `category`, `tone` and `humanOnly`, and the `initialStatus` a
+          new one starts in (null = none set). Declared data, no rows. A key
+          bounded by a grant must name `workspaceId` and hold
+          `entity.<profileSlug>.read` (`facet.read` for a role) there (403
+          otherwise).'
+        heading: the-declared-lifecycle-of-a-kind-or-role
       - content: Things of `profileSlug` grouped by their declared lifecycle status, in
           option order (`lifecycle.board`). `workedBy=true` adds who is on each
           card.
@@ -44,11 +57,12 @@ _openapi:
       - content: 'The goal line of a kind or role (`lifecycle.throughput`): every
           bucket, zeros included, oldest first.'
         heading: things-into-done--lost-per-bucket
-      - content: Every space the caller sees with its intent (`settings.intent`, else
+      - content: "Every space the caller sees with its intent (`settings.intent`, else
           inferred) and, per produced kind, the pipeline in one line, needs-you,
           being-worked and a headline thing (`lifecycle.home`). `projectId`
           lists only the project's spaces (the ones it uses + its home; 404 when
-          the caller cannot see it) and narrows every count.
+          the caller cannot see it) and narrows every count. A workspace-bound
+          key is refused (403): Home is every space."
         heading: what-each-space-produces-and-how-its-things-stand
       - content: 'Things with open work on them (a session, an in-flight worker, a
           scheduled prep), most urgent first, plus `unattached`: open work
@@ -61,7 +75,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/lifecycle" webhooks={[]} operations={[{"path":"/lifecycle/board","method":"get"},{"path":"/lifecycle/throughput","method":"get"},{"path":"/lifecycle/home","method":"get"},{"path":"/lifecycle/moving","method":"get"}]} showTitle />
+      <OpenAPIPage document="hub-api/lifecycle" webhooks={[]} operations={[{"path":"/lifecycle","method":"get"},{"path":"/lifecycle/board","method":"get"},{"path":"/lifecycle/throughput","method":"get"},{"path":"/lifecycle/home","method":"get"},{"path":"/lifecycle/moving","method":"get"}]} showTitle />
     </>
   );
 }

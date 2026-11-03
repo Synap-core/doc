@@ -98,21 +98,6 @@ Commit both the JSON and the pages. `content/reference-data/sources.json` record
 file came from. CI checks that the data matches those commits (`npm run reference:check`) and that the pages match
 the data (`npm run check:generated`); a weekly workflow (`reference-drift.yml`) reports when a source ref has moved.
 
-### Reference data: merge order
-
-The reference JSON is currently pinned to unmerged branches: `claude/docs-night` in Synap-core/backend (the one
-integration branch that carries the reference exporter and the Hub OpenAPI fix) and `claude/cli-reference` in
-Synap-core/synap-cli (see `sources.json`), because the exporters live there. After backend `claude/docs-night` and
-synap-cli `claude/cli-reference` merge, re-run `reference:sync` against `main` and commit the result:
-
-```bash
-npm run reference:sync     # SYNAP_CLI_REF and SYNAP_BACKEND_REF default to main
-npm run reference:generate
-```
-
-Until then, the weekly drift job follows the pinned refs (the `ref` in `sources.json`), so it reports changes on
-those branches, not on `main`.
-
 ## Markdown for agents
 
 Every page is served as Markdown from the same compiled MDX: `/docs/<page>.md`, or `/docs/<page>` with

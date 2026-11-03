@@ -1,6 +1,6 @@
 ---
 title: Runs
-description: The Runs operations of the Hub REST API (3 operations).
+description: The Runs operations of the Hub REST API (5 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/runs
@@ -23,6 +23,12 @@ _openapi:
     - depth: 2
       title: Diagnose — whole-pod health, a class surface, an object, or an agent
       url: '#diagnose--whole-pod-health-a-class-surface-an-object-or-an-agent'
+    - depth: 2
+      title: API usage — calls per key, client, conversation, class, outcome
+      url: '#api-usage--calls-per-key-client-conversation-class-outcome'
+    - depth: 2
+      title: One server error (5xx) by the errorId its client got
+      url: '#one-server-error-5xx-by-the-errorid-its-client-got'
   structuredData:
     headings:
       - content: List runs across flows (unified feed)
@@ -31,6 +37,10 @@ _openapi:
         id: get-one-run--its-activity-timeline
       - content: Diagnose — whole-pod health, a class surface, an object, or an agent
         id: diagnose--whole-pod-health-a-class-surface-an-object-or-an-agent
+      - content: API usage — calls per key, client, conversation, class, outcome
+        id: api-usage--calls-per-key-client-conversation-class-outcome
+      - content: One server error (5xx) by the errorId its client got
+        id: one-server-error-5xx-by-the-errorid-its-client-got
     contents:
       - content: "Newest-first run feed across automation / playbook / capture /
           capability / session / chat. Filter to one ledger with flowType, or
@@ -49,6 +59,16 @@ _openapi:
           scorecard · {runId,flowType} / {flowType,flowId} → today's
           run-detail/run-feed grammar."
         heading: diagnose--whole-pod-health-a-class-surface-an-object-or-an-agent
+      - content: 'Counts from `api_usage_buckets` (5-minute buckets, 30 days): calls,
+          summed wall time and distinct conversations, grouped by the asked
+          dimensions, largest first. Pod owner or admin only. Same read as
+          `synap_diagnose` type `usage`.'
+        heading: api-usage--calls-per-key-client-conversation-class-outcome
+      - content: "The stored cause of one server fault: the original error's name,
+          message, stack and cause chain, with when, door, method, path, status
+          and caller. A 5xx body names this read in `causeUrl`. Pod owner or
+          admin only; 404 when nothing is stored under the id (kept 30 days)."
+        heading: one-server-error-5xx-by-the-errorid-its-client-got
 ---
 
 export default function Layout(props) {
@@ -56,7 +76,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/runs" webhooks={[]} operations={[{"path":"/runs","method":"get"},{"path":"/runs/{id}","method":"get"},{"path":"/diagnose","method":"post"}]} showTitle />
+      <OpenAPIPage document="hub-api/runs" webhooks={[]} operations={[{"path":"/runs","method":"get"},{"path":"/runs/{id}","method":"get"},{"path":"/diagnose","method":"post"},{"path":"/usage","method":"get"},{"path":"/errors/{errorId}","method":"get"}]} showTitle />
     </>
   );
 }

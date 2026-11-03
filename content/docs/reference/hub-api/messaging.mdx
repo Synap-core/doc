@@ -1,6 +1,6 @@
 ---
 title: Messaging
-description: The Messaging operations of the Hub REST API (17 operations).
+description: The Messaging operations of the Hub REST API (15 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/messaging
@@ -27,14 +27,12 @@ _openapi:
       title: Sync live accounts from the connector into the database
       url: '#sync-live-accounts-from-the-connector-into-the-database'
     - depth: 2
-      title: Get current messaging connector config state (masked)
-      url: '#get-current-messaging-connector-config-state-masked'
+      title: Get the messaging service's connection state (no secret)
+      url: '#get-the-messaging-services-connection-state-no-secret'
     - depth: 2
-      title: Store Unipile connector credentials in the vault
-      url: '#store-unipile-connector-credentials-in-the-vault'
-    - depth: 2
-      title: Migrate workspace settings messaging credentials to vault
-      url: '#migrate-workspace-settings-messaging-credentials-to-vault'
+      title: Import an account's history with people already in the pod (an agent's
+        call becomes a proposal)
+      url: '#import-an-accounts-history-with-people-already-in-the-pod-an-agents-call-becomes-a-proposal'
     - depth: 2
       title: Disconnect a messaging account
       url: '#disconnect-a-messaging-account'
@@ -57,9 +55,6 @@ _openapi:
       title: Get messages in a conversation thread
       url: '#get-messages-in-a-conversation-thread'
     - depth: 2
-      title: Import a conversation thread into the pod as a governed proposal
-      url: '#import-a-conversation-thread-into-the-pod-as-a-governed-proposal'
-    - depth: 2
       title: Send a message in a conversation thread
       url: '#send-a-message-in-a-conversation-thread'
     - depth: 2
@@ -75,12 +70,11 @@ _openapi:
         id: get-hosted-auth-url-for-connecting-a-new-account
       - content: Sync live accounts from the connector into the database
         id: sync-live-accounts-from-the-connector-into-the-database
-      - content: Get current messaging connector config state (masked)
-        id: get-current-messaging-connector-config-state-masked
-      - content: Store Unipile connector credentials in the vault
-        id: store-unipile-connector-credentials-in-the-vault
-      - content: Migrate workspace settings messaging credentials to vault
-        id: migrate-workspace-settings-messaging-credentials-to-vault
+      - content: Get the messaging service's connection state (no secret)
+        id: get-the-messaging-services-connection-state-no-secret
+      - content: Import an account's history with people already in the pod (an agent's
+          call becomes a proposal)
+        id: import-an-accounts-history-with-people-already-in-the-pod-an-agents-call-becomes-a-proposal
       - content: Disconnect a messaging account
         id: disconnect-a-messaging-account
       - content: List conversations — entity-linked or browse mode
@@ -95,8 +89,6 @@ _openapi:
         id: all-unread-conversations-linked-to-entities
       - content: Get messages in a conversation thread
         id: get-messages-in-a-conversation-thread
-      - content: Import a conversation thread into the pod as a governed proposal
-        id: import-a-conversation-thread-into-the-pod-as-a-governed-proposal
       - content: Send a message in a conversation thread
         id: send-a-message-in-a-conversation-thread
       - content: List all external channels (DB-backed inbox)
@@ -116,7 +108,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/messaging" webhooks={[]} operations={[{"path":"/messaging/inbound","method":"post"},{"path":"/messaging/accounts","method":"get"},{"path":"/messaging/auth-url","method":"get"},{"path":"/messaging/accounts/sync","method":"post"},{"path":"/messaging/service-config","method":"get"},{"path":"/messaging/service-config","method":"post"},{"path":"/messaging/service-config/migrate","method":"post"},{"path":"/messaging/accounts/{accountId}","method":"delete"},{"path":"/messaging/conversations","method":"get"},{"path":"/messaging/channels/connect","method":"post"},{"path":"/messaging/channels/{channelId}","method":"delete"},{"path":"/messaging/channels/{channelId}/mark-read","method":"post"},{"path":"/messaging/linked-unread","method":"get"},{"path":"/messaging/conversations/{threadId}/messages","method":"get"},{"path":"/messaging/conversations/{threadId}/import","method":"post"},{"path":"/messaging/conversations/{threadId}/send","method":"post"},{"path":"/messaging/channels","method":"get"}]} showTitle />
+      <OpenAPIPage document="hub-api/messaging" webhooks={[]} operations={[{"path":"/messaging/inbound","method":"post"},{"path":"/messaging/accounts","method":"get"},{"path":"/messaging/auth-url","method":"get"},{"path":"/messaging/accounts/sync","method":"post"},{"path":"/messaging/service-config","method":"get"},{"path":"/messaging/accounts/{accountId}/import-history","method":"post"},{"path":"/messaging/accounts/{accountId}","method":"delete"},{"path":"/messaging/conversations","method":"get"},{"path":"/messaging/channels/connect","method":"post"},{"path":"/messaging/channels/{channelId}","method":"delete"},{"path":"/messaging/channels/{channelId}/mark-read","method":"post"},{"path":"/messaging/linked-unread","method":"get"},{"path":"/messaging/conversations/{threadId}/messages","method":"get"},{"path":"/messaging/conversations/{threadId}/send","method":"post"},{"path":"/messaging/channels","method":"get"}]} showTitle />
     </>
   );
 }

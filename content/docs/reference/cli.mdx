@@ -7,10 +7,10 @@ type: "reference"
 audience: "builder"
 status: "current"
 owner: "Antoinesrvt"
-generated_from: "Synap-core/synap-cli@d34cfbcbd (main)"
+generated_from: "Synap-core/synap-cli@8afcf0247 (main)"
 ---
 
-Generated from [Synap-core/synap-cli@d34cfbcbd](https://github.com/Synap-core/synap-cli/tree/d34cfbcbd70c5627d78ab9b17dfe3a8118c5877d) (`main`): [`docs/reference/cli.json`](https://github.com/Synap-core/synap-cli/blob/d34cfbcbd70c5627d78ab9b17dfe3a8118c5877d/docs/reference/cli.json).
+Generated from [Synap-core/synap-cli@8afcf0247](https://github.com/Synap-core/synap-cli/tree/8afcf024736d3ce003ac8c2edcf3ee035fb80768) (`main`): [`docs/reference/cli.json`](https://github.com/Synap-core/synap-cli/blob/8afcf024736d3ce003ac8c2edcf3ee035fb80768/docs/reference/cli.json).
 
 `@synap-core/cli` (command `synap`) connects computers and AI agents to a pod and works with the pod from a terminal.
 It needs Node.js 20 or later.
@@ -40,7 +40,7 @@ Never commit them.
 
 ## Commands
 
-220 commands, grouped by top-level command. 5 hidden commands (internal or deprecated) are not listed.
+234 commands, grouped by top-level command. 5 hidden commands (internal or deprecated) are not listed.
 
 | Global option | Description |
 |---|---|
@@ -61,6 +61,7 @@ synap init [options]
 | `--api-key <key>` | Hub Protocol API key (skip key generation) |
 | `-y, --yes` | Accept the defaults, no prompts (connects the agents found on this machine) |
 | `--agents <list>` | Agents to connect, comma-separated: claude-code,codex,cursor |
+| `--as <job>` | Give the agent this computer adds a job (e.g. --as "Agent sessions"); one engine |
 | `--json` | Print a JSON summary on stdout: \{podUrl, connected, notApproved, failed, pairLink, exitCode\} |
 
 ```text
@@ -107,7 +108,6 @@ synap connect [options] [thing]
 | `--api-key <key>` | Hub Protocol API key |
 | `--name <name>` | Pod profile to use (default: active pod) |
 | `--list` | List what can be connected and exit |
-| `--with-mcp` | Raycast only: also install the full 56-tool MCP server via mcp-remote (names overlap @synap) |
 | `--target <name>` | Legacy spelling of \<thing\> |
 | `--pin-workspace <id>` | Legacy spelling of --workspace |
 | `--pin-project <id>` | Legacy spelling of --project |
@@ -205,6 +205,7 @@ synap doctor [options]
 | `--json` | Output as JSON |
 | `--fix` | Fix key problems: finish a pending approval, give this computer its own key, or rewrite stale copies — then verify over MCP |
 | `-v, --verbose` | Every check with its details, ids and addresses |
+| `--pod-url <url>` | Probe this pod URL (works with no pod configured) |
 
 ## synap versions
 
@@ -229,6 +230,45 @@ synap whoami [options]
 | Option | Description |
 |---|---|
 | `--json` | Output as JSON |
+
+## synap wait
+
+Wait for a devbox job, a PR's checks or merge, or an Actions run; the status line shows the wait
+
+```bash
+synap wait [options] <kind> <target>
+```
+
+| Option | Description |
+|---|---|
+| `--interval <duration>` | Time between probes (default devbox 30s, pr/run 60s) |
+| `--timeout <duration>` | Give up after this long: exit 2 (default 4h) |
+| `--label <text>` | What the status line calls this wait |
+| `--for <what>` | pr: checks (default) or merged |
+| `--checks <names>` | pr --for checks: only these checks, comma-separated (default: all) |
+| `-R, --repo <owner/repo>` | run: the repository of a bare run id |
+| `--host <host>` | devbox: the ssh host (default devbox) |
+| `--since <duration>` | devbox: also accept a run that finished this long before the wait started (default 2m) |
+
+```text
+What each kind waits for:
+  devbox <job>      the devbox job of that name (gate.sh, q.sh, runlocked.sh) to finish a
+                    run that ended after the wait started (see --since). Reads
+                    `ssh devbox python3 ~/wt/devbox-status.py --name <job>` every 30 s.
+  pr <repo>#<n>     --for checks (default): every check on the PR (or the --checks list) to
+                    complete. --for merged: the PR to be merged or closed. A bare repo name
+                    means Synap-core/<repo>. Reads `gh pr view` every 60 s.
+  run <url|id>      a GitHub Actions run to complete. Reads `gh run view` every 60 s.
+
+It prints one line per state change and a final summary, and keeps its state in
+~/.synap/waits/<conversation>/<id>.json, which the Claude Code status line shows.
+
+Exit codes:
+  0  passed (devbox green; every check success/skipped/neutral; merged; run success)
+  1  failed (a red gate; a failed or cancelled check; closed unmerged; run failed)
+  2  timeout (--timeout, default 4h)
+  3  infra (devbox infra / died / refused / NOT-RUN), or the probe kept failing until the timeout
+```
 
 ## synap update
 
@@ -604,7 +644,7 @@ synap ask [options] <query>
 
 ## synap capture
 
-Capture knowledge: smart `capture "<free text>"` (AI structures it). For canonical typed Knowledge, use `create entity --profile=knowledge --props='{"knowledgeForm":"insight|caution"}'`.
+Capture knowledge: smart `capture "<free text>"` (AI structures it). For canonical typed Knowledge, use `create entity --profile=knowledge --props='{"knowledgeForm":"fact|caution|convention"}'`.
 
 ```bash
 synap capture [options] [text]
@@ -1126,15 +1166,54 @@ synap worker [options]
 | Option | Description |
 |---|---|
 | `--agent <name>` | The named agent this machine works as (its key comes from ~/.synap) Required. |
+| `--runtime <engine>` | First run of an agent with a job: the engine that runs it (e.g. claude-code); asks for the agent on this computer when no key is saved |
+| `--no-create` | Never ask for the agent on first run, even with --runtime |
 | `--interval <dur>` | How often to check for handed sessions (e.g. 30s, 2m) Default: `"30s"`. |
 | `--once` | Check once, run what is handed, wait for it, exit |
-| `--cwd <dir>` | Where the launched Claude Code works (default ~/Documents/Code/synap) |
+| `--cwd <dir>` | Where code sessions' Claude Code works (default ~/Documents/Code/synap) |
+| `--work-root <dir>` | Where playbook runs over pod data (no repo) get a folder each, \<dir\>/\<session id\> (default ~/synap-work) |
 | `--max-parallel <n>` | Runs at the same time Default: `"1"`. |
 | `--claude-bin <path>` | The claude binary Default: `"claude"`. |
 | `--claude-config-dir <dir>` | CLAUDE_CONFIG_DIR for launched runs — picks which Claude subscription they use |
+| `--accounts <file>` | Claude accounts to rotate across (\{version:1, reserve, accounts:\[\{id,label,token,design?\}\]\}, mode 600); default ~/.config/synap-worker/accounts.json when it exists, else the environment's login |
+| `--github-app <file>` | GitHub App env file (\{GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY_FILE, GITHUB_APP_INSTALLATION_ID?\}, mode 600): runs' gh and git push act as that App; default ~/.config/synap-agent-app.env when it exists, else the environment's login (warned loudly) |
 | `--allowed-tools <list>` | Comma-separated Claude tools allowed without asking (the pod MCP server is always added) |
 | `--skip-permissions` | Launch with --dangerously-skip-permissions instead of an allow-list |
 | `--dry-run` | Claim and log what would launch, without launching Claude |
+| `--protocols <list>` | Which runs this computer takes: code, work-folder (comma-separated; default both). A computer that runs no code, like the person's Mac, takes work-folder only; a design run counts as code |
+
+## synap box
+
+Run scripts in fresh isolated boxes on this computer (run box provisioner)
+
+```bash
+synap box [options] [command]
+```
+
+### synap box serve
+
+Lease queued box runs from the pod and run each in a fresh box
+
+```bash
+synap box serve [options]
+```
+
+| Option | Description |
+|---|---|
+| `--config <file>` | Provisioner config Default: `"/etc/synap-box/config.json"`. |
+| `--once` | Lease at most one run, work it, exit |
+
+### synap box reap
+
+Destroy every box no run holds (after a crash)
+
+```bash
+synap box reap [options]
+```
+
+| Option | Description |
+|---|---|
+| `--config <file>` | Provisioner config Default: `"/etc/synap-box/config.json"`. |
 
 ## synap session
 
@@ -1158,7 +1237,7 @@ synap session start [options]
 | `--workspace <id>` | Workspace that owns the session |
 | `--project <id>` | Project that owns the session (defaults to the active project lens; the pod accepts a workspace OR a project) |
 | `--task-id <id>` | Link session to an existing task entity |
-| `--track <id>` | Born inside a track (a project's lasting goal) — implies its project |
+| `--track <id>` | Born inside a track (a project's goal) — implies its project |
 | `--template <id>` | Start from a playbook (seeds currentStage from its stages) |
 | `--no-template` | Opt out of auto-matching a playbook — start ad-hoc |
 | `--parent <id>` | Push from another session — records session --spawned_from--\> session (the parent stays open) |
@@ -1234,6 +1313,8 @@ synap session close [options] <id>
 | `--workspace <id>` | Workspace hint (optional; not required for complete) |
 | `--recap <text>` | Short summary of what was accomplished (maps to summary) |
 | `--as <status>` | How it ended: closed (default, finished) \| cancelled (abandoned) \| failed (could not complete) |
+| `--withdraw <messageId=note>` | An open question you asked that your work overtook, with why (repeatable) Default: `[]`. |
+| `--keep-owed <messageId>` | An open question the person still owes you an answer to after this session (repeatable) Default: `[]`. |
 | `--json` | Output full pack (or close result) as JSON |
 | `--pod-url <url>` | Pod URL override |
 | `--api-key <key>` | API key override |
@@ -1311,21 +1392,67 @@ synap session evaluate [options]
 
 ### synap session wait
 
-Block until the human replies in the session room, then print the reply. Exit 0 replied · 1 timeout · 2 failure (auth/network/broken read)
+Block until the human replies in the session room (or, with --events, until the session changes), then print it. Session: the argument, else the one attached to this terminal. Exit 0 replied · 1 timeout · 2 failure (auth/network/broken read); with --hook: 2 wake · 0 anything else
 
 ```bash
-synap session wait [options] <sessionId>
+synap session wait [options] [sessionId]
 ```
 
 | Option | Description |
 |---|---|
-| `--since <iso>` | Only answers strictly after this ISO timestamp (default: now — skips anything that predates this wait) |
+| `--since <iso>` | Only events strictly after this ISO timestamp (default: now — skips anything that predates this wait; with --events: the unread ones) |
+| `--events <kinds>` | Wait on the session change feed: comma list of answer, proposal_decided, stage_moved, owner_message, session_message (a message from another session's agent), or all |
+| `--wake-only` | Stop only on what should wake an agent: answers, owner messages, and agent messages the pod marked wake (the rest is read and skipped) |
+| `--once` | One read, no waiting loop |
+| `--peek` | Mark nothing picked up or read (a watcher that is not the agent doing the work) |
+| `--hook` | Run as a Claude Code asyncRewake Stop hook: wait for a wake-worthy event, print it on stderr, exit 2 (see: synap hooks install-wake) |
 | `--timeout <duration>` | Give up after this long (e.g. 30m, 2h) Default: `"30m"`. |
-| `--interval <duration>` | Delay between checks (e.g. 10s) Default: `"10s"`. |
-| `--limit <n>` | Max answers per page, 1-100 Default: `"20"`. |
-| `--json` | Output the reply(ies) — or the timeout — as JSON |
+| `--interval <duration>` | Delay between checks of the answer-only wait (e.g. 10s) Default: `"10s"`. |
+| `--limit <n>` | Max answers / events per page, 1-100 Default: `"20"`. |
+| `--json` | Output the reply(ies) or events — or the timeout — as JSON |
 | `--pod-url <url>` | Pod URL override |
 | `--api-key <key>` | API key override |
+
+### synap session post
+
+Message ANOTHER of your sessions' agent: blocked_on_you / handoff may wake it, done / fyi never do. Replying to a message that woke you? Pass its id as --cause. Exit 0 delivered · 1 pod does not deliver agent messages · 2 failure
+
+```bash
+synap session post [options] <toSessionId> <text...>
+```
+
+| Option | Description |
+|---|---|
+| `--intent <intent>` | blocked_on_you \| handoff \| done \| fyi Default: `"fyi"`. |
+| `--cause <messageId>` | The message that woke you (the id `synap session wait` printed), when this replies to it |
+| `--from <sessionId>` | Your session, when this terminal is not bound to it |
+| `--ref <kind:id[:label]>` | The state behind the message: session:\<id\>, blocked_by:\<id\>, proposal:\<id\>, slot:\<sessionId\>:\<label\> (repeatable) Default: `[]`. |
+| `--json` | Output the pod's reply as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap hooks
+
+Claude Code hooks that connect a terminal to its Synap session
+
+```bash
+synap hooks [options] [command]
+```
+
+### synap hooks install-wake
+
+Add the wake hook (a Stop hook running `synap session wait --hook`) to this project's .claude/settings.json — idempotent, other hooks kept
+
+```bash
+synap hooks install-wake [options]
+```
+
+| Option | Description |
+|---|---|
+| `--uninstall` | Remove the wake hook instead |
+| `--user` | Use ~/.claude/settings.json (every project) instead of the project's |
+| `--dir <path>` | The project directory (default: the current one) |
+| `--json` | Output the result as JSON |
 
 ## synap playbook
 
@@ -1355,7 +1482,7 @@ synap playbook run [options] <name-or-id>
 
 ## synap track
 
-Manage tracks — the lasting goals a project pursues
+Manage tracks — the goals a project pursues
 
 ```bash
 synap track [options] [command]
@@ -1363,7 +1490,7 @@ synap track [options] [command]
 
 ### synap track list
 
-List a project's tracks (defaults to the active project lens)
+List a project's goals (the active project lens); with no project in scope, every goal on the pod
 
 ```bash
 synap track list [options]
@@ -1372,7 +1499,10 @@ synap track list [options]
 | Option | Description |
 |---|---|
 | `--project <id>` | Project id (defaults to the active project lens) |
-| `--all` | Include archived tracks |
+| `--everywhere` | List every goal on the pod, ignoring the project lens |
+| `--limit <n>` | Pod-wide: page size (default 50) |
+| `--cursor <cursor>` | Pod-wide: the next page (printed under the last one) |
+| `--all` | Include dropped (archived) tracks |
 | `--json` | Output as JSON |
 | `--pod-url <url>` | Pod URL override |
 | `--api-key <key>` | API key override |
@@ -1393,7 +1523,7 @@ synap track show [options] <id>
 
 ### synap track start
 
-Start a track — a lasting goal — on a project
+Start a track — a goal — on a project
 
 ```bash
 synap track start [options]
@@ -1406,7 +1536,52 @@ synap track start [options]
 | `--playbook <id>` | Legacy: a track template (project-scoped playbook with steps) |
 | `--project <id>` | Project id (defaults to the active project lens) |
 | `--param <key=value>` | Answer a declared param (repeatable) Default: `[]`. |
+| `--end-state <text>` | What done looks like, in your words |
+| `--criterion <text>` | How it is judged done — '\[measured\|judged\|handed_over\|learning\|decided_outside\|certified:\] statement'; give 0 or 2-5 (repeatable) Default: `[]`. |
+| `--drop-condition <text>` | When to stop pursuing it (repeatable, at most 5) Default: `[]`. |
+| `--kind <kind>` | Kind of work: project (Build)\|flow\|operation\|investigation\|incident\|commission\|pathway (a proposal until you confirm) |
+| `--uncertainty <level>` | How well the way is known: clear\|complicated\|complex\|chaotic\|unknown |
+| `--loop <on\|off\|n>` | Let the goal propose its next session: on, off, or n sessions a week |
 | `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track update
+
+Set a goal's direction, KPI and what it holds (each field is written whole; kpi is merged)
+
+```bash
+synap track update [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--direction <text>` | Where it is heading, one line |
+| `--kpi-current <n>` | The KPI's latest value (stated, never measured) |
+| `--kpi-target <n>` | Move the KPI's target |
+| `--end-state <text>` | What done looks like, in your words |
+| `--criterion <text>` | How it is judged done — '\[measured\|judged\|handed_over\|learning\|decided_outside\|certified:\] statement'; give 0 or 2-5 (repeatable) Default: `[]`. |
+| `--drop-condition <text>` | When to stop pursuing it (repeatable, at most 5) Default: `[]`. |
+| `--kind <kind>` | Kind of work: project (Build)\|flow\|operation\|investigation\|incident\|commission\|pathway (a proposal until you confirm) |
+| `--uncertainty <level>` | How well the way is known: clear\|complicated\|complex\|chaotic\|unknown |
+| `--loop <on\|off\|n>` | Let the goal propose its next session: on, off, or n sessions a week |
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track accept
+
+The goal's judge decides a claimed criterion: accepted | changes_asked | rejected (a person's act)
+
+```bash
+synap track accept [options] <id> <criterion> <decision>
+```
+
+| Option | Description |
+|---|---|
+| `--note <text>` | What to change, or why it was rejected |
 | `--json` | Output as JSON |
 | `--pod-url <url>` | Pod URL override |
 | `--api-key <key>` | API key override |
@@ -1428,7 +1603,7 @@ synap track advance [options] <id> <stage>
 
 ### synap track status
 
-Pause, resume or archive a track (active|paused|archived)
+Move a track: proposed (Draft)|agreed|ready|active|paused|completed (Closed)|archived (Dropped). Closing needs --verdict met|partly_met|not_met (an operation closes retired, and only one does); dropping should carry no_longer_needed|impossible|replaced|mistake (impossible and replaced need --verdict-reason). Both are final — reopen makes a new version.
 
 ```bash
 synap track status [options] <id> <status>
@@ -1436,6 +1611,25 @@ synap track status [options] <id> <status>
 
 | Option | Description |
 |---|---|
+| `--verdict <verdict>` | How the goal ended (required to close; advised to drop) |
+| `--verdict-reason <text>` | Why — required for impossible and replaced |
+| `--expected <status>` | The status you read the goal in (synap track show) — refused, nothing written, if it moved meanwhile. Agents: always pass it |
+| `--reason <text>` | Why — shown to the reviewer |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+### synap track reopen
+
+Reopen a closed or dropped goal as a NEW version (the old one keeps its verdict)
+
+```bash
+synap track reopen [options] <id>
+```
+
+| Option | Description |
+|---|---|
+| `--name <name>` | A new name (default: the old one's) |
 | `--reason <text>` | Why — shown to the reviewer |
 | `--json` | Output as JSON |
 | `--pod-url <url>` | Pod URL override |
@@ -1469,6 +1663,31 @@ synap track start-step [options] <id>
 | `--stage <key>` | Step key (defaults to the current step) |
 | `--title <text>` | Session name (defaults to the step's name) |
 | `--goal <text>` | Outcome (defaults to the step's goal) |
+| `--json` | Output as JSON |
+| `--pod-url <url>` | Pod URL override |
+| `--api-key <key>` | API key override |
+
+## synap goal
+
+Goals — what people call a track
+
+```bash
+synap goal [options] [command]
+```
+
+### synap goal convert
+
+Make a goal, objective or OKR entity a goal (once; the entity is kept and linked)
+
+```bash
+synap goal convert [options] <entityId>
+```
+
+| Option | Description |
+|---|---|
+| `--project <id>` | The goal's project — only when the entity is filed in none or several |
+| `--name <name>` | A name other than the entity's title |
+| `--reason <text>` | Why — shown to the reviewer |
 | `--json` | Output as JSON |
 | `--pod-url <url>` | Pod URL override |
 | `--api-key <key>` | API key override |
@@ -1520,6 +1739,7 @@ synap skill get [options] <slug>
 
 | Option | Description |
 |---|---|
+| `--raw` | Print only the stored body, exactly (for scripts) |
 | `--pod-url <url>` | Pod URL override |
 | `--api-key <key>` | API key override |
 
@@ -1647,7 +1867,7 @@ synap observe write [options] <text>
 
 | Option | Description |
 |---|---|
-| `--category <cat>` | working_style \| communication \| focus \| technical \| preference Default: `"preference"`. |
+| `--category <cat>` | working_style \| communication \| focus \| preferences \| habits \| technical Default: `"preferences"`. |
 | `--confidence <n>` | Confidence score 0-1 Default: `"0.5"`. |
 | `--json` | Output as JSON |
 | `--pod-url <url>` | Pod URL override |
@@ -1798,9 +2018,21 @@ synap agents add [options] [kind]
 | `--role <role>` | Workspace role: admin \| editor \| viewer (default: editor) |
 | `--workspace <id>` | Focus on one workspace (default: pod-wide) |
 | `--project <id>` | Focus on one project (composable with --workspace) |
-| `--with-mcp` | Raycast only: also install the full MCP server via mcp-remote |
 | `--api-key <key>` | Register a key you already hold, on this machine only (mints nothing) |
 | `--label <label>` | Human-readable description |
+| `--as <job>` | Give the agent a job (e.g. --as "CRM worker"): another agent than the engine's plain one, on this computer |
+
+### synap agents adopt
+
+Save the key this OS user already holds for an engine as the agent \<job\> (mints and revokes nothing)
+
+```bash
+synap agents adopt [options] <job>
+```
+
+| Option | Description |
+|---|---|
+| `--from <engine>` | The engine whose key is adopted (default: claude-code) |
 
 ### synap agents create
 
@@ -2431,7 +2663,7 @@ Examples:
 
 ## synap artifact
 
-Create and manage HTML artifacts as Synap documents
+Create HTML artifacts as Synap cells: an HTML/JS page that opens in the desktop app and can read pod data
 
 ```bash
 synap artifact [options] [command]
@@ -2439,7 +2671,7 @@ synap artifact [options] [command]
 
 ### synap artifact create
 
-Create an HTML artifact from a local file
+Define a cell from a local HTML file (governed: an agent key files a proposal)
 
 ```bash
 synap artifact create [options]
@@ -2448,7 +2680,7 @@ synap artifact create [options]
 | Option | Description |
 |---|---|
 | `--html <file>` | HTML file to upload Required. |
-| `--name <name>` | Document title (default: filename) |
+| `--name <name>` | Cell name (default: filename) |
 | `--workspace <id>` | Workspace context |
 | `--open` | Open in the Synap desktop app after creation |
 | `--json` | JSON output |
@@ -3218,3 +3450,25 @@ synap keys rotate [options]
 | Option | Description |
 |---|---|
 | `--show-key` | Print the new key in full if it could not be saved to the config |
+
+### synap keys request
+
+Ask the person for a scoped key, from a template or with exactly the permissions it needs; they approve it on one page, the key never goes through chat
+
+```bash
+synap keys request [options] [template]
+```
+
+| Option | Description |
+|---|---|
+| `--permission <pattern>` | A permission the key needs, instead of a template (repeatable): entity.company.update, facet.create. The person may narrow it, never widen it Default: `[]`. |
+| `--out <file>` | Write the key as env lines to this file (mode 0600) |
+| `--force` | Overwrite --out if it exists |
+| `--print` | Print the key on stdout (the only way to see it) |
+| `--name <name>` | Name of the key |
+| `--expires-days <n>` | Key lifetime in days (default: the template's; with --permission 90, at most 365) |
+| `--workspace <id>` | Limit the key to one workspace |
+| `--env-name <NAME>` | Variable name in --out (default SYNAP_HUB_API_KEY) |
+| `--wait <duration>` | How long to keep asking, e.g. 90s, 30m, 24h (default 24h) |
+| `--no-wait` | File the request, save it beside --out (\<out\>.request), print the link and exit; run the same command later to collect the key |
+| `--list-templates` | List the templates a key can be requested from |

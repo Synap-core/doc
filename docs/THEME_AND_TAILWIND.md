@@ -61,6 +61,10 @@ teal, constant clay, comment muted). `source.config.ts` uses them for the MDX pa
 the Hub REST API pages. Each token colour is at least 4.5:1 on both code backgrounds (`card`, and `secondary` inside
 tabs).
 
+On the Hub REST API pages, fumadocs-openapi colours the HTTP method badges with Tailwind's green, blue, yellow,
+orange and red. Inside `#nd-page`, `globals.css` maps those palette variables onto sage, teal, ochre, ochre-ink and
+clay, each at least 4.5:1 (Tailwind's green-600 was 3:1 on the paper).
+
 ## Components
 
 Use the Fumadocs components (`Card`, `Cards`, `Callout`, `Steps`, `Tabs`) rather than custom markup, so pages keep the

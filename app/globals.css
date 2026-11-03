@@ -87,6 +87,30 @@
   --color-fd-idea: #c28a4a;
 }
 
+/*
+ * Hub REST API pages: fumadocs-openapi colours the HTTP method badges (GET, POST, …) with Tailwind's green, blue,
+ * yellow, orange and red (600 in light, 400 in dark). Green-600 is 3:1 on the paper, under AA, and none of them is
+ * in the palette. Inside the page they map onto the semantic hues instead, each at least 4.5:1 on the card, muted
+ * and page backgrounds of its theme.
+ */
+#nd-page {
+  --color-green-600: #405236; /* sage-ink */
+  --color-blue-600: #2f6d69; /* teal */
+  --color-yellow-600: #784f21; /* primary ochre */
+  --color-amber-600: #784f21;
+  --color-orange-600: #5f3c13; /* ochre-ink */
+  --color-red-600: #9e4729; /* clay */
+}
+
+.dark #nd-page {
+  --color-green-400: #a8ba91; /* sage */
+  --color-blue-400: #76b9b2; /* teal */
+  --color-yellow-400: #c9975f; /* primary ochre */
+  --color-amber-400: #c9975f;
+  --color-orange-400: #f1c985; /* ochre-ink */
+  --color-red-400: #db8867; /* clay */
+}
+
 body {
   letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;

@@ -2,6 +2,7 @@ import { defineDocs, defineConfig } from 'fumadocs-mdx/config';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { z } from 'zod';
 import { AUDIENCES, AVAILABILITY, PAGE_TYPES, STATUSES } from './lib/page-meta';
+import { synapCodeThemes } from './lib/shiki-themes';
 
 /**
  * Every page carries the same frontmatter. fumadocs-mdx validates each page
@@ -44,4 +45,9 @@ export const docs = defineDocs({
   },
 });
 
-export default defineConfig();
+export default defineConfig({
+  mdxOptions: {
+    // Code blocks in the Synap palette (lib/shiki-themes.ts); the other code options keep the Fumadocs defaults.
+    rehypeCodeOptions: { themes: synapCodeThemes },
+  },
+});

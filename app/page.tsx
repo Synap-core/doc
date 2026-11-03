@@ -46,7 +46,7 @@ const sections = [
 
 export default function HomePage() {
   return (
-    <HomeLayout {...baseOptions()} className="min-h-screen" links={[{ text: 'Documentation', url: '/docs/start' }]}>
+    <HomeLayout {...baseOptions({ links: [{ text: 'Documentation', url: '/docs/start' }] })} className="min-h-screen">
       <div className="container mx-auto flex flex-1 flex-col gap-12 px-4 py-10 md:gap-16 md:py-14">
         <section className="mx-auto max-w-3xl text-center">
           <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-fd-muted-foreground">

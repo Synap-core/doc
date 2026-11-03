@@ -28,11 +28,14 @@ content/docs/
   reference/   CLI, MCP tools, events, Hub REST API (generated, except index.mdx)
   community/   contributing, code of conduct, security, marketplace policy, docs style guide
 content/reference-data/   JSON copied from the source repositories (scripts/sync-reference.mjs)
-app/           Next.js routes: home, /docs, /api/search, /api/mcp, /llms.txt, /llms-full.txt, /llms.mdx (Markdown)
+app/           Next.js routes: home, /docs, /api/search, /api/mcp, /llms.txt, /llms-full.txt, /llms.mdx (Markdown);
+               globals.css (the Synap theme); icon.png, apple-icon.png, favicon.ico (copied from synap-landing)
+public/brand/  synap-mark.svg, the S mark, copied unchanged from synap-landing (never recolour or redraw it)
 proxy.ts       /docs/<page>.md and `Accept: text/markdown` -> the Markdown route
-lib/           page-meta.ts (frontmatter vocabulary), source.ts, markdown.ts, openapi.ts, mdx-components.tsx
+lib/           page-meta.ts (frontmatter vocabulary), source.ts, markdown.ts, openapi.ts, mdx-components.tsx,
+               layout.shared.tsx (nav: mark, "Synap", "Docs", synap.live link), shiki-themes.ts (code colours)
 scripts/       the checks (check-*.mjs), sync/generate-reference.mjs, reference-templates/, retired-names.json
-docs/          notes for people working on this site (not published)
+docs/          notes for people working on this site (not published); THEME_AND_TAILWIND.md has the brand tokens
 ```
 
 Each folder has a `meta.json` whose `pages` list sets the navigation. A page not listed there fails `npm run check`.

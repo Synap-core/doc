@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <DocsLayout
-      {...baseOptions({ docsLabel: true })}
+      {...baseOptions()}
       tree={docsSource.getPageTree()}
       sidebar={{
         collapsible: true,

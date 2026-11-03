@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 /** Every unknown URL, under /docs or not: the site's own chrome, a way back, and search in the navbar. */
 export default function NotFound() {
   return (
-    <HomeLayout {...baseOptions()} className="min-h-screen" links={[{ text: 'Documentation', url: '/docs/start' }]}>
+    <HomeLayout {...baseOptions({ links: [{ text: 'Documentation', url: '/docs/start' }] })} className="min-h-screen">
       <div className="container mx-auto flex flex-1 flex-col items-center justify-center gap-4 px-4 py-16 text-center">
         <p className="text-sm font-semibold uppercase tracking-widest text-fd-muted-foreground">404</p>
         <h1 className="text-balance text-3xl font-bold tracking-tight text-fd-foreground md:text-4xl">Page not found</h1>

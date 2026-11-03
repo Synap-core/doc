@@ -33,10 +33,11 @@ What `synap import` does depends on what you give it:
 
 - **One file or one URL** goes through capture: it is read and structured into records.
 - **A CSV** is always imported as a table, even alone.
-- **Two or more text files** (`.md`, `.markdown`, `.txt`, `.csv`) are imported as one batch. You see a preview and
-  confirm it before anything is written (`--yes` confirms for you).
-- **Three or more** run as a background job, so a large folder does not time out. The result is one proposal (a
-  **Request** in the apps) for the whole import, which you approve. `--job-status <jobId>` checks on a job later.
+- **Exactly two text files** (`.md`, `.markdown`, `.txt`, `.csv`) are imported as one batch. You see a preview and
+  confirm it before anything is written (`--yes` confirms for you, `--dry-run` only previews).
+- **Three or more text files** run as a background job, so a large folder does not time out. There is no preview
+  step and `--dry-run` does not apply: the result is one proposal (a **Request** in the apps) for the whole import,
+  which you review and approve. `--job-status <jobId>` checks on a job later.
 
 Useful options: `--workspace` and `--project` choose where the records go, `--keep-raw` keeps the original file
 linked to the record it produced, and `--home-map "Projects=Builder"` sends paths containing `Projects` to the
@@ -198,7 +199,7 @@ The same rules apply to every door. In short:
 
 - **You, with your own key or in the apps**: your writes apply directly, except an import batch, which you confirm
   first, and the first sync of a connected account.
-- **An agent**: what happens depends on its write mode. Creates apply directly with Undo in the default mode;
+- **An agent**: what happens depends on its write mode. Creates and edits apply directly with Undo in the default mode;
   structural changes, deletions and anything that came from outside the pod become proposals. An agent can never
   apply an import proposal or approve its own.
 - **A webhook or a schedule** running an automation: every write its steps make goes through the same governance.

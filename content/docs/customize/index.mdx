@@ -26,7 +26,7 @@ Ordered from no code to code.
 
 | You want to… | What it changes | Who does it |
 |---|---|---|
-| [Install a workspace from a template](/docs/customize/spaces-and-templates) | Adds a whole domain (a CRM, a content studio, finance): its kinds, fields, views, playbooks (templates in the apps) and automations | You in the Browser app or on synap.live, the CLI, or your agent |
+| [Install a space from a template](/docs/customize/spaces-and-templates) | Adds a whole domain (a CRM, a content studio, finance): its kinds, fields, views, playbooks (templates in the apps) and automations | You in the Browser app or on synap.live, the CLI, or your agent |
 | [Add kinds, roles and fields](/docs/customize/kinds-and-fields) | Your data model: a new kind of record, a role an existing record can play, a field, a lifecycle | Your agent through MCP, or a template |
 | Add a [view](/docs/concepts/views) | How a set of records is shown (board, table, calendar, graph…). The records do not move | Your agent (`synap_create_view`), the CLI (`synap view create`), or a template |
 | [Install from the marketplace](/docs/customize/marketplace) | Adds packages others published: workspaces, capabilities, skills, automations, views, cards | You in an app, the CLI, or your agent |
@@ -42,7 +42,8 @@ Ordered from no code to code.
 - **Agents propose structural changes.** An agent defining a kind or a role, creating a workspace, playbook,
   automation or card, or installing a package always files a proposal you approve, and no rule can change that.
   Adding a field is a proposal by default. Plain record creates and edits are different: by default they apply
-  directly, with Undo. A person making the same change is not affected. See
+  directly, with Undo. A person defining a kind or creating a workspace is not affected, but retiring a field or
+  declaring a lifecycle is a proposal for anyone. See
   [Validation policy](/docs/concepts/validation-policy).
 - **One workspace per domain.** A domain is installed once; a project is a filter across workspaces, never a second
   copy of one. See [Spaces and templates](/docs/customize/spaces-and-templates#one-space-per-domain).

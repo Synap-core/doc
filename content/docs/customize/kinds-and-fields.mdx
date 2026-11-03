@@ -52,10 +52,10 @@ When an agent makes these changes, they come back as **proposals**:
 
 - defining a kind or a role always files a proposal, and no rule can change that;
 - adding a field to an existing kind is a proposal by default, unless a rule lets that agent add fields directly;
-- retiring a field and declaring a lifecycle always file a proposal.
+- retiring a field and declaring a lifecycle always file a proposal, whoever asks, a person included.
 
-A proposal is not a failure: approve it in Relay or the Browser app. For a new kind, one approval creates the kind and
-the fields it was proposed with. A person defining a kind is not subject to these rules. Records of a new kind are pod-wide by default; `entityScope: workspace` keeps them in one workspace, for a kind
+A proposal is not a failure: approve it in the Browser app (or Relay, in beta). For a new kind, one approval creates the kind and
+the fields it was proposed with. A person defining a kind or a field is not subject to the first two rules. Records of a new kind are pod-wide by default; `entityScope: workspace` keeps them in one workspace, for a kind
 that belongs to one app only.
 
 Slugs are stored in lowercase words joined by `-`: `botScore` becomes `botscore`, `social_account_audit` becomes

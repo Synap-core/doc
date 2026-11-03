@@ -10,7 +10,11 @@ last_reviewed: 2026-11-03
 ---
 
 When no [capability](/docs/customize/capabilities) does what you need, you or your agent can add code. There are
-three places code runs. Each is sandboxed, and code an agent adds waits for your approval before it runs:
+three places code runs. Each is sandboxed, and by default code an agent adds waits for your approval before it runs.
+
+Once approved, your code can be run by your agents (over MCP), by the CLI, by your automations, and by any script or
+website **server** that holds an API key for your pod. A page in a visitor's browser, or an app a person connects to
+their pod, cannot run it: see [Call your code from elsewhere](#call-your-code-from-elsewhere).
 
 | You want | Add | Where it runs |
 |---|---|---|
@@ -98,7 +102,7 @@ Each run happens in a V8 isolate (`isolated-vm`) with 64 MB of memory and the sk
 worker process the pod supervises, started with Node.js's permission model and read-only file access. A code skill
 never runs inside the pod's API process; a pod in production refuses to.
 
-## Box scripts
+## Box scripts (advanced)
 
 A box script is a whole program in Python or Node.js, with packages, run on a computer of yours, never on the pod.
 Each run gets a fresh box with no access to your pod and no secrets; its network reaches only the package registries

@@ -11,8 +11,8 @@ last_reviewed: 2026-11-03
 
 Synap is a pod: a server that holds your records in your own PostgreSQL database, and lets the AI agents you connect
 read and change them. By default an agent's creates and edits apply directly, with Undo, while deletions and
-structural changes (a new kind, a workspace (a space in the apps), an automation) become proposals (requests in the
-apps) you approve. Every change is written to
+structural changes, such as a new kind, a space or an automation, become proposals you approve (requests, in the
+apps). Every change is written to
 an append-only event log. [What is Synap?](/docs/concepts/what-is-synap) explains the model.
 
 ## Who it is for
@@ -81,7 +81,7 @@ wrote yourself gets an MCP URL and a key from `synap agents add --name <name>`. 
 | Bring in data from other tools | [Import your data](/docs/customize/import) |
 | Track a kind of record Synap does not have | [Kinds, roles and fields](/docs/customize/kinds-and-fields) |
 | See what you can install | [Marketplace](/docs/customize/marketplace) |
-| Approve agent changes from your phone | [Relay](/docs/use/relay) |
+| Approve agent changes from your phone | [Relay](/docs/use/relay) (in beta testing) |
 | Build an app or a website on your pod | [Build on your pod](/docs/build) |
 | Run your pod in production | [Run](/docs/run) |
 

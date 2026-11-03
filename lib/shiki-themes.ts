@@ -59,7 +59,6 @@ function synapTheme(name: string, type: 'light' | 'dark', p: Palette): ShikiThem
           'constant.language',
           'constant.character',
           'support.constant',
-          'variable.other.constant',
           'constant.other.option',
         ],
         settings: { foreground: p.constant },

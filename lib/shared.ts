@@ -1,6 +1,6 @@
 import { createGetUrl } from 'fumadocs-core/source';
 
-export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://docs.synap.live').replace(/\/$/, '');
+export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://doc.synap.live').replace(/\/$/, '');
 export const docsRoute = '/docs';
 /** Internal route that serves a page's Markdown; proxy.ts maps `/docs/<page>.md` onto it. */
 export const docsContentRoute = '/llms.mdx/docs';

@@ -134,7 +134,7 @@ try {
 
   // get_page must accept every way an agent writes a page reference.
   const sample = written.find((p) => p.url === '/docs/run/backups') ?? written[0];
-  const forms = [sample.url, `${sample.url}.md`, `https://docs.synap.live${sample.url}`, `https://docs.synap.live${sample.url}.md#x`];
+  const forms = [sample.url, `${sample.url}.md`, `https://doc.synap.live${sample.url}`, `https://doc.synap.live${sample.url}.md#x`];
   for (const form of forms) {
     try {
       const { isError, text } = await callMcpTool(server.base, 'get_page', { url: form });

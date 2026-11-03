@@ -19,7 +19,7 @@ const intro = `# Synap Documentation
 
 ## How to read these docs
 
-- Every page is also Markdown: add \`.md\` to its URL (${siteUrl}/docs/build/agents/mcp.md), or request the page
+- Every page is also Markdown: add \`.md\` to its URL (${siteUrl}/docs/agents/mcp.md), or request the page
   with \`Accept: text/markdown\`. The Markdown is built from the same source as the HTML.
 - [All hand-written pages in one file](${siteUrl}/llms-full.txt). The generated reference is not in it; it links
   to each reference page's Markdown.
@@ -32,12 +32,12 @@ const intro = `# Synap Documentation
 
 ## Key pages
 
-- [What is Synap?](${siteUrl}/docs/start/what-is-synap): the model (pod, agents, proposals)
+- [What is Synap?](${siteUrl}/docs/concepts/what-is-synap): the model (pod, agents, proposals)
 - [Cloud quickstart](${siteUrl}/docs/start/cloud-quickstart) and [self-host quickstart](${siteUrl}/docs/start/self-host-quickstart)
 - [Build on your pod](${siteUrl}/docs/build): which door (SDK, Hub REST, MCP, webhooks) to use for what
-- [Connect an agent](${siteUrl}/docs/build/agents) and [MCP](${siteUrl}/docs/build/agents/mcp)
+- [Connect an agent](${siteUrl}/docs/agents) and [MCP](${siteUrl}/docs/agents/mcp)
 - [API keys](${siteUrl}/docs/build/api-keys): scopes and grants
-- [Glossary](${siteUrl}/docs/start/glossary)
+- [Glossary](${siteUrl}/docs/concepts/glossary)
 
 ## Preferred interfaces
 

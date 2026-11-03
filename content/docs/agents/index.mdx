@@ -34,7 +34,7 @@ synap connect codex --project <id>            # focus on one project
 ```
 
 `connect` creates the agent's identity on your pod, gives it a key, and writes the client's configuration. For
-clients that read skill folders, it also installs the [Synap skills](/docs/build/agents/skills).
+clients that read skill folders, it also installs the [Synap skills](/docs/agents/skills).
 
 | Target | Client |
 |---|---|
@@ -88,3 +88,18 @@ synap agents list   # your agents on this pod
   and scope changes are always proposals.
 - It can never approve a proposal, its own or anyone else's.
 - It cannot create keys for other agents, widen its own approval rules, or give itself vault access.
+
+## In this section
+
+<Cards>
+  <Card
+    title="MCP"
+    description="The MCP endpoint every pod serves, how clients authenticate to it, and what it exposes."
+    href="/docs/agents/mcp"
+  />
+  <Card
+    title="Agent skills"
+    description="The skill packages that teach an agent how to work with a Synap pod, and how they are installed."
+    href="/docs/agents/skills"
+  />
+</Cards>

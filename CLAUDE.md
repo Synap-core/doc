@@ -21,21 +21,29 @@ Do not add an internal or sign-in-gated section.
 
 ```
 content/docs/
-  start/       what Synap is, quickstarts, glossary
-  use/         the apps (Browser, Relay, Raycast, Eve), Cloud vs self-hosted
-  build/       SDK, API keys, webhooks, chat stream, agents (connect, MCP, skills), concepts
-  run/         self-hosting: install, configuration, domains, backups, upgrades, operations
+  start/       Get started: start here, the Cloud and self-host quickstarts
+  concepts/    How Synap works: what Synap is, the data model, governance, under the hood, glossary
+  use/         Use Synap: the apps (Browser, Relay, Raycast, Eve), Cloud vs self-hosted
+  agents/      Connect your AI: connect an agent, MCP, agent skills
+  build/       Build on Synap: SDK, API keys, webhooks, chat stream, skill invocation, n8n, coding with agents
+  run/         Self-host a pod: install, configuration, domains, backups, upgrades, operations
   reference/   CLI, MCP tools, events, Hub REST API (generated, except index.mdx)
   community/   contributing, code of conduct, security, marketplace policy, docs style guide
 content/reference-data/   JSON copied from the source repositories (scripts/sync-reference.mjs)
-app/           Next.js routes: home, /docs, /api/search, /api/mcp, /llms.txt, /llms-full.txt, /llms.mdx (Markdown)
+app/           Next.js routes: home, /docs, /api/search, /api/mcp, /llms.txt, /llms-full.txt, /llms.mdx (Markdown);
+               globals.css (the Synap theme); icon.png, apple-icon.png, favicon.ico (copied from synap-landing)
+public/brand/  synap-mark.svg, the S mark, copied unchanged from synap-landing (never recolour or redraw it)
 proxy.ts       /docs/<page>.md and `Accept: text/markdown` -> the Markdown route
-lib/           page-meta.ts (frontmatter vocabulary), source.ts, markdown.ts, openapi.ts, mdx-components.tsx
+lib/           page-meta.ts (frontmatter vocabulary), source.ts, markdown.ts, openapi.ts, mdx-components.tsx,
+               layout.shared.tsx (nav: mark, "Synap", "Docs", synap.live link), shiki-themes.ts (code colours)
 scripts/       the checks (check-*.mjs), sync/generate-reference.mjs, reference-templates/, retired-names.json
-docs/          notes for people working on this site (not published)
+docs/          notes for people working on this site (not published); THEME_AND_TAILWIND.md has the brand tokens
 ```
 
-Each folder has a `meta.json` whose `pages` list sets the navigation. A page not listed there fails `npm run check`.
+Each folder has a `meta.json` whose `pages` list sets the navigation; each top-level section is a tab (`"root": true`).
+A page not listed there fails `npm run check`. Each section's `index.mdx` is its landing page and links every page of
+the section as a Card, in `meta.json` order (`scripts/section-index.test.mjs`). A moved page gets a permanent redirect
+in `next.config.mjs`.
 
 ## Frontmatter (required on every page)
 

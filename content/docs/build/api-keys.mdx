@@ -28,7 +28,7 @@ A key can never do more than the person it acts for. Effective access is always 
 The key is shown **once**, so copy it immediately. Only a hash is stored.
 
 For an AI agent, do not create a key by hand: `synap connect <agent>` (from `@synap-core/cli`) gives each agent its
-own key and identity. See [Connect an agent](/docs/build/agents).
+own key and identity. See [Connect an agent](/docs/agents).
 
 To create one programmatically, call the tRPC procedure `apiKeys.create`. `keyName`, `scope` (at least one) and
 `grant` are required:
@@ -206,4 +206,4 @@ the SDK calls: that endpoint accepts only a sign-in session. See [SDK first quer
 - [Hub REST API reference](/docs/reference/hub-api): every route a key can call
 - [Scripts and agents with an API key](/docs/build/sdk#scripts-and-agents-with-an-api-key): the TypeScript client
 - [Webhooks](/docs/build/webhooks)
-- [Connect an agent](/docs/build/agents)
+- [Connect an agent](/docs/agents)

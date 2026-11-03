@@ -27,15 +27,19 @@ Pages live in `content/docs/<section>/`. Pick the section by the reader's goal:
 
 | Section | For |
 |---|---|
-| `start` | Understanding Synap and getting a first pod working |
+| `start` | Getting a first pod working: the quickstarts |
+| `concepts` | Understanding how Synap works, from the simplest idea to the most technical, and the glossary |
 | `use` | Using the apps day to day |
-| `build` | Building on a pod: SDK, keys, webhooks, agents, concepts |
+| `agents` | Connecting an AI client: MCP and agent skills |
+| `build` | Building on a pod: SDK, keys, webhooks, the API doors |
 | `run` | Self-hosting and operating a pod |
 | `reference` | Lookup pages |
 | `community` | Contributing and policies |
 
 Add the page's file name (without extension) to the `pages` list of the folder's `meta.json`, or it will not appear
-in the navigation.
+in the navigation. Each section's `index.mdx` is its landing page: add a Card for the new page there too, in the same
+order as `meta.json` (`npm run check` fails otherwise). If you move a page, add a permanent redirect from its old URL
+in `next.config.mjs`.
 
 ## Frontmatter
 
@@ -83,7 +87,7 @@ command from another doc without running it or reading its source.
 - One idea per paragraph. Tables for options and comparisons.
 - Code blocks for anything the reader types, with placeholders like `pod.example.com` and `<id>`.
 - No marketing language, no emoji.
-- Use Synap's terms as the [glossary](/docs/start/glossary) defines them: kind, role (facet), project, track, session,
+- Use Synap's terms as the [glossary](/docs/concepts/glossary) defines them: kind, role (facet), project, track, session,
   playbook, proposal.
 
 ## Links

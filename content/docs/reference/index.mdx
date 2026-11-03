@@ -14,6 +14,33 @@ and commit it was generated from. The source repositories export the data as JSO
 `scripts/sync-reference.mjs` in this site's repository copies it and `scripts/generate-reference.mjs` turns it into
 these pages.
 
+## The reference pages
+
+<Cards>
+  <Card
+    title="CLI"
+    description="Every command of @synap-core/cli, generated from its command definitions."
+    href="/docs/reference/cli"
+  />
+  <Card
+    title="MCP tools"
+    description="Every tool a pod exposes over MCP, with its parameters, generated from the tool definitions."
+    href="/docs/reference/mcp-tools"
+  />
+  <Card
+    title="Event catalog"
+    description="The event types automations can trigger on and webhooks deliver, generated from the event definitions."
+    href="/docs/reference/events"
+  />
+  <Card
+    title="Hub REST API"
+    description="The pod's HTTP API for agents, scripts and integrations, rendered from its OpenAPI description."
+    href="/docs/reference/hub-api"
+  />
+</Cards>
+
+## Where each one comes from
+
 | Reference | Generated from | Here |
 |---|---|---|
 | CLI (`@synap-core/cli`) | The command definitions in the `synap-cli` repository (`docs/reference/cli.json`) | [CLI](/docs/reference/cli) |

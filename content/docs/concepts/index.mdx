@@ -1,0 +1,88 @@
+---
+title: How Synap works
+description: The ideas behind Synap in reading order, from what a pod is to the protocol agents use to reach it.
+type: explanation
+audience: user
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+---
+
+These pages explain the model behind Synap: what a pod holds, how its records are shaped, and how the changes your
+agents make are governed. Read them in order; each one builds on the one before. The first page is for everyone who
+uses Synap. The later ones go into the detail you need to build on a pod or write a template.
+
+## Start with the model
+
+<Cards>
+  <Card
+    title="What is Synap?"
+    description="A data pod you own, with a governed place for AI agents to work on your records."
+    href="/docs/concepts/what-is-synap"
+  />
+</Cards>
+
+## The data model
+
+<Cards>
+  <Card
+    title="Kind and facets"
+    description="One entity, one kind, many roles: how Synap separates what a thing is from the roles it plays."
+    href="/docs/concepts/kind-and-facets"
+  />
+  <Card
+    title="Entity connections"
+    description="The two ways entities connect, structural links and semantic relations, and when to use each."
+    href="/docs/concepts/entity-connections"
+  />
+  <Card
+    title="Views"
+    description="A view is a named query plus a rendering configuration over the same records; the view types a pod implements."
+    href="/docs/concepts/views"
+  />
+  <Card
+    title="Profile schemas"
+    description="How property definitions are layered so the same kind can carry different fields in different spaces."
+    href="/docs/concepts/profile-schemas"
+  />
+</Cards>
+
+## Governance
+
+<Cards>
+  <Card
+    title="Validation policy"
+    description="How the pod decides whether a requested change runs directly, becomes a proposal, or is refused."
+    href="/docs/concepts/validation-policy"
+  />
+  <Card
+    title="Permission model"
+    description="How access is enforced for people, workspaces and keys, at the API and in background work."
+    href="/docs/concepts/permission-model"
+  />
+</Cards>
+
+## Under the hood
+
+<Cards>
+  <Card
+    title="Hub Protocol flow"
+    description="The path of a request from an agent or script through the Hub REST API to the pod."
+    href="/docs/concepts/hub-protocol-flow"
+  />
+  <Card
+    title="Pod replication and pairing"
+    description="How two pods you own can be paired as primary and replica, and what is replicated."
+    href="/docs/concepts/pod-replication"
+  />
+</Cards>
+
+## Look up a term
+
+<Cards>
+  <Card
+    title="Glossary"
+    description="The terms used across the Synap docs, in one place."
+    href="/docs/concepts/glossary"
+  />
+</Cards>

@@ -20,7 +20,7 @@ Every entity answers three separate questions, and Synap stores the answers in t
   Facets are added and removed over time and can be limited to a workspace. Stored as `entity_facets` rows, each
   pointing at a profile with `profileKind = 'role'`.
 - **What it is connected to**: its relations. Works at, assigned to, blocks. Stored in `relations` or as structural
-  `entity_id` properties. See [Entity connections](/docs/build/concepts/entity-connections).
+  `entity_id` properties. See [Entity connections](/docs/concepts/entity-connections).
 
 This page covers the first two. The mistake it prevents is modelling "this person is now a client" by creating a
 second entity (a `client` record) that shadows the person, instead of attaching a role to the entity that already
@@ -180,5 +180,5 @@ agent skill tells agents to use `attach_facet` rather than `create_entity` here.
 
 ## Related
 
-- [Entity connections](/docs/build/concepts/entity-connections): relations and structural links (the third layer)
-- [Profile schemas](/docs/build/concepts/profile-schemas): layered property scoping
+- [Entity connections](/docs/concepts/entity-connections): relations and structural links (the third layer)
+- [Profile schemas](/docs/concepts/profile-schemas): layered property scoping

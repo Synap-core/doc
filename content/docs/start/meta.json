@@ -1,7 +1,7 @@
 {
-  "title": "Start",
-  "description": "What Synap is and the two quickstarts",
+  "title": "Get started",
+  "description": "Start here, and the two quickstarts",
   "root": true,
   "icon": "Rocket",
-  "pages": ["index", "what-is-synap", "cloud-quickstart", "self-host-quickstart", "glossary"]
+  "pages": ["index", "cloud-quickstart", "self-host-quickstart"]
 }

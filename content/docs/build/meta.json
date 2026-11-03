@@ -1,21 +1,18 @@
 {
-  "title": "Build",
-  "description": "SDK, API keys, webhooks, MCP and agent skills",
+  "title": "Build on Synap",
+  "description": "The SDK, API keys, webhooks and the API doors",
   "root": true,
   "icon": "CodeXml",
   "pages": [
     "index",
-    "coding-with-agents",
-    "---Your app---",
+    "---Apps and scripts---",
     "sdk",
     "api-keys",
     "webhooks",
-    "n8n",
     "chat-stream",
     "skill-invocation",
-    "---Agents---",
-    "agents",
-    "---Concepts---",
-    "concepts"
+    "---With other tools---",
+    "n8n",
+    "coding-with-agents"
   ]
 }

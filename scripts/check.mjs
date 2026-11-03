@@ -11,7 +11,7 @@ const checks = [
   [path.join(here, 'check-links.mjs')],
   [path.join(here, 'check-retired-names.mjs')],
   [path.join(here, 'generate-reference.mjs'), '--check'],
-  ['--test', '--test-reporter=dot', path.join(here, 'docs-url.test.mjs')],
+  ['--test', '--test-reporter=dot', path.join(here, 'docs-url.test.mjs'), path.join(here, 'section-index.test.mjs')],
 ];
 let failed = 0;
 for (const args of checks) {

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 724 1584" width="724" height="1584">
+  <defs>
+    <radialGradient id="synap-mark-grad" cx="50%" cy="50%" r="100%" fx="68.2%" fy="59.1%">
+      <stop offset="0%" stop-color="#c35100"/>
+      <stop offset="20%" stop-color="#db6500"/>
+      <stop offset="40%" stop-color="#eb8105"/>
+      <stop offset="60%" stop-color="#fa9d09"/>
+      <stop offset="80%" stop-color="#fcbd16"/>
+      <stop offset="100%" stop-color="#ffdb23"/>
+    </radialGradient>
+  </defs>
+  <path d="M 723 0 L 671 17 L 609 41 L 521 81 L 433 128 L 354 178 L 324 199 L 270 241 L 239 268 L 207 299 L 186 322 L 161 354 L 149 372 L 133 403 L 126 421 L 119 449 L 116 473 L 116 495 L 120 525 L 126 548 L 134 570 L 147 597 L 157 614 L 176 641 L 210 680 L 240 709 L 268 733 L 310 765 L 337 783 L 341 787 L 341 792 L 103 1346 L 101 1348 L 60 1445 L 3 1573 L 0 1583 L 90 1548 L 94 1545 L 124 1533 L 183 1505 L 279 1455 L 377 1396 L 445 1348 L 475 1324 L 504 1298 L 521 1281 L 548 1249 L 569 1217 L 578 1199 L 590 1167 L 594 1150 L 597 1126 L 597 1095 L 594 1072 L 588 1046 L 581 1026 L 564 990 L 535 947 L 491 899 L 455 867 L 427 845 L 378 810 L 345 788 L 345 783 L 387 700 L 398 675 L 411 651 L 517 430 L 523 420 L 527 409 L 555 353 L 600 256 L 605 248 L 608 239 L 612 233 Z" fill="url(#synap-mark-grad)"/>
+</svg>

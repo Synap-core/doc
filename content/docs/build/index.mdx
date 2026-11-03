@@ -13,6 +13,56 @@ A pod is a backend first. Everything the apps do goes through the same doors you
 permissions and the same governance. An agent or an app that writes through any door gets the same proposal and
 approval rules.
 
+This section is for developers: apps, scripts and integrations that read and write a pod. To connect an AI client
+such as Claude Code or Cursor, see [Connect your AI](/docs/agents) instead.
+
+## In this section
+
+### Apps and scripts
+
+<Cards>
+  <Card
+    title="SDK first query"
+    description="Install the typed SDK, create a client for your pod and read your first entities."
+    href="/docs/build/sdk"
+  />
+  <Card
+    title="API keys"
+    description="Create, scope, grant and revoke the keys that apps, scripts and agents use to call your pod."
+    href="/docs/build/api-keys"
+  />
+  <Card
+    title="Webhooks"
+    description="Have your pod POST a signed request to your URL when something changes."
+    href="/docs/build/webhooks"
+  />
+  <Card
+    title="Chat stream"
+    description="Stream an AI conversation backed by your pod, from any script or app, with one API key."
+    href="/docs/build/chat-stream"
+  />
+  <Card
+    title="Skill invocation"
+    description="List and invoke skills on your pod over HTTP with an API key."
+    href="/docs/build/skill-invocation"
+  />
+</Cards>
+
+### With other tools
+
+<Cards>
+  <Card
+    title="n8n"
+    description="Connect n8n workflows to a pod with an API key, a webhook subscription and the Hub REST API."
+    href="/docs/build/n8n"
+  />
+  <Card
+    title="Coding with agents"
+    description="Point Claude Code, Cursor and other coding agents at these docs, and connect them to your pod."
+    href="/docs/build/coding-with-agents"
+  />
+</Cards>
+
 ## The doors
 
 | Door | Path on the pod | Use it for | Auth |
@@ -45,6 +95,6 @@ Every pod publishes the OpenAPI description of its Hub REST API at `/api/hub/ope
   [Hub REST API](/docs/reference/hub-api).
 - React to changes in another system: [Webhooks](/docs/build/webhooks).
 - A coding agent that writes code against Synap: [Coding with agents](/docs/build/coding-with-agents).
-- An AI agent: [Connect an agent](/docs/build/agents), then [MCP](/docs/build/agents/mcp) and
-  [agent skills](/docs/build/agents/skills).
-- How the data model works: [Kind and facets](/docs/build/concepts/kind-and-facets).
+- An AI agent: [Connect an agent](/docs/agents), then [MCP](/docs/agents/mcp) and
+  [agent skills](/docs/agents/skills).
+- How the data model works: [Kind and facets](/docs/concepts/kind-and-facets).

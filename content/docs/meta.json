@@ -1,4 +1,14 @@
 {
   "title": "Documentation",
-  "pages": ["start", "concepts", "use", "agents", "build", "run", "reference", "community"]
+  "pages": [
+    "start",
+    "concepts",
+    "use",
+    "agents",
+    "customize",
+    "build",
+    "run",
+    "reference",
+    "community"
+  ]
 }

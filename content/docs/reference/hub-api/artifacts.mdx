@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/artifacts
@@ -51,7 +51,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/artifacts" webhooks={[]} operations={[{"path":"/artifacts","method":"get"},{"path":"/artifacts","method":"post"},{"path":"/artifacts/:id","method":"patch"}]} showTitle />
+      <OpenAPIPage document="hub-api/artifacts" webhooks={[]} operations={[{"path":"/artifacts","method":"get"},{"path":"/artifacts","method":"post"},{"path":"/artifacts/{id}","method":"patch"}]} showTitle />
     </>
   );
 }

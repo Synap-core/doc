@@ -1,6 +1,6 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { FullSearchTrigger } from 'fumadocs-ui/layouts/shared/slots/search-trigger';
-import { AppWindow, ArrowRight, Bot, Cloud, CodeXml, Library, Server, Users } from 'lucide-react';
+import { AppWindow, ArrowRight, Blocks, Bot, Cloud, CodeXml, Library, Server, Users } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { SynapLogoMark } from '@/components/SynapLogoMark';
@@ -36,7 +36,7 @@ const intents: { icon: ReactNode; title: string; description: string; href: stri
   {
     icon: <AppWindow aria-hidden />,
     title: 'Use Synap',
-    description: 'Browser on the desktop, Relay on your phone, plus Raycast and Eve. Synap Cloud or your own pod.',
+    description: 'Browser on the desktop, Relay on your phone, plus Raycast. Synap Cloud or your own pod.',
     href: '/docs/use',
     links: [
       { title: 'Browser', href: '/docs/use/browser' },
@@ -53,6 +53,17 @@ const intents: { icon: ReactNode; title: string; description: string; href: stri
       { title: 'Connect an agent', href: '/docs/agents' },
       { title: 'MCP', href: '/docs/agents/mcp' },
       { title: 'Agent skills', href: '/docs/agents/skills' },
+    ],
+  },
+  {
+    icon: <Blocks aria-hidden />,
+    title: 'Make it yours',
+    description: 'Shape a pod to your work, from installing a template to writing your own app.',
+    href: '/docs/customize',
+    links: [
+      { title: 'Templates and spaces', href: '/docs/customize/spaces-and-templates' },
+      { title: 'Marketplace', href: '/docs/customize/marketplace' },
+      { title: 'Capabilities', href: '/docs/customize/capabilities' },
     ],
   },
   {
@@ -137,8 +148,13 @@ export default function HomePage() {
           </h1>
           <p className="max-w-2xl text-pretty text-base text-fd-muted-foreground md:text-lg">
             Synap is an open-source data pod: a server that holds your records and lets the AI agents you connect work on
-            them. Agent writes go through the pod&apos;s governance, so most of them reach your data as proposals you
-            approve.
+            them. By default an agent&apos;s creates and edits apply directly and can be undone, while deletions and
+            structural changes wait for your approval.
+          </p>
+          <p className="max-w-2xl text-pretty text-base text-fd-muted-foreground">
+            It is for people and small teams who work with AI agents and want their notes, contacts, tasks and documents in
+            one place they own. For example, you ask Claude Code to log a call with a client: it adds the person and a note about
+            the call to your pod, and you find both in the Synap app on your desktop.
           </p>
           <FullSearchTrigger className="w-full max-w-md rounded-full bg-fd-card px-4 py-2.5" />
         </section>
@@ -162,6 +178,13 @@ export default function HomePage() {
               </Link>
             ))}
           </div>
+          <p className="mt-3 text-sm text-fd-muted-foreground">
+            Not sure which one?{' '}
+            <Link href="/docs/start/choose-your-path" className={homeUi.inlineLink}>
+              Choose your path
+            </Link>
+            .
+          </p>
         </section>
 
         <section aria-labelledby="intents">

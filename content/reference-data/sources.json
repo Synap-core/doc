@@ -3,30 +3,30 @@
   "cli": {
     "repo": "Synap-core/synap-cli",
     "ref": "main",
-    "commit": "d34cfbcbd70c5627d78ab9b17dfe3a8118c5877d",
+    "commit": "8afcf024736d3ce003ac8c2edcf3ee035fb80768",
     "files": {
       "cli.json": {
         "path": "docs/reference/cli.json",
-        "sha256": "79712a337cd96649885fda22671d31187f02b42697d65e2cce72dbf921d75a01"
+        "sha256": "616e8874a6c75e22261ded6f5e508f59848ae14f26d175e9fbec4e4eb17fd56b"
       }
     }
   },
   "backend": {
     "repo": "Synap-core/backend",
     "ref": "main",
-    "commit": "629c1d90efeba7720cf0047c593fe8b5a1d74e14",
+    "commit": "24fabe7ac96b2a85c9dc0f032769e26761530f47",
     "files": {
       "mcp-tools.json": {
         "path": "docs/reference/mcp-tools.json",
-        "sha256": "00ba6998a9d513a6581a59a335eccedac94426e36878435f1711484e8d271c85"
+        "sha256": "2a5cfed9446780cc43bdace34e36124c4cb4f5e39514ba2e283f3c3ef1427c70"
       },
       "events.json": {
         "path": "docs/reference/events.json",
-        "sha256": "b55995c4b54ae76db916aaa87a9be03903a2c051e6b96f5223c8f2aaae6cd047"
+        "sha256": "4c0f16f427a328be13216b7b49f1e89fae5ac25585d8ed5736aa94610a8695ad"
       },
       "hub-openapi.json": {
         "path": "docs/reference/hub-openapi.json",
-        "sha256": "1f6f0bddeed41cd189116a8dd46e92bf1c01077586e767cf620fd1bef0a5fb4a"
+        "sha256": "d1b6b7084c868ba865dfa9c7db0b7873b143b3bae34f5d852444230ad4396708"
       }
     }
   }

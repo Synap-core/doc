@@ -90,7 +90,7 @@ synap connect claude-code         # or: codex, cursor, claude-desktop, ...
   and installs the [Synap skills](/docs/agents/skills) in `~/.claude/skills/`.
 - **Cursor**: `synap connect cursor` writes the pod's MCP server into `~/.cursor/mcp.json`.
 - **claude.ai** (web): its connector settings take a URL and sign you in with OAuth, with no key to paste.
-  `synap mcp connect-claude` prints the steps and the Synap Cloud URL, `https://api.synap.live/mcp`. After you
+  `synap mcp connect-claude` prints the steps and the Synap Cloud URL, `https://mcp.synap.live`. After you
   approve, ask Claude to list your pods (`list_pods`) and connect one (`connect_pod`).
 
 Check the connection with `synap mcp verify` and `synap whoami`.
@@ -101,7 +101,9 @@ Check the connection with `synap mcp verify` and `synap whoami`.
   (what awaits your review, open work, your identity and projects), and `synap_ask` answers questions from your
   data. The agent loads more tools in groups.
   [MCP tools](/docs/reference/mcp-tools) lists them all.
-- Its writes become proposals unless a rule you set lets them apply. It can never approve a proposal.
+- Its writes follow the write mode you chose when you connected it. Under the default, creates and edits apply
+  directly with Undo, and deletions and structural changes become proposals you approve. It can never approve a
+  proposal. See [Validation policy](/docs/concepts/validation-policy).
 - What it may read and change is set by its key: see [API keys](/docs/build/api-keys).
 
 ## Both at once

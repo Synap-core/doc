@@ -1,6 +1,6 @@
 ---
 title: Keys
-description: The Keys operations of the Hub REST API (1 operation).
+description: The Keys operations of the Hub REST API (6 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/keys
@@ -17,16 +17,69 @@ _openapi:
     - depth: 2
       title: Rotate the calling key to the latest CLI scope set
       url: '#rotate-the-calling-key-to-the-latest-cli-scope-set'
+    - depth: 2
+      title: The templates a key can be requested from
+      url: '#the-templates-a-key-can-be-requested-from'
+    - depth: 2
+      title: 'Ask the person for a key: a template, or the exact permissions'
+      url: '#ask-the-person-for-a-key-a-template-or-the-exact-permissions'
+    - depth: 2
+      title: Collect an approved key, once
+      url: '#collect-an-approved-key-once'
+    - depth: 2
+      title: The keys this caller requested
+      url: '#the-keys-this-caller-requested'
+    - depth: 2
+      title: Revoke a key this caller requested
+      url: '#revoke-a-key-this-caller-requested'
   structuredData:
     headings:
       - content: Rotate the calling key to the latest CLI scope set
         id: rotate-the-calling-key-to-the-latest-cli-scope-set
+      - content: The templates a key can be requested from
+        id: the-templates-a-key-can-be-requested-from
+      - content: 'Ask the person for a key: a template, or the exact permissions'
+        id: ask-the-person-for-a-key-a-template-or-the-exact-permissions
+      - content: Collect an approved key, once
+        id: collect-an-approved-key-once
+      - content: The keys this caller requested
+        id: the-keys-this-caller-requested
+      - content: Revoke a key this caller requested
+        id: revoke-a-key-this-caller-requested
     contents:
       - content: Revokes the current key and issues a new one with the full
           INTEGRATION_HUB_SCOPES.cli scope set, keeping its expiry. Only an
           agent/CLI key that already holds hub-protocol.read and
           hub-protocol.write qualifies; sub-tokens and probe keys are refused.
         heading: rotate-the-calling-key-to-the-latest-cli-scope-set
+      - content: The built-in key templates (Dev loop poster, Website or pod app,
+          Read-only, Full access), then the person's own roles that say where a
+          key is used. `synap keys templates` lists these.
+        heading: the-templates-a-key-can-be-requested-from
+      - content: 'Files a key request the person approves on the pod-admin page
+          `review_url` (they may narrow it, never widen it past what was asked).
+          Name EITHER a `template` OR `permissions`, the grant patterns the key
+          needs (`entity.company.update`, `facet.create`, …): the list is then
+          the most the key may be. A list may not hold `*` (ask for the
+          `full-access` template), lasts 90 days unless `expiresInDays` says
+          otherwise (at most 365, never "never"), and is used on `hub` unless
+          `uses` names `hub` and/or `mcp`. It waits 24 hours; asking the same
+          again returns the request already waiting (same id and link, a new
+          `request_code`). Then poll `POST /keys/requests/token` with
+          `request_code` to collect the key once. The caller never mints a key
+          itself.'
+        heading: ask-the-person-for-a-key-a-template-or-the-exact-permissions
+      - content: Poll with the `request_code` of `POST /keys/requests`, every `interval`
+          seconds. Answers 400 `authorization_pending` until the person decides;
+          then 200 with the key, exactly once. Only the caller that filed the
+          request may collect it.
+        heading: collect-an-approved-key-once
+      - content: Only keys minted from this caller's own key requests — never the
+          person's other keys (`synap open keys` shows those).
+        heading: the-keys-this-caller-requested
+      - content: "Revokes a key minted from this caller's own key request. Any other key
+          is 404: a computer never revokes the person's other keys."
+        heading: revoke-a-key-this-caller-requested
 ---
 
 export default function Layout(props) {
@@ -34,7 +87,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/keys" webhooks={[]} operations={[{"path":"/keys/rotate-cli","method":"post"}]} showTitle />
+      <OpenAPIPage document="hub-api/keys" webhooks={[]} operations={[{"path":"/keys/rotate-cli","method":"post"},{"path":"/keys/templates","method":"get"},{"path":"/keys/requests","method":"post"},{"path":"/keys/requests/token","method":"post"},{"path":"/keys/requested","method":"get"},{"path":"/keys/requested/{keyId}","method":"delete"}]} showTitle />
     </>
   );
 }

@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/documents
@@ -54,7 +54,8 @@ _openapi:
           editors; a person's is applied. It may not change a person's section
           or drop an embed (`allowRemovingEmbeds`). Pass `baseRevision` (GET →
           `revision`); without it the revision at filing is pinned. `content` is
-          required; a `title` is refused with 400 (this route never renames)."
+          required; a `title` is refused with 400 (this route never renames:
+          send a `set_title` op to POST /documents/{documentId}/patch)."
         heading: replace-a-documents-content-alias-of-the-patch-door
       - content: "A full replacement — one `replace_all` op through the document patch
           door (see POST /documents/{documentId}/patch). Governed: an agent's
@@ -70,14 +71,16 @@ _openapi:
           {id,title,body}` (one `::::synap-section` block by id), `replace_text
           {old,new}` (`old` must match EXACTLY once — otherwise 400 with the
           count), `append {body}`, `replace_all {content}` (needs
-          `baseRevision`). Pass `baseRevision` from GET /documents/{id}
-          (`revision`); a document that moved answers 409. Refused (403): an
-          agent changing a person's section (replace_all included); removing an
-          embed without `allowRemovingEmbeds: true`. Governed: applies or files
-          a proposal (202); an agent's replace_all is always a proposal. The
-          response carries `preview` (per section, before/after) and
-          `diagnostics` (advisory: what will not render — never a refusal;
-          `null` + `diagnosticsError` when the check could not run)."
+          `baseRevision`), `set_title {title}` (renames the document; its
+          content is left as it is). Pass `baseRevision` from GET
+          /documents/{id} (`revision`); a document that moved answers 409.
+          Refused (403): an agent changing a person's section (replace_all
+          included); removing an embed without `allowRemovingEmbeds: true`.
+          Governed: applies or files a proposal (202); an agent's replace_all is
+          always a proposal. The response carries `preview` (per section,
+          before/after) and `diagnostics` (advisory: what will not render —
+          never a refusal; `null` + `diagnosticsError` when the check could not
+          run)."
         heading: edit-a-document-with-ops
 ---
 

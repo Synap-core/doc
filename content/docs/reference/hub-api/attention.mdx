@@ -1,6 +1,6 @@
 ---
 title: Attention
-description: The Attention operations of the Hub REST API (2 operations).
+description: The Attention operations of the Hub REST API (4 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/attention
@@ -18,21 +18,51 @@ _openapi:
       title: What needs you ON a kind's things
       url: '#what-needs-you-on-a-kinds-things'
     - depth: 2
+      title: 'A lens page, whole: what needs you, what is happening, what was
+        produced'
+      url: '#a-lens-page-whole-what-needs-you-what-is-happening-what-was-produced'
+    - depth: 2
       title: The needs-you number ON a kind's things
       url: '#the-needs-you-number-on-a-kinds-things'
+    - depth: 2
+      title: What really needs the person, and where everything else went
+      url: '#what-really-needs-the-person-and-where-everything-else-went'
   structuredData:
     headings:
       - content: What needs you ON a kind's things
         id: what-needs-you-on-a-kinds-things
+      - content: 'A lens page, whole: what needs you, what is happening, what was
+          produced'
+        id: a-lens-page-whole-what-needs-you-what-is-happening-what-was-produced
       - content: The needs-you number ON a kind's things
         id: the-needs-you-number-on-a-kinds-things
+      - content: What really needs the person, and where everything else went
+        id: what-really-needs-the-person-and-where-everything-else-went
     contents:
       - content: "The needs-you rows narrowed to the things of `profileSlug`
           (`signals.list({ lens: 'needs-you', profileSlug })`)."
         heading: what-needs-you-on-a-kinds-things
+      - content: "Every class of the lens page at a scope (`signals.list({ lens: 'page'
+          })`): Needs you, Proposed, Happening, Produced, Happened, plus the
+          status banner, read with the caps every lens host asks for
+          (`LENS_PAGE_READ_CAPS`). The scope is the narrowing lens
+          (`workspaceId`, optionally with `projectId`; `projectId`; `trackId`;
+          `sessionId`); none = the pod. `since` bounds Happened (a session sends
+          none). Read by a space package's frame through the browser's host
+          bridge, which stamps the scope."
+        heading: a-lens-page-whole-what-needs-you-what-is-happening-what-was-produced
       - content: '`signals.count({ profileSlug })` — the number with its parts
           (decisions, notifications, blocked, review).'
         heading: the-needs-you-number-on-a-kinds-things
+      - content: '`signals.needsYou` — THE needs-you rule (decision E): `rows.needs_you`
+          is the headline; `rows.working` (an agent is on it), `rows.stopped`
+          (no agent for 7 days; one row per ask, `needsYouRows` draws one per
+          session), `rows.review_later`, `rows.from_system` (no real asker) and
+          `rows.changes_to_review` (pending proposals nothing waits on) are its
+          folds. `count` is `signals.count` over the same read, with
+          `count.folds`. Read this instead of re-deriving needs-you from session
+          reads.'
+        heading: what-really-needs-the-person-and-where-everything-else-went
 ---
 
 export default function Layout(props) {
@@ -40,7 +70,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/attention" webhooks={[]} operations={[{"path":"/attention/needs-you","method":"get"},{"path":"/attention/count","method":"get"}]} showTitle />
+      <OpenAPIPage document="hub-api/attention" webhooks={[]} operations={[{"path":"/attention/needs-you","method":"get"},{"path":"/attention/lens-page","method":"get"},{"path":"/attention/count","method":"get"},{"path":"/needs-you","method":"get"}]} showTitle />
     </>
   );
 }

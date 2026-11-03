@@ -1,6 +1,6 @@
 ---
 title: Entities
-description: The Entities operations of the Hub REST API (17 operations).
+description: The Entities operations of the Hub REST API (18 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/entities
@@ -63,6 +63,9 @@ _openapi:
       title: Detach a facet (soft-delete)
       url: '#detach-a-facet-soft-delete'
     - depth: 2
+      title: List the channels with a person
+      url: '#list-the-channels-with-a-person'
+    - depth: 2
       title: Resolve identity (read-only) — does this subject already exist?
       url: '#resolve-identity-read-only--does-this-subject-already-exist'
   structuredData:
@@ -99,6 +102,8 @@ _openapi:
         id: update-a-facets-status--properties
       - content: Detach a facet (soft-delete)
         id: detach-a-facet-soft-delete
+      - content: List the channels with a person
+        id: list-the-channels-with-a-person
       - content: Resolve identity (read-only) — does this subject already exist?
         id: resolve-identity-read-only--does-this-subject-already-exist
     contents:
@@ -147,7 +152,8 @@ _openapi:
           verdict and writes nothing. `idempotencyKey` (or the `Idempotency-Key`
           header) replays the first call's receipt."
         heading: update-many-entities-in-one-governed-call
-      - content: Patch entity title / preview / metadata. Supports `Idempotency-Key`.
+      - content: Patch entity title / preview / metadata, or attach an existing document
+          as its body (`documentId`, `replaceBody`). Supports `Idempotency-Key`.
         heading: update-an-entity
       - content: "Deletes an entity by id via the canonical entities.delete procedure.
           For agent keys this is proposal-gated (returns { status: 'proposed',
@@ -168,6 +174,14 @@ _openapi:
       - content: Thin wrapper over the governed entities.detachFacet door. Requires
           hub-protocol.write.
         heading: detach-a-facet-soft-delete
+      - content: "The conversations the pod holds with one record (LinkedIn, email,
+          Discord, …), newest first: the tool, the account it goes through, the
+          tool's chat id (null until the first send opens the chat), the last
+          message, unread inbound messages and pending proposed messages. A
+          proposed message is a pending `messaging.external.send` proposal (GET
+          /channels/{id}/proposed-messages). 404 when the caller cannot read the
+          record."
+        heading: list-the-channels-with-a-person
       - content: Call BEFORE create to decide create-vs-enrich-vs-attach_facet. Returns
           `match:'strong'` (globally-unique signal hit — link/attach, don't
           create), `'weak'` (same-name candidates — advisory), or `'none'`.
@@ -180,7 +194,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/entities" webhooks={[]} operations={[{"path":"/users/{userId}/entities","method":"get"},{"path":"/entities/without-project/counts","method":"get"},{"path":"/entities","method":"get"},{"path":"/entities","method":"post"},{"path":"/entities/{id}/connections","method":"get"},{"path":"/entities/{id}","method":"get"},{"path":"/entities/recall","method":"post"},{"path":"/entities/retrieve","method":"post"},{"path":"/entities/{entityId}/attachments","method":"post"},{"path":"/entities/batch-update","method":"post"},{"path":"/entities/{entityId}","method":"patch"},{"path":"/entities/{entityId}","method":"delete"},{"path":"/entities/{entityId}/facets","method":"get"},{"path":"/entities/{entityId}/facets","method":"post"},{"path":"/facets/{facetId}","method":"patch"},{"path":"/facets/{facetId}","method":"delete"},{"path":"/identity/resolve","method":"post"}]} showTitle />
+      <OpenAPIPage document="hub-api/entities" webhooks={[]} operations={[{"path":"/users/{userId}/entities","method":"get"},{"path":"/entities/without-project/counts","method":"get"},{"path":"/entities","method":"get"},{"path":"/entities","method":"post"},{"path":"/entities/{id}/connections","method":"get"},{"path":"/entities/{id}","method":"get"},{"path":"/entities/recall","method":"post"},{"path":"/entities/retrieve","method":"post"},{"path":"/entities/{entityId}/attachments","method":"post"},{"path":"/entities/batch-update","method":"post"},{"path":"/entities/{entityId}","method":"patch"},{"path":"/entities/{entityId}","method":"delete"},{"path":"/entities/{entityId}/facets","method":"get"},{"path":"/entities/{entityId}/facets","method":"post"},{"path":"/facets/{facetId}","method":"patch"},{"path":"/facets/{facetId}","method":"delete"},{"path":"/entities/{id}/channels","method":"get"},{"path":"/identity/resolve","method":"post"}]} showTitle />
     </>
   );
 }

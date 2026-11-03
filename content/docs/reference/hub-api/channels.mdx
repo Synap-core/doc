@@ -1,6 +1,6 @@
 ---
 title: Channels
-description: The Channels operations of the Hub REST API (8 operations).
+description: The Channels operations of the Hub REST API (10 operations).
 full: true
 type: reference
 audience: builder
@@ -9,11 +9,14 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/channels
   toc:
+    - depth: 2
+      title: List the channels with a person
+      url: '#list-the-channels-with-a-person'
     - depth: 2
       title: List/search channels
       url: '#listsearch-channels'
@@ -38,8 +41,13 @@ _openapi:
     - depth: 2
       title: Propose binding a channel to a context object
       url: '#propose-binding-a-channel-to-a-context-object'
+    - depth: 2
+      title: List a channel's proposed messages
+      url: '#list-a-channels-proposed-messages'
   structuredData:
     headings:
+      - content: List the channels with a person
+        id: list-the-channels-with-a-person
       - content: List/search channels
         id: listsearch-channels
       - content: Create-or-link an EXTERNAL channel bound to an entity
@@ -56,7 +64,17 @@ _openapi:
         id: rename-a-discord-channel
       - content: Propose binding a channel to a context object
         id: propose-binding-a-channel-to-a-context-object
+      - content: List a channel's proposed messages
+        id: list-a-channels-proposed-messages
     contents:
+      - content: "The conversations the pod holds with one record (LinkedIn, email,
+          Discord, …), newest first: the tool, the account it goes through, the
+          tool's chat id (null until the first send opens the chat), the last
+          message, unread inbound messages and pending proposed messages. A
+          proposed message is a pending `messaging.external.send` proposal (GET
+          /channels/{id}/proposed-messages). 404 when the caller cannot read the
+          record."
+        heading: list-the-channels-with-a-person
       - content: Returns channels the authenticated user has access to. Supports
           optional workspace and type filters. When `q` is set the SAME query is
           narrowed server-side by title / branch purpose — browse and search are
@@ -96,6 +114,11 @@ _openapi:
           human-confirmed, never default-forced (client-comms is immutable once
           set).
         heading: propose-binding-a-channel-to-a-context-object
+      - content: "The messages waiting for the person's approval before they go out in
+          this channel, oldest first: each is a pending
+          `messaging.external.send` proposal (its id, text, who drafted it and
+          where to review it). 404 when the caller cannot read the channel."
+        heading: list-a-channels-proposed-messages
 ---
 
 export default function Layout(props) {
@@ -103,7 +126,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/channels" webhooks={[]} operations={[{"path":"/channels","method":"get"},{"path":"/channels","method":"post"},{"path":"/channels/by-context","method":"post"},{"path":"/channels/personal","method":"get"},{"path":"/channels/trigger-ai","method":"post"},{"path":"/channels/:externalChannelId/pins/:messageId","method":"post"},{"path":"/channels/:externalChannelId/rename","method":"post"},{"path":"/channels/:channelId/bind","method":"post"}]} showTitle />
+      <OpenAPIPage document="hub-api/channels" webhooks={[]} operations={[{"path":"/entities/{id}/channels","method":"get"},{"path":"/channels","method":"get"},{"path":"/channels","method":"post"},{"path":"/channels/by-context","method":"post"},{"path":"/channels/personal","method":"get"},{"path":"/channels/trigger-ai","method":"post"},{"path":"/channels/{externalChannelId}/pins/{messageId}","method":"post"},{"path":"/channels/{externalChannelId}/rename","method":"post"},{"path":"/channels/{channelId}/bind","method":"post"},{"path":"/channels/{channelId}/proposed-messages","method":"get"}]} showTitle />
     </>
   );
 }

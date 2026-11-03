@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/relations
@@ -32,8 +32,12 @@ _openapi:
       - content: Delete a relation
         id: delete-a-relation
     contents:
-      - content: Returns relations in a workspace. Filter by `entityId` (either side of
-          the edge) and/or `type`.
+      - content: "Without `entityId`, returns `{ relations }`: relation rows in the
+          workspace (or pod-wide when no workspace is given), optionally
+          filtered by `type`. With `entityId`, returns `{ entities, configLinks
+          }`: that entity's neighbours on either side of an edge, not relation
+          rows (use `/entities/{id}/connections` when you need each edge's type
+          and direction)."
         heading: list-relations
       - content: Creates a typed edge between two entities.
         heading: create-a-relation

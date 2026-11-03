@@ -7,10 +7,10 @@ type: "reference"
 audience: "builder"
 status: "current"
 owner: "Antoinesrvt"
-generated_from: "Synap-core/backend@629c1d90e (main)"
+generated_from: "Synap-core/backend@24fabe7ac (main)"
 ---
 
-Generated from [Synap-core/backend@629c1d90e](https://github.com/Synap-core/backend/tree/629c1d90efeba7720cf0047c593fe8b5a1d74e14) (`main`): [`docs/reference/events.json`](https://github.com/Synap-core/backend/blob/629c1d90efeba7720cf0047c593fe8b5a1d74e14/docs/reference/events.json).
+Generated from [Synap-core/backend@24fabe7ac](https://github.com/Synap-core/backend/tree/24fabe7ac96b2a85c9dc0f032769e26761530f47) (`main`): [`docs/reference/events.json`](https://github.com/Synap-core/backend/blob/24fabe7ac96b2a85c9dc0f032769e26761530f47/docs/reference/events.json).
 
 Every change on a pod is recorded as an event. This page lists the event types an automation trigger can name, which
 webhooks deliver and the event log returns.
@@ -23,7 +23,7 @@ The backend also generates table-level event names (`{table}.{action}.{phase}`, 
 `entities.create.requested`) for schema documentation and admin introspection. Automation triggers do not match
 those strings: use the types below.
 
-29 event types in 16 domains.
+34 event types in 16 domains.
 
 ## Catalog
 
@@ -34,6 +34,7 @@ those strings: use the types below.
 | `entity.create.completed` | Entity created | Fires after any entity is successfully created. | `profileSlug` |
 | `entity.update.completed` | Entity updated | Fires after any entity field or property is updated. | `profileSlug`, `changedKeys`, `changed.<fieldName>`, `previous.<fieldName>`, `<fieldName>` |
 | `entity.transition.completed` | Status changed | Fires when a thing's lifecycle status moves (the kind's own, or a role's), through the one moveStatus door. | `lifecycleProfile`, `profileSlug`, `role`, `property`, `from`, `to`, `fromCategory`, `category`, `actorKind` |
+| `entity.signal.completed` | Needs a look | Runs once when something passes its due date or is about to, stays too long in one status, or a pause is ready for review. | `signal`, `lifecycleProfile`, `profileSlug`, `role`, `status`, `category`, `ownerId`, `projectId`, `trackId` |
 | `entity.delete.completed` | Entity deleted | Fires after an entity is permanently deleted. | `profileSlug` |
 
 ### Focus sessions
@@ -41,12 +42,16 @@ those strings: use the types below.
 | Event type | Name | Description | Filter keys |
 |---|---|---|---|
 | `focus_session.stage_changed.completed` | Playbook stage changed | Fires when a focus session advances to a different playbook stage. | `toStage`, `fromStage`, `playbookId` |
+| `focus_session.transition.completed` | Session status changed | Fires when a focus session's status moves (active, paused, stale, closed…). | `from`, `to`, `fromCategory`, `category`, `actorKind`, `projectId`, `trackId` |
+| `focus_session.signal.completed` | Needs a look | Runs once when a paused session is ready to be reviewed. | `signal`, `status`, `category`, `ownerId`, `projectId`, `trackId` |
 
 ### Tracks
 
 | Event type | Name | Description | Filter keys |
 |---|---|---|---|
 | `track.stage_changed.completed` | Track stage changed | Fires when a project's track (a method it runs) moves to a different stage. | `toStage`, `fromStage`, `playbookId`, `projectId`, `trackId` |
+| `track.transition.completed` | Goal status changed | Fires when a project's goal (a track) moves status (active, paused, completed…). | `from`, `to`, `fromCategory`, `category`, `actorKind`, `projectId`, `trackId` |
+| `track.signal.completed` | Needs a look | Runs once when a paused goal is ready to be reviewed. | `signal`, `status`, `category`, `ownerId`, `projectId`, `trackId` |
 
 ### Proposals
 

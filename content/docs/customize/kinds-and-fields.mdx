@@ -1,0 +1,142 @@
+---
+title: Kinds, roles and fields
+description: Add a new kind of record, a role an existing record can play, a field or a lifecycle, through your agent or in a template.
+type: how-to
+audience: user
+availability: [pod-oss, cloud, cli]
+status: beta
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+Your pod's data model is configuration you can extend: new kinds of records, new roles, new fields and the stages a
+record moves through. This page is the how. For the why, read [Kind and facets](/docs/concepts/kind-and-facets) and
+[Profile schemas](/docs/concepts/profile-schemas).
+
+## Pick the right shape
+
+Before you add anything, check what exists: ask your agent to list the kinds and roles (`synap_list_profiles`), or run
+`synap list profiles`. Then pick the smallest change that fits:
+
+| You want to record… | Add | Example |
+|---|---|---|
+| A new kind of thing, with its own identity and fields | A **kind** | `episode`, `property`, `grant-application` |
+| A context an existing thing is in | A **role** on the existing kind, never a second kind | A `person` who is a `mentor`; a `company` that is a `supplier` |
+| One more piece of information on a kind you already have | A **field** on that kind | `episode-number` on `episode` |
+| A field only one workspace (a space in the apps) should see | A **workspace overlay** field | A deal-size field on `person`, in the CRM workspace only |
+| The stages a record moves through | A **lifecycle** on the kind or role | `idea` → `recording` → `published` |
+
+If the thing could outlive the record it belongs to, or have relations of its own, it is a kind; if it only changes
+how an existing record is seen, it is a role.
+
+## Through your agent
+
+Your agent changes the data model with MCP tools. A new agent key lists a small set of tools at first and loads the
+others in groups with `synap_load_skill`: the data model tools are in `tools:schema`, `synap_list_profiles` in
+`tools:read` and `synap_attach_facet` in `tools:data`. Ask in plain language, for example:
+
+> "I want to track podcast episodes, each with a number and a recording date. Propose the kind."
+
+The agent then uses these tools:
+
+| Tool | What it does |
+|---|---|
+| `synap_define_kind` | Creates a kind with its fields in one proposal (a request in the apps). Called again with an existing slug, it adds only the fields that are not there yet, which is how you add a field to any kind. A field takes a `valueType` (`string`, `number`, `boolean`, `date`, `entity_id`, `array`, `object` or `secret`), optional `constraints` (for example the allowed values, as an `enum`), `defaultValue` and `required`, and `overlay: true` to make it a workspace overlay. To allow more values on an existing field, the agent sends its `enum` again with the new values added |
+| `synap_define_role` | Creates a role and the kinds it can attach to (`applicableKinds`), or widens an existing role to more kinds |
+| `synap_attach_facet` | Gives an existing record a role. The CLI equivalent is `synap facet attach <entityId> <roleSlug>` |
+| `synap_declare_lifecycle` | Gives an existing kind or role a lifecycle (see below) |
+| `synap_change_kind_scope`, `synap_grant_profile_access` | Changes which workspaces see a kind, instead of creating a twin of it in another workspace |
+| `synap_retire_field` | Proposes removing a field. Refused while records still hold values in it |
+
+When an agent makes these changes, they come back as **proposals**:
+
+- defining a kind or a role always files a proposal, and no rule can change that;
+- adding a field to an existing kind is a proposal by default, unless a rule lets that agent add fields directly;
+- retiring a field and declaring a lifecycle always file a proposal, whoever asks, a person included.
+
+A proposal is not a failure: approve it in the Browser app (or Relay, in beta). For a new kind, one approval creates the kind and
+the fields it was proposed with. A person defining a kind or a field is not subject to the first two rules. Records of a new kind are pod-wide by default; `entityScope: workspace` keeps them in one workspace, for a kind
+that belongs to one app only.
+
+Slugs are stored in lowercase words joined by `-`: `botScore` becomes `botscore`, `social_account_audit` becomes
+`social-account-audit`. Use the stored slug afterwards.
+
+## Declare a lifecycle
+
+A lifecycle is the list of stages a record of a kind or role moves through. Each option has a stored `key` and a
+**category** that tells every app and agent what the stage means:
+
+| Category | Means |
+|---|---|
+| `open` | Not started |
+| `active` | In progress |
+| `paused` | On hold |
+| `done` | Finished well |
+| `lost` | Dropped, or will not happen |
+
+An option can also have a `label` (the words people read; the `key` never changes), `humanOnly: true` (only a person
+can move a record into it), and `stuckAfterDays` (for open, active and paused options: after how many days a record in
+it counts as stuck). Every status change then goes through the pod's one status door.
+
+With `synap_declare_lifecycle`, your agent proposes a lifecycle for an existing kind; its field is `status` unless you
+name another one. Existing records keep the status they have until they are moved. It is refused when the kind already
+has a lifecycle, or when records hold a value no option names.
+
+<Callout title="Newer pods only">
+  `synap_declare_lifecycle` is on the backend's main branch and not yet in a tagged release (v1.2.8 does not have it).
+  If your agent does not list it after loading `tools:schema`, declare the lifecycle in a template instead (next
+  section).
+</Callout>
+
+## In a template
+
+A workspace template declares kinds, roles, fields and lifecycles under `profiles`, and installing it creates them.
+This is how to ship a data model to others, or to several pods. A minimal example:
+
+```yaml
+meta:
+  slug: podcast-studio
+  name: Podcast Studio
+  description: Plan, record and publish podcast episodes.
+  icon: mic
+  color: "#6B7280"
+
+workspace:
+  name: Podcast Studio
+  description: Plan, record and publish podcast episodes.
+
+profiles:
+  - slug: episode
+    displayName: Episode
+    properties:
+      - slug: episode-number
+        label: Episode number
+        valueType: number
+      - slug: recorded-on
+        label: Recorded on
+        valueType: date
+      - slug: status
+        label: Status
+        valueType: string
+    lifecycle:
+      property: status
+      options:
+        - { key: idea, category: open }
+        - { key: recording, category: active, stuckAfterDays: 14 }
+        - { key: published, category: done, humanOnly: true }
+        - { key: dropped, category: lost }
+```
+
+A role is a profile with `profileKind: role` and the kinds it attaches to in `applicableKinds`, for example
+`[company, person]`. A template that uses a kind your pod already has (such as `person`) reuses it and adds its own
+fields as overlays for its workspace.
+
+Start a file with `synap market scaffold <slug>`, check it with `synap market validate <file>`, then install or
+publish it as described in [Marketplace](/docs/customize/marketplace#publish-your-own).
+
+## Related
+
+- [Kind and facets](/docs/concepts/kind-and-facets): why a role is not a second record.
+- [Profile schemas](/docs/concepts/profile-schemas): how base fields and workspace overlays layer.
+- [Entity connections](/docs/concepts/entity-connections): relations between records.
+- [MCP tools](/docs/reference/mcp-tools): every tool's parameters.

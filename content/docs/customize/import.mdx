@@ -1,0 +1,207 @@
+---
+title: Import your data
+description: Every way to bring data into a pod (files, notes, connected accounts, webhooks and your own scripts) and which of them you review before anything lands.
+type: how-to
+audience: user
+availability: [pod-oss, cloud, cli, sdk]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+Everything you bring in becomes records in your pod: notes, people, companies, files and the links between them. Pick
+the door that matches what you have:
+
+| You have | Use | You review it first? |
+|---|---|---|
+| Notes, Markdown, an Obsidian vault, a CSV, bookmarks | [`synap import`](#import-files-and-folders) or the import API | Yes: one preview for the whole batch |
+| A file to keep as it is (PDF, image, video, audio) | [`synap upload`](#upload-files) | Like any write: it applies, or comes back as a proposal |
+| A thought, a meeting note, a pasted text | [Capture](#capture-text) | When any part of it needs your approval |
+| Your calendar, contacts or email | [A connected account](#connected-accounts) | The first sync, once |
+| Events another service sends | [Webhooks in](#webhooks-in) | What the automation does is governed |
+| Anything else on your computer | [A script](#write-your-own-script) on the Hub REST API | Depends on the key |
+
+## Import files and folders
+
+```bash
+synap import ./notes                 # a folder
+synap import ./contacts.csv          # a table
+synap import ./a.md ./b.md --dry-run # preview only, write nothing
+```
+
+What `synap import` does depends on what you give it:
+
+- **One file or one URL** goes through capture: it is read and structured into records.
+- **A CSV** is always imported as a table, even alone.
+- **Exactly two text files** (`.md`, `.markdown`, `.txt`, `.csv`) are imported as one batch. You see a preview and
+  confirm it before anything is written (`--yes` confirms for you, `--dry-run` only previews).
+- **Three or more text files** run as a background job, so a large folder does not time out. There is no preview
+  step and `--dry-run` does not apply: the result is one proposal (a **Request** in the apps) for the whole import,
+  which you review and approve. `--job-status <jobId>` checks on a job later.
+
+Useful options: `--workspace` and `--project` choose where the records go, `--keep-raw` keeps the original file
+linked to the record it produced, and `--home-map "Projects=Builder"` sends paths containing `Projects` to the
+`Builder` workspace.
+
+### Through the API
+
+The same import, from code, with a key that has the `hub-protocol.write` scope:
+
+1. `POST /api/hub/import/analyze` with `userId` (yours, from `GET /api/hub/users/me`), `source` (`obsidian`,
+   `markdown`, `csv` or `bookmark`) and `items` (1 to 2,000 of `{ "path", "content" }`), plus optionally
+   `workspaceId`, `projectId` and `aiStructure: true` to have prose structured by AI. It returns the planned records
+   and files them as one proposal. `previewOnly: true` returns the plan and files nothing.
+2. Approve that proposal in the apps, or apply it with `POST /api/hub/import/apply` and its `proposalId`. Applying an
+   import proposal is approving it, so an agent's key is refused there: an agent can prepare an import, and only a
+   person can apply its proposal.
+
+For a large batch, `POST /api/hub/import/enqueue-corpus` returns a `jobId` at once; poll
+`GET /api/hub/import/corpus-job/{jobId}`. See [Import in the Hub REST API](/docs/reference/hub-api/import).
+
+## Upload files
+
+```bash
+synap upload ./contract.pdf
+synap upload ./photo.jpg --attach <entityId>   # attach it to an existing record
+synap upload ./talk.mp4 --title "Keynote" --workspace <id>
+```
+
+Each upload becomes a `file` record (or the kind you pass with `--profile`) holding the stored file. Files up to
+10 MB are sent directly; larger ones go straight to storage, up to 500 MB for video, 100 MB for audio and 200 MB for
+a zip archive.
+
+An agent stores a file with `synap_store_file` (up to 10 MB inline; it is stored as it is, never read), or asks for an
+upload URL first with `synap_request_upload` for a larger one.
+
+## Capture text
+
+Capture turns free text into records: a meeting note becomes a person, a company, a task and the links between them.
+
+```bash
+synap capture "Met Ada from Acme at the conference, she wants a demo in March"
+```
+
+An agent uses `synap_capture`: free `text` (up to 8,000 characters), or records it has already shaped (`entities`,
+`relations`, `documents`, `projects`, `sessions`). A capture lands all together or not at all: when every part of it
+may run directly under the agent's write mode it is written at once, and when any part needs your approval the
+whole capture becomes one proposal. When the AI that structures text is down, capture saves the text as a plain note
+and says so.
+
+## Connected accounts
+
+Connect an account once, and the pod brings its data in:
+
+```bash
+synap capability connect           # pick a service to connect
+synap tools list                   # what is connected
+synap tools sync <provider>        # sync now
+```
+
+Which services you can connect depends on your pod's connection service: `synap tools list` or
+`GET /api/hub/connectors/providers` lists them. For Google, the pod syncs calendar events, contacts and Gmail threads
+into records, merging the same person seen in several places into one.
+
+The first sync of an account arrives as **one** grouped proposal you review. Once you approve it, you can let that
+connection keep syncing: later syncs then apply directly.
+
+## Webhooks in
+
+Another service (GitHub, a form tool, your own server) can post events to your pod, and an automation reacts to them.
+
+<Steps>
+<Step>
+
+**Create a webhook source.** In the pod admin console, open the workspace and find **Webhook sources**. Give the
+source a name. You get its **Payload URL** and its **Secret**; the secret is shown once. Only a pod admin can create a
+source.
+
+</Step>
+<Step>
+
+**Point the service at it.** The service sends a `POST` to the payload URL,
+`https://pod.example.com/api/webhooks/inbound/<source id>`, signed with the secret: the header `X-Synap-Signature`
+or `X-Hub-Signature-256` carries `sha256=` followed by the hex HMAC-SHA256 of the raw body. GitHub signs this way
+already. The body may be up to 1 MB. A bad signature, an unknown source and a revoked source all get the same `401`.
+
+</Step>
+<Step>
+
+**React to it.** Create an automation with a `webhook` trigger that names the source:
+`"triggerConfig": { "webhookSource": { "name": "<source name>" } }`. Each delivery runs it with
+`trigger.payload.data.payload` set to the body the service sent. See
+[Automations and playbooks](/docs/customize/automations-and-playbooks).
+
+</Step>
+</Steps>
+
+Each delivery is stored before the pod answers `200`, so a delivery the automation could not process right away is
+retried by the pod. A redelivery with the same delivery ID (`X-Synap-Delivery-Id` or `X-GitHub-Delivery`) is stored
+and runs once. A `ping` event is acknowledged and runs nothing.
+
+This is the opposite direction from [Webhooks](/docs/build/webhooks), where your pod calls your URL.
+
+## Write your own script
+
+When your data sits somewhere none of the doors above reads (an export from another app, a folder in your own
+format, a database on your computer), write a script that reads it and creates records through the
+[Hub REST API](/docs/reference/hub-api). Create an [API key](/docs/build/api-keys) with the `hub-protocol.write` scope
+for it.
+
+This Node.js script creates a note for each Markdown file in a folder, using
+[`@synap-core/hub-rest-client`](https://www.npmjs.com/package/@synap-core/hub-rest-client):
+
+```bash
+npm install @synap-core/hub-rest-client
+```
+
+```js title="import-notes.mjs"
+import { readdir, readFile } from "node:fs/promises";
+import { join, basename } from "node:path";
+import { HubRestClient } from "@synap-core/hub-rest-client";
+
+const hub = new HubRestClient({
+  podUrl: process.env.SYNAP_POD_URL, // https://pod.example.com
+  apiKey: process.env.SYNAP_API_KEY,
+});
+
+const folder = process.argv[2];
+for (const name of await readdir(folder)) {
+  if (!name.endsWith(".md")) continue;
+  const content = await readFile(join(folder, name), "utf8");
+  const result = await hub.createEntity({
+    profileSlug: "note",
+    title: basename(name, ".md"),
+    content, // Markdown, stored as the note's document
+    workspaceId: process.env.SYNAP_WORKSPACE_ID,
+  });
+  if (result.status === "proposed") {
+    console.log(`${name}: waiting for your approval ${result.reviewUrl ?? ""}`);
+  } else {
+    console.log(`${name}: created ${result.id}`);
+  }
+}
+```
+
+```bash
+SYNAP_POD_URL=https://pod.example.com SYNAP_API_KEY=... SYNAP_WORKSPACE_ID=<id> node import-notes.mjs ./notes
+```
+
+`createEntity` calls `POST /api/hub/entities`. It answers `200` with `status: "created"` when the record is written,
+or `202` with `status: "proposed"` and a `reviewUrl` when it waits for your approval; the client throws on an error
+status. To import many records as one reviewable batch instead of one by one, send them to
+`POST /api/hub/import/analyze` (above).
+
+From another language, call the same routes over HTTP with `Authorization: Bearer <key>`.
+
+## What is reviewed and what lands
+
+The same rules apply to every door. In short:
+
+- **You, with your own key or in the apps**: your writes apply directly, except an import batch, which you confirm
+  first, and the first sync of a connected account.
+- **An agent**: what happens depends on its write mode. Creates and edits apply directly with Undo in the default mode;
+  structural changes, deletions and anything that came from outside the pod become proposals. An agent can never
+  apply an import proposal or approve its own.
+- **A webhook or a schedule** running an automation: every write its steps make goes through the same governance.
+
+See [Validation policy](/docs/concepts/validation-policy) for the full rules.

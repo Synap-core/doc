@@ -29,7 +29,8 @@ problem publicly until a fix is released and pod operators have had a reasonable
 ## For pod operators
 
 - Keep your pod updated: [Upgrades](/docs/run/upgrades). Automatic updates apply signed releases only.
-- Verify releases with `cosign` and `SYNAP_RELEASE_VERIFY=enforce`: [Verifying releases](/docs/run/install#verifying-releases).
+- Keep release verification on: `install.sh` and `synap update` refuse an unsigned or tampered release by default.
+  See [Verifying releases](/docs/run/install#verifying-releases).
 - Keep the database, MinIO, Typesense and Kratos ports on `127.0.0.1`, as the stock configuration does: only Caddy
   should face the internet.
 - Give agents and integrations their own keys with the smallest grant that works: [API keys](/docs/build/api-keys).

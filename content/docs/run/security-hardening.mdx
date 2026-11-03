@@ -74,17 +74,10 @@ password never lands in your shell history. See [Install](/docs/run/install#the-
 
 ## Releases you install
 
-Install `cosign` and refuse unsigned or tampered releases, for `install.sh` and for every `synap update`. `sudo`
-drops variables exported in your shell, so set the variable on the `sudo` command itself:
-
-```bash
-curl -fsSL https://github.com/synap-core/backend/releases/download/channel-stable/install.sh \
-  | sudo SYNAP_RELEASE_VERIFY=enforce bash -s -- --domain pod.example.com --email you@example.com
-sudo SYNAP_RELEASE_VERIFY=enforce synap update
-```
-
-A manual `synap update` also reads `SYNAP_RELEASE_VERIFY` from `deploy/.env`. Automatic updates always run with
-`enforce`. See [Verifying releases](/docs/run/install#verifying-releases).
+`install.sh` and `synap update` refuse an unsigned or tampered release by default (`SYNAP_RELEASE_VERIFY=enforce`),
+and automatic updates always do. You do not need to install `cosign`: without it, the check runs `cosign` from its
+official Docker image. Keep the default: `SYNAP_RELEASE_VERIFY=warn` and `synap update --insecure-skip-verify` exist
+only to go on past a failed check for one run. See [Verifying releases](/docs/run/install#verifying-releases).
 
 ## Backups
 

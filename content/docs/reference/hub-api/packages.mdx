@@ -1,6 +1,6 @@
 ---
 title: Packages
-description: The Packages operations of the Hub REST API (1 operation).
+description: The Packages operations of the Hub REST API (4 operations).
 full: true
 type: reference
 audience: builder
@@ -9,7 +9,7 @@ availability:
   - cloud
 status: current
 owner: Antoinesrvt
-generated_from: Synap-core/backend@629c1d90e (main)
+generated_from: Synap-core/backend@24fabe7ac (main)
 _openapi:
   preload:
     - hub-api/packages
@@ -17,10 +17,25 @@ _openapi:
     - depth: 2
       title: List everything installed on this pod, per kind
       url: '#list-everything-installed-on-this-pod-per-kind'
+    - depth: 2
+      title: List the package updates waiting on this pod
+      url: '#list-the-package-updates-waiting-on-this-pod'
+    - depth: 2
+      title: One package update, field by field
+      url: '#one-package-update-field-by-field'
+    - depth: 2
+      title: Apply a package update with a choice per field
+      url: '#apply-a-package-update-with-a-choice-per-field'
   structuredData:
     headings:
       - content: List everything installed on this pod, per kind
         id: list-everything-installed-on-this-pod-per-kind
+      - content: List the package updates waiting on this pod
+        id: list-the-package-updates-waiting-on-this-pod
+      - content: One package update, field by field
+        id: one-package-update-field-by-field
+      - content: Apply a package update with a choice per field
+        id: apply-a-package-update-with-a-choice-per-field
     contents:
       - content: "Unions the install ledgers that already exist — workspaces
           (package_slug + version stamp), capability containers (template_key +
@@ -31,6 +46,41 @@ _openapi:
           slug. `drift: null` on a row means NOT COMPUTED, never 'up to date'.
           Requires hub-protocol.read scope."
         heading: list-everything-installed-on-this-pod-per-kind
+      - content: "Every installed package (space template, overlay pack, capability,
+          view, skill, automation) whose catalog version moved, by the one rule
+          every surface reads: the catalog's content-hash version against the
+          one the pod converged to. A view/skill/automation update counts how
+          many fields it changes per state (updates / yours / both / same); a
+          space or capability is updated as a whole (`comparedBy: package`). A
+          package that cannot be compared is listed under `unreadable` with the
+          reason; `installed` carries every package's verdict. Pod admins only.
+          Requires hub-protocol.read scope."
+        heading: list-the-package-updates-waiting-on-this-pod
+      - content: "For each installed row of the package, each field the catalog provides
+          with its state and its three values: the catalog's when installed
+          (`base`), the catalog's now (`desired`) and the pod's (`live`). A text
+          field both sides changed carries the line-level merge (`merged`, null
+          when the edits overlap). `recommended` names the suggested choice per
+          `<rowId>:<field>`. Pod admins only. Requires hub-protocol.read scope."
+        heading: one-package-update-field-by-field
+      - content: "`choices` is keyed `<rowId>:<field>`: `catalog`, `mine`, `combine` or
+          `{value}`. Every field both sides changed needs one; a field only the
+          catalog changed defaults to `catalog`. `expectedVersion` is the
+          catalog version the plan showed: a newer one answers 409. Each row is
+          written through its own governed `.update` door as the caller: a
+          person's write lands and returns its receipt (Undo for 30 days, on pod
+          admin); an agent's is filed as proposals. A space or capability
+          package (`comparedBy: package`) takes no choices: a person's apply
+          runs the space's agreed `acceptDataChanges`, then its template apply
+          (or the capability's reconcile); an agent's is filed for the person's
+          approval (`proposed`), and approving runs that same apply as the
+          person. What only a person can do answers `reasonCode` `NEEDS_PERSON`
+          (a space update that changes existing records, a view) or
+          `CHOICES_NEEDED` (a field both sides changed), with the review page as
+          `reviewUrl`; a catalog definition the pod refuses answers 400
+          `INVALID_CATALOG_DEFINITION`, naming the template and each field
+          (`fieldErrors`). Pod admins only. Requires hub-protocol.write scope."
+        heading: apply-a-package-update-with-a-choice-per-field
 ---
 
 export default function Layout(props) {
@@ -38,7 +88,7 @@ export default function Layout(props) {
   return (
     <>
       {props.children}
-      <OpenAPIPage document="hub-api/packages" webhooks={[]} operations={[{"path":"/installed","method":"get"}]} showTitle />
+      <OpenAPIPage document="hub-api/packages" webhooks={[]} operations={[{"path":"/installed","method":"get"},{"path":"/package-updates","method":"get"},{"path":"/package-updates/{slug}","method":"get"},{"path":"/package-updates/{slug}/apply","method":"post"}]} showTitle />
     </>
   );
 }

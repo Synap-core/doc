@@ -10,7 +10,7 @@ last_reviewed: 2026-10-20
 ---
 
 Every pod serves a Model Context Protocol (MCP) server at `/mcp`, for example `https://pod.example.com/mcp`. AI
-clients use it to read your pod and to propose changes to it, under the permissions of their key.
+clients use it to read your pod and to change it, under the permissions of their key and the agent's write mode.
 
 Most people never configure it by hand: `synap connect <client>` writes the client's MCP configuration. See
 [Connect an agent](/docs/agents).
@@ -56,9 +56,11 @@ tools whose reads its grant bounds; other read tools answer `GRANT_DOOR_UNSUPPOR
 
 ## Governance
 
-Every write tool goes through the same permission check as any other write to the pod: the change is applied only
-where a rule allows it, and otherwise becomes a proposal that a person approves. No MCP tool can approve a proposal
-with an agent's key.
+Every write tool goes through the same permission check as any other write to the pod, then through the
+[validation policy](/docs/concepts/validation-policy). Under the default write mode, creates and edits apply directly
+and can be undone; deletions, schema and structural changes, and admin actions become a proposal that a person
+approves. A tool that answers `status: "proposed"` has succeeded: the change waits for review. No MCP tool can approve
+a proposal with an agent's key.
 
 ## Tools
 

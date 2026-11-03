@@ -15,7 +15,7 @@ semantic relation, stored in the graph. This page explains when to use each.
 
 | | **Structural links** (properties) | **Semantic relations** (relation objects) |
 |---|---|---|
-| **Where stored** | Entity's property values (`valueType: "entity_id"`) | `relations` table, typed by `relation_defs` |
+| **Where stored** | Entity's property values (`valueType: "entity_id"`) | The pod's relation graph, each relation with a type |
 | **Defined by** | Profile schema (designed at workspace setup) | Created on the fly, by user or AI |
 | **Direction** | One-way (owned by the source entity) | Bi-directional, traversable both ways |
 | **Discoverability** | Schema first: you know which fields exist | Emergent: you find them with graph queries |
@@ -60,7 +60,7 @@ Each Deal entity then has `contact`, `owner` and `company` fields that point to 
 
 ## Semantic relations (graph)
 
-A **semantic relation** is a record in the `relations` table, typed by a slug from `relation_defs`.
+A **semantic relation** is a record in the pod's relation graph, typed by a relation type's slug.
 
 These relations are scoped to a workspace, traversable in both directions and not tied to a profile schema. People, agents and automations can create one between any two entities at any time.
 
@@ -88,7 +88,7 @@ No profile schema defines this relation. An agent or a person created it after n
 
 ### Default relation types
 
-Every workspace ships with 12 default semantic relation types, defined in `relation_defs`:
+Every workspace ships with 12 default semantic relation types:
 
 | Slug | Label | Category |
 |---|---|---|
@@ -105,14 +105,14 @@ Every workspace ships with 12 default semantic relation types, defined in `relat
 | `belongs_to_project` | Belongs To Project | hierarchy |
 | `tagged_with` | Tagged With | hierarchy |
 
-You can create additional workspace-specific types via `trpc.relationDefs.create`.
+You can add relation types of your own for a workspace.
 
 ## When both could work
 
 Structural links and semantic relations can express similar things:
 
-- A Deal entity could have a `contact` property (structural) pointing to a Contact entity
-- *Or* you could create a `relates_to` semantic relation between a Deal and a Contact
+- A Deal entity could have a `contact` property (structural) pointing to a person
+- *Or* you could create a `relates_to` semantic relation between a Deal and that person
 
 The rule of thumb:
 
@@ -125,13 +125,8 @@ Both appear side by side in the entity's **Connections** panel, so people see on
 
 ## One list of connections
 
-The `EntityRelationshipsDisplay` component and the `relations.getConnections` API unify both systems:
-
-1. It fetches semantic relations from the `relations` table
-2. It scans the entity's properties for `entity_id` values (structural links)
-3. It also includes `thread_entities` — AI chat threads that created, updated, or referenced the entity
-
-The result is a single list of connections with a `source` field indicating origin:
+The pod's connections read unifies both systems, and adds the AI chat threads that created, updated or referenced the
+entity. The result is a single list of connections with a `source` field indicating origin:
 
 ```typescript
 type Connection = {
@@ -153,15 +148,7 @@ type Connection = {
 
 ### API usage
 
-**In-app (tRPC):**
-
-```typescript
-const { connections } = await trpc.relations.getConnections.query({
-  entityId: "entity_abc123",
-});
-```
-
-**External agents / integrations (Hub Protocol REST):**
+With the Hub REST API:
 
 ```bash
 GET /api/hub/entities/{entityId}/connections?userId={userId}&workspaceId={wsId}
@@ -169,7 +156,7 @@ GET /api/hub/entities/{entityId}/connections?userId={userId}&workspaceId={wsId}
 # Returns: { connections: [...], counts: { total, graph, structural, threads } }
 ```
 
-The typed client wraps both paths — use `client.getConnections(entityId)` from `@synap-core/hub-rest-client`.
+The typed client wraps it: `client.getConnections(entityId)` from `@synap-core/hub-rest-client`.
 
 Filtering patterns:
 
@@ -184,49 +171,24 @@ const graph = connections.filter(c => c.source === "graph");
 const threads = connections.filter(c => c.source === "thread");
 ```
 
-> **Why `getConnections` rather than `GET /relations` or `/graph/traverse`?**
-> Those two read only the `relations` table. For system profiles (task.projectId, task.assignee, contact.companyId,
-> deal.contactId), property links are mirrored into relations automatically. For custom profiles with `entity_id`
-> properties they are not always mirrored, so a link may exist only in the property index. `getConnections` reads
-> both in one call.
+> **Why `/connections` rather than `GET /relations`?**
+> `GET /relations` reads only the relation graph. For the built-in kinds, property links are mirrored into relations
+> automatically; for kinds with custom `entity_id` fields they are not always mirrored, so a link may exist only as a
+> property. `/connections` reads both in one call.
 
 ## For template authors
 
-When writing workspace templates (`.json` proposal files), use **properties** for all modelled relationships:
-
-```json
-{
-  "profiles": [
-    {
-      "slug": "task",
-      "properties": [
-        { "slug": "assignee", "valueType": "entity_id", "label": "Assignee" },
-        { "slug": "project",  "valueType": "entity_id", "label": "Project" }
-      ]
-    }
-  ],
-  "suggestedRelations": [
-    {
-      "sourceRef": "task:task-1",
-      "targetRef": "task:task-2",
-      "type": "blocks"
-    }
-  ]
-}
-```
-
-- `properties` with `valueType: "entity_id"` → structural links (filled in per entity)
-- `suggestedRelations` → semantic relations (graph edges seeded at workspace creation)
-
-A template can use both.
+When you write a workspace template, use **properties** with `valueType: "entity_id"` for every relationship your
+kinds model, so each one appears as a field people fill in. See
+[Spaces and templates](/docs/customize/spaces-and-templates).
 
 ## For agent authors
 
 When writing agent tools that touch relationships:
 
 - **Write to properties** when setting a defined field (an assignee, the contact on a deal).
-- **Write to `relations`** for a connection you discover (a note refers to a decision: create a `references` edge).
-- **Read `getConnections`** to get every link around an entity without knowing which system holds it.
+- **Create a relation** for a connection you discover (a note refers to a decision: create a `references` edge).
+- **Read the connections** (`GET /api/hub/entities/{entityId}/connections`) to get every link around an entity without knowing which system holds it.
 
 ## Summary
 
@@ -235,7 +197,7 @@ When writing agent tools that touch relationships:
 │                    Entity: "Q1 Planning Note"                   │
 ├──────────────────────────┬──────────────────────────────────────┤
 │   STRUCTURAL LINKS       │   SEMANTIC RELATIONS                 │
-│   (entity_id properties) │   (relations table)                  │
+│   (entity_id properties) │   (relation graph)                   │
 │                          │                                      │
 │  project → "App Redesign"│  references → "Decision: Hire"       │
 │  owner   → "Marie"       │  mentions   → "Contact: Paul"        │

@@ -110,9 +110,8 @@ const result = await synap.entities.create.mutate({
 });
 ```
 
-Writes go through the pod's governance. Depending on who the key belongs to and the rules you set, a write is applied
-directly or comes back as a **proposal** (`status: "proposed"` with a `proposalId`) that a person approves. Handle
-both. See [Validation policy](/docs/concepts/validation-policy).
+Writes go through the pod's governance. Depending on the pod's rules, a write is applied or comes back as a
+**proposal** (`status: "proposed"` with a `proposalId`) that a person approves. Handle both. See [Validation policy](/docs/concepts/validation-policy).
 
 ## React
 
@@ -150,7 +149,9 @@ client.
 
 Both packages ship ES modules and CommonJS with TypeScript declarations, under the MIT license. The router types
 come from `@synap-core/api-types`, a dependency, so the client's types follow the version of that package you install.
-Use only what the package root exports: other subpaths are not part of the published API.
+`@synap-core/sdk` also publishes three subpaths: `./public` (read what a pod publishes, with no sign-in), `./connect`
+(a website or app a person connects to their pod, see [Build a website](/docs/build/build-a-website)) and
+`./testing` (a mock pod for tests). Anything not listed in the package's `exports` is internal.
 
 ## Scripts and agents with an API key
 

@@ -1,0 +1,88 @@
+---
+title: Choose your path
+description: Who Synap is for, and where to start depending on where your pod runs, which agent you use and what data you bring.
+type: explanation
+audience: user
+availability: [pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+Synap is a pod: a server that holds your records in your own PostgreSQL database, and lets the AI agents you connect
+read and change them. By default an agent's creates and edits apply directly, with Undo, while deletions and
+structural changes, such as a new kind, a space or an automation, become proposals you approve (requests, in the
+apps). Every change is written to
+an append-only event log. [What is Synap?](/docs/concepts/what-is-synap) explains the model.
+
+## Who it is for
+
+- **You use an AI agent for real work** (Claude Code, Codex, Cursor, ChatGPT or another MCP client) and want it to
+  work on your records instead of starting from nothing each conversation. The context lives in your pod, so it stays
+  when you change agents.
+- **You want one place for your records** across domains: people and companies, tasks, notes, documents, deals,
+  content. Each domain gets its own workspace on the same records, so a person is stored once however many workspaces
+  use them.
+- **You want to see and control what agents do.** Each agent has its own key and identity. You choose how much each
+  one does on its own, from creates and edits that apply with Undo to every change asking you first; deletions and
+  structural changes always ask you. You approve on the desktop in the Browser app (Relay, the phone app, is in beta
+  testing).
+- **You run a small team.** One pod holds the team's records; each person signs in as a member of the pod and connects
+  their own agents.
+- **You build software** and want a data store with permissions, review and an audit trail already in place: an app,
+  a website, a script or your own agent.
+
+## Four choices
+
+You make four choices. They are independent: any answer to one works with any answer to the others.
+
+### 1. Where your pod runs
+
+| | Synap Cloud | Your own server |
+|---|---|---|
+| Who operates the server | Synap | You |
+| How you start | [Cloud quickstart](/docs/start/cloud-quickstart): `npx @synap-core/cli init` | [Self-host quickstart](/docs/start/self-host-quickstart): the installer from the backend's GitHub releases |
+| Code | The same open-source pod | The same open-source pod |
+
+Both run the same code from the same releases, and the same apps and agents connect to both.
+[Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted) lists what Synap Cloud runs for you (updates, email,
+billing, connected accounts) and what you take on when you run your own. A self-hosted pod can be registered with the
+Control Plane later; see [Connect to the Control Plane](/docs/run/connect-control-plane).
+
+### 2. Which agent works on it
+
+Synap does not sell or meter inference: you bring your own agent. `synap init` connects the agents it finds on your
+computer (Claude Code, Codex, Cursor), and `synap connect --list` lists every client it can configure. An agent you
+wrote yourself gets an MCP URL and a key from `synap agents add --name <name>`. See [Connect an agent](/docs/agents).
+
+### 3. What goes in it
+
+- **Start from a template.** A workspace template sets up one domain (a CRM, a content studio, finance) with its kinds
+  of records, fields, views and playbooks (templates in the apps). See [Spaces and templates](/docs/customize/spaces-and-templates).
+- **Bring your data in.** Import what you already have. See [Import your data](/docs/customize/import).
+- **Capture as you go.** Ask your agent to save what you are working on, or capture from Relay on your phone.
+
+### 4. How far you take it
+
+- **Make it yours** without code: install workspaces, add kinds and fields, add capabilities and automations. See
+  [Make Synap yours](/docs/customize).
+- **Build on it**: an app on the SDK, a script on the Hub REST API, a website that reads your pod. See
+  [Build on your pod](/docs/build) and [Build a website](/docs/build/build-a-website).
+
+## If you want this, start here
+
+| If you want to… | Start at |
+|---|---|
+| Try Synap with the least setup | [Cloud quickstart](/docs/start/cloud-quickstart) |
+| Keep your data on hardware you control | [Self-host quickstart](/docs/start/self-host-quickstart) |
+| Decide between the two | [Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted) |
+| Give your AI agent access to your pod | [Connect an agent](/docs/agents) |
+| Set up a domain (sales, content, finance…) in one step | [Spaces and templates](/docs/customize/spaces-and-templates) |
+| Bring in data from other tools | [Import your data](/docs/customize/import) |
+| Track a kind of record Synap does not have | [Kinds, roles and fields](/docs/customize/kinds-and-fields) |
+| See what you can install | [Marketplace](/docs/customize/marketplace) |
+| Approve agent changes from your phone | [Relay](/docs/use/relay) (in beta testing) |
+| Build an app or a website on your pod | [Build on your pod](/docs/build) |
+| Run your pod in production | [Run](/docs/run) |
+
+Words you do not know are in the [glossary](/docs/concepts/glossary).

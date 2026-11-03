@@ -9,9 +9,9 @@ owner: Antoinesrvt
 last_reviewed: 2026-10-20
 ---
 
-An agent connects to your pod with its **own identity and key**. What it writes goes through the pod's governance
-like any other write, so most of its changes reach your data as proposals you approve, and you can see and revoke
-each agent separately.
+An agent connects to your pod with its **own identity and key**. What it writes goes through the pod's governance:
+by default its creates and edits apply directly and can be undone, while deletions, schema and structural changes,
+and admin actions become proposals you approve. You can see and revoke each agent separately.
 
 The user CLI, `@synap-core/cli`, does the wiring for you.
 
@@ -35,6 +35,12 @@ synap connect codex --project <id>            # focus on one project
 
 `connect` creates the agent's identity on your pod, gives it a key, and writes the client's configuration. For
 clients that read skill folders, it also installs the [Synap skills](/docs/agents/skills).
+
+You choose how the agent's changes land: **Normal** (recommended: creates and edits apply directly with Undo;
+deletions and structural changes ask you), **Creates only** or **Ask first**. `synap init` asks on the page where you
+approve the computer; `synap connect claude-code` asks in the terminal. You can change it later on the agent's page
+in the pod admin console. See
+[Validation policy](/docs/concepts/validation-policy).
 
 | Target | Client |
 |---|---|
@@ -84,8 +90,9 @@ synap agents list   # your agents on this pod
 
 - It works through MCP or the Hub REST API, with the scopes and grant of its key. See
   [API keys](/docs/build/api-keys#limiting-an-agent) to limit what it may change.
-- Its writes are proposals unless a rule you set lets that kind of write apply automatically. Deletes, admin actions
-  and scope changes are always proposals.
+- Its writes follow its write mode. Under the default, creates and edits apply directly with Undo; deletions and
+  structural changes become proposals. Deletes, admin actions, scope changes, new kinds and roles, and new spaces,
+  cells, playbooks and automations are always proposals, whatever rule you set.
 - It can never approve a proposal, its own or anyone else's.
 - It cannot create keys for other agents, widen its own approval rules, or give itself vault access.
 

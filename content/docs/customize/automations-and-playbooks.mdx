@@ -1,0 +1,251 @@
+---
+title: Automations and playbooks
+description: Make work repeatable. A playbook is the work you can run again, an automation decides when it runs, and capabilities are the tools both use.
+type: how-to
+audience: user
+availability: [pod-oss, cloud, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+Three pieces compose every repeatable process on a pod:
+
+| Piece | Answers | What it is |
+|---|---|---|
+| [Capability](/docs/customize/capabilities) | With what? | A tool the pod can run: a verb such as "send an email" or "search the web". |
+| **Playbook** (a template in the apps) | What? | The reusable work: a goal, optional stages and acceptance criteria. Each run is a session that an agent works on. |
+| **Automation** | When? | A trigger (an event, a schedule, an incoming webhook or a manual start) and a flow of steps. A step can call a verb or start a playbook. |
+
+Keep them apart: an automation should not hold the work itself, and a playbook should not decide when it runs.
+
+## Playbooks
+
+A playbook needs a `name` and a `goalTemplate`. It can also declare:
+
+- `params`: inputs asked for when it runs, referenced in the goal as `{name}`
+  (for example `Analyze competitors for {market}`). An undeclared name, or `{{name}}`, is refused.
+- `stages`: ordered steps, each with a `key`, a `name` and a `category` (`backlog`, `planned`, `started`, `paused`,
+  `completed` or `canceled`), and optionally a gate where a person must say yes.
+- `criteria`: binary statements every run is graded against.
+- a subject kind: the kind of record it runs on, such as a company or a lead.
+
+### Create one
+
+- **Your agent**: ask for it. `synap_create_playbook` files it as a proposal you approve. An agent can also turn a
+  session that went well into a playbook with `synap_promote_session_to_playbook`.
+- **The API**: `POST /api/hub/playbooks` with `name`, `goalTemplate` and `workspaceId`, plus any of `description`,
+  `stages`, `params`, `criteria` and `subjectProfile` (for example `{ "profileSlug": "company" }`). See
+  [Playbooks in the Hub REST API](/docs/reference/hub-api/playbooks).
+- **A template**: workspaces from the [marketplace](/docs/customize/marketplace) bring their own playbooks.
+
+### Run one
+
+```bash
+synap playbook run "<name or id>" --subject <entityId> --param market=Europe
+```
+
+Your agent runs one with `synap_run_playbook`, and the API with `POST /api/hub/playbooks/{id}/run` (`subjectId`,
+`params`, `workspaceId`). A run creates a session and hands it to the playbook's executor. It can come back:
+
+| Status | Meaning |
+|---|---|
+| `running` | It started. |
+| `draft` | An agent launched it: it waits in your sessions until you accept it. |
+| `proposed` | A rule or a limit asks you first. |
+| `blocked` | Nothing ran: the playbook uses verbs that are not turned on yet. The answer names them. |
+| `skipped` | Nothing ran, for the reason in `message` (for example, the record's last run failed recently). |
+
+### Let a goal run on its own
+
+A playbook can declare **workers**: what starts it by itself. Your agent turns one on for a goal with
+`synap_enable_worker`, named by its trigger: `schedule:<cron>` (for example `schedule:0 9 * * 1`, every Monday at
+09:00 UTC), `enters_status:<status>` (when a record enters that status), `count:<status>` (when enough records are in
+it) or `created`. Its mode says whether each run asks you first (`propose`, the default) or just runs (`run`).
+
+## Automations
+
+### Triggers
+
+| Trigger | Fires | Settings (`triggerConfig`) |
+|---|---|---|
+| `event` | When something happens on the pod | `eventPattern`, such as `entity.create.completed` or `entity.*`, and optional `filters` on the event's data, such as `{ "profileSlug": "company" }` |
+| `cron` | On a schedule | `expression`, a 5-field cron expression such as `0 9 * * MON` |
+| `webhook` | When an outside service posts to the pod | `webhookSource: { "name": … }`, an inbound webhook source a pod admin created. See [Import your data](/docs/customize/import#webhooks-in). |
+| `manual` | When you start it | none |
+
+Match events in the `.completed` phase: it fires for every change that lands, whether it ran directly or was
+approved. The `.validated` phase fires only for changes that went through a proposal.
+
+Filters compare values exactly, or with `$eq`, `$ne`, `$in`, `$gt`, `$gte`, `$lt` and `$lte`. A record's properties
+are flat in the event data: filter on `score`, not `properties.score`.
+
+### The flow
+
+The flow is a set of `nodes` joined by `edges`. It starts at its `trigger` node. The steps you will use most:
+
+| Step | Does |
+|---|---|
+| `output` | An action: a notification, a record created or updated, a role attached, a relation, a webhook call, a channel message, or a session update |
+| `condition`, `switch` | Branch on a value |
+| `fetch` | Call a URL |
+| `transform`, `compute` | Reshape or compute values |
+| `query`, `entity_read`, `related_entities` | Read records |
+| `loop` | Repeat steps for each item |
+| `capability` | Run a verb (its `verbId` must exist on your pod) |
+| `skill` | Run a skill by ID |
+| `playbook_run` | Start a run of a playbook, by `playbookId` or `playbookName`. This is how an automation starts a session. |
+| `sub_automation` | Run another automation |
+
+Text in a step can use the trigger and earlier steps: `{{trigger.payload.subjectId}}` (the record the event is about),
+`{{trigger.payload.data.title}}`, `{{steps.<nodeId>.output}}`. The full reference, with every step type and its
+fields, is served by your pod:
+
+```bash
+synap automation schema           # or GET /api/hub/automations/schema
+```
+
+### Create and manage one
+
+- **Your agent**: `synap_create_automation`. It is always a proposal; once approved, the automation is live. An
+  agent's automation must also carry a short contract of what it reads, stores and does (`metadata.dataContract`,
+  below), or it is refused.
+- **The API**: `POST /api/hub/automations/create` with `name`, `triggerType`, `triggerConfig`, `flowDefinition`,
+  `workspaceId` and `status` (`draft` by default, or `active`). See
+  [Automations in the Hub REST API](/docs/reference/hub-api/automations).
+
+```bash
+synap automation list
+synap automation describe <id>
+synap automation enable <id>      # make it live
+synap automation disable <id>     # pause it
+```
+
+To run one now, outside its trigger: `synap_trigger_automation` for an agent, or
+`POST /api/hub/automations/{automationId}/trigger`. A run is not a proposal, but every write its steps make goes
+through the same governance as any other write.
+
+## Example: research every new company
+
+This puts the three pieces together: when a company is added to your pod, start a research session on it, in which
+an agent can use the search capability you installed.
+
+<Steps>
+<Step>
+
+**Install the tool.** Install a web search capability from the marketplace and turn it on, then check the name of
+its search verb:
+
+```bash
+synap capability add
+synap capability list
+```
+
+</Step>
+<Step>
+
+**Create the playbook** (the work). With a key that has the `hub-protocol.write` scope:
+
+```bash
+curl -X POST https://pod.example.com/api/hub/playbooks \
+  -H "Authorization: Bearer $SYNAP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspaceId": "<workspace id>",
+    "name": "Research a company",
+    "goalTemplate": "Research this company on the web and record what it does, who runs it and recent news",
+    "subjectProfile": { "profileSlug": "company" }
+  }'
+```
+
+The automation below refers to the playbook by name, so the playbook must exist first. If an agent created it, approve
+its proposal before the next step.
+
+</Step>
+<Step>
+
+**Create the automation** (when). It listens for new `company` records and starts a run of the playbook on each one:
+
+```bash
+curl -X POST https://pod.example.com/api/hub/automations/create \
+  -H "Authorization: Bearer $SYNAP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d @research-new-companies.json
+```
+
+```json title="research-new-companies.json"
+{
+  "workspaceId": "<workspace id>",
+  "name": "Research new companies",
+  "triggerType": "event",
+  "triggerConfig": {
+    "eventPattern": "entity.create.completed",
+    "filters": { "profileSlug": "company" }
+  },
+  "status": "active",
+  "flowDefinition": {
+    "nodes": [
+      {
+        "id": "trigger-1",
+        "type": "trigger",
+        "position": { "x": 0, "y": 0 },
+        "data": {
+          "triggerType": "event",
+          "label": "A company is added",
+          "config": { "eventPattern": "entity.create.completed" }
+        }
+      },
+      {
+        "id": "run-1",
+        "type": "playbook_run",
+        "position": { "x": 0, "y": 200 },
+        "data": { "label": "Research it", "playbookName": "Research a company" }
+      }
+    ],
+    "edges": [{ "id": "e1", "source": "trigger-1", "target": "run-1" }]
+  },
+  "metadata": {
+    "dataContract": {
+      "version": 1,
+      "mode": "react",
+      "gets": [
+        {
+          "id": "new-company",
+          "label": "A company is added to the pod",
+          "nodeIds": ["trigger-1"],
+          "origin": "synap",
+          "event": "entity.create.completed"
+        }
+      ],
+      "stores": [],
+      "reacts": [
+        { "id": "research", "label": "Start a research session on it", "nodeIds": ["run-1"], "kind": "process" }
+      ]
+    }
+  }
+}
+```
+
+The `dataContract` is required only when an agent creates the automation; it is harmless otherwise. Its `mode` must
+match its sections: `react` has `reacts` and no `stores`, `ingest` the opposite, `ingest_and_react` both. Every
+`nodeIds` entry must name a node of the flow.
+
+</Step>
+<Step>
+
+**Try it.** Add a company. The run's session is about the new record (the automation passes the record the event is
+about as the session's subject), and the agent working on it can use the capabilities your pod has, under the same
+governance as any other agent run.
+
+</Step>
+</Steps>
+
+To call the search verb directly from the flow instead of leaving it to the agent, add a `capability` step with
+`verbId` set to the verb's name and an `inputMapping` such as `{ "query": "{{trigger.payload.data.title}}" }`.
+
+## Related
+
+- [Capabilities](/docs/customize/capabilities)
+- [Validation policy](/docs/concepts/validation-policy)
+- [Event catalog](/docs/reference/events)
+- [Webhooks](/docs/build/webhooks), for the pod to call your URL when something changes

@@ -1,0 +1,150 @@
+---
+title: Marketplace
+description: Find, install and update packages for your pod, and publish your own, from the web, the Browser app, the CLI or your agent.
+type: how-to
+audience: user
+availability: [pod-oss, cloud, browser, cli]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-03
+---
+
+The marketplace is the catalog of packages you can add to a pod: made by Synap and by the people who use it. The
+catalog lives on the Synap Control Plane; installing always happens on your pod, under your pod's governance.
+
+Browse it on the web at [synap.live/marketplace](https://www.synap.live/marketplace).
+
+## What you can install
+
+| Package | What installing it gives you |
+|---|---|
+| **Workspace** (a space in the apps) | A complete domain: kinds of records, fields, views, playbooks (templates in the apps) and automations. See [Spaces and templates](/docs/customize/spaces-and-templates). |
+| **Project template** | Several workspaces at once, for one intent ("run an agency"). It is a workspace package tagged `suite`. |
+| **Capability** | Tools your agents can call, such as an email or calendar account. See [Capabilities](/docs/customize/capabilities). |
+| **Skill** | Instructions that teach an agent a job. See [Agent skills](/docs/agents/skills). |
+| **Automation** | A triggered, repeatable process. The catalog calls this package type `workflow`. See [Automations and playbooks](/docs/customize/automations-and-playbooks). |
+| **View** | A new way to look at records, such as a board or a dashboard. See [Views](/docs/concepts/views). |
+| **Card** | How a record renders. The catalog calls this package type `cell`. |
+
+## Browse and install
+
+### On the web
+
+On [synap.live/marketplace](https://www.synap.live/marketplace), search or pick a kind of package. Signed in with your
+Synap account, you can install a workspace or project template into one of your pods with **Install**. For every
+package, **Other ways to install** offers to open the install in the Synap app or gives you the CLI command.
+
+### In the Browser app
+
+Open the **Marketplace** to find and install packages into the pod you are signed in to. A package that needs your
+approval waits as a proposal (a request in the apps): approve it in the Browser app (or [Relay](/docs/use/relay), in beta).
+
+### From the CLI
+
+```bash
+synap market                               # list everything you can install
+synap market --type capability            # one package type: workspace, capability, skill, workflow, view, cell
+synap market --search calendar             # search names, descriptions and slugs
+synap market install <slug>                # install one package
+```
+
+What `install` does depends on the package type:
+
+- A **workspace** is provisioned on your pod. `--dry-run` previews it without writing anything, `--onto <workspaceId>`
+  adds it to a workspace you already have, and `--project <id>` tags what it creates to a project.
+- A **capability** installs through the same path as `synap capability add`, and asks for any credential it needs.
+  Run it interactively.
+- An **automation** or a **view** is added to a workspace: pass `--workspace <id>`, or set a default with
+  `synap use <workspace>`.
+- A **card** or a **skill** lands pod-wide.
+
+Without `synap login`, `synap market` lists public packages. Signed in, it also lists your own private packages.
+
+### From your agent
+
+Your agent searches with the pod's `market.search` verb and installs with `market.install`, both run through
+`synap_run_capability`. `market.search` reads the copy of the catalog your pod keeps. An agent's install is always a
+proposal you approve:
+ask in plain language, for example "find a capability for my calendar and propose installing it".
+
+An agent connected through the Synap Cloud connector (`https://mcp.synap.live`, set up for claude.ai by
+`synap mcp connect-claude`) also has `market_search`, which searches the catalog on the Control Plane before any pod is
+chosen.
+
+## What your pod checks
+
+Every install goes through the pod, whoever starts it:
+
+- A package only adds. It is refused when it would overwrite something your pod already has under the same name.
+- An install by an agent becomes a proposal; an agent cannot approve it.
+- A package that needs a paid plan is refused early when your pod's plan does not cover it.
+- Updates to installed packages are not applied automatically: you run them (below).
+
+Your pod reads Synap's catalog from the Control Plane every 10 minutes. A pod admin can add other catalogs (sources) and
+set how far each is trusted, and the operator of a self-hosted pod can switch Synap's catalog off. See
+[Marketplace listing policy](/docs/community/marketplace-policy) and
+[Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted#what-a-self-hosted-pod-still-contacts).
+
+## See what is installed and update it
+
+```bash
+synap market installed              # packages installed on this pod
+synap market installed --outdated   # only those with an update available
+synap market update                 # preview the updates available; applies nothing
+synap market update <slug>          # update one
+synap market update --yes           # apply every available update, agreeing to the data changes it lists
+```
+
+For workspaces, `synap templates` shows every workspace with its template status and `synap templates update` applies
+updates. An update that changes existing data waits for a person to agree. See
+[Spaces and templates](/docs/customize/spaces-and-templates#keep-a-space-in-step-with-its-template).
+
+## Publish your own
+
+Publishing uses your Synap account, not your pod's keys: approval and publication stay with a person.
+
+<Steps>
+<Step>
+
+**Sign in and create your publisher profile**, once, before your first publish. Packages are attributed to it.
+
+```bash
+synap login
+synap vendor create <your-slug> --name "Your studio"
+```
+
+</Step>
+<Step>
+
+**Write the package.** Start from a minimal valid file, or from a workspace you already built:
+
+```bash
+synap market scaffold <slug>                     # writes <slug>.template.yaml, a workspace template
+synap market scaffold <slug> --kind view         # or a cell, view, workflow, capability or skill package
+synap market validate <slug>.template.yaml       # check it
+```
+
+</Step>
+<Step>
+
+**Publish it.** A package is private by default.
+
+```bash
+synap market publish <slug>.template.yaml        # from a file
+synap market publish --from-workspace <id>       # turn a live workspace into a template
+synap market publish --from-project <id>         # turn a project's workspaces into a project template
+```
+
+Publishing the same slug again updates your package; publishing identical content changes nothing.
+
+</Step>
+</Steps>
+
+A private package stays installable by its slug for you. A package from a publisher other than Synap is listed
+publicly only after Synap reviews it: until then `--public` is refused, with that reason. `synap market unpublish <slug>`
+makes a package private again.
+
+An agent on the Synap Cloud connector can publish with `market_publish`, under the same rules. A slug that Synap
+already publishes as an official package of the same type is refused for anyone else.
+
+What Synap requires of a listed package is in the [Marketplace listing policy](/docs/community/marketplace-policy).

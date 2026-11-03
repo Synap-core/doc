@@ -4,23 +4,71 @@ description: How the pod decides whether a requested change runs directly, becom
 type: explanation
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-03
 ---
 
-The validation policy decides whether a requested change runs directly or becomes a proposal.
+The validation policy decides what happens to a change an agent asks to make: it runs directly, it becomes a proposal
+(shown in the apps as a **Request**) that waits for a person, or it is refused.
 
-## What it looks at
+## People and agents
 
-- **Who is asking**: a person, an agent, the system, or an external connector.
-- **How sensitive the action is**: a low-risk update or a high-impact structural change.
-- **Scope and ownership**: the workspace and the resource the change touches.
+A change made by a person runs if that person has the permission for it. See
+[Permission model](/docs/concepts/permission-model).
 
-## Outcomes
+A change made by an agent goes through the same permission check first, then through the policy below.
 
-- **Runs directly**: an allowed, low-risk change.
-- **Becomes a proposal**: the policy needs a person to confirm it.
-- **Refused**: the caller lacks the permission.
+## Write modes
+
+Each agent has a write mode. You choose it when you connect the agent: the page in the pod admin console where you
+approve a computer and its agents (`synap init`) asks how the agents' changes land, and `synap connect claude-code`
+asks the same in the terminal. You can change it at any time on the agent's page in the pod admin console.
+
+| Write mode | What it does |
+|---|---|
+| **Normal** (recommended, the default) | Creates and edits apply directly with Undo; deletions and structural changes ask you. |
+| **Creates only** | Creates apply directly with Undo; edits, deletions and structural changes ask you. |
+| **Ask first** | Every change asks you first. |
+
+An agent you have not configured follows the pod's default, which is **Normal**: a pod-wide rule lets an agent's
+reversible writes run directly. A change that runs directly is still recorded, and you can undo it.
+
+## What always asks you
+
+Some changes become a proposal whatever the write mode and whatever rule you add. No rule can widen them:
+
+- **Destructive actions**: delete, archive, purge and merge.
+- **Administrative actions**: changing a space's settings, adding or removing members, changing a member's role,
+  changing what an agent may do.
+- **Changes of scope or identity**, for example making a record visible to the whole pod, or changing its kind.
+- **An agent defining a kind or a role.** A person defining one is not affected.
+- **An agent creating a space, cell, playbook or automation**, or activating an automation. A person doing the same
+  is not affected.
+- **Human gates**: approvals whose whole purpose is that a person says yes, such as approving a plan before an agent
+  writes code.
+
+An agent's own key can never approve a proposal, its own or anyone else's. Approval is a human step.
+
+## Other things that make a change ask you
+
+- **Rules you add.** On top of the write mode, you can add rules that let a kind of write run directly or make it ask
+  you, for one agent or for the whole pod. A rule can never loosen the list above.
+- **Untrusted origin.** A write that comes from outside the pod's trusted channels, such as an external connector,
+  becomes a proposal even when the agent's write mode would run it directly.
+- **A daily limit.** A pod can cap how many writes an agent runs directly each day; past the cap, the rest become
+  proposals. There is no cap unless one is set.
+
+## Refused
+
+A change is refused when the caller lacks the permission for it, when the agent lacks the capability it needs, or when
+a person set a rule that says never.
+
+## What an app or script sees
+
+A write through MCP, the SDK or the Hub REST API answers with the outcome. A proposal comes back as
+`status: "proposed"` with a `proposalId`; this is a success, not an error. The change is applied when a person
+approves the proposal.
 
 See also:
 

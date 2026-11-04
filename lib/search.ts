@@ -12,8 +12,10 @@ const ENGINE_LIMIT = 200;
  * re-ranked by lib/search-rank.ts (title matches first, generated reference after the guides, short passages).
  */
 export const searchServer = {
-  ...engine,
+  export: engine.export,
+  staticGET: engine.staticGET,
   async search(query: string, options?: Parameters<typeof engine.search>[1]) {
+    if (query.trim().length === 0) return [];
     const results = await engine.search(query, { ...options, limit: ENGINE_LIMIT });
     return rankResults(results as SearchResult[], query) as typeof results;
   },
@@ -21,7 +23,5 @@ export const searchServer = {
 
 /** GET /api/search?query=…: the shape the Fumadocs search dialog reads. */
 export async function searchGET(request: Request): Promise<Response> {
-  const query = new URL(request.url).searchParams.get('query') ?? '';
-  if (query.trim().length === 0) return Response.json([]);
-  return Response.json(await searchServer.search(query));
+  return Response.json(await searchServer.search(new URL(request.url).searchParams.get('query') ?? ''));
 }

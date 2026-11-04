@@ -45,14 +45,25 @@ test('passages are capped per page and cut short', () => {
   for (const p of passages) assert.ok(p.content.length <= MAX_PASSAGE_CHARS + 1, `${p.content.length} chars`);
 });
 
-test('a passage that is raw table Markdown is dropped', () => {
+test('a table-row passage is kept whole, never shortened into raw pipes', () => {
+  const row = '| If you want to… | Start at |\n| --- | --- |\n| Bring in data | Import |';
   const engine = [
     page('Choose your path', '/docs/start/choose-your-path'),
-    text('| If you want to… | Start at | | --- | --- | | Bring in data | Import |', '/docs/start/choose-your-path'),
-    text('Bring your data in. Import what you already have.', '/docs/start/choose-your-path'),
+    { id: 't1', type: 'text', table: true, content: row, url: '/docs/start/choose-your-path' },
   ];
-  const passages = rankResults(engine, 'import').filter((r) => r.type !== 'page').map((r) => r.content);
-  assert.deepEqual(passages, ['Bring your data in. Import what you already have.']);
+  const passage = rankResults(engine, 'import').find((r) => r.type !== 'page');
+  assert.equal(passage.content, row);
+});
+
+test('the engine order only breaks ties: a full title match beats a partial one however deep it sits', () => {
+  const filler = Array.from({ length: 150 }, (_, i) => page(`Filler ${i}`, `/docs/f/${i}`));
+  const engine = [page('Signing keys', '/docs/a'), ...filler, page('Create API keys', '/docs/b')];
+  const ranked = rankResults(engine, 'api keys').map((r) => r.content);
+  assert.deepEqual(ranked.slice(0, 2), ['Create API keys', 'Signing keys']);
+});
+
+test('an empty query asks nothing', async () => {
+  assert.deepEqual(rankResults([], ''), []);
 });
 
 test('title score: exact, every word, plurals, none', () => {

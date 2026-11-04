@@ -82,8 +82,9 @@ export function rankResults(results: SearchResult[], query: string): SearchResul
     }
   }
 
+  // The engine's order only breaks ties (it is below 1): a better title tier always ranks first.
   const score = (g: (typeof groups)[number]) =>
-    Math.round(titleScore(g.page.content, query) * 100) - referencePenalty(g.page.url) - g.order;
+    Math.round(titleScore(g.page.content, query) * 100) - referencePenalty(g.page.url) - g.order / groups.length;
 
   return groups
     .sort((a, b) => score(b) - score(a))
@@ -93,9 +94,8 @@ export function rankResults(results: SearchResult[], query: string): SearchResul
       ...g.passages
         // A passage that only repeats the page title adds nothing.
         .filter((p) => p.content.trim().toLowerCase() !== g.page.content.trim().toLowerCase())
-        // A table indexed as raw Markdown ("| a | b | | --- |") reads as noise in a result list.
-        .filter((p) => !/\|\s*-{3,}/.test(p.content))
         .slice(0, MAX_PASSAGES)
-        .map((p) => ({ ...p, content: cut(p.content) })),
+        // A table row is GFM the dialog renders as a table: shortening it would flatten its lines into raw pipes.
+        .map((p) => (p.table ? p : { ...p, content: cut(p.content) })),
     ]);
 }

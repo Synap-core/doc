@@ -95,6 +95,10 @@ const config = {
       { source: '/team', destination: '/docs/start', permanent: true },
       { source: '/developers', destination: '/docs/build', permanent: true },
       ...[...movedToSections, ...moved].map(([source, destination]) => ({ source, destination, permanent: true })),
+      // The Markdown twin of a page (/docs/<page>.md) follows an exact move too; `:page` and `:path*` sources already do.
+      ...[...movedToSections, ...moved]
+        .filter(([source]) => !source.includes(':'))
+        .map(([source, destination]) => ({ source: `${source}.md`, destination: `${destination}.md`, permanent: true })),
     ];
   },
 };

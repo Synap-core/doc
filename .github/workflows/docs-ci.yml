@@ -27,6 +27,10 @@ jobs:
       - name: Install
         run: npm ci
 
+      # The unit tests of scripts/ (search ranking, section index, docs URLs).
+      - name: Unit tests
+        run: npm test
+
       # Each check is a small script in scripts/, runnable locally with `npm run check`.
       - name: Frontmatter schema
         run: npm run check:frontmatter

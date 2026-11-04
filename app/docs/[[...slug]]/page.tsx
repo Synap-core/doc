@@ -1,4 +1,4 @@
-import { docsSource } from '@/lib/source';
+import { docsSource, getPageImage } from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
@@ -127,6 +127,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: page.data.title,
       description: page.data.description,
       url: page.url,
+      // A page's own `openGraph` replaces the root layout's, so the image is set here too.
+      images: [{ url: getPageImage(page).url, width: 1200, height: 630, alt: page.data.title }],
     },
   };
 }

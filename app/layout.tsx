@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
-import { siteUrl } from '@/lib/shared';
+import { siteDescription, siteImageUrl, siteUrl } from '@/lib/shared';
 
 /*
  * The website's type (synap.live, founder decision 2026-10-05): Geist for headings and body, Geist Mono for code.
@@ -13,8 +13,7 @@ import { siteUrl } from '@/lib/shared';
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' });
 
-const description =
-  'Docs for Synap, the open-source data pod: use the apps, self-host a pod, and build on it with the SDK, the Hub REST API and MCP.';
+const description = siteDescription;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -28,7 +27,9 @@ export const metadata: Metadata = {
     type: 'website',
     title: 'Synap Documentation',
     description,
+    images: [{ url: siteImageUrl, width: 1200, height: 630, alt: 'Synap Docs' }],
   },
+  twitter: { card: 'summary_large_image' },
 };
 
 /** The browser chrome on phones takes the page ground of each theme (see app/globals.css). */

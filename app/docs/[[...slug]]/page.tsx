@@ -1,4 +1,4 @@
-import { docsSource } from '@/lib/source';
+import { docsSource, getPageImage } from '@/lib/source';
 import {
   DocsBody,
   DocsDescription,
@@ -10,7 +10,8 @@ import {
 import { Callout } from 'fumadocs-ui/components/callout';
 import { notFound } from 'next/navigation';
 import { mdxComponents } from '@/lib/mdx-components';
-import { AUDIENCE_LABELS, AVAILABILITY_LABELS } from '@/lib/page-meta';
+import { AUDIENCE_LABELS, AVAILABILITY_LABELS, MATURITY_LABELS, STATUS_LABELS } from '@/lib/page-meta';
+import { generatedSource } from '@/lib/generated-source';
 import { getPublicMarkdownUrl, gitConfig } from '@/lib/shared';
 import { openapi } from '@/lib/openapi';
 import { OpenAPIPage } from '@/components/api-page';
@@ -48,6 +49,7 @@ export default async function Page({ params }: Props) {
   const data = page.data;
   const MDX = data.body;
   const reviewed = formatReviewed(data.last_reviewed);
+  const generated = data.generated_from ? generatedSource(data.generated_from) : null;
   const markdownUrl = getPublicMarkdownUrl(page);
   // A generated Hub REST API page has no Markdown headings: its operations' table of contents is in its frontmatter.
   // `full` pages hide "On this page" by default; these list up to dozens of operations, so keep it.
@@ -66,12 +68,20 @@ export default async function Page({ params }: Props) {
         {data.availability.map((a) => (
           <Badge key={a}>{AVAILABILITY_LABELS[a]}</Badge>
         ))}
-        {data.status !== 'current' ? <Badge tone="warn">{data.status}</Badge> : null}
+        {/* The feature's maturity, then the page's own state (lib/page-meta.ts keeps the two apart). */}
+        {data.maturity ? <Badge tone="warn">{MATURITY_LABELS[data.maturity]}</Badge> : null}
+        {data.status !== 'current' ? <Badge tone="warn">{STATUS_LABELS[data.status]}</Badge> : null}
         {reviewed ? <span className="text-xs text-fd-muted-foreground">Reviewed {reviewed}</span> : null}
-        {data.generated_from ? (
-          <span className="text-xs text-fd-muted-foreground">Generated from {data.generated_from}</span>
-        ) : null}
       </div>
+      {generated ? (
+        <p className="text-xs text-fd-muted-foreground">
+          Generated from{' '}
+          <a href={generated.url} className="font-medium underline underline-offset-2 hover:text-fd-foreground">
+            {generated.repo} {generated.ref} at {generated.shortCommit}
+          </a>
+          , which can be newer than {generated.releasedAs}.
+        </p>
+      ) : null}
       <div className="flex flex-row items-center gap-2 border-b pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover
@@ -79,7 +89,7 @@ export default async function Page({ params }: Props) {
           githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
         />
       </div>
-      {data.status === 'beta' && !reviewed ? (
+      {data.status === 'beta' ? (
         <Callout type="warn" title="Not yet re-verified">
           This page predates the current docs review and has not been checked against the code yet. Commands, names
           and counts may be out of date. Prefer the pages marked as reviewed.
@@ -127,6 +137,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: page.data.title,
       description: page.data.description,
       url: page.url,
+      // A page's own `openGraph` replaces the root layout's, so the image is set here too.
+      images: [{ url: getPageImage(page).url, width: 1200, height: 630, alt: page.data.title }],
     },
   };
 }

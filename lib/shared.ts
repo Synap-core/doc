@@ -2,6 +2,14 @@ import { createGetUrl } from 'fumadocs-core/source';
 
 export const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://doc.synap.live').replace(/\/$/, '');
 export const docsRoute = '/docs';
+
+/** The site's description: the home page's meta description and its social preview image. */
+export const siteDescription =
+  'Docs for Synap, the open-source data pod: use the apps, self-host a pod, and build on it with the SDK, the Hub REST API and MCP.';
+
+/** The site's social preview image (home page, 404), served by app/og/image.png/route.tsx. */
+export const siteImageUrl = '/og/image.png';
+
 /** Internal route that serves a page's Markdown; proxy.ts maps `/docs/<page>.md` onto it. */
 export const docsContentRoute = '/llms.mdx/docs';
 

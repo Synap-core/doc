@@ -21,12 +21,24 @@ export const AVAILABILITY = [
   'sdk',
 ] as const;
 
+/**
+ * The PAGE's review state, not the feature's: `current` (checked against the code), `beta` (not re-verified yet: the
+ * page shows a warning banner and carries no `last_reviewed`), `deprecated` (describes something being retired).
+ */
 export const STATUSES = ['current', 'beta', 'deprecated'] as const;
+
+/**
+ * Optional: how far the FEATURE the page describes has shipped, shown as a badge. Leave it out for a feature that is
+ * released. `beta`: in beta testing (e.g. Relay on TestFlight); `not-published`: built but not published where people
+ * install it (e.g. a store); `main-only`: on a repository's main branch, not in a tagged release yet.
+ */
+export const MATURITIES = ['beta', 'not-published', 'main-only'] as const;
 
 export type PageType = (typeof PAGE_TYPES)[number];
 export type Audience = (typeof AUDIENCES)[number];
 export type Availability = (typeof AVAILABILITY)[number];
 export type Status = (typeof STATUSES)[number];
+export type Maturity = (typeof MATURITIES)[number];
 
 export const AVAILABILITY_LABELS: Record<Availability, string> = {
   'pod-oss': 'Open-source pod',
@@ -44,4 +56,16 @@ export const AUDIENCE_LABELS: Record<Audience, string> = {
   'self-host': 'Self-hosters',
   builder: 'Builders',
   contributor: 'Contributors',
+};
+
+export const STATUS_LABELS: Record<Status, string> = {
+  current: 'Current',
+  beta: 'Not re-verified',
+  deprecated: 'Deprecated',
+};
+
+export const MATURITY_LABELS: Record<Maturity, string> = {
+  beta: 'Beta testing',
+  'not-published': 'Not published yet',
+  'main-only': 'Not in a release yet',
 };

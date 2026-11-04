@@ -42,7 +42,9 @@ scripts/       the checks (check-*.mjs), sync/generate-reference.mjs, reference-
 docs/          notes for people working on this site (not published); THEME_AND_TAILWIND.md has the brand tokens
 ```
 
-Each folder has a `meta.json` whose `pages` list sets the navigation; each top-level section is a tab (`"root": true`).
+Each folder has a `meta.json` whose `pages` list sets the navigation; each top-level section is a root folder
+(`"root": true`) with its own sidebar. The section switcher lists the reading sections; Reference is a top-level link
+and Community the sidebar's and home page's footer (`lib/nav.tsx`).
 A page not listed there fails `npm run check`. Each section's `index.mdx` is its landing page and links every page of
 the section as a Card, in `meta.json` order (`scripts/section-index.test.mjs`). A moved page gets a permanent redirect
 in `next.config.mjs`.
@@ -55,7 +57,8 @@ description: One sentence.
 type: tutorial | how-to | reference | explanation
 audience: user | self-host | builder | contributor
 availability: [pod-oss, cloud, browser, relay, raycast, eve, cli, sdk]   # one or more
-status: current | beta | deprecated
+status: current | beta | deprecated   # the PAGE's review state (beta = not re-verified: banner, no last_reviewed)
+maturity: beta | not-published | main-only   # optional: the FEATURE's state, a badge; omit when released
 owner: Antoinesrvt                 # GitHub handle
 last_reviewed: YYYY-MM-DD          # ONLY if you verified the page against the code that day
 ```

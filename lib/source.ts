@@ -16,6 +16,12 @@ export const source = docsSource;
 
 export type DocsPage = ReturnType<typeof docsSource.getPages>[number];
 
+/** A page's social preview image, served by app/og/docs/[...slug]/route.tsx. */
+export function getPageImage(page: { slugs: string[] }) {
+  const segments = [...page.slugs, 'image.png'];
+  return { segments, url: `/og/docs/${segments.join('/')}` };
+}
+
 /**
  * The Markdown form of the docs, built from the same compiled pages as the HTML:
  * `/docs/<page>.md`, `/llms-full.txt` and the docs MCP server all use `page()`/`full()`.

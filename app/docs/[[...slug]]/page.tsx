@@ -11,6 +11,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 import { notFound } from 'next/navigation';
 import { mdxComponents } from '@/lib/mdx-components';
 import { AUDIENCE_LABELS, AVAILABILITY_LABELS } from '@/lib/page-meta';
+import { generatedSource } from '@/lib/generated-source';
 import { getPublicMarkdownUrl, gitConfig } from '@/lib/shared';
 import { openapi } from '@/lib/openapi';
 import { OpenAPIPage } from '@/components/api-page';
@@ -48,6 +49,7 @@ export default async function Page({ params }: Props) {
   const data = page.data;
   const MDX = data.body;
   const reviewed = formatReviewed(data.last_reviewed);
+  const generated = data.generated_from ? generatedSource(data.generated_from) : null;
   const markdownUrl = getPublicMarkdownUrl(page);
   // A generated Hub REST API page has no Markdown headings: its operations' table of contents is in its frontmatter.
   // `full` pages hide "On this page" by default; these list up to dozens of operations, so keep it.
@@ -68,10 +70,16 @@ export default async function Page({ params }: Props) {
         ))}
         {data.status !== 'current' ? <Badge tone="warn">{data.status}</Badge> : null}
         {reviewed ? <span className="text-xs text-fd-muted-foreground">Reviewed {reviewed}</span> : null}
-        {data.generated_from ? (
-          <span className="text-xs text-fd-muted-foreground">Generated from {data.generated_from}</span>
-        ) : null}
       </div>
+      {generated ? (
+        <p className="text-xs text-fd-muted-foreground">
+          Generated from{' '}
+          <a href={generated.url} className="font-medium underline underline-offset-2 hover:text-fd-foreground">
+            {generated.repo} {generated.ref} at {generated.shortCommit}
+          </a>
+          , which can be newer than {generated.releasedAs}.
+        </p>
+      ) : null}
       <div className="flex flex-row items-center gap-2 border-b pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
         <ViewOptionsPopover

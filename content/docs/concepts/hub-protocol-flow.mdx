@@ -4,29 +4,41 @@ description: The path of a request from an agent or script through the Hub REST 
 type: explanation
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
-The Hub Protocol is the REST API (`/api/hub`) that agents, scripts and integrations use to reach a pod.
+The Hub Protocol is the pod's HTTP API, served under `/api/hub`. Agents, scripts and integrations in any language use
+it to read and change what is in a pod. This page follows one request from the caller to the pod's records; the
+[Hub REST API](/docs/reference/hub-api) reference lists every route.
 
-## Request path
+## The path of a request
 
-1. The agent or script calls a Hub route with a scoped key.
-2. The pod resolves the caller, the workspace and the key's scope.
-3. A read returns directly; a write goes through governance (it runs or becomes a proposal).
-4. The event pipeline applies the change and its side effects.
+1. **The caller authenticates.** A script or agent sends an API key as `Authorization: Bearer <api-key>`. A web
+   client signed in to the pod can send its session token as `X-Session-Token` instead.
+2. **The pod works out who is calling.** A key held by an agent acts as that agent, on behalf of the person it works
+   for. Any other key acts as the person who owns it.
+3. **The key's limits are checked.** Each route checks the key's scopes: `hub-protocol.read` to read,
+   `hub-protocol.write` to write. If the key has a grant, the request must stay inside it.
+4. **A read returns** only the records the caller is allowed to see (see
+   [Permission model](/docs/concepts/permission-model)).
+5. **A write is governed.** The pod checks the caller's permission, then, for an agent, the
+   [validation policy](/docs/concepts/validation-policy). The write runs, becomes a proposal, or is refused. A
+   proposal is a success: the answer carries `status: "proposed"` and a `proposalId`.
+6. **A change that runs is recorded** in the pod's event log, and its follow-up work runs from there: search indexing,
+   automations and [webhooks](/docs/build/webhooks).
 
-It gives outside clients one stable surface instead of the apps' internal API, and applies the same governance and
-audit to an agent's write as to a person's.
+Because every step runs on the pod, an agent's write over the Hub REST API is checked and recorded the same way as a
+person's change in the apps.
 
 ## What it covers
 
-- entities and relations
-- channels and messages
-- memory and facts
-- setup and integrations
+Records (entities, relations, documents, views), conversations (channels and threads), memory and knowledge, sessions
+and playbooks, proposals, automations, capabilities and tools, connectors and webhooks, and pod setup. Each pod
+publishes its exact routes at `/api/hub/openapi.json`.
 
 See also:
 
 - [Hub REST API](/docs/reference/hub-api)
+- [API keys](/docs/build/api-keys)

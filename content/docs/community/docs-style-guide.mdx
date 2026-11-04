@@ -53,7 +53,8 @@ description: One sentence that says what the page gives the reader.
 type: how-to                         # tutorial | how-to | reference | explanation
 audience: builder                    # user | self-host | builder | contributor
 availability: [pod-oss, cloud]       # one or more of: pod-oss, cloud, browser, relay, raycast, eve, cli, sdk
-status: current                      # current | beta | deprecated
+status: current                      # current | beta | deprecated: the page's review state
+# maturity: beta                     # optional, the feature's state: beta | not-published | main-only
 owner: Antoinesrvt                   # GitHub handle of the person who keeps it right
 last_reviewed: 2026-10-20            # only if you verified the page against the code that day
 ---
@@ -62,8 +63,14 @@ last_reviewed: 2026-10-20            # only if you verified the page against the
 - **type**, after the Diataxis framework: a *tutorial* teaches by doing, a *how-to* solves one task, a *reference*
   describes something to look up, an *explanation* gives understanding. One type per page.
 - **availability** is shown as badges: where the page's content applies.
-- **status**: `beta` for pages not yet verified or features that are still changing; `deprecated` for things being
-  retired. A `beta` page without `last_reviewed` shows a warning banner.
+- **status** is the state of the page, not of the feature: `current` once the page is checked against the code,
+  `beta` while it is not re-verified (it shows a warning banner and has no `last_reviewed`; `npm run check` refuses
+  the two together), `deprecated` for something being retired.
+- **maturity** is the state of the feature the page describes, shown as a badge. Leave it out for a released
+  feature. `beta` shows "Beta testing" (for example Relay, on TestFlight only), `not-published` shows "Not published
+  yet" (built, but not where people install it, such as the Raycast Store), and `main-only` shows "Not in a release
+  yet" (on a repository's main branch, not in a tagged release). When only one part of a page is unreleased, say so
+  in that part instead.
 - **last_reviewed**: set it only when you checked every command, flag, path, name and number on the page against the
   code, and update it whenever you do so again.
 
@@ -89,6 +96,9 @@ command from another doc without running it or reading its source.
 - No marketing language, no emoji.
 - Use Synap's terms as the [glossary](/docs/concepts/glossary) defines them: kind, role (facet), project, track, session,
   playbook, proposal.
+- On pages for users (`audience: user`), name things with the word the apps show, as the glossary gives it: Space,
+  Request, Job, Goal, Step, Tool. Keep the technical name (`workspaceId`, `focus_session`, a tool or field name) in
+  code formatting, where the reader types or reads it in an API, the CLI or MCP.
 
 ## Links
 

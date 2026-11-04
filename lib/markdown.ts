@@ -1,5 +1,6 @@
 import type { DocsPage } from './source';
 import { siteUrl } from './shared';
+import { MATURITY_LABELS, STATUS_LABELS } from './page-meta';
 import { hubApiTagMarkdown } from './openapi-markdown';
 
 /**
@@ -14,7 +15,8 @@ export async function renderPageMarkdown(page: DocsPage): Promise<string> {
 
   const facts = [`URL: ${siteUrl}${page.url}`];
   if (data.generated_from) facts.push(`Generated from ${data.generated_from}`);
-  if (data.status !== 'current') facts.push(`Status: ${data.status}`);
+  if (data.maturity) facts.push(`Feature status: ${MATURITY_LABELS[data.maturity]}`);
+  if (data.status !== 'current') facts.push(`Page status: ${STATUS_LABELS[data.status]}`);
   if (data.last_reviewed) facts.push(`Last reviewed against the code: ${data.last_reviewed}`);
   lines.push(facts.join(' · '), '');
 

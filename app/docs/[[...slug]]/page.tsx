@@ -10,7 +10,7 @@ import {
 import { Callout } from 'fumadocs-ui/components/callout';
 import { notFound } from 'next/navigation';
 import { mdxComponents } from '@/lib/mdx-components';
-import { AUDIENCE_LABELS, AVAILABILITY_LABELS } from '@/lib/page-meta';
+import { AUDIENCE_LABELS, AVAILABILITY_LABELS, MATURITY_LABELS, STATUS_LABELS } from '@/lib/page-meta';
 import { generatedSource } from '@/lib/generated-source';
 import { getPublicMarkdownUrl, gitConfig } from '@/lib/shared';
 import { openapi } from '@/lib/openapi';
@@ -68,7 +68,9 @@ export default async function Page({ params }: Props) {
         {data.availability.map((a) => (
           <Badge key={a}>{AVAILABILITY_LABELS[a]}</Badge>
         ))}
-        {data.status !== 'current' ? <Badge tone="warn">{data.status}</Badge> : null}
+        {/* The feature's maturity, then the page's own state (lib/page-meta.ts keeps the two apart). */}
+        {data.maturity ? <Badge tone="warn">{MATURITY_LABELS[data.maturity]}</Badge> : null}
+        {data.status !== 'current' ? <Badge tone="warn">{STATUS_LABELS[data.status]}</Badge> : null}
         {reviewed ? <span className="text-xs text-fd-muted-foreground">Reviewed {reviewed}</span> : null}
       </div>
       {generated ? (
@@ -87,7 +89,7 @@ export default async function Page({ params }: Props) {
           githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${page.path}`}
         />
       </div>
-      {data.status === 'beta' && !reviewed ? (
+      {data.status === 'beta' ? (
         <Callout type="warn" title="Not yet re-verified">
           This page predates the current docs review and has not been checked against the code yet. Commands, names
           and counts may be out of date. Prefer the pages marked as reviewed.

@@ -1,7 +1,7 @@
 import { defineDocs, defineConfig } from 'fumadocs-mdx/config';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { z } from 'zod';
-import { AUDIENCES, AVAILABILITY, PAGE_TYPES, STATUSES } from './lib/page-meta';
+import { AUDIENCES, AVAILABILITY, MATURITIES, PAGE_TYPES, STATUSES } from './lib/page-meta';
 import { remarkStructureDefaultOptions } from 'fumadocs-core/mdx-plugins';
 import { synapCodeThemes } from './lib/shiki-themes';
 
@@ -30,6 +30,8 @@ export const docs = defineDocs({
         audience: z.enum(AUDIENCES),
         availability: z.array(z.enum(AVAILABILITY)).min(1),
         status: z.enum(STATUSES),
+        /** How far the feature has shipped (lib/page-meta.ts); omitted for a released feature. */
+        maturity: z.enum(MATURITIES).optional(),
         owner: z.string().min(1),
         last_reviewed: isoDate.optional(),
         /** Set on generated pages: the repository and ref the page was generated from. */

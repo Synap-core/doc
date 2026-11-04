@@ -6,10 +6,10 @@
 // once, and adds rules a schema cannot express (last_reviewed age, owner handle).
 // Run: npm run check:frontmatter
 import { listPages, readPage, rel, report } from './lib.mjs';
-import { AUDIENCES, AVAILABILITY, PAGE_TYPES, STATUSES } from '../lib/page-meta.ts';
+import { AUDIENCES, AVAILABILITY, MATURITIES, PAGE_TYPES, STATUSES } from '../lib/page-meta.ts';
 
 const REQUIRED = ['title', 'description', 'type', 'audience', 'availability', 'status', 'owner'];
-const OPTIONAL = ['last_reviewed', 'icon', 'full', 'generated_from', '_openapi'];
+const OPTIONAL = ['last_reviewed', 'maturity', 'icon', 'full', 'generated_from', '_openapi'];
 const ALLOWED = new Set([...REQUIRED, ...OPTIONAL]);
 const MAX_REVIEW_AGE_DAYS = 183; // flag pages not reviewed for six months
 
@@ -38,6 +38,14 @@ for (const file of listPages()) {
     problems.push(`${where}: audience "${fm.audience}" is not one of ${AUDIENCES.join(', ')}`);
   if (fm.status !== undefined && !STATUSES.includes(fm.status))
     problems.push(`${where}: status "${fm.status}" is not one of ${STATUSES.join(', ')}`);
+  if (fm.maturity !== undefined && !MATURITIES.includes(fm.maturity))
+    problems.push(`${where}: maturity "${fm.maturity}" is not one of ${MATURITIES.join(', ')}`);
+  // `status` is the page's review state: a page checked against the code is `current`. A feature still in beta says
+  // so with `maturity`, not with `status: beta` (which shows the "not re-verified" banner).
+  if (fm.status === 'beta' && fm.last_reviewed !== undefined)
+    problems.push(
+      `${where}: status "beta" means not re-verified, but the page has last_reviewed: use status "current" (and "maturity" for a feature still in beta)`,
+    );
   if (fm.availability !== undefined) {
     if (!Array.isArray(fm.availability) || fm.availability.length === 0) {
       problems.push(`${where}: "availability" must be a non-empty list`);

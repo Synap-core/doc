@@ -57,7 +57,8 @@ description: One sentence.
 type: tutorial | how-to | reference | explanation
 audience: user | self-host | builder | contributor
 availability: [pod-oss, cloud, browser, relay, raycast, eve, cli, sdk]   # one or more
-status: current | beta | deprecated
+status: current | beta | deprecated   # the PAGE's review state (beta = not re-verified: banner, no last_reviewed)
+maturity: beta | not-published | main-only   # optional: the FEATURE's state, a badge; omit when released
 owner: Antoinesrvt                 # GitHub handle
 last_reviewed: YYYY-MM-DD          # ONLY if you verified the page against the code that day
 ```

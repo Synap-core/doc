@@ -42,7 +42,8 @@ const intents: { icon: ReactNode; title: string; description: string; href: stri
   {
     icon: <AppWindow aria-hidden />,
     title: 'Use Synap',
-    description: 'The Browser app on the desktop; Relay for your phone and Raycast are in beta. Synap Cloud or your own pod.',
+    description:
+      'The Browser app on the desktop; Relay for your phone is in beta testing, the Raycast extension is not published yet. Synap Cloud or your own pod.',
     href: '/docs/use',
     links: [
       { title: 'Browser', href: '/docs/use/browser' },

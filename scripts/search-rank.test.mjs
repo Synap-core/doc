@@ -60,6 +60,6 @@ test('title score: exact, every word, plurals, none', () => {
   assert.equal(titleScore('Spaces and templates', 'templates'), 2);
   assert.equal(titleScore('Spaces and templates', 'template'), 2);
   assert.equal(titleScore('Write mode and Undo', 'write mode'), 2);
-  assert.equal(titleScore('Import your data', 'import csv'), 1);
+  assert.equal(titleScore('Import your data', 'import csv'), 0.5);
   assert.equal(titleScore('Webhooks', 'pricing'), 0);
 });

@@ -21,10 +21,7 @@ export const searchServer = {
 
 /** GET /api/search?query=…: the shape the Fumadocs search dialog reads. */
 export async function searchGET(request: Request): Promise<Response> {
-  const params = new URL(request.url).searchParams;
-  const query = params.get('query') ?? '';
-  const tag = params.get('tag')?.split(',').filter(Boolean);
-  const locale = params.get('locale') ?? undefined;
+  const query = new URL(request.url).searchParams.get('query') ?? '';
   if (query.trim().length === 0) return Response.json([]);
-  return Response.json(await searchServer.search(query, { tag, locale }));
+  return Response.json(await searchServer.search(query));
 }

@@ -17,6 +17,9 @@ interface PageLink {
   href: string;
 }
 
+/** The docs section a link belongs to (`/docs/<section>/…`): its colour is in app/globals.css. */
+const sectionOf = (href: string) => href.split('/')[2] ?? '';
+
 const quickstarts = [
   {
     icon: <Cloud aria-hidden />,
@@ -167,7 +170,9 @@ export default function HomePage() {
             {quickstarts.map((q) => (
               <Link key={q.href} href={q.href} className={homeUi.linkCard}>
                 <span className="flex items-center gap-3">
-                  <span className={homeUi.iconTile}>{q.icon}</span>
+                  <span className={`${homeUi.iconTile} section-tile`} data-section={sectionOf(q.href)}>
+                    {q.icon}
+                  </span>
                   <span className="text-base font-semibold text-fd-foreground">{q.title}</span>
                   <ArrowRight
                     className="ms-auto size-4 text-fd-muted-foreground transition-transform group-hover:translate-x-0.5"
@@ -198,7 +203,9 @@ export default function HomePage() {
                   href={intent.href}
                   className="group flex items-center gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
                 >
-                  <span className={homeUi.iconTile}>{intent.icon}</span>
+                  <span className={`${homeUi.iconTile} section-tile`} data-section={sectionOf(intent.href)}>
+                    {intent.icon}
+                  </span>
                   <span className="text-base font-semibold text-fd-foreground group-hover:underline group-hover:decoration-fd-primary group-hover:underline-offset-4">
                     {intent.title}
                   </span>
@@ -269,7 +276,9 @@ export default function HomePage() {
                 href={group.href}
                 className="group flex items-center gap-3 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fd-ring"
               >
-                <span className={homeUi.iconTile}>{group.icon}</span>
+                <span className={`${homeUi.iconTile} section-tile`} data-section={sectionOf(group.href)}>
+                    {group.icon}
+                  </span>
                 <span className="text-base font-semibold text-fd-foreground group-hover:underline group-hover:decoration-fd-primary group-hover:underline-offset-4">
                   {group.title}
                 </span>

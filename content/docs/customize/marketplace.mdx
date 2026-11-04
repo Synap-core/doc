@@ -42,10 +42,14 @@ approval waits as a proposal (a request in the apps): approve it in the Browser 
 ### From the CLI
 
 ```bash
-synap market                               # list everything you can install
-synap market --type capability            # one package type: workspace, capability, skill, workflow, view, cell
-synap market --search calendar             # search names, descriptions and slugs
-synap market install <slug>                # install one package
+# list everything you can install
+synap market
+# one package type: workspace, capability, skill, workflow, view, cell
+synap market --type capability
+# search names, descriptions and slugs
+synap market --search calendar
+# install one package
+synap market install <slug>
 ```
 
 What `install` does depends on the package type:
@@ -88,11 +92,16 @@ set how far each is trusted, and the operator of a self-hosted pod can switch Sy
 ## See what is installed and update it
 
 ```bash
-synap market installed              # packages installed on this pod
-synap market installed --outdated   # only those with an update available
-synap market update                 # preview the updates available; applies nothing
-synap market update <slug>          # update one
-synap market update --yes           # apply every available update, agreeing to the data changes it lists
+# packages installed on this pod
+synap market installed
+# only those with an update available
+synap market installed --outdated
+# preview the updates available; applies nothing
+synap market update
+# update one
+synap market update <slug>
+# apply every available update, agreeing to the data changes it lists
+synap market update --yes
 ```
 
 For workspaces, `synap templates` shows every workspace with its template status and `synap templates update` applies
@@ -119,9 +128,12 @@ synap vendor create <your-slug> --name "Your studio"
 **Write the package.** Start from a minimal valid file, or from a workspace you already built:
 
 ```bash
-synap market scaffold <slug>                     # writes <slug>.template.yaml, a workspace template
-synap market scaffold <slug> --kind view         # or a cell, view, workflow, capability or skill package
-synap market validate <slug>.template.yaml       # check it
+# writes <slug>.template.yaml, a workspace template
+synap market scaffold <slug>
+# or a cell, view, workflow, capability or skill package
+synap market scaffold <slug> --kind view
+# check it
+synap market validate <slug>.template.yaml
 ```
 
 </Step>
@@ -130,9 +142,12 @@ synap market validate <slug>.template.yaml       # check it
 **Publish it.** A package is private by default.
 
 ```bash
-synap market publish <slug>.template.yaml        # from a file
-synap market publish --from-workspace <id>       # turn a live workspace into a template
-synap market publish --from-project <id>         # turn a project's workspaces into a project template
+# from a file
+synap market publish <slug>.template.yaml
+# turn a live workspace into a template
+synap market publish --from-workspace <id>
+# turn a project's workspaces into a project template
+synap market publish --from-project <id>
 ```
 
 Publishing the same slug again updates your package; publishing identical content changes nothing.

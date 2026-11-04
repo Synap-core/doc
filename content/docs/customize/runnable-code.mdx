@@ -128,8 +128,10 @@ A cell is UI code that renders records: a card for one kind, a chart, a board. I
 pod.
 
 ```bash
-synap cell build ./deal-card.tsx --out ./dist/deal-card.js --bundle-deps   # one module, packages included
-synap cell define --name "Deal card" --file ./dist/deal-card.js            # send it to the pod
+# one module, packages included
+synap cell build ./deal-card.tsx --out ./dist/deal-card.js --bundle-deps
+# send it to the pod
+synap cell define --name "Deal card" --file ./dist/deal-card.js
 ```
 
 `synap cell build --define` does both in one step. Bundle every dependency: a cell that asks for packages at run time

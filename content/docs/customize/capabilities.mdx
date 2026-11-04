@@ -52,10 +52,14 @@ A verb's ID is its name: that is what you pass to run it.
 Capabilities come from the [marketplace](/docs/customize/marketplace). From the CLI:
 
 ```bash
-synap capability add               # pick one from the catalog
-synap capability add <name>        # or name it; it asks for anything it needs, such as an API key
-synap capability connect <name>    # sign in to the service, or give its credential
-synap capability enable <name>     # turn it on and choose which verbs it may run
+# pick one from the catalog
+synap capability add
+# or name it; it asks for anything it needs, such as an API key
+synap capability add <name>
+# sign in to the service, or give its credential
+synap capability connect <name>
+# turn it on and choose which verbs it may run
+synap capability enable <name>
 ```
 
 A capability that is installed but not turned on cannot run: every run is refused until you enable it. A capability

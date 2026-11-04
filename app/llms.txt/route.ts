@@ -35,8 +35,8 @@ const intro = `# Synap Documentation
 
 - [What is Synap?](${siteUrl}/docs/concepts/what-is-synap): the model (pod, agents, proposals)
 - [Cloud quickstart](${siteUrl}/docs/start/cloud-quickstart) and [self-host quickstart](${siteUrl}/docs/start/self-host-quickstart)
-- [Build on your pod](${siteUrl}/docs/build): which door (SDK, Hub REST, MCP, webhooks) to use for what
-- [Connect an agent](${siteUrl}/docs/agents) and [MCP](${siteUrl}/docs/agents/mcp)
+- [Build on Synap](${siteUrl}/docs/build): which door (SDK, Hub REST, MCP, webhooks) to use for what
+- [Connect your AI](${siteUrl}/docs/agents) and [MCP](${siteUrl}/docs/agents/mcp)
 - [API keys](${siteUrl}/docs/build/api-keys): scopes and grants
 - [Glossary](${siteUrl}/docs/concepts/glossary)
 

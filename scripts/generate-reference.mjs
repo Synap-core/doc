@@ -81,7 +81,8 @@ function generatedLine(name, files) {
   const links = files
     .map((f) => `[\`${src.files[f].path}\`](https://github.com/${src.repo}/blob/${src.commit}/${src.files[f].path})`)
     .join(', ');
-  return `Generated from [${src.repo}@${src.commit.slice(0, 9)}](https://github.com/${src.repo}/tree/${src.commit}) (\`${src.ref}\`): ${links}.`;
+  // The page header already says which repo, branch and commit (app/docs/[[...slug]]/page.tsx): this line adds the files.
+  return `Source ${files.length > 1 ? 'files' : 'file'}: ${links}.`;
 }
 
 function frontmatter(fields) {

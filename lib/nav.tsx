@@ -35,14 +35,18 @@ export interface NavPage {
 /**
  * The Community section's pages, in its meta.json order (index first), read from the page tree so a page added to
  * the section shows in the footer without a second list to keep in sync.
+ *
+ * Community is a root folder, and fumadocs-core 16 gives a root folder no `index`: its index page is one of its
+ * children (`meta.root` leaves the index name unset, fumadocs-core dist/dynamic-*.js). So the section is found by the
+ * page it holds, and a non-root shape (`folder.index`) is read too.
  */
 export function communityPages(tree: PageTree.Root): NavPage[] {
-  const folder = tree.children.find(
-    (node): node is PageTree.Folder => node.type === 'folder' && node.index?.url === COMMUNITY_URL,
-  );
-  if (!folder) throw new Error(`No section with the index page ${COMMUNITY_URL} in the page tree`);
+  const holds = (folder: PageTree.Folder) =>
+    folder.index?.url === COMMUNITY_URL ||
+    folder.children.some((node) => node.type === 'page' && node.url === COMMUNITY_URL);
+  const folder = tree.children.find((node): node is PageTree.Folder => node.type === 'folder' && holds(node));
+  if (!folder) throw new Error(`No section holding the page ${COMMUNITY_URL} in the page tree`);
   const pages: NavPage[] = [];
-  // The index can be both `folder.index` and a child (when meta.json lists "index"): keep it once.
   const add = (item: PageTree.Item) => {
     if (!pages.some((p) => p.url === item.url)) pages.push({ title: String(item.name), url: item.url });
   };

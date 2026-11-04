@@ -1,61 +1,74 @@
 ---
-title: Pod replication and pairing
-description: How two pods you own can be paired as primary and replica, and what is replicated.
+title: Pod linking and replication
+description: How to link two of your pods as a primary and a replica, what the replica receives, and how often.
 type: explanation
-audience: builder
+audience: user
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
-## Why replication exists
+Linking keeps a second, live copy of a pod. You link two pods you own: the **primary**, the pod you use every day, and
+the **replica**, which receives a copy of everything the primary records. A replica can serve as a standby, a copy on
+another server, or a copy you host yourself next to a pod Synap hosts for you.
 
-A pod stores your records and their event history. Some teams want two copies of that history: a primary pod they use
-every day and a replica (a backup, a failover candidate or a copy in another region).
+Linking is not the same as a backup. A replica follows the primary within seconds, so a mistake on the primary reaches
+the replica too. To go back to an earlier state, use [backups](/docs/run/backups).
 
-Replication uses the same event log as the rest of the pod. Changes become completed events, which are sent to the
-other pod over HTTPS and materialized there, so the events stay the source of truth on both sides.
+## Link two pods
 
-## What “pairing” means
+1. Sign in on [synap.live](https://synap.live) and open your pod.
+2. Open **Pod linking** and choose **Link another Pod**.
+3. Pick the other pod, and choose this pod's role: **primary** (it sends data) or **replica** (it receives data).
+4. Choose **Confirm link**. synap.live asks you to confirm it is you before the link is made.
 
-The Synap Cloud Control Plane can link two active pods you own into a pair: one primary and one replica.
+Both pods must belong to your Synap account and be running. That can be a pod Synap hosts for you or a self-hosted
+pod you [registered with the Control Plane](/docs/run/connect-control-plane#register-the-pod-with-the-control-plane).
+A pod can be linked to one other pod at a time: a link always joins exactly two pods.
 
-- A link joins exactly two pods; the product does not offer a mesh.
-- The Control Plane issues credentials and calls each pod's sync setup, so both sides agree on who pushes, who pulls
-  and which secrets they share.
-- Any other topology needs explicit configuration on the pods themselves.
+When you link, the Control Plane creates a secret that only the two pods share and gives it to each of them. From then
+on the pods talk to each other directly over HTTPS; your data does not pass through the Control Plane.
 
-To link two pods, sign in on [synap.live](https://synap.live), open one of your pods and find the **Pod linking**
-panel. **Link another Pod** asks for the other pod and whether this one is the primary (it sends data) or the replica
-(it receives data). The same panel shows the link and unlinks the pods. Both pods must be in your account: a pod Synap
-hosts for you, or a self-hosted pod you connected with the CLI.
+Once the pods are linked, the same panel shows this pod's role and the pod it is linked to. **Unlink Pods** stops the
+sync on both pods at once. Each pod keeps the data it already has.
 
-## What gets replicated
+To follow the sync itself, open the [pod admin console](/docs/concepts/glossary#pod-admin-console) of either pod and go
+to **Backups**: the **Sync** card lists the other pod, the number of events synced, and the last error if there is one.
 
-| Area | Behaviour |
-|------|-----------|
-| Event log | Completed events are replicated continuously (fast path) and on a schedule (catch-up). |
-| Workspace scope | A peer can be limited to specific workspaces. |
-| Large files | Binary payloads follow a separate scheduled sync; their metadata travels in the event stream. |
+## What the replica receives
 
-Both metadata and payloads are replicated, and the replica applies them idempotently, so a duplicate delivery is
-harmless.
+| What | When |
+|---|---|
+| Every change to your records (entities, relations, views, documents and the rest of the event history) | Sent as soon as it happens, with a check every minute that catches up on anything missed |
+| Spaces and their members, channels and messages, automations and their runs, property definitions, and your AI service settings | Every 5 minutes |
+| The content of files and documents, and their version history | Every 10 minutes |
 
-## Trust and boundaries
+On the first link, the replica also catches up on the primary's existing history. Every space is replicated. API keys
+for AI services are never copied: each pod keeps its own.
 
-- Replication runs between pods you configure (on Synap Cloud, pods in your account that you link). Peers
-  authenticate with shared secrets and scoped roles; nothing is merged across tenants.
-- Conflicts are resolved last-write-wins when events are materialized, and each conflict is recorded for audit.
-- Other merge rules (per-entity rules, CRDTs for selected types) do not exist.
+Sync goes one way, from the primary to the replica. A change made directly on the replica is not sent back to the
+primary.
 
-## What it does not do
+## When both pods changed the same record
 
-- Link three or more pods into one cluster from the Cloud UI.
-- Offer a screen to resolve conflicts field by field.
-- Guarantee a replication latency. The fast path plus the scheduled catch-up lets a short outage recover without a
-  manual dump.
+When a change arrives for a record the replica already has, the version with the later time is kept: a newer change
+from the primary replaces the replica's copy, and an older one is skipped. The pod records each such case. There is no
+screen to merge two versions field by field.
+
+## When a pod is unreachable
+
+If one pod cannot reach the other, the changes wait and the next run sends them. After 10 failed runs in a row, the
+pod stops trying that peer. The **Sync** card in the pod admin console then shows the last error and a **Retry**
+button, which clears the error so the next run tries again.
+
+## What linking does not do
+
+- Link three or more pods together.
+- Swap the primary and the replica from synap.live.
+- Promise a delay: changes usually arrive within seconds, and the scheduled runs above catch up after an outage.
 
 ## Where to go next
 
-- [Event catalog](/docs/reference/events): the events the log records
-- [Backups](/docs/run/backups): off-host snapshots, the other way to keep a second copy
+- [Backups](/docs/run/backups): snapshots you can restore, the other way to keep a copy
+- [Connect to the Control Plane](/docs/run/connect-control-plane): register a self-hosted pod with your Synap account

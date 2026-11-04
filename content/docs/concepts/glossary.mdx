@@ -24,6 +24,12 @@ grant (what it may touch). See [API keys](/docs/build/api-keys).
 A trigger (an event, a schedule (cron), a webhook, or a manual start) and the flow of steps it runs. Starting a
 playbook is one kind of step. See [Automations and playbooks](/docs/customize/automations-and-playbooks).
 
+### Capability
+
+Something your pod can do with an outside service or with your own code, such as sending an email or searching the
+web: a connection to one service plus the verbs that use it. Shown in the apps as a **Tool**. See
+[Capabilities](/docs/customize/capabilities).
+
 ### Channel
 
 A conversation room. A session has a channel where you and your agents work on the same goal.
@@ -102,8 +108,8 @@ track and stage. Shown in the apps as a **Job**.
 
 ### Skill
 
-A folder of instructions (a `SKILL.md` and reference files) that teaches an agent how to use Synap. See
-[Agent skills](/docs/agents/skills).
+A folder of instructions (a `SKILL.md` and reference files) that teaches an agent how to use Synap. Shown in the apps
+as a **Tool**. See [Agent skills](/docs/agents/skills).
 
 ### Stage
 
@@ -112,6 +118,12 @@ One step of a track. A session can be filed at a track and one of its stages. Sh
 ### Synap Cloud
 
 Synap's hosted service: Synap runs your pod for you. See [Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted).
+
+### Tool
+
+The word the apps use for capabilities, skills and tools alike: three kinds of thing in your pod, one word on screen.
+A Tool's own page still says which kind it is. In the pod and its API, a `tool` is one part of a capability: the
+connection to one service, with where its API is and which credential it uses.
 
 ### Track
 

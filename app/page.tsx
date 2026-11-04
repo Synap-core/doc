@@ -1,11 +1,14 @@
 import { HomeLayout } from 'fumadocs-ui/layouts/home';
 import { FullSearchTrigger } from 'fumadocs-ui/layouts/shared/slots/search-trigger';
-import { AppWindow, ArrowRight, Blocks, Bot, Cloud, CodeXml, Library, Server, Users } from 'lucide-react';
+import { AppWindow, ArrowRight, Blocks, Bot, Cloud, CodeXml, Library, Server } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { SynapLogoMark } from '@/components/SynapLogoMark';
 import { baseOptions } from '@/lib/layout.shared';
 import { homeUi } from '@/lib/home-ui';
+import { docsSource } from '@/lib/source';
+import { communityPages } from '@/lib/nav';
+import { CommunityFooter } from '@/components/CommunityFooter';
 
 /*
  * The home page routes by intent. Every sentence here is the wording of the page it links to (its description or its
@@ -116,6 +119,7 @@ const conceptPath = [
   },
 ];
 
+/** Reference is a top-level link (lib/nav.tsx); Community is the page footer, as in the docs sidebar. */
 const lookups: { icon: ReactNode; title: string; href: string; links: PageLink[] }[] = [
   {
     icon: <Library aria-hidden />,
@@ -126,16 +130,6 @@ const lookups: { icon: ReactNode; title: string; href: string; links: PageLink[]
       { title: 'MCP tools', href: '/docs/reference/mcp-tools' },
       { title: 'Event catalog', href: '/docs/reference/events' },
       { title: 'Hub REST API', href: '/docs/reference/hub-api' },
-    ],
-  },
-  {
-    icon: <Users aria-hidden />,
-    title: 'Community',
-    href: '/docs/community',
-    links: [
-      { title: 'Contributing', href: '/docs/community' },
-      { title: 'Security', href: '/docs/community/security' },
-      { title: 'Docs style guide', href: '/docs/community/docs-style-guide' },
     ],
   },
 ];
@@ -266,7 +260,7 @@ export default function HomePage() {
           </p>
         </section>
 
-        <section aria-labelledby="look-up" className="grid gap-3 sm:grid-cols-2">
+        <section aria-labelledby="look-up" className="grid gap-3">
           <h2 id="look-up" className="sr-only">
             Look something up
           </h2>
@@ -296,6 +290,11 @@ export default function HomePage() {
           ))}
         </section>
       </div>
+      <footer className="border-t border-fd-border">
+        <div className="mx-auto w-full max-w-5xl px-4 py-6">
+          <CommunityFooter pages={communityPages(docsSource.getPageTree())} />
+        </div>
+      </footer>
     </HomeLayout>
   );
 }

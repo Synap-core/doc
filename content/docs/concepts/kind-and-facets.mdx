@@ -50,7 +50,8 @@ it belongs to one entity and only changes that entity's stance, it is a role.
 
 The CRM template models relationship state as roles on people and companies, with deals as their own kind:
 
-- `person` and `company` are kinds. They carry no sales state.
+- `person` and `company` are kinds. The CRM adds a few contact fields to them, such as lead source and next
+  follow-up date, but no pipeline stage: a lead's stage lives on its `lead` role, a deal's on the deal.
 - `lead`, `client` and `partner` are roles. A person you start pursuing gets the `lead` role; when you win a deal, the
   company gets the `client` role. The person and the company stay the same entities throughout.
 - `deal` is a kind, with its own stage, value and close date. It links to the person or company; it is not a role.

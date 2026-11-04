@@ -19,8 +19,8 @@ it to read and change what is in a pod. This page follows one request from the c
    client signed in to the pod can send its session token as `X-Session-Token` instead.
 2. **The pod works out who is calling.** A key held by an agent acts as that agent, on behalf of the person it works
    for. Any other key acts as the person who owns it.
-3. **The key's limits are checked.** Each route checks the key's scopes: `hub-protocol.read` to read,
-   `hub-protocol.write` to write. If the key has a grant, the request must stay inside it.
+3. **The key's limits are checked.** Most routes check `hub-protocol.read` to read and `hub-protocol.write` to write;
+   a few pod-setup routes require another scope, such as `hub-protocol.admin`. If the key has a grant, the request must stay inside it.
 4. **A read returns** only the records the caller is allowed to see (see
    [Permission model](/docs/concepts/permission-model)).
 5. **A write is governed.** The pod checks the caller's permission, then, for an agent, the

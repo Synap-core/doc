@@ -34,7 +34,8 @@ curl https://pod.example.com/api/external/skills \
   -H "Authorization: Bearer <api-key>"
 ```
 
-The answer is an array of the active skills the key's user can see:
+The answer is an array of the active skills the key's user can see. It also includes instruction skills
+(`kind: "instruction"`), which hold text for agents rather than an operation:
 
 ```json
 [
@@ -117,7 +118,7 @@ pod answers `202` with a proposal, and the skill runs when a person approves it.
 | `202 Accepted` | Nothing ran yet: the run became a proposal (see above). |
 | `400 Bad Request` | The request body is invalid, or the skill exists but is not active. |
 | `401 Unauthorized` | The API key is missing, invalid or expired. |
-| `403 Forbidden` | The key lacks the `skills.invoke` scope, its grant is narrower than full access (`GRANT_DOOR_UNSUPPORTED`), or the pod's governance refused the run. The `error` says which. |
+| `403 Forbidden` | The key lacks the `skills.invoke` scope, its grant is narrower than full access (`GRANT_DOOR_UNSUPPORTED`), its person is a guest of the pod, or the pod's governance refused the run. The `error` says which. |
 | `404 Not Found` | The skill does not exist, or the key's user cannot see it. |
 | `429 Too Many Requests` | The key's rate limit is reached. |
 | `502 Bad Gateway` | The pod could not execute the skill. |

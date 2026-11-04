@@ -52,15 +52,15 @@ three cases.
 
 A write is checked through the space it is made in. A value for a field that space cannot see is treated as an
 unknown field: it is stored as sent, but it is not validated and cannot be queried. The write's answer lists it as
-unmodelled, with the closest known field name when there is one. It is not refused, because a refusal would reveal the
-other space's schema.
+unmodelled, with the closest known field name when there is one. It is not refused: the pod keeps extra keys so older
+clients keep working, and reports them so the writer learns the field is not modelled.
 
 ## What it does not do
 
 - **It does not decide which records you see.** Layers control which fields appear, not which records a space can
   reach. That is decided by the record's scope: a record visible to the whole pod, or to one space.
-- **It does not set per-field permissions.** Everyone with access to a space sees and edits every field in that
-  space's view of a profile.
+- **It does not set per-field permissions.** A member of a space sees every field in that space's view of a profile,
+  and a member whose role can edit records can edit all of them.
 - **It does not share fields between overlays.** Two spaces that each add `status` to `person` get two independent
   fields. To share one, define it in the profile base.
 
@@ -68,7 +68,8 @@ other space's schema.
 
 - Over MCP, `synap_get_entity` returns a record with its `effectiveProperties`: the fields it carries in the space
   you read it through.
-- Over HTTP, `GET /api/hub/discover?profileSlugs=<slug>` describes a kind's fields.
+- Over HTTP, `GET /api/hub/discover?userId=<your-user-id>&profileSlugs=<slug>` describes a kind's fields; add
+  `workspaceId=<space-id>` to see that space's fields.
 
 ## Related
 

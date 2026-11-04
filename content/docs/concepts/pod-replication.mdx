@@ -42,7 +42,7 @@ to **Backups**: the **Sync** card lists the other pod, the number of events sync
 |---|---|
 | Every change to your records (entities, relations, views, documents and the rest of the event history) | Sent as soon as it happens, with a check every minute that catches up on anything missed |
 | Spaces and their members, channels and messages, automations and their runs, property definitions, and your AI service settings | Every 5 minutes |
-| The content of files and documents, and their version history | Every 10 minutes |
+| The content of files and documents up to 10 MB each, and their version history (larger files are not copied) | Every 10 minutes |
 
 On the first link, the replica also catches up on the primary's existing history. Every space is replicated. API keys
 for AI services are never copied: each pod keeps its own.

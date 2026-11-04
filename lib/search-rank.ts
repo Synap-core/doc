@@ -45,7 +45,7 @@ function referencePenalty(url: string): number {
   return REFERENCE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`)) ? 50 : 0;
 }
 
-/** How well a page title answers the query: 3 exact, 2 every word, 1 some word, 0 none. */
+/** How well a page title answers the query: 3 exact, 2 every word, else the share of query words it has. */
 export function titleScore(title: string, query: string): number {
   const t = title.trim().toLowerCase();
   const q = query.trim().toLowerCase();
@@ -56,7 +56,7 @@ export function titleScore(title: string, query: string): number {
   if (qWords.length === 0) return 0;
   const hits = qWords.filter((w) => tWords.has(stem(w))).length;
   if (hits === qWords.length) return 2;
-  return hits > 0 ? 1 : 0;
+  return hits / qWords.length;
 }
 
 /** Plural and simple verb endings, so "templates" finds "Spaces and templates" and "import" finds "Importing". */
@@ -82,8 +82,9 @@ export function rankResults(results: SearchResult[], query: string): SearchResul
     }
   }
 
+  // The engine's order only breaks ties (it is below 1): a better title tier always ranks first.
   const score = (g: (typeof groups)[number]) =>
-    titleScore(g.page.content, query) * 100 - referencePenalty(g.page.url) - g.order;
+    Math.round(titleScore(g.page.content, query) * 100) - referencePenalty(g.page.url) - g.order / groups.length;
 
   return groups
     .sort((a, b) => score(b) - score(a))
@@ -93,9 +94,8 @@ export function rankResults(results: SearchResult[], query: string): SearchResul
       ...g.passages
         // A passage that only repeats the page title adds nothing.
         .filter((p) => p.content.trim().toLowerCase() !== g.page.content.trim().toLowerCase())
-        // A table indexed as raw Markdown ("| a | b | | --- |") reads as noise in a result list.
-        .filter((p) => !/\|\s*-{3,}/.test(p.content))
         .slice(0, MAX_PASSAGES)
-        .map((p) => ({ ...p, content: cut(p.content) })),
+        // A table row is GFM the dialog renders as a table: shortening it would flatten its lines into raw pipes.
+        .map((p) => (p.table ? p : { ...p, content: cut(p.content) })),
     ]);
 }

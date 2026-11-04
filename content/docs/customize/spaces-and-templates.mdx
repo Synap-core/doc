@@ -82,11 +82,16 @@ app.
 ### From the CLI
 
 ```bash
-synap market --type workspace            # browse space templates
-synap market --search crm                # search by name, description or slug
-synap market install crm --dry-run       # preview: what it would create, reuse or conflict with; writes nothing
-synap market install crm                 # install
-synap market install crm --project <id>  # install and tag what it creates to a project
+# browse space templates
+synap market --type workspace
+# search by name, description or slug
+synap market --search crm
+# preview: what it would create, reuse or conflict with; writes nothing
+synap market install crm --dry-run
+# install
+synap market install crm
+# install and tag what it creates to a project
+synap market install crm --project <id>
 ```
 
 `--onto <workspaceId>` installs a template onto a space you already have, adding what is missing, instead of creating
@@ -110,11 +115,16 @@ up for claude.ai) can also search the catalog with `market_search` before it pic
 Templates get new versions. Your space records which template and version it was installed from.
 
 ```bash
-synap templates                       # every space: attached, drifted or unattached
-synap templates update                # preview the available updates
-synap templates update crm            # apply one
-synap templates update all            # apply every available update
-synap templates attach "Sales"        # connect a space made before it had a template; suggests one
+# every space: attached, drifted or unattached
+synap templates
+# preview the available updates
+synap templates update
+# apply one
+synap templates update crm
+# apply every available update
+synap templates update all
+# connect a space made before it had a template; suggests one
+synap templates attach "Sales"
 ```
 
 An update that changes existing data lists each change and waits for a person to agree. `--yes` agrees to every

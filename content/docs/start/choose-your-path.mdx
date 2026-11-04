@@ -10,10 +10,7 @@ last_reviewed: 2026-11-03
 ---
 
 Synap is a pod: a server that holds your records in your own PostgreSQL database, and lets the AI agents you connect
-read and change them. By default an agent's creates and edits apply directly, with Undo, while deletions and
-structural changes, such as a new kind, a space or an automation, become proposals you approve (requests, in the
-apps). Every change is written to
-an append-only event log. [What is Synap?](/docs/concepts/what-is-synap) explains the model.
+read and change them under rules you set. Every change is written to an append-only event log. [What is Synap?](/docs/concepts/what-is-synap) explains the model.
 
 ## Who it is for
 
@@ -42,7 +39,6 @@ You make four choices. They are independent: any answer to one works with any an
 |---|---|---|
 | Who operates the server | Synap | You |
 | How you start | [Cloud quickstart](/docs/start/cloud-quickstart): `npx @synap-core/cli init` | [Self-host quickstart](/docs/start/self-host-quickstart): the installer from the backend's GitHub releases |
-| Code | The same open-source pod | The same open-source pod |
 
 Both run the same code from the same releases, and the same apps and agents connect to both.
 [Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted) lists what Synap Cloud runs for you (updates, email,
@@ -53,7 +49,7 @@ Control Plane later; see [Connect to the Control Plane](/docs/run/connect-contro
 
 Synap does not sell or meter inference: you bring your own agent. `synap init` connects the agents it finds on your
 computer (Claude Code, Codex, Cursor), and `synap connect --list` lists every client it can configure. An agent you
-wrote yourself gets an MCP URL and a key from `synap agents add --name <name>`. See [Connect an agent](/docs/agents).
+wrote yourself gets an MCP URL and a key from `synap agents add --name <name>`. See [Connect your AI](/docs/agents).
 
 ### 3. What goes in it
 
@@ -65,9 +61,9 @@ wrote yourself gets an MCP URL and a key from `synap agents add --name <name>`. 
 ### 4. How far you take it
 
 - **Make it yours** without code: install workspaces, add kinds and fields, add capabilities and automations. See
-  [Make Synap yours](/docs/customize).
+  [Make it yours](/docs/customize).
 - **Build on it**: an app on the SDK, a script on the Hub REST API, a website that reads your pod. See
-  [Build on your pod](/docs/build) and [Build a website](/docs/build/build-a-website).
+  [Build on Synap](/docs/build) and [Build a website](/docs/build/build-a-website).
 
 ## If you want this, start here
 
@@ -76,13 +72,13 @@ wrote yourself gets an MCP URL and a key from `synap agents add --name <name>`. 
 | Try Synap with the least setup | [Cloud quickstart](/docs/start/cloud-quickstart) |
 | Keep your data on hardware you control | [Self-host quickstart](/docs/start/self-host-quickstart) |
 | Decide between the two | [Self-hosted pod or Synap Cloud](/docs/use/cloud-vs-self-hosted) |
-| Give your AI agent access to your pod | [Connect an agent](/docs/agents) |
+| Give your AI agent access to your pod | [Connect your AI](/docs/agents) |
 | Set up a domain (sales, content, finance…) in one step | [Spaces and templates](/docs/customize/spaces-and-templates) |
 | Bring in data from other tools | [Import your data](/docs/customize/import) |
 | Track a kind of record Synap does not have | [Kinds, roles and fields](/docs/customize/kinds-and-fields) |
 | See what you can install | [Marketplace](/docs/customize/marketplace) |
 | Approve agent changes from your phone | [Relay](/docs/use/relay) (in beta testing) |
-| Build an app or a website on your pod | [Build on your pod](/docs/build) |
+| Build an app or a website on your pod | [Build on Synap](/docs/build) |
 | Run your pod in production | [Run](/docs/run) |
 
 Words you do not know are in the [glossary](/docs/concepts/glossary).

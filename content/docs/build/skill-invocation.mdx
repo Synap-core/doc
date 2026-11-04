@@ -4,8 +4,9 @@ description: List and invoke skills on your pod over HTTP with an API key.
 type: how-to
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
 The skills on this page are operations your pod runs, called over HTTP. They are not
@@ -13,111 +14,120 @@ The skills on this page are operations your pod runs, called over HTTP. They are
 
 ## What it is
 
-A skill is a named operation that runs on your pod, under the permissions of the key that calls it. Each skill has a
-defined input schema and a fixed scope (pod-wide, workspace, or user), and runs synchronously with a configurable
-timeout.
+A skill is a named operation stored on your pod, with an input schema. You call it like a typed function: you send
+`input` as JSON and get a JSON `result` back. No language model sits between you and the call.
 
-Invoking a skill via HTTP is like calling a typed function on your pod. The result is structured JSON. There is no natural language involved: you pass `input`, you get `result`.
-
-Use it when you want the same behaviour on every call: extracting entities from raw text, creating structured notes, running a search pipeline, or any other operation your pod has a skill for.
+Use it from a script, a scheduled job or your own app when you want the same operation every time, under the
+permissions of the key that calls it.
 
 ## Get an API key
 
-Create an [API key](/docs/build/api-keys) with the scope `skills.invoke`.
+Create an [API key](/docs/build/api-keys) with the scope `skills.invoke`. Give it full access: a key whose grant is
+limited to some kinds, spaces or objects is refused on these routes (`403 GRANT_DOOR_UNSUPPORTED`).
 
-The key is shown once, when you create it; it cannot be retrieved later.
+The key is shown once, when you create it.
 
 ## List your skills
 
 ```bash
 curl https://pod.example.com/api/external/skills \
-  -H "Authorization: Bearer YOUR_API_KEY"
+  -H "Authorization: Bearer <api-key>"
 ```
 
-Response:
+The answer is an array of the active skills the key's user can see. It also includes instruction skills
+(`kind: "instruction"`), which hold text for agents rather than an operation:
 
 ```json
 [
   {
     "id": "0b6f1c9e-2d4a-4e8b-9c1a-5f3e7d2a1b00",
-    "name": "Extract and save entities",
-    "description": "Parses raw text and creates structured entity records in your workspace.",
-    "scope": "workspace",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "text": { "type": "string", "description": "Raw text to parse" },
-        "workspaceId": { "type": "string" }
-      },
-      "required": ["text", "workspaceId"]
-    },
-    "executionMode": "sync",
-    "timeoutSeconds": 30
-  },
-  {
-    "id": "sk_02hy...",
     "name": "Summarize overdue tasks",
-    "description": "Fetches overdue tasks and returns a markdown summary.",
+    "description": "Returns a summary of the overdue tasks in a space.",
     "scope": "workspace",
     "parameters": {
       "type": "object",
-      "properties": {
-        "workspaceId": { "type": "string" }
-      },
+      "properties": { "workspaceId": { "type": "string" } },
       "required": ["workspaceId"]
     },
     "executionMode": "sync",
-    "timeoutSeconds": 15
+    "timeoutSeconds": 30,
+    "kind": "code"
   }
 ]
 ```
 
-> **Note:** Skill slugs are not supported: use the UUID `id` from the list endpoint when invoking.
+`parameters` is the JSON Schema of the skill's `input`. Call a skill by its `id`; its name is not accepted in the
+URL.
 
 ## Invoke a skill
 
 ```bash
-curl -X POST https://pod.example.com/api/external/skills/0b6f1c9e-2d4a-4e8b-9c1a-5f3e7d2a1b00/invoke \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST https://pod.example.com/api/external/skills/<skill-id>/invoke \
+  -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "text": "Meeting with Alice on Friday re: Q3 budget. Action: send updated projections by EOD.",
-      "workspaceId": "ws_..."
-    }
-  }'
+  -d '{ "input": { "workspaceId": "<workspace-id>" } }'
 ```
 
-Response:
+A skill that ran answers:
 
 ```json
 {
   "success": true,
-  "result": {
-    "entitiesCreated": [
-      { "id": "ent_abc", "profileSlug": "task", "title": "Send updated Q3 projections" },
-      { "id": "ent_def", "profileSlug": "event", "title": "Meeting with Alice, Friday" }
-    ],
-    "summary": "Created 1 task and 1 event from the input text."
-  },
-  "executionTimeMs": 142
+  "result": { "…": "what the skill returned" },
+  "correlationId": "<id>",
+  "ackState": "applied"
 }
 ```
+
+`result` is whatever the skill returns. `input` is optional; an empty body runs the skill with no input.
+
+## Who can see a skill
+
+Each skill has a scope:
+
+| Scope | Who can list and invoke it |
+|-------|-----------|
+| `pod` | Every user of the pod |
+| `workspace` | Members of the skill's space |
+| `user` | Only the user who owns it |
+
+A key acts for a user (for an agent's key, the person the agent works for). A `user` skill that belongs to someone
+else, or a `workspace` skill in a space that user is not a member of, answers `404`, as if it did not exist.
+
+## Governance
+
+An invocation goes through the same governance check as any other run of a skill. If the key belongs to an agent, the
+pod decides whether the run goes ahead, waits for a person, or is refused (see the
+[validation policy](/docs/concepts/validation-policy)). When the run needs a person's approval, nothing runs yet: the
+pod answers `202` with a proposal, and the skill runs when a person approves it.
+
+```json
+{
+  "success": false,
+  "proposed": true,
+  "proposalId": "<id>",
+  "reviewUrl": "<url>"
+}
+```
+
+## Errors and other answers
+
+| Status | Meaning |
+|--------|---------|
+| `200` with `success: false` | The skill ran and failed. The body has an `error` message. |
+| `202 Accepted` | Nothing ran yet: the run became a proposal (see above). |
+| `400 Bad Request` | The request body is invalid, or the skill exists but is not active. |
+| `401 Unauthorized` | The API key is missing, invalid or expired. |
+| `403 Forbidden` | The key lacks the `skills.invoke` scope, its grant is narrower than full access (`GRANT_DOOR_UNSUPPORTED`), its person is a guest of the pod, or the pod's governance refused the run. The `error` says which. |
+| `404 Not Found` | The skill does not exist, or the key's user cannot see it. |
+| `429 Too Many Requests` | The key's rate limit is reached. |
+| `502 Bad Gateway` | The pod could not execute the skill. |
 
 ## TypeScript example
 
 ```typescript
 const POD_URL = 'https://pod.example.com';
-const API_KEY = 'YOUR_API_KEY';
-
-async function listSkills() {
-  const res = await fetch(`${POD_URL}/api/external/skills`, {
-    headers: { Authorization: `Bearer ${API_KEY}` },
-  });
-
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-  return res.json() as Promise<Skill[]>;
-}
+const API_KEY = process.env.SYNAP_API_KEY;
 
 async function invokeSkill(skillId: string, input: Record<string, unknown>) {
   const res = await fetch(`${POD_URL}/api/external/skills/${skillId}/invoke`, {
@@ -129,99 +139,17 @@ async function invokeSkill(skillId: string, input: Record<string, unknown>) {
     body: JSON.stringify({ input }),
   });
 
+  if (res.status === 202) return { proposed: true, ...(await res.json()) };
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
 
   const data = await res.json();
-  if (!data.success) throw new Error(`Skill failed: ${JSON.stringify(data)}`);
-
+  if (!data.success) throw new Error(`Skill failed: ${data.error}`);
   return data.result;
 }
-
-// Usage
-const skills = await listSkills();
-const extractSkill = skills.find(s => s.name === 'Extract and save entities');
-
-const result = await invokeSkill(extractSkill.id, {
-  text: 'Follow up with Bob about the contract renewal.',
-  workspaceId: 'ws_...',
-});
-
-console.log(result);
 ```
-
-## Using with Claude Code
-
-Add skill invocation as a tool in your project's `CLAUDE.md` so Claude Code can call it directly:
-
-````markdown
-## Tools
-
-### invoke_synap_skill
-Calls a named operation on the Synap data pod.
-
-```bash
-# List available skills first
-curl https://pod.example.com/api/external/skills \
-  -H "Authorization: Bearer $SYNAP_API_KEY"
-
-# Invoke a skill by ID
-curl -X POST https://pod.example.com/api/external/skills/SKILL_ID/invoke \
-  -H "Authorization: Bearer $SYNAP_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{ "input": { ... } }'
-```
-
-Use this when you want to persist something to my Synap pod, search my knowledge base, or run a structured operation. Store SYNAP_API_KEY in your environment.
-````
-
-Or as a standalone script Claude Code can run:
-
-```typescript
-// synap-invoke.ts: run with npx tsx synap-invoke.ts SKILL_ID '{"text":"..."}'
-const [, , skillId, inputJson] = process.argv;
-
-const result = await fetch(
-  `${process.env.SYNAP_POD_URL}/api/external/skills/${skillId}/invoke`,
-  {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.SYNAP_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ input: JSON.parse(inputJson) }),
-  }
-);
-
-console.log(JSON.stringify(await result.json(), null, 2));
-```
-
-## Skill scopes
-
-| Scope | Visibility | Notes |
-|-------|-----------|-------|
-| `pod` | All workspaces on the pod | System-level skills: full-text search, cross-workspace indexing |
-| `workspace` | One workspace | Most skills live here; your API key's workspace context applies |
-| `user` | Current authenticated user only | Personal skills: private notes, personal memory |
-
-Your API key acts for a user. A `user` skill that belongs to someone else, or a `workspace` skill in a workspace that
-user is not a member of, answers `404`, as if it did not exist.
-
-## Errors and other answers
-
-| Status | Meaning |
-|--------|---------|
-| `202 Accepted` | Nothing ran yet: the pod's governance turned the run into a proposal. The body has `proposed: true`, a `proposalId` and a `reviewUrl`. The skill runs when a person approves it. |
-| `400 Bad Request` | The request body is invalid, or the skill exists but is not active |
-| `401 Unauthorized` | API key missing or invalid |
-| `403 Forbidden` | The key lacks the `skills.invoke` scope, its grant is narrower than full access (`GRANT_DOOR_UNSUPPORTED`), or the pod's governance refused the run |
-| `404 Not Found` | The skill does not exist, or the key's user cannot see it |
-| `429 Too Many Requests` | The key's rate limit is reached |
-| `502 Bad Gateway` | The skill could not be executed |
-
-A skill that ran and failed answers `200` with `success: false` and an `error` message.
 
 ## Next steps
 
-- [Chat stream](/docs/build/chat-stream)
-- [SDK first query](/docs/build/sdk)
 - [API keys](/docs/build/api-keys)
+- [Chat stream](/docs/build/chat-stream)
+- [Validation policy](/docs/concepts/validation-policy)

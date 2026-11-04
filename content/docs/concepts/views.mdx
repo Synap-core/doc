@@ -1,40 +1,52 @@
 ---
 title: Views
-description: A view is a named query plus a rendering configuration over the same records; the view types a pod implements.
+description: A view shows your records as a table, a board, a calendar or a graph without copying them; the view types you can create.
 type: explanation
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
-A view is not a copy of your data. It is a named query plus a rendering configuration, stored as JSON. Change the view
-type and the same entities appear as a kanban board, a timeline, a graph or a masonry feed; the records stay where
-they are.
+A view is a way of looking at records you already have. It is not a copy of your data: it stores a query (which
+records, filtered and sorted how) and a configuration (how to draw them). Show the same tasks as a sheet, a kanban
+board grouped by status, or a calendar, and the tasks stay where they are. Edit a record in one view and every other
+view shows the change.
 
-## View types
+## View types you can create
 
-A pod implements 19 view types:
-
-| Category | View types |
+| View type | Shows records as |
 |---|---|
-| Structured | `sheet`, `table`, `list`, `grid`, `gallery`, `kanban`, `matrix`, `masonry`, `calendar`, `gantt`, `timeline`, `graph`, `flow`, `map`, `zoom_map` |
-| Canvas | `whiteboard` |
-| Special | `pipeline`, `branch_tree`, `bento` |
+| `sheet` | A spreadsheet-like table |
+| `list` | A list, optionally grouped by a field |
+| `grid` | Cards in a grid |
+| `gallery` | Cards led by a cover image taken from a field |
+| `kanban` | Columns grouped by a field, such as a status |
+| `matrix` | A two-axis grid, one field for columns and one for rows |
+| `masonry` | A feed of cards of varying height |
+| `calendar` | Items placed on dates |
+| `gantt` | Bars between a start date and an end date |
+| `timeline` | Events in time order |
+| `graph` | Records and the links between them |
+| `flow` | A directed graph or flowchart, for processes and workflows |
+| `map` | Locations on a map, optionally joined by routes |
+| `bento` | A dashboard of widgets, each showing a number, a chart or another view |
+| `whiteboard` | A free canvas you draw on |
 
-Not every implemented type can be created as a new view: `table` (superseded by `sheet`), `branch_tree` (only
-meaningful inside a conversation), `zoom_map` (retired as a new view) and `pipeline` (created by its own flows) remain
-renderable for existing views but are not offered when you create one. `mindmap` is defined but not implemented.
+A whiteboard holds the shapes drawn on it rather than a query. The others read your records each time they open.
 
-New view types are adapters in the view renderer; the data layer does not change.
+Four more types still open but are not offered for a new view: `table` (replaced by `sheet`), `zoom_map` (retired as a
+new view), `branch_tree` (used only inside a conversation) and `pipeline` (created by the features that use it).
 
-## Views created by agents
+## Creating a view
 
-Because a view is configuration, an agent can create one from a request in plain language, for example:
+- **From an agent**: `synap_create_view` takes a name, a type, a space or a project, and an optional configuration.
+  Call `synap_list_views` first so you do not create a duplicate, and `synap_list_widgets` before you place widgets on
+  a bento. See [MCP tools](/docs/reference/mcp-tools).
+- **Over HTTP**: `GET` and `POST /api/hub/views` list and create views, and `PATCH /api/hub/views/{viewId}` changes
+  one. See the [Hub REST API](/docs/reference/hub-api).
 
-- "Create a pipeline view of my deals grouped by stage": a kanban configuration with `groupBy: dealStage`.
-- "Build a team dashboard with open tasks, recent activity and deal velocity": a bento configuration with three
-  widget blocks.
-- "Show me a graph of how my contacts relate to each other": a graph view configuration.
-
-The agent writes the configuration and the view renderer draws it.
+Because a view is configuration, an agent can build one from a plain request. "Show my deals as a board by stage"
+becomes a `kanban` view of the `deal` kind with `groupByField` set to the stage field. An agent's new view follows the
+[validation policy](/docs/concepts/validation-policy) like any other write, so it can come back as a proposal.

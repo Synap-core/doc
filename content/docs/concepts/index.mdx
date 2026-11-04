@@ -1,16 +1,17 @@
 ---
-title: How Synap works
-description: The ideas behind Synap in reading order, from what a pod is to the protocol agents use to reach it.
+title: Concepts
+description: How Synap works, in reading order, from what a pod is to how two pods stay in sync.
 type: explanation
 audience: user
 availability: [pod-oss, cloud]
 status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
-These pages explain the model behind Synap: what a pod holds, how its records are shaped, and how the changes your
-agents make are governed. Read them in order; each one builds on the one before. The first page is for everyone who
-uses Synap. The later ones go into the detail you need to build on a pod or write a template.
+These pages explain how Synap works: what a pod holds, how its records are shaped, and how the changes your agents
+make are governed. Read them in order; each one builds on the one before. The first page is for everyone who uses
+Synap. The data model and governance pages go into the detail you need to build on a pod or write a template.
 
 ## Start with the model
 
@@ -37,12 +38,12 @@ uses Synap. The later ones go into the detail you need to build on a pod or writ
   />
   <Card
     title="Views"
-    description="A view is a named query plus a rendering configuration over the same records; the view types a pod implements."
+    description="A view shows your records as a table, a board, a calendar or a graph without copying them; the view types you can create."
     href="/docs/concepts/views"
   />
   <Card
     title="Profile schemas"
-    description="How property definitions are layered so the same kind can carry different fields in different spaces."
+    description="How field definitions are layered so the same kind can carry different fields in different spaces."
     href="/docs/concepts/profile-schemas"
   />
 </Cards>
@@ -57,7 +58,7 @@ uses Synap. The later ones go into the detail you need to build on a pod or writ
   />
   <Card
     title="Permission model"
-    description="How access is enforced for people, workspaces and keys, at the API and in background work."
+    description="Who can see and change what on a pod, for people, agents, apps and API keys."
     href="/docs/concepts/permission-model"
   />
 </Cards>
@@ -71,8 +72,8 @@ uses Synap. The later ones go into the detail you need to build on a pod or writ
     href="/docs/concepts/hub-protocol-flow"
   />
   <Card
-    title="Pod replication and pairing"
-    description="How two pods you own can be paired as primary and replica, and what is replicated."
+    title="Pod linking and replication"
+    description="How to link two of your pods as a primary and a replica, what the replica receives, and how often."
     href="/docs/concepts/pod-replication"
   />
 </Cards>

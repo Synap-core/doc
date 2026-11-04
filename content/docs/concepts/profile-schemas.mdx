@@ -1,134 +1,75 @@
 ---
 title: Profile schemas
-description: How property definitions are layered so the same kind can carry different fields in different spaces.
+description: How field definitions are layered so the same kind can carry different fields in different spaces.
 type: explanation
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
-A person in your Sales workspace can show different fields from the same person in your Knowledge workspace. The data
-is the same; each workspace adds its own schema overlay on top of a shared base. This is how several workspaces with
-different jobs share one set of records without their fields colliding or leaking into each other.
+A profile is the schema of a kind or a role: the fields its records carry. One person in your pod can show different
+fields in your Sales space and in your Studio space. The record is the same; each space adds its own fields on top of
+a shared base. Several spaces with different jobs share one set of records without their fields colliding or leaking
+into each other.
 
 ## The three layers
 
-Every property definition in Synap lives in one of three layers:
+Every field definition lives in one of three layers:
 
-| Layer | Who defines it | Who sees it | Example |
-|---|---|---|---|
-| **Global** | System | Everyone | `name`, `email`, `phone` on the built-in `person` profile |
-| **Profile base** | System or the workspace that owns the profile | Every workspace that uses this profile | `status`, `priority` on the built-in `task` profile |
-| **Workspace overlay** | A workspace extending a profile it doesn't own | Only that workspace | Sales adds `investmentThesis` to the pod-wide `person` profile |
-
-When you open an entity, Synap composes its fields from the layers that apply to your current workspace:
-
-```
-                 base fields (always rendered)
-┌────────────────────────────────────────────────┐
-│  name, email, phone, company                   │
-├────────────────────────────────────────────────┤
-│  your workspace's overlay fields               │
-│  investmentThesis, lastPitchedAt, …            │
-└────────────────────────────────────────────────┘
-                 what you actually see
-```
-
-Another workspace looking at the **same entity** sees a different bottom half:
-
-```
-┌────────────────────────────────────────────────┐
-│  name, email, phone, company         ← shared  │
-├────────────────────────────────────────────────┤
-│  notesCount, topicsDiscussed         ← private │
-│                                                │
-│  (no trace of investmentThesis here)           │
-└────────────────────────────────────────────────┘
-```
-
-## What it allows
-
-- **One record, several jobs.** A freelancer with a Sales workspace (client pipeline) and a Studio workspace (content
-  production) can track Alice as both a prospect and an audience member. Sales shows her pipeline status and deal
-  size; Studio shows which hooks worked on her.
-- **Independent workspaces.** A field added in Sales does not appear in Studio and needs no migration.
-- **Templates that add fields.** Installing a workspace template adds its overlay fields next to the existing data,
-  without creating new person records.
-
-## How it works
-
-### Storage
-
-Property definitions are stored in a single `property_defs` table with three columns that define scope:
-
-```
-property_defs
-├── slug                 (what the field is called)
-├── profile_id           (which profile it belongs to — NULL for globals)
-└── workspace_id         (which workspace owns it — NULL for base fields)
-```
-
-The scope matrix:
-
-| profile_id | workspace_id | Layer |
+| Layer | Who sees it | Example |
 |---|---|---|
-| NULL | NULL | Global |
-| SET | NULL | Profile base |
-| SET | SET | Workspace overlay |
+| **Global** | Every profile that uses it | A field the system defines once and several kinds share |
+| **Profile base** | Every space that uses the profile | `status` and `priority` on a task |
+| **Space overlay** | Only the space that added it | Sales adds `investmentThesis` to the pod-wide `person` |
 
-Three partial unique indexes let the same slug exist in different scopes: one workspace's `notesCount` overlay on `person` does not clash with another workspace's `notesCount` overlay on the same profile.
-
-### Reading
-
-When your workspace reads an entity, the backend walks the profile hierarchy (following `extends`), gathers all effective property defs, and **filters by workspace** at the SQL level. You only ever see:
-
-- Global defs
-- Profile-base defs
-- Your own workspace's overlay defs
-
-Other workspaces' overlays are dropped in that one query (`getManyByIds` with a `WHERE workspace_id IS NULL OR workspace_id = :me` clause), not filtered afterwards.
-
-### Writing
-
-When you write a property on an entity, validation also runs through your workspace's lens. A key that belongs to another workspace's overlay is treated as an **unknown property**: the value is kept in the raw JSONB bag, but it is not validated against a schema and does not appear in filtered views. Rejecting it instead would reveal the other workspace's schema in the error message.
-
-### Creating overlays
-
-When you install a workspace template that extends a profile it does not own (for example, Sales extending the pod-wide `person` profile with `investmentThesis`), the new property defs are tagged with the installing workspace's ID, which makes them overlays.
-
-When you install a workspace template that creates its **own** profile (for example, a custom `campaign` profile unique to Sales), the property defs are tagged as **profile base** (workspace_id = NULL), because the profile row itself already carries the workspace scope via `profiles.workspace_id`.
+When you open a record in a space, its fields are the global and base fields of its profile plus that space's own
+overlay fields. Another space's overlay fields are left out.
 
 ## A worked example
 
-Say you run three workspaces on one pod:
+You run three spaces on one pod, and all three use the `person` kind. You create one person, Alice Chen.
 
-1. **Sales** (CRM) uses the built-in `person` profile.
-2. **Knowledge** (notes) also uses `person`.
-3. **Studio** (content) also uses `person`, plus its own `content-piece` profile.
+- In Sales you add a field `investmentThesis` to `person`. It becomes a Sales overlay.
+- In Knowledge you add `notesCount` to `person`. It becomes a Knowledge overlay.
+- Studio adds nothing to `person`.
 
-You create a Person: `Alice Chen`. She lives once on your pod.
+Open Alice in Sales and you see the base fields of `person` plus `investmentThesis`. Open her in Knowledge and you see
+the base fields plus `notesCount`. Open her in Studio and you see the base fields only. There is one Alice in all
+three cases.
 
-Then:
+## What it allows
 
-- In Sales you add a custom field `investmentThesis` on Person.
-  - A new property def is created: `slug=investmentThesis, profile_id=person, workspace_id=<Sales>`.
-- In Knowledge you add `notesCount` on Person.
-  - Another def: `slug=notesCount, profile_id=person, workspace_id=<Knowledge>`.
-- In Studio you define a `content-piece` profile with `format`, `status`, `script`.
-  - These defs get `profile_id=<Studio's content-piece>, workspace_id=NULL` because Studio owns the profile.
+- **One record, several jobs.** A freelancer with a Sales space and a Studio space can track Alice as a prospect and
+  as an audience member, each space with its own fields.
+- **Independent spaces.** A field added in Sales does not appear in Studio.
+- **Templates that add fields.** A template that extends a profile it does not own, such as the pod-wide `person`,
+  adds its fields as overlays of the space it is installed in. A template that defines its own kind gives that kind
+  base fields.
 
-When you open Alice in Sales you see: `name, email, phone, company, investmentThesis`.
-When you open the same Alice in Knowledge you see: `name, email, phone, company, notesCount`.
-When you open her in Studio you see: `name, email, phone, company` (no overlays because Studio didn't add any to `person`).
+## Writing a field another space owns
 
-There is one Alice record in all three cases.
+A write is checked through the space it is made in. A value for a field that space cannot see is treated as an
+unknown field: it is stored as sent, but it is not validated and cannot be queried. The write's answer lists it as
+unmodelled, with the closest known field name when there is one. It is not refused: the pod keeps extra keys so older
+clients keep working, and reports them so the writer learns the field is not modelled.
 
-## What this doesn't do
+## What it does not do
 
-- **It isn't row-level permissions.** The layered schema model controls **what fields are visible**, not which entities a workspace can access. Pod-wide entities are visible to every workspace that has access to the pod; workspace-scoped entities are visible only to their owning workspace. Those are separate mechanisms.
-- **It isn't per-field ACLs.** Every field in your own workspace's lens is visible and editable by anyone with access to that workspace. Visibility is not split below the workspace.
-- **It isn't schema inheritance between overlays.** Two workspaces each defining `status` on `person` will each have their own independent `status` field. If you want a shared convention, use a profile-base def (no workspace scope).
+- **It does not decide which records you see.** Layers control which fields appear, not which records a space can
+  reach. That is decided by the record's scope: a record visible to the whole pod, or to one space.
+- **It does not set per-field permissions.** A member of a space sees every field in that space's view of a profile,
+  and a member whose role can edit records can edit all of them.
+- **It does not share fields between overlays.** Two spaces that each add `status` to `person` get two independent
+  fields. To share one, define it in the profile base.
+
+## Where to see a kind's fields
+
+- Over MCP, `synap_get_entity` returns a record with its `effectiveProperties`: the fields it carries in the space
+  you read it through.
+- Over HTTP, `GET /api/hub/discover?userId=<your-user-id>&profileSlugs=<slug>` describes a kind's fields; add
+  `workspaceId=<space-id>` to see that space's fields.
 
 ## Related
 

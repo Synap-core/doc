@@ -1,33 +1,60 @@
 ---
 title: Permission model
-description: How access is enforced for people, workspaces and keys, at the API and in background work.
+description: Who can see and change what on a pod, for people, agents, apps and API keys.
 type: explanation
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
-The pod enforces permissions for people, workspaces and keys.
+Every request to your pod is checked on the pod itself, whichever app, agent or script sends it. The pod asks two
+questions: who is calling, and what may that caller see and change.
 
-## Who is checked
+## Who is calling
 
-- **People** sign in with a session and act within the workspaces they are members of.
-- **Workspaces** limit each action by the person's role and membership there.
-- **Agents, scripts and integrations** use scoped API keys instead of a person's session.
+- **A person** signs in to the pod (in the apps or the pod admin console) and acts as themselves.
+- **An agent** connects with its own key and its own identity. It sees what the person it works for can see, and its
+  changes are recorded as the agent's.
+- **An app** that you approve gets its own agent identity too, so its changes follow the same rules as an agent's.
+- **A script or integration** uses an [API key](/docs/build/api-keys) that acts for the person who created it.
 
-## Where it is checked
+## What a person can see
 
-Checks run in the pod's procedures and routes, and again in the background work that events trigger; they are not
-only in the apps.
+Records live in spaces (workspaces). Each kind is either shared by the whole pod, like `person` and `company`, or kept
+inside the space it belongs to, like a CRM `deal`. You see a space's records when you are a member of that space.
 
-- A read needs a valid identity and scope.
-- A write needs an identity and permission for that action.
-- An agent's write then goes through the [validation policy](/docs/concepts/validation-policy): it runs directly,
-  becomes a proposal, or is refused.
+Each member of a space has a role:
 
-This keeps one workspace's records out of another, keeps keys to the access they were given, and puts every agent or
-automation write on the record.
+| Role | What it adds |
+|---|---|
+| **Viewer** | Reads the space's records and views |
+| **Editor** | Also creates, edits and archives records |
+| **Admin** | Also manages the space and invites members |
+| **Owner** | Also deletes |
+
+When your role does not allow a change, you can still ask for it: the change becomes a proposal (shown in the apps as
+a **Request**) for the space's owners and admins to approve. A space can let its editors approve too. If nobody else
+could approve it, the change is refused.
+
+## What a key can do
+
+An API key has two limits on top of the person it acts for:
+
+- its **scopes** name the API surfaces it may call, such as the Hub REST API or MCP;
+- its **grant** narrows what it may touch there: some kinds, some actions, some spaces, projects or single records.
+
+A key can never do more than its person can. See [API keys](/docs/build/api-keys).
+
+## What happens to a change
+
+A person's change runs when that person's role allows it. A change made by an agent, an app or an automation passes
+the same check, then goes through the [validation policy](/docs/concepts/validation-policy): it runs directly, becomes
+a proposal for a person to approve, or is refused.
+
+Because the checks run on the pod and not in the apps, the same rules hold for the apps, MCP, the Hub REST API and
+the SDK.
 
 See also:
 

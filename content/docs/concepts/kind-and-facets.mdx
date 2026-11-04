@@ -4,8 +4,9 @@ description: "One entity, one kind, many roles: how Synap separates what a thing
 type: explanation
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
 One real-world thing is one entity in your pod. What it is used as in a given context is a **role** (also called a
@@ -27,8 +28,8 @@ person Anna. In Synap, Anna stays one `person`, and a `client` role is attached 
 email, her notes, her meetings, the deals she is part of) stays on one entity, whatever roles she plays.
 
 A role carries its own status and its own fields. A `client` role can have a status such as active or paused and a
-"became client at" date; those live on the role, not on the person. A role can also be limited to one space, so the
-people in that space see it while the person stays the same entity everywhere.
+"became client at" date; those live on the role, not on the person. A role can also be attached in one space only, so
+the people in that space see it while the person stays the same entity everywhere.
 
 ## When something should be a kind instead
 
@@ -49,14 +50,14 @@ it belongs to one entity and only changes that entity's stance, it is a role.
 
 The CRM template models relationship state as roles on people and companies, with deals as their own kind:
 
-- `person` and `company` are kinds shared by the whole pod. They carry no sales state.
-- `lead`, `client` and `partner` are roles. A person you start pursuing gets the `lead` role; when you win a deal with
-  them, they get the `client` role. The person is the same entity throughout.
+- `person` and `company` are kinds. The CRM adds a few contact fields to them, such as lead source and next
+  follow-up date, but no pipeline stage: a lead's stage lives on its `lead` role, a deal's on the deal.
+- `lead`, `client` and `partner` are roles. A person you start pursuing gets the `lead` role; when you win a deal, the
+  company gets the `client` role. The person and the company stay the same entities throughout.
 - `deal` is a kind, with its own stage, value and close date. It links to the person or company; it is not a role.
 
-When a deal is won, the agent or app first reads the person's roles. With no `client` role, it attaches one. With an
-existing `client` role, it updates that role's status instead of attaching a second one. A renewal (a new deal with
-someone who is already a client) and churn (detach the role; the person remains) work the same way.
+A client who leaves keeps their entity: you change the `client` role's status or detach the role, and their history
+stays on the person or company.
 
 ## Finding the right entity first
 
@@ -66,8 +67,8 @@ duplicate:
 - **Strong signals** (an email address, a phone number, a URL such as a LinkedIn profile or a website, a handle, an
   external id) identify one entity. A match on any of them resolves to that entity: enrich it or attach a role to it,
   do not create a new one.
-- **Weak signals** (a name and its aliases) only suggest candidates. They never merge two records on their own; when
-  two people share a name, you or the agent choose.
+- **Weak signals** (a name) only suggest candidates. They never merge two records on their own; when two people share
+  a name, you or the agent choose.
 
 ## How an app or agent attaches a role
 
@@ -81,14 +82,14 @@ Through MCP:
 | `synap_define_role` | Defines a new role, or widens the kinds an existing role applies to. |
 | `synap_list_profiles` | Lists the kinds and roles on your pod, and which kinds each role applies to. |
 
-Through the Hub REST API: `GET` and `POST /api/hub/entities/{entityId}/facets` list and attach roles, and
-`PATCH /api/hub/facets/{facetId}` changes a role's status or fields; `DELETE /api/hub/facets/{facetId}` detaches it.
-See the [Hub REST API](/docs/reference/hub-api).
+Through the Hub REST API: `POST /api/hub/identity/resolve` runs the same identity check, `GET` and
+`POST /api/hub/entities/{entityId}/facets` list and attach roles, `PATCH /api/hub/facets/{facetId}` changes a role's
+status or fields, and `DELETE /api/hub/facets/{facetId}` detaches it. See the [Hub REST API](/docs/reference/hub-api).
 
 Attaching a role again after it was detached works: a client who leaves and comes back needs no special case.
 
-Under the default write mode, an agent's attach and detach apply directly and can be undone. An agent defining a new
-role always becomes a proposal for you to approve. Any of these calls may answer `status: "proposed"`: that means the
+By default an agent's attach, update and detach of a role apply directly; a detached role is kept in the history and
+can be attached again. An agent defining a new role always becomes a proposal for you to approve. Any of these calls may answer `status: "proposed"`: that means the
 change waits for review, not that it failed. See [Validation policy](/docs/concepts/validation-policy).
 
 ## Related

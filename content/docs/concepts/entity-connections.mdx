@@ -4,214 +4,102 @@ description: The two ways entities connect, structural links and semantic relati
 type: explanation
 audience: builder
 availability: [pod-oss, cloud]
-status: beta
+status: current
 owner: Antoinesrvt
+last_reviewed: 2026-11-04
 ---
 
-Synap has two ways to express a relationship between entities: a structural link, stored as a property, and a
-semantic relation, stored in the graph. This page explains when to use each.
+Records in your pod connect to each other in two ways. A **structural link** is a field on a record that points to
+another record, such as the contact on a deal. A **semantic relation** is a typed edge in the pod's graph, such as a
+note that references a decision. You read both together, in one list.
 
 ## The two systems
 
-| | **Structural links** (properties) | **Semantic relations** (relation objects) |
+| | Structural links | Semantic relations |
 |---|---|---|
-| **Where stored** | Entity's property values (`valueType: "entity_id"`) | The pod's relation graph, each relation with a type |
-| **Defined by** | Profile schema (designed at workspace setup) | Created on the fly, by user or AI |
-| **Direction** | One-way (owned by the source entity) | Bi-directional, traversable both ways |
-| **Discoverability** | Schema first: you know which fields exist | Emergent: you find them with graph queries |
-| **Used in templates** | Yes: templates wire records together this way | Optionally, for extra context |
-| **Good for** | Core data model ("this task belongs to this project") | Knowledge graph ("this note references that decision") |
-| **Created by** | User filling in forms, AI via structured output | User via whiteboard/connection UI, AI via graph tools |
+| **Stored as** | A field whose value is another record's id (`valueType: "entity_id"`) | A relation with a type, between two records |
+| **Defined by** | The kind's fields, set up with the space or its template | Any time, by a person, an agent or an automation |
+| **Direction** | From the record that holds the field | Readable from either end |
+| **Good for** | The core data model: "this deal's primary contact" | Knowledge found later: "this note references that decision" |
 
-## Structural links (properties)
+## Structural links
 
-A **structural link** is an `entity_id` property on a profile.
+A structural link is a field of type `entity_id` on a kind. Its value is the id of another record. For example, a
+`deal` kind could have a `contact` field; every deal then shows it as a field people fill in.
 
-When a workspace profile defines a property with `valueType: "entity_id"`, that property *is* the relationship. The property value is the UUID of another entity. The schema tells you the relationship exists, and what it means.
+Use a structural link when:
 
-### Example
+- the link is part of what the record is, and most records of that kind have it;
+- you want it to appear as a field in forms;
+- the link has a clear direction ("a deal has one primary contact");
+- you are writing a template: model each relationship your kinds need as a field.
 
-A CRM workspace might define a **Deal** profile with these properties:
+A field can also name a relation type. Writing that field then creates the matching relation in the graph, and
+clearing it removes the relation, so the link shows up in graph queries too.
+
+## Semantic relations
+
+A semantic relation joins two records with a type, such as `references`, `mentions` or `blocks`. No field defines it:
+a person, an agent or an automation creates one between any two records when it finds the connection.
 
 ```json
 {
-  "slug": "deal",
-  "properties": [
-    { "slug": "contact",     "valueType": "entity_id", "label": "Primary Contact" },
-    { "slug": "owner",       "valueType": "entity_id", "label": "Deal Owner" },
-    { "slug": "company",     "valueType": "entity_id", "label": "Company" }
-  ]
+  "sourceEntityId": "<note-id>",
+  "targetEntityId": "<decision-id>",
+  "type": "references"
 }
 ```
 
-Each Deal entity then has `contact`, `owner` and `company` fields that point to other entities. Workspace templates model their relationships this way.
+Use a semantic relation when:
 
-### When to use structural links
+- the connection is found after the fact, not modelled up front;
+- it joins records of any kinds, with no field behind it;
+- you want to walk the graph, such as everything two hops from a record;
+- it is many-to-many and does not fit a field;
+- an agent is annotating what it found.
 
-- The relationship is part of what the entity is, not something discovered later.
-- Every entity of that profile has it, or is expected to.
-- You want the link to appear as a form field people fill in.
-- The relationship has a clear direction ("a Deal has one Contact").
-- You are writing a workspace template: use properties for every modelled relationship.
-
-### How they are displayed
-
-`entity_id` properties are displayed as entity reference chips (a small card showing the linked entity's name and type). Clicking navigates to that entity. In table views, they appear as inline entity badges.
-
-## Semantic relations (graph)
-
-A **semantic relation** is a record in the pod's relation graph, typed by a relation type's slug.
-
-These relations are scoped to a workspace, traversable in both directions and not tied to a profile schema. People, agents and automations can create one between any two entities at any time.
-
-### Example
-
-```json
-{
-  "sourceEntityId": "note_planning_q1",
-  "targetEntityId": "decision_hire_engineer",
-  "type": "references",
-  "metadata": { "confidence": 0.91 }
-}
-```
-
-No profile schema defines this relation. An agent or a person created it after noticing that the planning note refers to a decision.
-
-### When to use semantic relations
-
-- The relationship is discovered after the fact, not modelled up front.
-- It links entities of any kinds, with no schema behind it.
-- You want graph traversal, such as every entity two hops from X.
-- It is many-to-many and hard to express as a property.
-- An agent is building or annotating the graph.
-- People are drawing connections on the whiteboard.
-
-### Default relation types
-
-Every workspace ships with 12 default semantic relation types:
-
-| Slug | Label | Category |
-|---|---|---|
-| `assigned_to` | Assigned To | workflow |
-| `blocks` | Blocks | workflow |
-| `depends_on` | Depends On | workflow |
-| `relates_to` | Relates To | reference |
-| `mentions` | Mentions | reference |
-| `links_to` | Links To | reference |
-| `references` | References | reference |
-| `parent_of` | Parent Of | hierarchy |
-| `created_by` | Created By | social |
-| `attended_by` | Attended By | social |
-| `belongs_to_project` | Belongs To Project | hierarchy |
-| `tagged_with` | Tagged With | hierarchy |
-
-You can add relation types of your own for a workspace.
+The type must be one the pod knows. Every pod has a set of default types, such as `relates_to`, `references`,
+`mentions`, `parent_of`, `depends_on`, `blocks`, `assigned_to`, `created_by` and `works_at`, and a space or its
+template can add its own. `synap_list_profiles` returns the relation types you may use.
 
 ## When both could work
 
-Structural links and semantic relations can express similar things:
+A deal could have a `contact` field, or a `relates_to` relation to the same person. The rule of thumb:
 
-- A Deal entity could have a `contact` property (structural) pointing to a person
-- *Or* you could create a `relates_to` semantic relation between a Deal and that person
+> **Use fields for what the kind's schema owns. Use relations for what you discover.**
 
-The rule of thumb:
-
-> **Use properties for things the profile schema owns. Use semantic relations for things the graph discovers.**
-
-An `assignee` field on a Task is a structural link — it's part of the Task's data model.
-A `references` relation between two documents is a semantic link — it emerged from content analysis.
-
-Both appear side by side in the entity's **Connections** panel, so people see one list whichever system holds the link.
+An assignee on a task is a field: it is part of the task. A `references` relation between two documents is a
+relation: it came from reading them.
 
 ## One list of connections
 
-The pod's connections read unifies both systems, and adds the AI chat threads that created, updated or referenced the
-entity. The result is a single list of connections with a `source` field indicating origin:
+`GET /api/hub/entities/{id}/connections` (scope `hub-protocol.read`) returns every connection around a record, from
+both systems and from the rest of the pod, in one list. Each item has a `source`:
 
-```typescript
-type Connection = {
-  entityId: string;         // The connected entity's ID
-  entity?: Entity;          // Resolved entity object
-  label: string;            // Human-readable relation name
-  direction: "outgoing" | "incoming" | "structural";
-  source: "graph" | "property" | "thread";
-  // For graph relations:
-  relationType?: string;
-  // For property relations:
-  propertySlug?: string;
-  propertyLabel?: string;
-  // For thread relations:
-  threadId?: string;
-  threadRelationshipType?: string;
-};
-```
+| `source` | What it is |
+|---|---|
+| `graph` | A semantic relation, with its `relationType` and a `direction` of `outgoing` or `incoming` |
+| `property` | A structural link, with its `propertySlug` and `propertyLabel` |
+| `thread` | A conversation that used, created, updated or referenced the record |
+| `context_channel` | A conversation about the record |
+| `focus_session` | A session whose subject is the record |
 
-### API usage
+The answer is `{ connections, counts }`. `limit` caps the items read from each source (default 50, at most 200), and
+`workspaceId` reads through one space. The typed client wraps it: `client.getConnections(entityId)` from
+`@synap-core/hub-rest-client`.
 
-With the Hub REST API:
+`GET /api/hub/relations` reads only the graph, so a structural link whose field names no relation type is missing
+there. Use `/connections` when you want every link without knowing where it is stored.
 
-```bash
-GET /api/hub/entities/{entityId}/connections?userId={userId}&workspaceId={wsId}
-# Scope: hub-protocol.read
-# Returns: { connections: [...], counts: { total, graph, structural, threads } }
-```
+## For agents
 
-The typed client wraps it: `client.getConnections(entityId)` from `@synap-core/hub-rest-client`.
-
-Filtering patterns:
-
-```typescript
-// Property-based structural links only
-const structural = connections.filter(c => c.source === "property");
-
-// Semantic graph relations only
-const graph = connections.filter(c => c.source === "graph");
-
-// All threads that touched this entity
-const threads = connections.filter(c => c.source === "thread");
-```
-
-> **Why `/connections` rather than `GET /relations`?**
-> `GET /relations` reads only the relation graph. For the built-in kinds, property links are mirrored into relations
-> automatically; for kinds with custom `entity_id` fields they are not always mirrored, so a link may exist only as a
-> property. `/connections` reads both in one call.
-
-## For template authors
-
-When you write a workspace template, use **properties** with `valueType: "entity_id"` for every relationship your
-kinds model, so each one appears as a field people fill in. See
-[Spaces and templates](/docs/customize/spaces-and-templates).
-
-## For agent authors
-
-When writing agent tools that touch relationships:
-
-- **Write to properties** when setting a defined field (an assignee, the contact on a deal).
-- **Create a relation** for a connection you discover (a note refers to a decision: create a `references` edge).
-- **Read the connections** (`GET /api/hub/entities/{entityId}/connections`) to get every link around an entity without knowing which system holds it.
-
-## Summary
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Entity: "Q1 Planning Note"                   │
-├──────────────────────────┬──────────────────────────────────────┤
-│   STRUCTURAL LINKS       │   SEMANTIC RELATIONS                 │
-│   (entity_id properties) │   (relation graph)                   │
-│                          │                                      │
-│  project → "App Redesign"│  references → "Decision: Hire"       │
-│  owner   → "Marie"       │  mentions   → "Contact: Paul"        │
-│                          │  blocks     → "Note: Old Strategy"   │
-├──────────────────────────┴──────────────────────────────────────┤
-│                    THREAD CONNECTIONS                           │
-│   AI Chat created this entity · 2 threads referenced it        │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-                  Unified Connections Panel
-                  (one list of links)
-```
+- **Set a field** when the link is a defined field (an assignee, the contact on a deal).
+- **Create a relation** for a connection you discover: `synap_link_entities` over MCP, or `POST /api/hub/relations`.
+- **Read the connections** to see every link around a record: `GET /api/hub/entities/{id}/connections`, or
+  `synap_get_relations` over MCP for the graph edges alone.
 
 ## Related
 
 - [Kind and facets](/docs/concepts/kind-and-facets)
-- [Hub REST API](/docs/reference/hub-api): `GET /api/hub/entities/{id}/connections`
+- [Profile schemas](/docs/concepts/profile-schemas)
+- [Hub REST API](/docs/reference/hub-api)

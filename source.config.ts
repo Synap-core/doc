@@ -2,6 +2,7 @@ import { defineDocs, defineConfig } from 'fumadocs-mdx/config';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { z } from 'zod';
 import { AUDIENCES, AVAILABILITY, PAGE_TYPES, STATUSES } from './lib/page-meta';
+import { remarkStructureDefaultOptions } from 'fumadocs-core/mdx-plugins';
 import { synapCodeThemes } from './lib/shiki-themes';
 
 /**
@@ -49,5 +50,9 @@ export default defineConfig({
   mdxOptions: {
     // Code blocks in the Synap palette (lib/shiki-themes.ts); the other code options keep the Fumadocs defaults.
     rehypeCodeOptions: { themes: synapCodeThemes },
+    // A <Card> is a link to another page; indexed, its attributes read as raw text ("card title: … | href: …").
+    remarkStructureOptions: {
+      filterElement: (node) => node.name !== 'Card' && remarkStructureDefaultOptions.filterElement(node),
+    },
   },
 });

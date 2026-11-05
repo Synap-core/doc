@@ -1,0 +1,287 @@
+---
+title: Pod-app sign-in
+description: "Reference for @synap-core/sdk/connect: the options, routes, permissions, connection life, client results and error codes of an app that people sign in to with their own pod."
+type: reference
+audience: builder
+availability: [sdk, pod-oss, cloud]
+status: current
+owner: Antoinesrvt
+last_reviewed: 2026-11-05
+---
+
+`@synap-core/sdk/connect` lets one app work on many pods: each person signs in with their own pod, chooses the
+spaces the app may use, and can take that access back. The app is an OAuth 2.1 public client of each pod (PKCE S256,
+the pod's `iss` checked on every answer). Its client ID is the https URL of a client metadata document that the app
+serves itself, so there is nothing to register on a pod. The pod's token stays on your server, sealed in an
+HTTP-only cookie; the browser never sees it.
+
+This page is the reference. To build an app step by step, follow
+[Build a website on your pod](/docs/build/build-a-website). The `AGENTS.md` file shipped in the npm package has
+every rule in full.
+
+The entry is server-only: it throws when loaded in a browser, and a browser bundle resolves it to a stub that throws.
+It uses Web-standard `Request`, `Response` and WebCrypto, so it runs in Next.js route handlers and `proxy.ts`, Hono,
+Remix and edge runtimes. It needs Node.js 20 or later.
+
+## Set up: `createPodAppAuth`
+
+```ts title="lib/synap.ts"
+import { createPodAppAuth } from "@synap-core/sdk/connect";
+
+export const synap = createPodAppAuth({
+  appUrl: process.env.SYNAP_APP_URL!, // https://notes.example.com
+  clientName: "Notes",
+  requests: [
+    { permission: "entity.note.read", reason: "Show your notes" },
+    { permission: "entity.note.create", reason: "Save the notes you write here" },
+  ],
+  secret: process.env.SYNAP_APP_SESSION_SECRET!,
+});
+```
+
+| Option | What it is |
+|---|---|
+| `appUrl` | Your app's origin: https, a domain name (not an IP address), no path, query or fragment. `http://localhost` is accepted, but only the SDK's mock pod signs in an app served over http. |
+| `clientName` | The name the consent screen shows, 1 to 100 characters. |
+| `requests` | What the app asks for: 1 to 48 entries (duplicates count), each `{ permission, reason, scope? }`. See [Permissions](#permissions). |
+| `secret` | Seals the cookies. At least 32 characters, server-side only. Pass several to rotate. |
+| `templates` | Optional. Up to 8 template slugs the consent screen may offer to create as a space. |
+| `paths` | Optional. Overrides for the routes below. Each is an absolute path on your app. |
+| `store` | Optional. Where the connection is kept. Default: the sealed cookie. See [Your own store](#your-own-store). |
+| `resource` | Optional. `"api/hub"` (default), `"mcp"` or `null`: the pod API the token is for. |
+| `cloudUrl` | Optional. The Synap Cloud URL, to offer "Continue with Synap Cloud". See [Synap Cloud](#synap-cloud). |
+| `allowInsecureLoopback` | Optional. Accept a pod, or a Synap Cloud, served on `http://localhost`, for development. |
+| `onError` | Optional. Called with each refused sign-in, for your logs. Default: `console.warn`. Messages never carry a token. |
+| `fetch` | Optional. Your own `fetch`. |
+
+`createPodAppAuth` refuses at startup, with a `ConnectError` whose code is `misconfigured`, every setup the pod would
+refuse at sign-in, so the mistake shows when your app starts, not when a person connects. The client metadata
+document must stay under 8 KB.
+
+## Routes
+
+| Path (default) | Method | Handler | What it does |
+|---|---|---|---|
+| `/.well-known/synap-client.json` | GET | `handlers.clientMetadata` | Serves the client metadata document. Its URL is the client ID. |
+| `/api/synap/connect` | POST | `handlers.connect` | Starts the sign-in for the pod named in the form. |
+| `/api/synap/callback` | GET | `handlers.callback` | Takes the pod's answer, stores the connection, redirects to `next`. |
+| `/api/synap/disconnect` | POST | `handlers.disconnect` | Revokes the token at the pod and clears the cookie. |
+| `/api/synap/cloud` | POST, GET | `handlers.cloudConnect`, `handlers.cloudReturn` | Synap Cloud sign-in, when `cloudUrl` is set. |
+
+Three more paths are pages of your app: `/connect` (the connect page; the pod may send people there to start a
+sign-in), `/connect/result` (where a failed callback lands with `?error=<code>`) and `/` (where a sign-in lands when
+it named no `next`). Each route file re-exports one handler, for example `export const POST = synap.handlers.connect;`.
+
+`connect` and `disconnect` change state, so they accept a `POST` from your own pages only (the `Origin` header, or
+`Sec-Fetch-Site: same-origin`). The connect form sends:
+
+| Field | Meaning |
+|---|---|
+| `pod` | The pod's address, as the person typed it. `https://` is added when it is missing. |
+| `next` | Optional. A path on your app to land on after sign-in. |
+| `space` | Optional. A space to suggest on the consent screen. A pod may ignore it: never rely on a space being preselected. |
+| `prompt` | Optional. `consent` shows the consent screen again even when this browser is already connected (to widen or narrow access); `login` asks the person to sign in to the pod again. |
+
+Before it sends the browser anywhere, the SDK reads the pod's OAuth metadata and checks that it is a Synap pod that
+supports app sign-in. It never follows a redirect from the pod: a pod that moved answers `pod_moved`, and the person
+connects again with the new address. The connect route fetches an address a visitor typed, so rate-limit it per
+visitor.
+
+## Permissions
+
+Each request names one permission in the pod's grammar, `<subject>[.<qualifier>].<action>`, lowercase, as in
+[API key grants](/docs/build/api-keys), and the sentence the consent screen shows (`reason`, 1 to 200 characters).
+The person ticks what the app gets; asking is not getting.
+
+| Rule | Example |
+|---|---|
+| No wildcard: name what you ask for. | `entity.note.read`, not `entity.*` |
+| A subject and at least one more segment. | `entity.note` (every action on notes) is accepted; `document` alone is not. |
+| A qualifier only on `entity` (a kind), `capability` (an intent) and `event` (a family). | `entity.post.create`, `capability.publish_post.run`, `event.dev.read` |
+| On an intent, `run` is the only action. | `capability.send_message.run` |
+| `scope: "pod"` only on a read of one kind. Everything else is given per space. | `{ permission: "entity.decision.read", reason, scope: "pod" }` |
+
+A pod-wide read comes back as a grant row with no space: `listEntities({ profileSlug })` with no `workspaceId` then
+lists that kind across the pod. Writes always name a space the person granted.
+
+## The connection
+
+After sign-in the connection holds the pod's URL, the person (`user`), the grant by space and the tokens.
+
+| | |
+|---|---|
+| Access token | Lives 1 hour. |
+| Refresh token | Rotates on each use and lives 30 days from issue. A spent refresh token presented again within a short grace (30 seconds by default) gets the same new pair; after it, the pod revokes the whole connection. |
+| Session cookie | `__Host-synap_session` on https, sealed with AES-GCM. |
+| Marker cookie | `__Host-synap_seen`, 400 days: the pod's URL only, so a lapsed connection reads as "expired", not "never connected". A disconnect clears it. |
+
+Read the connection where you have the request, or its `Cookie` header:
+
+```ts
+const connection = await synap.readConnection((await headers()).get("cookie"));
+if (!connection) redirect("/connect");
+```
+
+`synap.readLapsed(cookieHeader)` answers `{ podUrl }` when this browser was connected to a pod and the connection
+lapsed, so you can say "expired, connect again" with the address pre-filled.
+
+### Renewal
+
+A server component cannot set cookies, so renew in `proxy.ts` (or a route handler) before the page renders:
+`synap.refreshIfNeeded(request)` rotates the token only in its last 5 minutes, and only once at a time per connection
+in the process. Send `outcome.setCookies` on the response and forward `outcome.cookieHeader` as the request's
+`Cookie`. [Build a website on your pod](/docs/build/build-a-website) has the full `proxy.ts`, with the matcher that
+skips static files, the sign-in routes and router prefetches.
+
+| `status` | Meaning |
+|---|---|
+| `none` | No connection in this request (`lapsed` set when there was one). |
+| `skipped` | A prefetch or a static asset: nothing renewed. |
+| `fresh` | Valid beyond the renewal window, or no refresh token. |
+| `refreshed` | Rotated: send `setCookies`, forward `cookieHeader`. |
+| `kept` | The refresh failed but the access token still works. Not asked again for a minute. |
+| `expired` | The access token is spent and cannot be renewed: connect again. |
+| `revoked` | The pod refused the refresh token (access removed): connect again. |
+| `unavailable` | The pod could not be reached and the access token is spent: try later. |
+
+In a route handler or a server action, `synap.client(connection, { request, persist })` renews once after a `401`
+and retries the request once; `persist` receives the `Set-Cookie` values to send. Without `persist` (a server
+component), a `401` answers `unauthorized` with `refreshable: true`: send the visitor through the proxy with
+`refreshIfNeeded(request, { force: true })`.
+
+## The client: `synap.client(connection)`
+
+```ts
+const pod = synap.client(connection);
+
+const notes = await pod.listEntities({ workspaceId, profileSlug: "note", limit: 50 });
+if (!notes.ok) console.warn(notes.error.code);
+
+const res = await pod.post("/entities", { profileSlug: "note", workspaceId, title: "Hello" });
+if (res.ok && res.status === "proposed") showPending(res.reviewUrl);
+```
+
+Calls never throw: a read answers `{ ok: true, data }` or `{ ok: false, error }`. A write answers one of:
+
+| Result | Meaning |
+|---|---|
+| `{ ok: true, status: "applied", data }` | The pod applied the write. |
+| `{ ok: true, status: "proposed", proposalId, reviewUrl, data }` | The write waits for the person's review. This is a success: show `reviewUrl`, never retry. |
+| `{ ok: false, error }` | Refused or failed; see [Error codes](#error-codes). |
+
+`get`, `post`, `patch`, `put` and `delete` take a Hub REST path (`/entities`, not `/api/hub/entities`); see the
+[Hub REST API](/docs/reference/hub-api). Encode each path segment with `encodeURIComponent`: a path that could leave
+the Hub answers `invalid` without a request. Typed reads include `listEntities`, `getEntity`, `getEntityConnections`,
+`getDocument`, `getFileUrl` and `listPendingProposals` (needs `proposal.read`).
+
+| Member | What it tells you |
+|---|---|
+| `actsAs` | `"agent"` for every app except Synap's official ones (`"person"`). An agent's writes are proposals, and an agent never approves. |
+| `spaces()` | The granted spaces: `{ workspaceId, workspaceName, permissions }`, plus `templateSlug` when the pod names the template the space came from. |
+| `podWide()` | The reads approved pod-wide. |
+| `can(permission, workspaceId?)` | Whether the grant covers a permission, read with the pod's grammar (`entity.read` covers `entity.note.read`). |
+| `reach(permission)` | Where the connection holds it: `{ kind: "pod" }`, `{ kind: "spaces", ids }` or `null`. |
+| `rateLimit()` | The budget the pod's last answer named: `{ limit, remaining, resetSec, at }`, or `null`. |
+| `actions` | `actions.list` and `actions.request`: ask the person's own tools to do something (needs `capability.<intent>.run`). An intent that reaches outside the pod, such as posting or sending a message, always comes back `proposed`. |
+
+Client options: `timeoutMs` (default 10 000; a slower request answers `pod_unreachable`), `maxResponseBytes`
+(default 8 MiB; a bigger answer is `server`) and `retryRateLimitedWithinSec` (default 0: a `GET` answered `429` with a
+wait at most this long is asked once more after the wait; writes are never retried).
+
+### Rate limits
+
+A pod budgets the calls each connection makes in a 15-minute window, with separate budgets for reads and writes (by
+default 3,000 reads and 500 writes; the pod's owner can change them). Over the budget, every call answers
+`rate_limited` with `retryAfterSec` until the window ends. Read a list once per page and keep it for that request,
+rather than asking again.
+
+## Error codes
+
+A call's `error` is `{ code, status, retryAfterSec?, detail?, podCode?, reason? }`. Branch on `code`; `detail` and
+`podCode` are for your logs. `status` is `null` when nothing was answered, and `reason` is set when the SDK refused
+without sending anything (`not_granted`, `agent_cannot_approve`, `invalid_input`). `POD_ERROR_CODES` lists every code.
+
+| `code` | What to do |
+|---|---|
+| `expired` | The connection's time is up: connect again. |
+| `unauthorized` | The pod refused the token; with `refreshable`, renew once (see [Renewal](#renewal)). |
+| `forbidden` | The person did not grant this, or an agent tried to approve. |
+| `door_unsupported` | The pod is too old for this call. |
+| `not_found` | It does not exist, or the app cannot read it. |
+| `invalid` | The request is malformed. |
+| `conflict` | Someone changed it first: read again. |
+| `rate_limited` | Wait `retryAfterSec`. |
+| `pod_unreachable` | No answer, or a timeout: try later. |
+| `pod_moved` | The pod answered a redirect: connect again with its new address. |
+| `step_up_required` | The person must confirm at their pod first. |
+| `email_unverified` | Synap Cloud needs a verified email. |
+| `origin_insecure` | Synap Cloud needs the app on https. |
+| `server` | The pod failed, or answered something the SDK cannot read. |
+
+A sign-in that fails redirects with `?error=<code>`: to your connect page when it could not start, to your result
+page when it failed on the way back. `parseConnectErrorCode(value)` reads it back (`null` for anything else).
+
+| Sign-in `error` | Meaning |
+|---|---|
+| `invalid_pod_address` | The address is not a usable URL. |
+| `not_a_pod` | Something answered, but it is not a Synap pod. |
+| `pod_unreachable` | The pod did not answer. |
+| `pod_unsupported` | A Synap pod too old for app sign-in. |
+| `cp_unavailable` | Synap Cloud is not configured for this app. |
+| `denied` | The person said no on the consent screen. |
+| `expired_transaction` | No sign-in in progress, or it is older than 10 minutes. |
+| `mismatch` | The answer does not belong to the sign-in this browser started. |
+| `misconfigured` | The app's own setup is wrong. |
+| `rate_limited` | The pod asked to slow down. |
+| `expired`, `revoked` | The connection lapsed, or the pod refused its refresh token. |
+| `pod_moved` | The pod moved: connect again with its new address. |
+| `server_error` | The pod answered something the SDK cannot use. |
+
+## Synap Cloud
+
+With `cloudUrl` set, `synap.cloudConnectAvailable` is `true` and the app can offer "Continue with Synap Cloud": a
+`POST` to `handlers.cloudConnect` sends the browser to the Synap Cloud pod chooser, which returns to your connect page.
+There, `acceptLaunch(url, origin).cloudState` is set: forward the request's query to `handlers.cloudReturn`, which
+checks the return against this browser's cookie before the chosen pod is used, then signs in as with a typed address.
+
+```tsx title="app/connect/page.tsx"
+const launch = acceptLaunch(url, origin);
+if (launch.cloudState) redirect(`${synap.paths.cloud}${new URL(url).search}`);
+```
+
+## Your own store
+
+By default the connection lives in the sealed cookie. To keep it in a database or a key-value store, implement
+`ConnectionStore` and pass it as `store`:
+
+```ts
+interface ConnectionStore {
+  read(request: Request): Promise<PodConnection | null>;
+  write(connection: PodConnection, request: Request): Promise<string[]>; // Set-Cookie values
+  clear(request: Request): Promise<string[]>;
+}
+```
+
+A shared server-side store also protects a connection served by several server instances: the pod revokes a
+connection when a spent refresh token is presented again, and only one store all instances read can rule that out.
+
+## Test without a pod
+
+`@synap-core/sdk/testing` has `createMockAuthServer()`, a mock pod with the metadata, the consent step, the token,
+refresh and revoke endpoints and the Hub doors an app uses, and `createMockCloud()` for the Synap Cloud chooser.
+Pass the mock's `fetch` to `createPodAppAuth`; the mock answers in memory, so your app can run on
+`http://localhost`. A real pod, even a local one, accepts only an app served over https: use a tunnel in development.
+
+```ts
+import { createMockAuthServer } from "@synap-core/sdk/testing";
+
+const pod = createMockAuthServer({ actsAs: "agent" });
+const synap = createPodAppAuth({ ...config, fetch: pod.fetch });
+```
+
+## Related
+
+- [Build a website on your pod](/docs/build/build-a-website)
+- [API keys](/docs/build/api-keys)
+- [Permission model](/docs/concepts/permission-model)
+- [Hub REST API](/docs/reference/hub-api)

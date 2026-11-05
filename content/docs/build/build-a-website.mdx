@@ -262,7 +262,8 @@ The connection client has typed reads beyond `listEntities`: `getEntity`, `getEn
 `getFileUrl` (a signed link to a file) and `listPendingProposals` (what waits for the person's review; needs
 `proposal.read`). `spaces()` and `can(permission, workspaceId)` let a page adapt to what was granted. `pod.actions`
 asks the person's own tools to do something for them, such as publishing a post, after they approve it (needs
-`capability.<intent>.run`). The `AGENTS.md` file shipped in the npm package documents every rule.
+`capability.<intent>.run`). [Pod-app sign-in](/docs/build/pod-app-sign-in) is the reference for every option,
+result and error code, and the `AGENTS.md` file shipped in the npm package documents every rule.
 
 ## A public site
 
@@ -283,6 +284,7 @@ them, never as raw HTML.
 
 ## Related
 
+- [Pod-app sign-in](/docs/build/pod-app-sign-in)
 - [SDK first query](/docs/build/sdk)
 - [Hub REST API reference](/docs/reference/hub-api)
 - [API keys](/docs/build/api-keys)
